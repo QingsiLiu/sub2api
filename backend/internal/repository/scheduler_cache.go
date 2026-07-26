@@ -394,9 +394,35 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		SessionWindowStart:      account.SessionWindowStart,
 		SessionWindowEnd:        account.SessionWindowEnd,
 		SessionWindowStatus:     account.SessionWindowStatus,
+		AccountGroups:           filterSchedulerAccountGroups(account.AccountGroups),
 		Credentials:             filterSchedulerCredentials(account.Credentials),
 		Extra:                   filterSchedulerExtra(account.Extra),
 	}
+}
+
+func filterSchedulerAccountGroups(accountGroups []service.AccountGroup) []service.AccountGroup {
+	if len(accountGroups) == 0 {
+		return nil
+	}
+
+	filtered := make([]service.AccountGroup, 0, len(accountGroups))
+	for _, binding := range accountGroups {
+		if binding.GroupID <= 0 {
+			continue
+		}
+		// Keep only the scalar binding fields. Account/Group edges can be large
+		// or cyclic and are not needed for scheduler priority resolution.
+		filtered = append(filtered, service.AccountGroup{
+			AccountID: binding.AccountID,
+			GroupID:   binding.GroupID,
+			Priority:  binding.Priority,
+			CreatedAt: binding.CreatedAt,
+		})
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }
 
 func filterSchedulerCredentials(credentials map[string]any) map[string]any {

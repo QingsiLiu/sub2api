@@ -27,6 +27,11 @@ type Account struct {
 	ProxyID     *int64
 	Concurrency int
 	Priority    int
+	// GroupPriority is the transient priority used while scheduling an account
+	// from a specific group. The persisted accounts.priority value remains in
+	// Priority; this field is intentionally excluded from JSON/cache payloads
+	// because one account can have a different priority in each group.
+	GroupPriority *int `json:"-"`
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
 	// 使用指针用于兼容旧版本调度缓存（Redis）中缺字段的情况：nil 表示按 1.0 处理。
 	RateMultiplier     *float64
@@ -89,6 +94,64 @@ func (a *Account) BillingRateMultiplier() float64 {
 		return 1.0
 	}
 	return *a.RateMultiplier
+}
+
+// SchedulingPriority returns the priority that should be used by account
+// selection. GroupPriority is set only for a group-scoped scheduler request;
+// ungrouped and legacy callers continue to use the persisted global priority.
+func (a *Account) SchedulingPriority() int {
+	if a == nil {
+		return 0
+	}
+	if a.GroupPriority != nil {
+		return *a.GroupPriority
+	}
+	return a.Priority
+}
+
+// SetGroupSchedulingPriority resolves the account_groups.priority value for a
+// single scheduler bucket. It clears stale state first because Account values
+// may be reused while rebuilding snapshots.
+func (a *Account) SetGroupSchedulingPriority(groupID int64) {
+	if a == nil {
+		return
+	}
+	a.GroupPriority = nil
+	if groupID <= 0 {
+		return
+	}
+	for _, binding := range a.AccountGroups {
+		if binding.GroupID != groupID {
+			continue
+		}
+		priority := binding.Priority
+		a.GroupPriority = &priority
+		return
+	}
+}
+
+// ApplyGroupSchedulingPriority applies a group-scoped priority to a list of
+// accounts without changing their persisted global priority.
+func ApplyGroupSchedulingPriority(accounts []Account, groupID int64) {
+	for i := range accounts {
+		accounts[i].SetGroupSchedulingPriority(groupID)
+	}
+}
+
+// copyGroupSchedulingPriority preserves a group-scoped priority when a
+// candidate is refreshed from the account cache or database. The refreshed
+// account contains the persisted global priority, so the transient value must
+// be copied explicitly for the current scheduling request.
+func copyGroupSchedulingPriority(dst, src *Account) {
+	if dst == nil {
+		return
+	}
+	if src == nil || src.GroupPriority == nil {
+		dst.GroupPriority = nil
+		return
+	}
+	priority := *src.GroupPriority
+	dst.GroupPriority = &priority
 }
 
 func (a *Account) EffectiveLoadFactor() int {

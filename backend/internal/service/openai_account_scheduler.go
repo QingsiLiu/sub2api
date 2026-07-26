@@ -424,8 +424,8 @@ func isOpenAIAccountCandidateBetter(left openAIAccountCandidateScore, right open
 	if left.score != right.score {
 		return left.score > right.score
 	}
-	if left.account.Priority != right.account.Priority {
-		return left.account.Priority < right.account.Priority
+	if left.account.SchedulingPriority() != right.account.SchedulingPriority() {
+		return left.account.SchedulingPriority() < right.account.SchedulingPriority()
 	}
 	if left.loadInfo.LoadRate != right.loadInfo.LoadRate {
 		return left.loadInfo.LoadRate < right.loadInfo.LoadRate
@@ -640,7 +640,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		}
 	}
 
-	minPriority, maxPriority := filtered[0].Priority, filtered[0].Priority
+	minPriority, maxPriority := filtered[0].SchedulingPriority(), filtered[0].SchedulingPriority()
 	maxWaiting := 1
 	loadRateSum := 0.0
 	loadRateSumSquares := 0.0
@@ -652,11 +652,11 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		if loadInfo == nil {
 			loadInfo = &AccountLoadInfo{AccountID: account.ID}
 		}
-		if account.Priority < minPriority {
-			minPriority = account.Priority
+		if account.SchedulingPriority() < minPriority {
+			minPriority = account.SchedulingPriority()
 		}
-		if account.Priority > maxPriority {
-			maxPriority = account.Priority
+		if account.SchedulingPriority() > maxPriority {
+			maxPriority = account.SchedulingPriority()
 		}
 		if loadInfo.WaitingCount > maxWaiting {
 			maxWaiting = loadInfo.WaitingCount
@@ -693,7 +693,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		item := &candidates[i]
 		priorityFactor := 1.0
 		if maxPriority > minPriority {
-			priorityFactor = 1 - float64(item.account.Priority-minPriority)/float64(maxPriority-minPriority)
+			priorityFactor = 1 - float64(item.account.SchedulingPriority()-minPriority)/float64(maxPriority-minPriority)
 		}
 		loadFactor := 1 - clamp01(float64(item.loadInfo.LoadRate)/100.0)
 		queueFactor := 1 - clamp01(float64(item.loadInfo.WaitingCount)/float64(maxWaiting))

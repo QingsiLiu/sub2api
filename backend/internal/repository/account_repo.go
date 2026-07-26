@@ -1542,7 +1542,12 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 		}
 	}
 
-	return r.accountsToService(ctx, accounts)
+	out, err := r.accountsToService(ctx, accounts)
+	if err != nil {
+		return nil, err
+	}
+	service.ApplyGroupSchedulingPriority(out, groupID)
+	return out, nil
 }
 
 func (r *accountRepository) accountsToService(ctx context.Context, accounts []*dbent.Account) ([]service.Account, error) {

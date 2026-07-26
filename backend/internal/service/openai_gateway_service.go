@@ -1365,10 +1365,10 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool {
 	// 优先级更高（数值更小）
 	// Higher priority (lower value)
-	if candidate.Priority < current.Priority {
+	if candidate.SchedulingPriority() < current.SchedulingPriority() {
 		return true
 	}
-	if candidate.Priority > current.Priority {
+	if candidate.SchedulingPriority() > current.SchedulingPriority() {
 		return false
 	}
 
@@ -1562,8 +1562,8 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		if len(available) > 0 {
 			sort.SliceStable(available, func(i, j int) bool {
 				a, b := available[i], available[j]
-				if a.account.Priority != b.account.Priority {
-					return a.account.Priority < b.account.Priority
+				if a.account.SchedulingPriority() != b.account.SchedulingPriority() {
+					return a.account.SchedulingPriority() < b.account.SchedulingPriority()
 				}
 				if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
 					return a.loadInfo.LoadRate < b.loadInfo.LoadRate
@@ -1638,6 +1638,11 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
+	effectiveGroupID := derefGroupID(groupID)
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		effectiveGroupID = 0
+	}
+	ApplyGroupSchedulingPriority(accounts, effectiveGroupID)
 	return accounts, nil
 }
 
@@ -1660,6 +1665,7 @@ func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.
 			return nil
 		}
 		fresh = current
+		copyGroupSchedulingPriority(fresh, account)
 	}
 
 	if !fresh.IsSchedulable() || !fresh.IsOpenAI() {
@@ -1683,6 +1689,7 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	if err != nil || latest == nil {
 		return nil
 	}
+	copyGroupSchedulingPriority(latest, account)
 	if !latest.IsSchedulable() || !latest.IsOpenAI() {
 		return nil
 	}
@@ -1719,6 +1726,7 @@ func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, accou
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected openai account %d not found during hydration", account.ID)
 	}
+	copyGroupSchedulingPriority(hydrated, account)
 	return hydrated, nil
 }
 
