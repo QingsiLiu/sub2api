@@ -792,6 +792,8 @@ func (s *AccountRepoSuite) TestListSchedulableByGroupIDAndPlatform() {
 	s.Require().NoError(err)
 	s.Require().Len(accounts, 1)
 	s.Require().Equal(a1.ID, accounts[0].ID)
+	s.Require().Equal(1, accounts[0].SchedulingPriority())
+	s.Require().Equal(a1.Priority, accounts[0].Priority)
 }
 
 func (s *AccountRepoSuite) TestSetSchedulable() {

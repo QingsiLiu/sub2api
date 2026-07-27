@@ -382,10 +382,10 @@ func (s *GeminiMessagesCompatService) buildPreCheckUsageResultMap(ctx context.Co
 // Rules: higher priority (lower value) wins; same priority: never used (OAuth > non-OAuth) > least recently used.
 func (s *GeminiMessagesCompatService) isBetterGeminiAccount(candidate, current *Account) bool {
 	// 优先级更高（数值更小）
-	if candidate.Priority < current.Priority {
+	if candidate.SchedulingPriority() < current.SchedulingPriority() {
 		return true
 	}
-	if candidate.Priority > current.Priority {
+	if candidate.SchedulingPriority() > current.SchedulingPriority() {
 		return false
 	}
 
@@ -440,6 +440,7 @@ func (s *GeminiMessagesCompatService) hydrateSelectedAccount(ctx context.Context
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected gemini account %d not found during hydration", account.ID)
 	}
+	copyGroupSchedulingPriority(hydrated, account)
 	return hydrated, nil
 }
 
@@ -455,13 +456,22 @@ func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Co
 		queryPlatforms = []string{platform, PlatformAntigravity}
 	}
 
-	if groupID != nil {
-		return s.accountRepo.ListSchedulableByGroupIDAndPlatforms(ctx, *groupID, queryPlatforms)
-	}
+	var accounts []Account
+	var err error
+	effectiveGroupID := derefGroupID(groupID)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		return s.accountRepo.ListSchedulableByPlatforms(ctx, queryPlatforms)
+		effectiveGroupID = 0
+		accounts, err = s.accountRepo.ListSchedulableByPlatforms(ctx, queryPlatforms)
+	} else if groupID != nil {
+		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatforms(ctx, *groupID, queryPlatforms)
+	} else {
+		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatforms(ctx, queryPlatforms)
 	}
-	return s.accountRepo.ListSchedulableUngroupedByPlatforms(ctx, queryPlatforms)
+	if err != nil {
+		return nil, err
+	}
+	ApplyGroupSchedulingPriority(accounts, effectiveGroupID)
+	return accounts, nil
 }
 
 func (s *GeminiMessagesCompatService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -554,9 +564,9 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 			continue
 		}
 
-		if acc.Priority < selected.Priority {
+		if acc.SchedulingPriority() < selected.SchedulingPriority() {
 			selected = acc
-		} else if acc.Priority == selected.Priority {
+		} else if acc.SchedulingPriority() == selected.SchedulingPriority() {
 			switch {
 			case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 				selected = acc

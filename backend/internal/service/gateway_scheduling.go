@@ -441,8 +441,8 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 				// 排序：优先级 > 负载率 > 最后使用时间
 				sort.SliceStable(routingAvailable, func(i, j int) bool {
 					a, b := routingAvailable[i], routingAvailable[j]
-					if a.account.Priority != b.account.Priority {
-						return a.account.Priority < b.account.Priority
+					if a.account.SchedulingPriority() != b.account.SchedulingPriority() {
+						return a.account.SchedulingPriority() < b.account.SchedulingPriority()
 					}
 					if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
 						return a.loadInfo.LoadRate < b.loadInfo.LoadRate
@@ -969,6 +969,10 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		}
 		return accounts, useMixed, err
 	}
+	effectiveGroupID := derefGroupID(groupID)
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		effectiveGroupID = 0
+	}
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
 	if useMixed {
 		platforms := []string{platform, PlatformAntigravity}
@@ -988,6 +992,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 				"error", err)
 			return nil, useMixed, err
 		}
+		ApplyGroupSchedulingPriority(accounts, effectiveGroupID)
 		filtered := make([]Account, 0, len(accounts))
 		for _, acc := range accounts {
 			if acc.Platform == PlatformAntigravity && !acc.IsMixedSchedulingEnabled() {
@@ -1011,6 +1016,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 					"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 			}
 		}
+		ApplyGroupSchedulingPriority(filtered, effectiveGroupID)
 		return filtered, useMixed, nil
 	}
 
@@ -1031,6 +1037,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			"error", err)
 		return nil, useMixed, err
 	}
+	ApplyGroupSchedulingPriority(accounts, effectiveGroupID)
 	slog.Debug("account_scheduling_list_single",
 		"group_id", derefGroupID(groupID),
 		"platform", platform,
@@ -1434,6 +1441,7 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
 	}
+	copyGroupSchedulingPriority(hydrated, account)
 	return hydrated, nil
 }
 
@@ -1455,15 +1463,15 @@ func filterByMinPriority(accounts []accountWithLoad) []accountWithLoad {
 	if len(accounts) == 0 {
 		return accounts
 	}
-	minPriority := accounts[0].account.Priority
+	minPriority := accounts[0].account.SchedulingPriority()
 	for _, acc := range accounts[1:] {
-		if acc.account.Priority < minPriority {
-			minPriority = acc.account.Priority
+		if acc.account.SchedulingPriority() < minPriority {
+			minPriority = acc.account.SchedulingPriority()
 		}
 	}
 	result := make([]accountWithLoad, 0, len(accounts))
 	for _, acc := range accounts {
-		if acc.account.Priority == minPriority {
+		if acc.account.SchedulingPriority() == minPriority {
 			result = append(result, acc)
 		}
 	}
@@ -1586,8 +1594,8 @@ func selectByLRU(accounts []accountWithLoad, preferOAuth bool) *accountWithLoad 
 func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 	sort.SliceStable(accounts, func(i, j int) bool {
 		a, b := accounts[i], accounts[j]
-		if a.Priority != b.Priority {
-			return a.Priority < b.Priority
+		if a.SchedulingPriority() != b.SchedulingPriority() {
+			return a.SchedulingPriority() < b.SchedulingPriority()
 		}
 		switch {
 		case a.LastUsedAt == nil && b.LastUsedAt != nil:
@@ -1629,7 +1637,7 @@ func shuffleWithinSortGroups(accounts []accountWithLoad) {
 
 // sameAccountWithLoadGroup 判断两个 accountWithLoad 是否属于同一排序组
 func sameAccountWithLoadGroup(a, b accountWithLoad) bool {
-	if a.account.Priority != b.account.Priority {
+	if a.account.SchedulingPriority() != b.account.SchedulingPriority() {
 		return false
 	}
 	if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
@@ -1685,7 +1693,7 @@ func shuffleWithinPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 
 // sameAccountGroup 判断两个 Account 是否属于同一排序组（Priority + LastUsedAt）
 func sameAccountGroup(a, b *Account) bool {
-	if a.Priority != b.Priority {
+	if a.SchedulingPriority() != b.SchedulingPriority() {
 		return false
 	}
 	return sameLastUsedAt(a.LastUsedAt, b.LastUsedAt)
@@ -1720,8 +1728,8 @@ func (s *GatewayService) sortCandidatesForFallback(accounts []*Account, preferOA
 func sortAccountsByPriorityOnly(accounts []*Account, preferOAuth bool) {
 	sort.SliceStable(accounts, func(i, j int) bool {
 		a, b := accounts[i], accounts[j]
-		if a.Priority != b.Priority {
-			return a.Priority < b.Priority
+		if a.SchedulingPriority() != b.SchedulingPriority() {
+			return a.SchedulingPriority() < b.SchedulingPriority()
 		}
 		if preferOAuth && a.Type != b.Type {
 			return a.Type == AccountTypeOAuth
@@ -1738,9 +1746,9 @@ func shuffleWithinPriority(accounts []*Account) {
 	r := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
 	start := 0
 	for start < len(accounts) {
-		priority := accounts[start].Priority
+		priority := accounts[start].SchedulingPriority()
 		end := start + 1
-		for end < len(accounts) && accounts[end].Priority == priority {
+		for end < len(accounts) && accounts[end].SchedulingPriority() == priority {
 			end++
 		}
 		// 对 [start, end) 范围内的账户随机打乱
@@ -1860,9 +1868,9 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 				selected = acc
 				continue
 			}
-			if acc.Priority < selected.Priority {
+			if acc.SchedulingPriority() < selected.SchedulingPriority() {
 				selected = acc
-			} else if acc.Priority == selected.Priority {
+			} else if acc.SchedulingPriority() == selected.SchedulingPriority() {
 				switch {
 				case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 					selected = acc
@@ -1974,9 +1982,9 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 			selected = acc
 			continue
 		}
-		if acc.Priority < selected.Priority {
+		if acc.SchedulingPriority() < selected.SchedulingPriority() {
 			selected = acc
-		} else if acc.Priority == selected.Priority {
+		} else if acc.SchedulingPriority() == selected.SchedulingPriority() {
 			switch {
 			case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 				selected = acc
@@ -2120,9 +2128,9 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 				selected = acc
 				continue
 			}
-			if acc.Priority < selected.Priority {
+			if acc.SchedulingPriority() < selected.SchedulingPriority() {
 				selected = acc
-			} else if acc.Priority == selected.Priority {
+			} else if acc.SchedulingPriority() == selected.SchedulingPriority() {
 				switch {
 				case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 					selected = acc
@@ -2235,9 +2243,9 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 			selected = acc
 			continue
 		}
-		if acc.Priority < selected.Priority {
+		if acc.SchedulingPriority() < selected.SchedulingPriority() {
 			selected = acc
-		} else if acc.Priority == selected.Priority {
+		} else if acc.SchedulingPriority() == selected.SchedulingPriority() {
 			switch {
 			case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 				selected = acc

@@ -31,6 +31,9 @@ type Account struct {
 	ProxyFallbackOriginName *string // 仅展示用
 	Concurrency             int
 	Priority                int
+	// GroupPriority is set only while scheduling for one group. It must not be
+	// serialized because an account can have a different priority in each group.
+	GroupPriority *int `json:"-"`
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
 	// 使用指针用于兼容旧版本调度缓存（Redis）中缺字段的情况：nil 表示按 1.0 处理。
 	RateMultiplier     *float64
@@ -148,6 +151,61 @@ func (a *Account) BillingRateMultiplier() float64 {
 		return 1.0
 	}
 	return *a.RateMultiplier
+}
+
+// SchedulingPriority returns the group-specific priority when one has been
+// resolved for this scheduling request, otherwise the persisted global value.
+func (a *Account) SchedulingPriority() int {
+	if a == nil {
+		return 0
+	}
+	if a.GroupPriority != nil {
+		return *a.GroupPriority
+	}
+	return a.Priority
+}
+
+// SetGroupSchedulingPriority resolves the account_groups priority for one
+// scheduler bucket. Clear the transient value first because Account values can
+// be reused while snapshots are rebuilt.
+func (a *Account) SetGroupSchedulingPriority(groupID int64) {
+	if a == nil {
+		return
+	}
+	a.GroupPriority = nil
+	if groupID <= 0 {
+		return
+	}
+	for _, binding := range a.AccountGroups {
+		if binding.GroupID != groupID {
+			continue
+		}
+		priority := binding.Priority
+		a.GroupPriority = &priority
+		return
+	}
+}
+
+// ApplyGroupSchedulingPriority resolves group-scoped priorities without
+// changing the persisted global priority.
+func ApplyGroupSchedulingPriority(accounts []Account, groupID int64) {
+	for i := range accounts {
+		accounts[i].SetGroupSchedulingPriority(groupID)
+	}
+}
+
+// copyGroupSchedulingPriority preserves the request-scoped priority when an
+// account is refreshed from the global metadata cache or database.
+func copyGroupSchedulingPriority(dst, src *Account) {
+	if dst == nil {
+		return
+	}
+	if src == nil || src.GroupPriority == nil {
+		dst.GroupPriority = nil
+		return
+	}
+	priority := *src.GroupPriority
+	dst.GroupPriority = &priority
 }
 
 func (a *Account) EffectiveLoadFactor() int {

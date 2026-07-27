@@ -219,7 +219,9 @@ func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, 
 		if err != nil {
 			logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] cache read failed: bucket=%s err=%v", bucket.String(), err)
 		} else if hit {
-			return derefAccounts(cached), useMixed, nil
+			accounts := derefAccounts(cached)
+			ApplyGroupSchedulingPriority(accounts, bucket.GroupID)
+			return accounts, useMixed, nil
 		}
 		token, err := s.cache.CaptureBucketWriteToken(ctx, bucket)
 		if err != nil {
@@ -245,6 +247,7 @@ func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, 
 	if err != nil {
 		return nil, useMixed, err
 	}
+	ApplyGroupSchedulingPriority(accounts, bucket.GroupID)
 
 	if s.cache != nil && canPublish {
 		if err := s.cache.SetSnapshot(fallbackCtx, bucket, writeToken, accounts); err != nil {
