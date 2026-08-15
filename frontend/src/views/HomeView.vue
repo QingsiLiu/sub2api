@@ -48,6 +48,12 @@
 
         <!-- Nav Actions -->
         <div class="flex items-center gap-3">
+          <router-link
+            to="/pricing"
+            class="hidden rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-primary-400 sm:inline-flex"
+          >
+            {{ t('pricing.title') }}
+          </router-link>
           <!-- Language Switcher -->
           <LocaleSwitcher />
 

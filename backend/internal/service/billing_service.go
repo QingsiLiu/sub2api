@@ -779,6 +779,15 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 // GetModelPricing 获取模型价格配置
 func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
+	pricing, _, err := s.getModelPricingWithSource(model)
+	return pricing, err
+}
+
+// getModelPricingWithSource returns the same pricing used by settlement plus
+// the resolver source label needed by public diagnostics such as the pricing
+// catalog. Keeping the source decision beside the actual fallback chain avoids
+// incorrectly labelling hard-coded fallback prices as LiteLLM prices.
+func (s *BillingService) getModelPricingWithSource(model string) (*ModelPricing, string, error) {
 	// 标准化模型名称（转小写）
 	model = strings.ToLower(model)
 
@@ -817,7 +826,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextOutputMultiplier:        litellmPricing.LongContextOutputCostMultiplier,
 				ImageInputPricePerToken:            litellmPricing.InputCostPerImageToken,
 				ImageOutputPricePerToken:           litellmPricing.OutputCostPerImageToken,
-			}), nil
+			}), PricingSourceLiteLLM, nil
 		}
 	}
 
@@ -829,10 +838,10 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		if _, seen := s.fallbackWarnSeen.LoadOrStore(model, struct{}{}); !seen {
 			log.Printf("[Billing] Using fallback pricing for model: %s", model)
 		}
-		return s.applyModelSpecificPricingPolicy(model, fallback), nil
+		return s.applyModelSpecificPricingPolicy(model, fallback), PricingSourceFallback, nil
 	}
 
-	return nil, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
+	return nil, PricingSourceFallback, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
 }
 
 // GetModelPricingWithChannel 获取模型定价，渠道配置的价格覆盖默认值
