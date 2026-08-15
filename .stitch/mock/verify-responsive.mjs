@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer'
+import { mockUser } from './pricing-fixtures.mjs'
 
 const browser = await puppeteer.launch({ headless: true })
 const results = []
@@ -6,13 +7,15 @@ const results = []
 for (const width of [390, 768, 1280, 1440]) {
   const page = await browser.newPage()
   await page.setViewport({ width, height: 900 })
-  await page.goto('http://127.0.0.1:4173/pricing', { waitUntil: 'networkidle2' })
-  await page.evaluate(() => {
-    localStorage.removeItem('auth_token')
+  await page.goto('http://127.0.0.1:4173/login', { waitUntil: 'networkidle2' })
+  await page.evaluate((user) => {
+    localStorage.setItem('auth_token', 'stitch-mock-token')
+    localStorage.setItem('auth_user', JSON.stringify(user))
+    localStorage.setItem('token_expires_at', String(Date.now() + 86_400_000))
     localStorage.setItem('theme', 'light')
     document.documentElement.classList.remove('dark')
-  })
-  await page.reload({ waitUntil: 'networkidle2' })
+  }, mockUser)
+  await page.goto('http://127.0.0.1:4173/admin/model-pricing', { waitUntil: 'networkidle2' })
 
   if (width >= 1280) {
     const tableButton = await page.$('[data-pricing-view="table"]')

@@ -4,6 +4,7 @@
       <div class="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_20%_15%,rgba(20,184,166,0.18),transparent_42%),radial-gradient(circle_at_82%_12%,rgba(59,130,246,0.12),transparent_38%)] dark:opacity-60"></div>
       <div class="relative mx-auto max-w-3xl">
         <div class="flex flex-wrap items-center justify-center gap-2">
+          <span class="badge badge-warning">{{ t('pricing.adminPreview') }}</span>
           <span v-if="catalog" class="badge" :class="isStale ? 'badge-warning' : 'badge-success'">
             <span class="h-1.5 w-1.5 rounded-full bg-current"></span>
             {{ isStale ? t('pricing.status.stale') : t('pricing.status.live') }}
@@ -362,7 +363,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import pricingAPI, { type PricingCatalog, type PricingGroup, type PricingItem } from '@/api/pricing'
 import Icon from '@/components/icons/Icon.vue'
-import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
 import PricingModelCard from './PricingModelCard.vue'
@@ -377,7 +377,6 @@ import {
 } from './pricingPresentation'
 
 const { t, locale } = useI18n()
-const authStore = useAuthStore()
 const catalog = ref<PricingCatalog | null>(null)
 const loading = ref(false)
 const errorMessage = ref('')
@@ -422,7 +421,7 @@ async function loadCatalog(manual = false) {
   controller = requestController
   loading.value = true
   try {
-    const next = await pricingAPI.getCatalog(authStore.isAuthenticated, requestController.signal)
+    const next = await pricingAPI.getCatalog(requestController.signal)
     catalog.value = next
     localStale.value = false
     errorMessage.value = ''
@@ -504,7 +503,6 @@ function safeOfficialSource(value?: string) {
   return value ? sanitizeUrl(value) : ''
 }
 
-watch(() => authStore.isAuthenticated, () => loadCatalog(true))
 watch(selectedGroupId, () => {
   selectedRow.value = null
   if (providerCount(selectedProvider.value) === 0) selectedProvider.value = 'all'

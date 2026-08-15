@@ -28,15 +28,10 @@ describe('pricing API', () => {
     get.mockResolvedValue({ data: catalog })
   })
 
-  it('loads the anonymous public catalog', async () => {
+  it('loads the administrator-only pricing catalog', async () => {
     const controller = new AbortController()
 
-    await expect(getPricingCatalog(false, controller.signal)).resolves.toEqual(catalog)
-    expect(get).toHaveBeenCalledWith('/pricing/catalog', { signal: controller.signal })
-  })
-
-  it('loads the no-store personalized catalog for authenticated users', async () => {
-    await expect(getPricingCatalog(true)).resolves.toEqual(catalog)
-    expect(get).toHaveBeenCalledWith('/pricing/catalog/me', { signal: undefined })
+    await expect(getPricingCatalog(controller.signal)).resolves.toEqual(catalog)
+    expect(get).toHaveBeenCalledWith('/admin/pricing/catalog', { signal: controller.signal })
   })
 })

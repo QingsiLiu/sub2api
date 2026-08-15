@@ -6,7 +6,7 @@ export const mockUser = {
   username: 'pricing-reviewer',
   email: 'reviewer@example.invalid',
   avatar_url: null,
-  role: 'user',
+  role: 'admin',
   balance: 128.64,
   frozen_balance: 0,
   concurrency: 10,

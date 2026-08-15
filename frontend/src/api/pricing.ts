@@ -73,9 +73,8 @@ export interface PricingCatalog {
   models: PricingModel[]
 }
 
-export async function getPricingCatalog(personalized: boolean, signal?: AbortSignal): Promise<PricingCatalog> {
-  const endpoint = personalized ? '/pricing/catalog/me' : '/pricing/catalog'
-  const { data } = await apiClient.get<PricingCatalog>(endpoint, { signal })
+export async function getPricingCatalog(signal?: AbortSignal): Promise<PricingCatalog> {
+  const { data } = await apiClient.get<PricingCatalog>('/admin/pricing/catalog', { signal })
   return data
 }
 

@@ -167,16 +167,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/pricing',
-    name: 'Pricing',
-    component: () => import('@/views/PricingView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Model Pricing',
-      titleKey: 'pricing.title'
-    }
-  },
-  {
     path: '/legal/:documentId',
     name: 'LegalDocument',
     component: () => import('@/views/public/LegalDocumentView.vue'),
@@ -411,6 +401,17 @@ const routes: RouteRecordRaw[] = [
       title: 'Admin Dashboard',
       titleKey: 'admin.dashboard.title',
       descriptionKey: 'admin.dashboard.description'
+    }
+  },
+  {
+    path: '/admin/model-pricing',
+    name: 'AdminModelPricing',
+    component: () => import('@/views/PricingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Model Pricing Preview',
+      titleKey: 'pricing.title'
     }
   },
   {
@@ -738,7 +739,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/pricing', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',

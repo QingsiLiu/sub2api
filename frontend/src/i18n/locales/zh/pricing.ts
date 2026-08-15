@@ -1,6 +1,7 @@
 export default {
   pricing: {
     title: '模型价格',
+    adminPreview: '管理员预览',
     description: '按可用分组查看官方定价、Sub2API 系统基准价、有效倍率和最终人民币扣费。价格与当前渠道配置及结算逻辑同步。',
     marketDescription: '浏览当前可用模型，按分组比较官方定价、系统基准价、有效倍率与最终人民币扣费。',
     modelCount: '{count} 款模型',

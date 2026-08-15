@@ -1,6 +1,7 @@
 export default {
   pricing: {
     title: 'Model Pricing',
+    adminPreview: 'Admin preview',
     description: 'Compare official pricing, Sub2API system base prices, effective multipliers, and final RMB charges for every published group.',
     marketDescription: 'Explore available models and compare official pricing, system base prices, effective multipliers, and final RMB charges by group.',
     modelCount: '{count} models',

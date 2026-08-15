@@ -12,8 +12,7 @@ const server = http.createServer((request, response) => {
 
   if (path === '/setup/status') data = { needs_setup: false, step: 'completed' }
   else if (path === '/api/v1/settings/public') data = publicSettings
-  else if (path === '/api/v1/pricing/catalog') data = buildPricingCatalog(false)
-  else if (path === '/api/v1/pricing/catalog/me') data = buildPricingCatalog(true)
+  else if (path === '/api/v1/admin/pricing/catalog') data = buildPricingCatalog(false)
   else if (path === '/api/v1/auth/me') data = mockUser
   else if (path === '/api/v1/groups/rates') data = { 27: 0.16, 46: 0.18 }
   else if (path === '/api/v1/subscriptions/active') data = []

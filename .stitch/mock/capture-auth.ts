@@ -25,8 +25,7 @@ export default async function preparePricingCapture(page: Page) {
     let data: unknown = []
     if (path === '/api/v1/settings/public') data = publicSettings
     if (path === '/api/v1/auth/me') data = mockUser
-    if (path === '/api/v1/pricing/catalog') data = buildPricingCatalog(false)
-    if (path === '/api/v1/pricing/catalog/me') data = buildPricingCatalog(true)
+    if (path === '/api/v1/admin/pricing/catalog') data = buildPricingCatalog(false)
     if (path === '/api/v1/groups/rates') data = { 27: 0.16, 46: 0.18 }
     if (path === '/api/v1/subscriptions/active') data = []
     if (path === '/api/v1/announcements') data = []
