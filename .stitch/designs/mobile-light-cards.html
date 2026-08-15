@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh" style="height: auto !important; overflow: visible !important;"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>/pricing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-high": "#e3eae7",
+                        "on-background": "#161d1b",
+                        "surface-container": "#e9efec",
+                        "on-tertiary-fixed": "#001f28",
+                        "surface-container-highest": "#cbd5e1",
+                        "on-surface": "#161d1b",
+                        "inverse-on-surface": "#ecf2ef",
+                        "surface-variant": "#dde4e1",
+                        "success": "#059669",
+                        "on-secondary-fixed": "#0d1c2e",
+                        "on-primary-container": "#00423b",
+                        "on-tertiary-container": "#004051",
+                        "tertiary": "#006780",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#b9c7df",
+                        "surface": "#f4fbf8",
+                        "on-primary": "#ffffff",
+                        "background": "#f4fbf8",
+                        "outline": "#6c7a77",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#006b5f",
+                        "surface-bright": "#f4fbf8",
+                        "on-primary-fixed": "#00201c",
+                        "secondary-container": "#d5e3fc",
+                        "on-secondary-fixed-variant": "#3a485b",
+                        "surface-dim": "#d5dbd9",
+                        "on-primary-fixed-variant": "#005048",
+                        "warning": "#d97706",
+                        "primary-fixed": "#71f8e4",
+                        "secondary-fixed": "#d5e3fc",
+                        "on-error-container": "#93000a",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#14b8a6",
+                        "inverse-primary": "#4fdbc8",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#3c4947",
+                        "surface-container-low": "#eff5f2",
+                        "error": "#dc2626",
+                        "tertiary-fixed-dim": "#6cd3f7",
+                        "tertiary-fixed": "#b7eaff",
+                        "outline-variant": "#bbcac6",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed-variant": "#004e61",
+                        "surface-tint": "#006b5f",
+                        "tertiary-container": "#44b1d3",
+                        "inverse-surface": "#2b3230",
+                        "secondary": "#515f74",
+                        "on-secondary-container": "#57657a",
+                        "primary-fixed-dim": "#4fdbc8"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+<div class="relative min-h-screen max-w-[390px] mx-auto overflow-hidden bg-surface shadow-2xl sm:max-w-md" id="app">
+<!-- Header -->
+<header class="sticky top-0 z-40 border-b border-outline-variant bg-surface/90 backdrop-blur-md">
+<nav class="flex h-14 items-center justify-between px-4">
+<a class="flex items-center gap-2" href="/home">
+<img alt="Sub2API" class="h-8 w-8 rounded-lg object-contain" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+CiAgPHRpdGxlIGlkPSJ0aXRsZSI+U3ViMkFQSTwvdGl0bGU+CiAgPGRlc2MgaWQ9ImRlc2MiPkFuIGludGVybG9ja2luZyBTIHN5bWJvbCByZXByZXNlbnRpbmcgc3Vic2NyaXB0aW9uIHJvdXRpbmcgaW50byBBUElzLjwvZGVzYz4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iczJhLWJnIiB4MT0iNzIiIHkxPSI0NCIgeDI9IjQ0MiIgeTI9IjQ3OCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgogICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjMTQyQjU2Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iLjUyIiBzdG9wLWNvbG9yPSIjMEExQTM5Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzA2MTEyNyIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0iczJhLWFtYmllbnQiIGN4PSIwIiBjeT0iMCIgcj0iMSIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTY4IDkyKSByb3RhdGUoNTEpIHNjYWxlKDM0MiAzODIpIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iIzNFNjhCMCIgc3RvcC1vcGFjaXR5PSIuMjgiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjM0U2OEIwIiBzdG9wLW9wYWNpdHk9IjAiLz4KICAgIDwvcmFkaWFsR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9InMyYS1icmFuZCIgeDE9IjQiIHkxPSI0IiB4Mj0iMjAiIHkyPSIyMCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgogICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjNzlGNEJEIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iLjQ4IiBzdG9wLWNvbG9yPSIjMzlEOUU3Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzM4NzVGNiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxmaWx0ZXIgaWQ9InMyYS1zaGFkb3ciIHg9Ii0yNSUiIHk9Ii0yNSUiIHdpZHRoPSIxNTAlIiBoZWlnaHQ9IjE2NSUiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+CiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIuNTUiIHN0ZERldmlhdGlvbj0iLjY1IiBmbG9vZC1jb2xvcj0iIzAyMDgxNyIgZmxvb2Qtb3BhY2l0eT0iLjM0Ii8+CiAgICA8L2ZpbHRlcj4KICA8L2RlZnM+CgogIDxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjQ4MCIgaGVpZ2h0PSI0ODAiIHJ4PSIxMjAiIGZpbGw9InVybCgjczJhLWJnKSIvPgogIDxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjQ4MCIgaGVpZ2h0PSI0ODAiIHJ4PSIxMjAiIGZpbGw9InVybCgjczJhLWFtYmllbnQpIi8+CiAgPHJlY3QgeD0iMTYuNzUiIHk9IjE2Ljc1IiB3aWR0aD0iNDc4LjUiIGhlaWdodD0iNDc4LjUiIHJ4PSIxMTkuMjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0E1QkZGRiIgc3Ryb2tlLW9wYWNpdHk9Ii4xNiIgc3Ryb2tlLXdpZHRoPSIxLjUiLz4KCiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNTIgNTIpIHNjYWxlKDE3KSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3MyYS1icmFuZCkiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyLjciIGZpbHRlcj0idXJsKCNzMmEtc2hhZG93KSI+CiAgICA8cGF0aCBkPSJtMTkuMjUgNy42NS0yLjU1LTMuMmExLjMzIDEuMzMgMCAwIDAtMS4wMy0uNUg4LjU4Yy0uMzQgMC0uNjcuMTMtLjkxLjM3TDQuMTUgNy42NWMtLjkzLjg4LS42IDEuNTIuNjUgMi4zbDkuNTUgNS45NyIvPgogICAgPHBhdGggZD0ibTQuNzUgMTYuMzUgMi41NSAzLjJjLjI1LjMxLjYzLjUgMS4wMy41aDcuMDljLjM0IDAgLjY3LS4xMy45MS0uMzdsMy41Mi0zLjMzYy45My0uODguNi0xLjUyLS42NS0yLjNMOS42NSA4LjA4Ii8+CiAgPC9nPgo8L3N2Zz4K"/>
+<span class="text-sm font-semibold text-on-surface">Sub2API</span>
+</a>
+<div class="flex items-center gap-3">
+<button class="flex h-10 items-center justify-center gap-1 rounded-full px-2 text-on-surface-variant hover:bg-surface-container-highest">
+<span class="text-sm">🇨🇳 ZH</span>
+</button>
+<a class="flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-on-primary transition-colors hover:bg-primary/90" href="/login">登录</a>
+</div>
+</nav>
+</header>
+<main class="relative z-10 pb-12">
+<!-- Hero Search -->
+<section class="px-4 py-6 text-center">
+<div class="inline-flex items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 text-[11px] font-medium text-primary">
+<span class="h-1.5 w-1.5 rounded-full bg-success"></span> 实时目录 · 8 款模型
+                </div>
+<h1 class="mt-4 text-2xl font-bold tracking-tight text-on-surface">模型价格</h1>
+<p class="mt-2 text-xs text-on-surface-variant leading-relaxed">浏览当前可用模型，按分组比较官方定价、系统基准价、有效倍率与最终人民币扣费。</p>
+<div class="relative mt-5">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[20px]">search</span>
+<input class="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="搜索模型名称或模型 ID"/>
+</div>
+</section>
+<!-- Billing Explanation -->
+<section class="mx-4 mb-6 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+<div class="space-y-4">
+<div>
+<p class="text-[10px] font-semibold uppercase tracking-wider text-outline">充值额度规则</p>
+<p class="mt-1 font-mono text-[15px] font-bold text-primary">¥1 充值 = $1 美元额度</p>
+<p class="mt-1 text-[10px] leading-relaxed text-on-surface-variant">系统余额按美元额度结算；当前每充值 1 元人民币获得 1 美元额度。</p>
+</div>
+<div class="h-px w-full bg-outline-variant/40"></div>
+<div>
+<p class="text-[10px] font-semibold uppercase tracking-wider text-outline">运营人民币对比汇率</p>
+<p class="mt-1 font-mono text-[15px] font-bold text-on-surface">1 USD = ¥6.8</p>
+<p class="mt-1 text-[10px] text-on-surface-variant">运营固定对比汇率（非实时牌价） · 2026-08-14</p>
+</div>
+<div class="h-px w-full bg-outline-variant/40"></div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-[10px] font-semibold uppercase text-outline">海外模型实际扣费</p>
+<p class="mt-1 font-mono text-[10px] leading-relaxed text-on-surface-variant">USD价 × 倍率 ÷ 每元获$额度</p>
+</div>
+<div>
+<p class="text-[10px] font-semibold uppercase text-outline">国模综合实际扣费</p>
+<p class="mt-1 font-mono text-[10px] leading-relaxed text-on-surface-variant">RMB价 × 倍率 (无汇率)</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Sticky Filter Toolbar -->
+<div class="sticky top-14 z-30 border-y border-outline-variant bg-surface/95 px-4 py-3 backdrop-blur-md shadow-sm">
+<div class="flex flex-col gap-3">
+<div class="relative">
+<select class="h-11 w-full appearance-none rounded-xl border border-outline-variant bg-surface-container-lowest px-3 pr-10 text-sm text-on-surface focus:border-primary focus:outline-none">
+<option value="4">Plus/Pro 混合号池 · ×0.1</option>
+<option value="27">Pro 更稳定号池 · ×0.2</option>
+<option value="80">GPT 破甲 · ×0.1</option>
+<option value="47">CC-Kiro · ×0.1</option>
+<option value="46">CC-满血 Max · ×0.2</option>
+<option value="41">Gemini · ×0.1</option>
+<option value="67">Grok · ×0.2</option>
+<option value="82">国模综合 · ×0.2</option>
+</select>
+<span class="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-outline">expand_more</span>
+</div>
+<div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+<button class="flex h-8 flex-shrink-0 items-center rounded-full bg-primary px-3 text-[11px] font-medium text-on-primary">全部 · 4</button>
+<button class="flex h-8 flex-shrink-0 items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-highest">OpenAI · 4</button>
+<button class="flex h-8 flex-shrink-0 items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-highest">Claude · 0</button>
+<button class="flex h-8 flex-shrink-0 items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-highest">Gemini · 0</button>
+<button class="flex h-8 flex-shrink-0 items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-highest">Grok · 0</button>
+<button class="flex h-8 flex-shrink-0 items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 text-[11px] font-medium text-on-surface-variant hover:bg-surface-container-highest">国模 · 0</button>
+</div>
+</div>
+</div>
+<!-- Model Grid -->
+<div class="bg-surface-container px-4 py-6">
+<div class="grid grid-cols-1 gap-4">
+<!-- Card 1 -->
+<article class="flex flex-col rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+<header class="flex items-center justify-between gap-3">
+<div class="flex min-w-0 items-center gap-3">
+<span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-tertiary-container text-on-tertiary-container font-bold text-sm">O</span>
+<div class="min-w-0">
+<h2 class="truncate font-mono text-[15px] font-bold text-on-surface">gpt-5.6</h2>
+<p class="truncate text-[11px] text-on-surface-variant mt-0.5">GPT-5.6 (Sol)</p>
+</div>
+</div>
+<button class="flex h-8 flex-shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[11px] font-medium text-primary hover:bg-surface-container-high transition-colors">查看详情</button>
+</header>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输入</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.5</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输出</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥3</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">缓存读取</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.05</p>
+</div>
+</div>
+<p class="mt-2 text-right text-[9px] text-outline">每 100 万 tokens</p>
+<footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-outline-variant/40 pt-3">
+<div class="flex items-center gap-1.5">
+<span class="rounded bg-surface-container-high px-1.5 py-0.5 text-[10px] text-on-surface-variant">Plus/Pro 混合号池</span>
+<span class="font-mono text-[10px] font-medium text-outline">×0.1</span>
+</div>
+<span class="rounded-full bg-tertiary px-2 py-0.5 text-[10px] font-medium text-on-tertiary">省 98.53%</span>
+</footer>
+</article>
+<!-- Card 2 -->
+<article class="flex flex-col rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+<header class="flex items-center justify-between gap-3">
+<div class="flex min-w-0 items-center gap-3">
+<span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-tertiary-container text-on-tertiary-container font-bold text-sm">O</span>
+<div class="min-w-0">
+<h2 class="truncate font-mono text-[15px] font-bold text-on-surface">gpt-5.6-terra</h2>
+<p class="truncate text-[11px] text-on-surface-variant mt-0.5">GPT-5.6 Terra</p>
+</div>
+</div>
+<button class="flex h-8 flex-shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[11px] font-medium text-primary hover:bg-surface-container-high transition-colors">查看详情</button>
+</header>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输入</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.25</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输出</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥1.5</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">缓存读取</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.025</p>
+</div>
+</div>
+<p class="mt-2 text-right text-[9px] text-outline">每 100 万 tokens</p>
+<footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-outline-variant/40 pt-3">
+<div class="flex items-center gap-1.5">
+<span class="rounded bg-surface-container-high px-1.5 py-0.5 text-[10px] text-on-surface-variant">Plus/Pro 混合号池</span>
+<span class="font-mono text-[10px] font-medium text-outline">×0.1</span>
+</div>
+<span class="rounded-full bg-tertiary px-2 py-0.5 text-[10px] font-medium text-on-tertiary">省 98.16%</span>
+</footer>
+</article>
+<!-- Card 3 -->
+<article class="flex flex-col rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+<header class="flex items-center justify-between gap-3">
+<div class="flex min-w-0 items-center gap-3">
+<span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-tertiary-container text-on-tertiary-container font-bold text-sm">O</span>
+<div class="min-w-0">
+<h2 class="truncate font-mono text-[15px] font-bold text-on-surface">gpt-5.5</h2>
+<p class="truncate text-[11px] text-on-surface-variant mt-0.5">GPT-5.5</p>
+</div>
+</div>
+<button class="flex h-8 flex-shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[11px] font-medium text-primary hover:bg-surface-container-high transition-colors">查看详情</button>
+</header>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输入</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.25</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输出</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥1.5</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">缓存读取</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.025</p>
+</div>
+</div>
+<p class="mt-2 text-right text-[9px] text-outline">每 100 万 tokens</p>
+<footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-outline-variant/40 pt-3">
+<div class="flex items-center gap-1.5">
+<span class="rounded bg-surface-container-high px-1.5 py-0.5 text-[10px] text-on-surface-variant">Plus/Pro 混合号池</span>
+<span class="font-mono text-[10px] font-medium text-outline">×0.1</span>
+</div>
+<span class="rounded-full bg-tertiary px-2 py-0.5 text-[10px] font-medium text-on-tertiary">省 99.26%</span>
+</footer>
+</article>
+<!-- Card 4 -->
+<article class="flex flex-col rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+<header class="flex items-center justify-between gap-3">
+<div class="flex min-w-0 items-center gap-3">
+<span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-tertiary-container text-on-tertiary-container font-bold text-sm">O</span>
+<div class="min-w-0">
+<h2 class="truncate font-mono text-[15px] font-bold text-on-surface">gpt-5.4</h2>
+<p class="truncate text-[11px] text-on-surface-variant mt-0.5">GPT-5.4</p>
+</div>
+</div>
+<button class="flex h-8 flex-shrink-0 items-center rounded-lg border border-outline-variant px-3 text-[11px] font-medium text-primary hover:bg-surface-container-high transition-colors">查看详情</button>
+</header>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输入</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.25</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">输出</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥1.5</p>
+</div>
+<div class="rounded-xl border border-outline-variant/30 bg-surface px-2 py-2 text-center">
+<p class="text-[10px] text-on-surface-variant">缓存读取</p>
+<p class="mt-1 font-mono text-sm font-bold text-primary">¥0.025</p>
+</div>
+</div>
+<p class="mt-2 text-right text-[9px] text-outline">每 100 万 tokens</p>
+<footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-outline-variant/40 pt-3">
+<div class="flex items-center gap-1.5">
+<span class="rounded bg-surface-container-high px-1.5 py-0.5 text-[10px] text-on-surface-variant">Plus/Pro 混合号池</span>
+<span class="font-mono text-[10px] font-medium text-outline">×0.1</span>
+</div>
+<span class="rounded-full bg-tertiary px-2 py-0.5 text-[10px] font-medium text-on-tertiary">省 98.53%</span>
+</footer>
+</article>
+</div>
+<div class="mt-6 flex flex-wrap items-center justify-center gap-2 text-center text-[10px] text-outline">
+<span>目录生成时间：2026年8月14日 16:00:00</span>
+<span class="font-mono">vdemo-public-20260814</span>
+</div>
+</div>
+</main>
+</div>
+</body></html>
