@@ -162,6 +162,13 @@ func runMainServer() {
 			log.Printf("Prompt Audit started in degraded state: %v", err)
 		}
 	}
+	if app.TrainingData != nil {
+		if err := app.TrainingData.Start(context.Background()); err != nil {
+			// Capture is fail-open: storage or governance outages must never block
+			// the model gateway. The feature remains disabled until repaired.
+			log.Printf("Training data capture started in degraded state: %v", err)
+		}
+	}
 
 	// 启动服务器
 	go func() {

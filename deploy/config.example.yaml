@@ -1274,3 +1274,57 @@ image_storage:
   presign_expiry_hours: 24
   # 当上游返回的是图片 url 时，下载该图片再转存的字节上限（默认 32MB）
   max_download_bytes: 33554432
+
+# =============================================================================
+# Training Data Capture (实际推理报文归档，默认关闭)
+# =============================================================================
+# This captures only authenticated inference requests/responses. It does not
+# capture dashboards, billing, usage pages, admin APIs or website traffic.
+# Keep credentials in the server environment, never in this repository.
+training_data:
+  enabled: false
+  # Generate once from a cryptographically random 32+ byte value. Keep it
+  # stable for the lifetime of existing rights/captures; rotation requires a
+  # deliberate subject-reference migration.
+  subject_hmac_key: ""
+  # Mount this absolute path on a dedicated persistent volume/partition.
+  spool_dir: "/var/lib/sub2api/training-data-spool"
+  spool_max_bytes: 4294967296
+  queue_capacity: 8192
+  queue_max_bytes: 67108864
+  writer_shards: 4
+  capture_max_body_bytes: 33554432
+  rights_refresh_seconds: 60
+  upload_interval_seconds: 5
+  upload_concurrency: 4
+  capture_unknown_rights: false
+  raw_store:
+    endpoint: ""
+    region: "auto"
+    bucket: ""
+    prefix: "raw/v1"
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+    server_side_encryption: "AES256"
+    kms_key_id: ""
+  curated_store:
+    endpoint: ""
+    region: "auto"
+    bucket: ""
+    prefix: "curated/v1"
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+    server_side_encryption: "AES256"
+    kms_key_id: ""
+  delivery_store:
+    endpoint: ""
+    region: "auto"
+    bucket: ""
+    prefix: "delivery/v1"
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+    server_side_encryption: "AES256"
+    kms_key_id: ""

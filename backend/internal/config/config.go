@@ -10,6 +10,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -98,6 +99,44 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
+	TrainingData            TrainingDataConfig            `mapstructure:"training_data"`
+}
+
+// TrainingDataConfig controls the opt-in training-data capture and curation
+// pipeline. The feature is disabled by default. Governance/index metadata uses
+// the application's migration-controlled PostgreSQL schema; payloads stay in
+// isolated object-store buckets.
+type TrainingDataConfig struct {
+	Enabled               bool                          `mapstructure:"enabled"`
+	SubjectHMACKey        string                        `mapstructure:"subject_hmac_key"`
+	SpoolDir              string                        `mapstructure:"spool_dir"`
+	SpoolMaxBytes         int64                         `mapstructure:"spool_max_bytes"`
+	QueueCapacity         int                           `mapstructure:"queue_capacity"`
+	QueueMaxBytes         int64                         `mapstructure:"queue_max_bytes"`
+	WriterShards          int                           `mapstructure:"writer_shards"`
+	CaptureMaxBodyBytes   int64                         `mapstructure:"capture_max_body_bytes"`
+	RightsRefreshSeconds  int                           `mapstructure:"rights_refresh_seconds"`
+	UploadIntervalSeconds int                           `mapstructure:"upload_interval_seconds"`
+	UploadConcurrency     int                           `mapstructure:"upload_concurrency"`
+	CaptureUnknownRights  bool                          `mapstructure:"capture_unknown_rights"`
+	RawStore              TrainingDataObjectStoreConfig `mapstructure:"raw_store"`
+	CuratedStore          TrainingDataObjectStoreConfig `mapstructure:"curated_store"`
+	DeliveryStore         TrainingDataObjectStoreConfig `mapstructure:"delivery_store"`
+}
+
+// TrainingDataObjectStoreConfig describes an S3-compatible private bucket.
+// Credentials are injected through environment variables or a root-only
+// config file and must never be committed to source control.
+type TrainingDataObjectStoreConfig struct {
+	Endpoint             string `mapstructure:"endpoint"`
+	Region               string `mapstructure:"region"`
+	Bucket               string `mapstructure:"bucket"`
+	Prefix               string `mapstructure:"prefix"`
+	AccessKeyID          string `mapstructure:"access_key_id"`
+	SecretAccessKey      string `mapstructure:"secret_access_key"`
+	ForcePathStyle       bool   `mapstructure:"force_path_style"`
+	ServerSideEncryption string `mapstructure:"server_side_encryption"`
+	KMSKeyID             string `mapstructure:"kms_key_id"`
 }
 
 type LogConfig struct {
@@ -271,6 +310,33 @@ func (c *ImageStorageConfig) MissingCredentialKeys() []string {
 		missing = append(missing, "image_storage.secret_access_key")
 	}
 	return missing
+}
+
+func (c TrainingDataObjectStoreConfig) IsConfigured() bool {
+	return strings.TrimSpace(c.Bucket) != "" &&
+		strings.TrimSpace(c.AccessKeyID) != "" &&
+		strings.TrimSpace(c.SecretAccessKey) != ""
+}
+
+func normalizeTrainingDataConfig(cfg *TrainingDataConfig) {
+	if cfg == nil {
+		return
+	}
+	cfg.SubjectHMACKey = strings.TrimSpace(cfg.SubjectHMACKey)
+	cfg.SpoolDir = strings.TrimSpace(cfg.SpoolDir)
+	for _, store := range []*TrainingDataObjectStoreConfig{&cfg.RawStore, &cfg.CuratedStore, &cfg.DeliveryStore} {
+		store.Endpoint = strings.TrimSpace(store.Endpoint)
+		store.Region = strings.TrimSpace(store.Region)
+		if store.Region == "" {
+			store.Region = "auto"
+		}
+		store.Bucket = strings.TrimSpace(store.Bucket)
+		store.Prefix = strings.Trim(strings.TrimSpace(store.Prefix), "/")
+		store.AccessKeyID = strings.TrimSpace(store.AccessKeyID)
+		store.SecretAccessKey = strings.TrimSpace(store.SecretAccessKey)
+		store.ServerSideEncryption = strings.TrimSpace(store.ServerSideEncryption)
+		store.KMSKeyID = strings.TrimSpace(store.KMSKeyID)
+	}
 }
 
 type LinuxDoConnectConfig struct {
@@ -1757,6 +1823,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	normalizeTrainingDataConfig(&cfg.TrainingData)
 	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
 		content, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
@@ -2075,6 +2142,33 @@ func setDefaults() {
 	viper.SetDefault("image_storage.access_key_id", "")
 	viper.SetDefault("image_storage.secret_access_key", "")
 	viper.SetDefault("image_storage.public_base_url", "")
+
+	// Training-data asset pipeline. Disabled by default; enabling it requires a
+	// stable subject HMAC key and a private raw object-store bucket.
+	viper.SetDefault("training_data.enabled", false)
+	viper.SetDefault("training_data.subject_hmac_key", "")
+	viper.SetDefault("training_data.spool_dir", "data/training-data-spool")
+	viper.SetDefault("training_data.spool_max_bytes", int64(4*1024*1024*1024))
+	viper.SetDefault("training_data.queue_capacity", 8192)
+	viper.SetDefault("training_data.queue_max_bytes", int64(64*1024*1024))
+	viper.SetDefault("training_data.writer_shards", 4)
+	viper.SetDefault("training_data.capture_max_body_bytes", int64(32*1024*1024))
+	viper.SetDefault("training_data.rights_refresh_seconds", 60)
+	viper.SetDefault("training_data.upload_interval_seconds", 5)
+	viper.SetDefault("training_data.upload_concurrency", 4)
+	viper.SetDefault("training_data.capture_unknown_rights", false)
+	for _, store := range []string{"raw_store", "curated_store", "delivery_store"} {
+		base := "training_data." + store + "."
+		viper.SetDefault(base+"endpoint", "")
+		viper.SetDefault(base+"region", "auto")
+		viper.SetDefault(base+"bucket", "")
+		viper.SetDefault(base+"prefix", "")
+		viper.SetDefault(base+"access_key_id", "")
+		viper.SetDefault(base+"secret_access_key", "")
+		viper.SetDefault(base+"force_path_style", false)
+		viper.SetDefault(base+"server_side_encryption", "AES256")
+		viper.SetDefault(base+"kms_key_id", "")
+	}
 
 	// Ops (vNext)
 	viper.SetDefault("ops.enabled", true)
@@ -2885,6 +2979,59 @@ func (c *Config) Validate() error {
 		}
 		if c.BatchImage.VertexOutputRetentionHours <= 0 {
 			return fmt.Errorf("batch_image.vertex_output_retention_hours must be positive")
+		}
+	}
+	if c.TrainingData.Enabled {
+		if len([]byte(strings.TrimSpace(c.TrainingData.SubjectHMACKey))) < 32 {
+			return fmt.Errorf("training_data.subject_hmac_key must be at least 32 bytes when training_data.enabled=true")
+		}
+		if strings.TrimSpace(c.TrainingData.SpoolDir) == "" {
+			return fmt.Errorf("training_data.spool_dir is required when training_data.enabled=true")
+		}
+		if !filepath.IsAbs(c.TrainingData.SpoolDir) {
+			return fmt.Errorf("training_data.spool_dir must be an absolute path on a dedicated persistent mount when training_data.enabled=true")
+		}
+		if !c.TrainingData.RawStore.IsConfigured() {
+			return fmt.Errorf("training_data.raw_store bucket and credentials are required when training_data.enabled=true")
+		}
+	}
+	if c.TrainingData.SpoolMaxBytes <= 0 {
+		return fmt.Errorf("training_data.spool_max_bytes must be positive")
+	}
+	if c.TrainingData.QueueCapacity <= 0 {
+		return fmt.Errorf("training_data.queue_capacity must be positive")
+	}
+	if c.TrainingData.QueueMaxBytes <= 0 || c.TrainingData.QueueMaxBytes > c.TrainingData.SpoolMaxBytes {
+		return fmt.Errorf("training_data.queue_max_bytes must be positive and no larger than spool_max_bytes")
+	}
+	if c.TrainingData.WriterShards <= 0 || c.TrainingData.WriterShards > 64 {
+		return fmt.Errorf("training_data.writer_shards must be between 1 and 64")
+	}
+	if c.TrainingData.CaptureMaxBodyBytes <= 0 {
+		return fmt.Errorf("training_data.capture_max_body_bytes must be positive")
+	}
+	if c.TrainingData.RightsRefreshSeconds <= 0 {
+		return fmt.Errorf("training_data.rights_refresh_seconds must be positive")
+	}
+	if c.TrainingData.UploadIntervalSeconds <= 0 {
+		return fmt.Errorf("training_data.upload_interval_seconds must be positive")
+	}
+	if c.TrainingData.UploadConcurrency <= 0 || c.TrainingData.UploadConcurrency > 32 {
+		return fmt.Errorf("training_data.upload_concurrency must be between 1 and 32")
+	}
+	for name, store := range map[string]TrainingDataObjectStoreConfig{
+		"raw_store":      c.TrainingData.RawStore,
+		"curated_store":  c.TrainingData.CuratedStore,
+		"delivery_store": c.TrainingData.DeliveryStore,
+	} {
+		switch store.ServerSideEncryption {
+		case "", "AES256":
+		case "aws:kms":
+			if strings.TrimSpace(store.KMSKeyID) == "" {
+				return fmt.Errorf("training_data.%s.kms_key_id is required for aws:kms encryption", name)
+			}
+		default:
+			return fmt.Errorf("training_data.%s.server_side_encryption must be AES256 or aws:kms", name)
 		}
 	}
 	if c.Dashboard.Enabled {

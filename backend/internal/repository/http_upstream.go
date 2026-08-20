@@ -31,6 +31,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/trainingdata"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/mod/semver"
 )
@@ -201,8 +202,17 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	// 执行请求
 	client := httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
+	var captureAttempt *trainingdata.Attempt
+	if req != nil {
+		if session := trainingdata.SessionFromContext(req.Context()); session != nil {
+			captureAttempt = session.BeginUpstreamAttempt(req)
+		}
+	}
 	resp, err := servertiming.Do(client, req)
 	if err != nil {
+		if captureAttempt != nil {
+			captureAttempt.Fail(err)
+		}
 		s.recordOpenAIHTTP2Failure(profile, entry.protocolMode, entry.proxyKey, err)
 		// 请求失败，立即减少计数
 		atomic.AddInt64(&entry.inFlight, -1)
@@ -210,9 +220,7 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 		return nil, err
 	}
 	s.recordOpenAIHTTP2Success(profile, entry.protocolMode, entry.proxyKey)
-
-	// 如果上游返回了压缩内容，解压后再交给业务层
-	decompressResponseBody(resp)
+	prepareUpstreamResponse(resp, captureAttempt)
 
 	// 包装响应体，在关闭时自动减少计数并更新时间戳
 	// 这确保了流式响应（如 SSE）在完全读取前不会被淘汰
@@ -265,15 +273,24 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 
 	client := httpClientForUpstreamRequest(entry.client, req)
 	client = httpClientWithGrokAccessDeniedFallback(client)
+	var captureAttempt *trainingdata.Attempt
+	if req != nil {
+		if session := trainingdata.SessionFromContext(req.Context()); session != nil {
+			captureAttempt = session.BeginUpstreamAttempt(req)
+		}
+	}
 	resp, err := servertiming.Do(client, req)
 	if err != nil {
+		if captureAttempt != nil {
+			captureAttempt.Fail(err)
+		}
 		atomic.AddInt64(&entry.inFlight, -1)
 		atomic.StoreInt64(&entry.lastUsed, time.Now().UnixNano())
 		slog.Debug("tls_fingerprint_request_failed", "account_id", accountID, "error", err)
 		return nil, err
 	}
 
-	decompressResponseBody(resp)
+	prepareUpstreamResponse(resp, captureAttempt)
 
 	resp.Body = wrapTrackedBody(resp.Body, func() {
 		atomic.AddInt64(&entry.inFlight, -1)
@@ -281,6 +298,24 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	})
 
 	return resp, nil
+}
+
+type upstreamResponseCapture interface {
+	RecordResponseHeaders(*http.Response)
+	CaptureResponseBody(*http.Response)
+}
+
+func prepareUpstreamResponse(resp *http.Response, capture upstreamResponseCapture) {
+	if capture != nil {
+		capture.RecordResponseHeaders(resp)
+	}
+	// The gateway consumes the decoded representation. Wrapping after this step
+	// keeps captured JSON/SSE usable while the pre-decompression header snapshot
+	// still records Content-Encoding and the original upstream metadata.
+	decompressResponseBody(resp)
+	if capture != nil {
+		capture.CaptureResponseBody(resp)
+	}
 }
 
 func httpClientForUpstreamRequest(client *http.Client, req *http.Request) *http.Client {
@@ -346,6 +381,13 @@ func (t *grokAccessDeniedFallbackTransport) RoundTrip(req *http.Request) (*http.
 
 	if resp.Body != nil {
 		_ = resp.Body.Close()
+	}
+	if session := trainingdata.SessionFromContext(req.Context()); session != nil {
+		// The compatibility transport performs a second real upstream request
+		// inside one http.Client.Do call. Until those two wire attempts are
+		// represented separately, keep the capture for audit but prevent it from
+		// entering a curated training set with incorrect provenance.
+		session.MarkIncomplete("grok_internal_fallback_not_split")
 	}
 	slog.Warn("grok_cli_access_denied_api_fallback_succeeded", "method", req.Method, "path", req.URL.EscapedPath())
 	return fallbackResp, nil

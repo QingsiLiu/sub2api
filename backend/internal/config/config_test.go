@@ -61,6 +61,24 @@ func TestLoadHTTPIngressSafetyDefaults(t *testing.T) {
 	require.Equal(t, 16384, cfg.APIKeyAuth.InvalidAbuse.Capacity)
 }
 
+func TestTrainingDataRequiresDedicatedAbsoluteSpoolPathWhenEnabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	viper.Set("training_data.enabled", true)
+	viper.Set("training_data.subject_hmac_key", strings.Repeat("h", 32))
+	viper.Set("training_data.spool_dir", "data/training-data-spool")
+	viper.Set("training_data.raw_store.bucket", "training-raw-test")
+	viper.Set("training_data.raw_store.access_key_id", "test-access-key")
+	viper.Set("training_data.raw_store.secret_access_key", "test-secret-key")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "must be an absolute path")
+
+	viper.Set("training_data.spool_dir", filepath.Join(t.TempDir(), "spool"))
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, filepath.IsAbs(cfg.TrainingData.SpoolDir))
+}
+
 func TestNormalizeForwardedClientIPHeaders(t *testing.T) {
 	headers, err := NormalizeForwardedClientIPHeaders([]string{
 		" x-cdn-client-ip ",
