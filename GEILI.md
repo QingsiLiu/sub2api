@@ -144,10 +144,30 @@ GoReleaser 构建二进制并推 `ghcr.io/qingsiliu/sub2api:X.Y.Z-geili.N`（附
 
 ---
 
+## 6.5 预发门禁：任何镜像先过本地预发，再交给 ops
+
+**禁止把未经预发验证的镜像交给线上。** 流程：
+
+```bash
+.github/geili/staging.sh up 0.2.0-geili.1   # 本机 Docker 起一套独立、全新空库的 Sub2API（127.0.0.1:18080）
+.github/geili/staging.sh smoke              # 健康 / 版本号 / 前端确为 Geili 构建 / 在线更新被拒 / 回滚列表为空
+.github/geili/staging.sh creds              # 管理员账号，人工走一遍关键路径
+.github/geili/staging.sh reset              # 验证完清掉数据卷
+```
+
+预发用的 compose 叠加文件在 `deploy/geili-staging/`，与线上一致地使用 fork GHCR 镜像 + `read_only` rootfs，
+但独立 project 名与数据卷，不会接触生产数据。冒烟通过 + 人工验收后，才在 ops 仓改镜像 tag 部署（§7）。
+
+## 6.6 视觉重塑工作流
+
+设计简报、屏清单、四层实施方案与验收标准见 [`frontend/src/geili/design/BRIEF.md`](frontend/src/geili/design/BRIEF.md)。
+Stitch 产出的 DESIGN.md / 关键屏 HTML / 截图入库到 `frontend/src/geili/design/stitch/`，实现时以它为唯一视觉真源。
+
 ## 7. 部署（ops 仓，非本仓）
 
 部署脚本与 compose 在 `~/code/geili/sub2api`（`QingsiLiu/geili-sub2api`），需要的改动：
 
+0. 前提：该 tag 已通过 §6.5 的预发冒烟与人工验收。
 1. `deploy/docker-compose.sub2api.yml`：`image: ghcr.io/qingsiliu/sub2api:X.Y.Z-geili.N`；加回 `read_only: true` + `/tmp` tmpfs
    （在线更新已禁用，容器无需可写 rootfs）。
 2. `bin/deploy-sub2api.sh`：目标主机改为圣路易斯 BizGeili；镜像校验改为校验 fork 的 GHCR 摘要。

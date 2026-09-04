@@ -1,0 +1,27 @@
+# Geili 本地预发（staging）环境：叠加在上游 deploy/docker-compose.yml 之上。
+#
+#   docker compose -p sub2api-staging \
+#     -f deploy/docker-compose.yml -f deploy/geili-staging/compose.override.yml \
+#     --env-file deploy/geili-staging/staging.env up -d
+#
+# 一般不直接敲上面的命令，用 .github/geili/staging.sh。
+#
+# 与线上一致的关键点：
+#   * 镜像来自 fork 的 GHCR（vX.Y.Z-geili.N），不是 weishaw/sub2api；
+#   * rootfs 只读 + /tmp tmpfs（在线更新已在构建期禁用，容器无需可写 rootfs）；
+# 与线上不同的点：
+#   * 独立 project 名 → 独立的数据卷（全新空库，不碰生产数据）；
+#   * 只监听 127.0.0.1:18080（见 staging.env）。
+services:
+  sub2api:
+    image: ghcr.io/qingsiliu/sub2api:${GEILI_IMAGE_TAG:?GEILI_IMAGE_TAG is required, e.g. 0.2.0-geili.1}
+    container_name: sub2api-staging
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  postgres:
+    container_name: sub2api-staging-postgres
+
+  redis:
+    container_name: sub2api-staging-redis
