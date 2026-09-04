@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>给力 API - 仪表盘</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Public+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {},
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Geist", "sans-serif"],
+                        "display": ["Geist", "sans-serif"],
+                        "body": ["Geist", "sans-serif"],
+                        "label": ["Public Sans", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B0D10;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1F242C;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4B535D;
+        }
+    </style>
+</head>
+<body class="bg-[#0B0D10] text-[#E6E8EB] font-body flex h-screen overflow-hidden antialiased selection:bg-[#C6F135] selection:text-[#0B0D10]">
+<!-- SideNavBar -->
+<nav class="w-[220px] h-screen border-r border-[#1F242C] bg-[#0B0D10] flex flex-col flex-shrink-0 z-20">
+<!-- Brand Header -->
+<div class="h-14 flex items-center px-4 border-b border-[#1F242C]">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-[#171B21] flex items-center justify-center border border-[#1F242C]">
+<span class="material-symbols-outlined text-[#C6F135] text-lg">api</span>
+</div>
+<div>
+<h1 class="font-headline text-base font-bold text-[#E6E8EB] leading-tight">给力 API</h1>
+<p class="text-[11px] text-[#8B949E] uppercase tracking-wider font-mono">AI 模型网关</p>
+</div>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+<!-- Group 1: 账户 -->
+<div>
+<div class="px-2 mb-2 text-[11px] font-semibold text-[#8B949E] uppercase tracking-wider">账户</div>
+<ul class="space-y-0.5">
+<li>
+<a class="flex items-center gap-3 bg-[#171B21] text-[#E6E8EB] border-l-2 border-[#C6F135] py-2 px-3 rounded-r-md text-[13px] font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[16px] text-[#C6F135]">dashboard</span>
+                            仪表盘
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">vpn_key</span>
+                            API 密钥
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">history</span>
+                            使用记录
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">widgets</span>
+                            模型广场
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">alt_route</span>
+                            可用渠道
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">analytics</span>
+                            渠道状态
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">photo_library</span>
+                            批量生图
+                        </a>
+</li>
+</ul>
+</div>
+<!-- Group 2: 付费 -->
+<div>
+<div class="px-2 mb-2 text-[11px] font-semibold text-[#8B949E] uppercase tracking-wider">付费</div>
+<ul class="space-y-0.5">
+<li>
+<a class="flex items-center justify-between text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[16px]">payments</span>
+                                充值/订阅
+                            </div>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">card_membership</span>
+                            我的订阅
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                            我的订单
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">redeem</span>
+                            兑换
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">group_add</span>
+                            邀请返利
+                        </a>
+</li>
+</ul>
+</div>
+<!-- Group 3: 设置 -->
+<div>
+<div class="px-2 mb-2 text-[11px] font-semibold text-[#8B949E] uppercase tracking-wider">设置</div>
+<ul class="space-y-0.5">
+<li>
+<a class="flex items-center gap-3 text-[#8B949E] hover:bg-[#171B21] hover:text-[#E6E8EB] py-2 px-4 rounded-md text-[13px] font-medium transition-colors border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">person</span>
+                            个人资料
+                        </a>
+</li>
+</ul>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="border-t border-[#1F242C] p-2 space-y-1">
+<div class="flex items-center justify-between px-2 py-2">
+<button class="text-[#8B949E] hover:text-[#E6E8EB] transition-colors" title="中文/EN">
+<span class="material-symbols-outlined text-[18px]">language</span>
+</button>
+<button class="text-[#8B949E] hover:text-[#E6E8EB] transition-colors" title="深色模式">
+<span class="material-symbols-outlined text-[18px]">dark_mode</span>
+</button>
+<button class="text-[#8B949E] hover:text-[#E6E8EB] transition-colors" title="折叠">
+<span class="material-symbols-outlined text-[18px]">menu_open</span>
+</button>
+<button class="text-[#8B949E] hover:text-[#E6E8EB] transition-colors" title="退出登录">
+<span class="material-symbols-outlined text-[18px]">logout</span>
+</button>
+</div>
+<!-- User Profile Summary -->
+<div class="mt-2 p-2 rounded-lg bg-[#12151A] border border-[#1F242C] flex items-center gap-3 hover:bg-[#171B21] cursor-pointer transition-colors">
+<div class="w-8 h-8 rounded bg-[#1F242C] flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional looking avatar with subtle cyberpunk vibes, neon accents, highly detailed, sharp, 8k resolution, cinematic lighting, corporate tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbyOWAYN0CFk9NWsduL4SP1z91Bi2jzRbsKvW08aa4D3Mnu_LIBgitZfZ4YQ5bmZvlkviBWTIVoqHbT8e-pTEJs_P3nnM1KlcXjdlqcvosvrhVe8mcXAwyzSlrtzyX_YlhIudBFjHOGCtuXMTBadoX7IiLTacQVn6ONPhh67PO9l3wP-GrsW3eLFLxfWckYuTMTb0zMJTygd2KJw7pNyHCrZ6TXj2oG7drU_vL_36fXBvsa-Q4GOoEeqTrgUMyZ5JOx2tI-d2-wOEt"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-[12px] font-medium text-[#E6E8EB] truncate">dev@example.com</p>
+<p class="text-[11px] font-mono text-[#C6F135] truncate">¥1,284.50</p>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden bg-[#0B0D10]">
+<!-- TopNavBar -->
+<header class="h-14 w-full border-b border-[#1F242C] bg-[#0B0D10] flex justify-between items-center px-6 flex-shrink-0 z-10">
+<!-- Left Side: Context/Title -->
+<div class="flex items-baseline gap-4">
+<h2 class="font-headline text-base font-bold text-[#E6E8EB]">仪表盘</h2>
+<span class="text-sm text-[#8B949E] hidden md:inline-block">欢迎回来！这是您账户的概览。</span>
+</div>
+<!-- Right Side: Actions -->
+<div class="flex items-center gap-6">
+<a class="text-sm font-medium text-[#8B949E] hover:text-[#E6E8EB] transition-colors flex items-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+                    文档
+                </a>
+<div class="flex items-center gap-3">
+<button class="relative p-1.5 text-[#8B949E] hover:text-[#E6E8EB] hover:bg-[#171B21] rounded-md transition-all">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-[#F85149] rounded-full border border-[#0B0D10]"></span>
+</button>
+<button class="p-1.5 text-[#8B949E] hover:text-[#E6E8EB] hover:bg-[#171B21] rounded-md transition-all">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full border border-[#1F242C] overflow-hidden ml-2 cursor-pointer ring-2 ring-transparent hover:ring-[#C6F135] transition-all">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar for a tech professional, dark background, subtle green neon rim light, highly detailed, realistic, high contrast." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3uQdy2d2LNQYQZNpgo8rTB3uTJqFj698fIlocs7DVgvtX3II71QxLb7p3fBkBrDc_8YW_9PnZw0SXSKiPUqMA8VX6tRvHQoXsNKxHwPHS2iabJn-F4UwlViPPae4x0CbE62U-b9gmnfO09K6Kmwmh8PsY97Pkgqb1P3IZUHKN5p5FTayB7KnT_rrd7DLIfAfbn2b5vtixhxY-b5l9xCGy9jVsTGcnC8Ee1lmoTqmtrgLinzUKcSoZLkq1EWmKyighSIXrD_j6Im-j"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Grid -->
+<div class="flex-1 overflow-y-auto p-6 scroll-smooth">
+<div class="max-w-[1440px] mx-auto space-y-6">
+<!-- Row 1: Stats (4 Cards) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Balance Card -->
+<div class="bg-[#12151A] rounded-lg p-5 border border-[#1F242C] relative overflow-hidden group hover:border-[#4B535D] transition-colors border-t-2 border-t-[#C6F135]">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-[#8B949E]">
+<span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+<span class="text-[13px] font-medium">账户余额</span>
+</div>
+<button class="bg-[#C6F135] text-[#0B0D10] text-[11px] font-semibold px-2 py-1 rounded hover:bg-opacity-90 transition-opacity">充值</button>
+</div>
+<div class="mt-3">
+<span class="text-2xl font-bold font-mono text-[#E6E8EB]">¥1,284.50</span>
+</div>
+</div>
+<!-- API Keys Card -->
+<div class="bg-[#12151A] rounded-lg p-5 border border-[#1F242C] relative overflow-hidden group hover:border-[#4B535D] transition-colors border-t-2 border-t-[#C6F135]">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-[#8B949E]">
+<span class="material-symbols-outlined text-[18px]">key</span>
+<span class="text-[13px] font-medium">活跃 API 密钥</span>
+</div>
+<button class="text-[#8B949E] hover:text-[#C6F135] text-[11px] font-semibold flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[14px]">add</span>
+                                创建
+                            </button>
+</div>
+<div class="mt-3">
+<span class="text-2xl font-bold font-mono text-[#E6E8EB]">6</span>
+<span class="text-[#8B949E] text-sm ml-2">/ 10</span>
+</div>
+</div>
+<!-- Today Requests Card -->
+<div class="bg-[#12151A] rounded-lg p-5 border border-[#1F242C] relative overflow-hidden group hover:border-[#4B535D] transition-colors border-t-2 border-t-[#C6F135]">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-[#8B949E]">
+<span class="material-symbols-outlined text-[18px]">swap_vert</span>
+<span class="text-[13px] font-medium">今日请求数</span>
+</div>
+<span class="flex items-center gap-1 text-[11px] font-mono text-[#3FB950] bg-[#3FB950]/10 px-1.5 py-0.5 rounded border border-[#3FB950]/20">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+                                +8.2%
+                            </span>
+</div>
+<div class="mt-3">
+<span class="text-2xl font-bold font-mono text-[#E6E8EB]">12,408</span>
+</div>
+</div>
+<!-- Today Spend Card -->
+<div class="bg-[#12151A] rounded-lg p-5 border border-[#1F242C] relative overflow-hidden group hover:border-[#4B535D] transition-colors border-t-2 border-t-[#C6F135]">
+<div class="flex justify-between items-start mb-2">
+<div class="flex items-center gap-2 text-[#8B949E]">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+<span class="text-[13px] font-medium">今日花费</span>
+</div>
+</div>
+<div class="mt-3">
+<span class="text-2xl font-bold font-mono text-[#E6E8EB]">¥86.32</span>
+</div>
+<div class="mt-2 text-[11px] text-[#8B949E] font-mono">
+                            Token 4.2M · <span class="text-[#C6F135]">Cache 38%</span>
+</div>
+</div>
+</div>
+<!-- Row 2: Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Token Usage Trend (2/3) -->
+<div class="lg:col-span-2 bg-[#12151A] border border-[#1F242C] rounded-lg p-5 flex flex-col h-[320px]">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-[14px] font-semibold text-[#E6E8EB]">Token 使用趋势</h3>
+<div class="flex gap-2">
+<div class="flex bg-[#0F1216] border border-[#1F242C] rounded p-0.5">
+<button class="px-2 py-1 text-[11px] font-medium rounded bg-[#1F242C] text-[#E6E8EB]">7d</button>
+<button class="px-2 py-1 text-[11px] font-medium rounded text-[#8B949E] hover:text-[#E6E8EB]">30d</button>
+</div>
+<div class="flex bg-[#0F1216] border border-[#1F242C] rounded p-0.5">
+<button class="px-2 py-1 text-[11px] font-medium rounded bg-[#1F242C] text-[#E6E8EB]">Day</button>
+<button class="px-2 py-1 text-[11px] font-medium rounded text-[#8B949E] hover:text-[#E6E8EB]">Hour</button>
+</div>
+</div>
+</div>
+<!-- Chart Area Placeholder (Stylized using borders/gradients) -->
+<div class="flex-1 relative w-full border-b border-l border-[#1F242C] mt-2 mb-6">
+<!-- Y-Axis Labels -->
+<div class="absolute -left-8 h-full flex flex-col justify-between text-[10px] font-mono text-[#4B535D] py-1">
+<span>2M</span>
+<span>1M</span>
+<span>0</span>
+</div>
+<!-- Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between">
+<div class="w-full border-t border-[#1F242C]/50 border-dashed h-0"></div>
+<div class="w-full border-t border-[#1F242C]/50 border-dashed h-0"></div>
+<div class="w-full h-0"></div>
+</div>
+<!-- Mock Data Visualization: SVG Lines -->
+<svg class="absolute inset-0 w-full h-full overflow-visible" preserveaspectratio="none">
+<!-- Cache Line (Blue) -->
+<path class="opacity-70" d="M0,100 L50,120 L100,90 L150,110 L200,80 L250,95 L300,70 L350,85 L400,60 L450,75 L500,50 L550,65 L600,40" fill="none" stroke="#58A6FF" stroke-width="1.5"></path>
+<!-- Output Line (Yellow) -->
+<path class="opacity-70" d="M0,150 L50,130 L100,160 L150,140 L200,170 L250,150 L300,180 L350,160 L400,190 L450,170 L500,200 L550,180 L600,210" fill="none" stroke="#D29922" stroke-width="1.5"></path>
+<!-- Input Line (Primary Lime) -->
+<path d="M0,80 L50,60 L100,70 L150,40 L200,55 L250,30 L300,45 L350,20 L400,35 L450,10 L500,25 L550,5 L600,15" fill="none" stroke="#C6F135" stroke-width="2"></path>
+<!-- Area Fill for Primary -->
+<path d="M0,80 L50,60 L100,70 L150,40 L200,55 L250,30 L300,45 L350,20 L400,35 L450,10 L500,25 L550,5 L600,15 L600,250 L0,250 Z" fill="#C6F135" opacity="0.08"></path>
+</svg>
+<!-- X-Axis Labels -->
+<div class="absolute -bottom-6 w-full flex justify-between text-[10px] font-mono text-[#4B535D]">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+</div>
+<!-- Legend -->
+<div class="flex justify-center gap-6 mt-auto">
+<div class="flex items-center gap-2 text-[12px] text-[#8B949E]">
+<span class="w-2 h-2 rounded-full bg-[#C6F135]"></span> Input
+                            </div>
+<div class="flex items-center gap-2 text-[12px] text-[#8B949E]">
+<span class="w-2 h-2 rounded-full bg-[#D29922]"></span> Output
+                            </div>
+<div class="flex items-center gap-2 text-[12px] text-[#8B949E]">
+<span class="w-2 h-2 rounded-full bg-[#58A6FF]"></span> Cache
+                            </div>
+</div>
+</div>
+<!-- Model Distribution (1/3) -->
+<div class="bg-[#12151A] border border-[#1F242C] rounded-lg p-5 flex flex-col h-[320px]">
+<h3 class="text-[14px] font-semibold text-[#E6E8EB] mb-4">模型分布 (7天)</h3>
+<!-- Donut Chart Placeholder -->
+<div class="flex-1 flex justify-center items-center relative mb-4">
+<svg class="w-32 h-32 transform -rotate-90" viewbox="0 0 100 100">
+<!-- Others (9%) -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#1F242C" stroke-dasharray="251.2" stroke-dashoffset="0" stroke-width="15"></circle>
+<!-- gemini-2.5-pro (18%) -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#58A6FF" stroke-dasharray="251.2" stroke-dashoffset="50.2" stroke-width="15"></circle>
+<!-- gpt-4.1 (27%) -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#D29922" stroke-dasharray="251.2" stroke-dashoffset="118" stroke-width="15"></circle>
+<!-- claude-sonnet-4 (46%) -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#C6F135" stroke-dasharray="251.2" stroke-dashoffset="185.8" stroke-width="15"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+<span class="text-[10px] text-[#8B949E] uppercase font-mono">Total Req</span>
+<span class="text-sm font-bold font-mono text-[#E6E8EB]">84.2K</span>
+</div>
+</div>
+<!-- Legend List -->
+<div class="space-y-2 mt-auto">
+<div class="flex justify-between items-center text-[12px]">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#C6F135]"></span>
+<span class="font-mono text-[#E6E8EB]">claude-sonnet-4</span>
+</div>
+<span class="font-mono text-[#8B949E]">46%</span>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#D29922]"></span>
+<span class="font-mono text-[#E6E8EB]">gpt-4.1</span>
+</div>
+<span class="font-mono text-[#8B949E]">27%</span>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#58A6FF]"></span>
+<span class="font-mono text-[#E6E8EB]">gemini-2.5-pro</span>
+</div>
+<span class="font-mono text-[#8B949E]">18%</span>
+</div>
+<div class="flex justify-between items-center text-[12px]">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#1F242C]"></span>
+<span class="font-mono text-[#E6E8EB]">Others</span>
+</div>
+<span class="font-mono text-[#8B949E]">9%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 3: Table and Context Cards -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-6">
+<!-- Recent Usage Table (2/3) -->
+<div class="lg:col-span-2 bg-[#12151A] border border-[#1F242C] rounded-lg overflow-hidden flex flex-col">
+<div class="p-4 border-b border-[#1F242C] flex justify-between items-center bg-[#12151A]">
+<h3 class="text-[14px] font-semibold text-[#E6E8EB]">最近使用记录</h3>
+<a class="text-[12px] font-medium text-[#C6F135] hover:underline flex items-center gap-1" href="#">
+                                查看全部 <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-[#1F242C] bg-[#0B0D10]/50 text-[11px] uppercase tracking-wider text-[#8B949E] font-medium">
+<th class="py-3 px-4 font-normal">时间</th>
+<th class="py-3 px-4 font-normal">模型</th>
+<th class="py-3 px-4 font-normal">API Key</th>
+<th class="py-3 px-4 font-normal text-right">In / Out Token</th>
+<th class="py-3 px-4 font-normal text-right">花费 (¥)</th>
+<th class="py-3 px-4 font-normal text-center">状态</th>
+</tr>
+</thead>
+<tbody class="text-[13px] font-mono">
+<!-- Row 1 -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors group">
+<td class="py-2.5 px-4 text-[#8B949E]">14:23:05</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">claude-sonnet-4</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...a1b2</td>
+<td class="py-2.5 px-4 text-right">
+<span class="text-[#8B949E]">2.1k /</span> <span class="text-[#E6E8EB]">450</span>
+</td>
+<td class="py-2.5 px-4 text-right text-[#E6E8EB]">0.082</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#3FB950]/30 text-[#3FB950] bg-transparent">Success</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors bg-[#0F1216]/30">
+<td class="py-2.5 px-4 text-[#8B949E]">14:22:18</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">gpt-4.1</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...a1b2</td>
+<td class="py-2.5 px-4 text-right">
+<span class="text-[#8B949E]">850 /</span> <span class="text-[#E6E8EB]">1.2k</span>
+</td>
+<td class="py-2.5 px-4 text-right text-[#E6E8EB]">0.120</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#3FB950]/30 text-[#3FB950] bg-transparent">Success</span>
+</td>
+</tr>
+<!-- Row 3: Rate Limit -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors">
+<td class="py-2.5 px-4 text-[#8B949E]">14:20:01</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">claude-sonnet-4</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...x9z8</td>
+<td class="py-2.5 px-4 text-right text-[#4B535D]">- / -</td>
+<td class="py-2.5 px-4 text-right text-[#4B535D]">0.000</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#D29922]/30 text-[#D29922] bg-transparent">RateLimit</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors bg-[#0F1216]/30">
+<td class="py-2.5 px-4 text-[#8B949E]">14:18:44</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">gemini-2.5-pro</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...m4n5</td>
+<td class="py-2.5 px-4 text-right">
+<span class="text-[#8B949E]">12.4k /</span> <span class="text-[#E6E8EB]">3.1k</span>
+</td>
+<td class="py-2.5 px-4 text-right text-[#E6E8EB]">0.450</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#3FB950]/30 text-[#3FB950] bg-transparent">Success</span>
+</td>
+</tr>
+<!-- Row 5: Error -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors">
+<td class="py-2.5 px-4 text-[#8B949E]">14:15:22</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">gpt-4.1</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...a1b2</td>
+<td class="py-2.5 px-4 text-right text-[#4B535D]">- / -</td>
+<td class="py-2.5 px-4 text-right text-[#4B535D]">0.000</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#F85149]/30 text-[#F85149] bg-transparent">Failed</span>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="border-b border-[#1F242C] hover:bg-[#171B21] transition-colors bg-[#0F1216]/30">
+<td class="py-2.5 px-4 text-[#8B949E]">14:12:10</td>
+<td class="py-2.5 px-4 text-[#E6E8EB]">claude-sonnet-4</td>
+<td class="py-2.5 px-4 text-[#8B949E]">sk-...m4n5</td>
+<td class="py-2.5 px-4 text-right">
+<span class="text-[#8B949E]">450 /</span> <span class="text-[#E6E8EB]">80</span>
+</td>
+<td class="py-2.5 px-4 text-right text-[#E6E8EB]">0.012</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-[#3FB950]/30 text-[#3FB950] bg-transparent">Success</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column (1/3) -->
+<div class="space-y-6">
+<!-- Quick Actions Card -->
+<div class="bg-[#12151A] border border-[#1F242C] rounded-lg p-5">
+<h3 class="text-[14px] font-semibold text-[#E6E8EB] mb-4">快捷操作</h3>
+<div class="grid grid-cols-2 gap-3">
+<button class="flex flex-col items-center justify-center p-3 rounded-md bg-[#0F1216] border border-[#1F242C] hover:border-[#C6F135] hover:bg-[#171B21] transition-all group">
+<span class="material-symbols-outlined text-[20px] text-[#8B949E] group-hover:text-[#C6F135] mb-2">key</span>
+<span class="text-[12px] text-[#E6E8EB]">创建密钥</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 rounded-md bg-[#0F1216] border border-[#1F242C] hover:border-[#C6F135] hover:bg-[#171B21] transition-all group">
+<span class="material-symbols-outlined text-[20px] text-[#8B949E] group-hover:text-[#C6F135] mb-2">payments</span>
+<span class="text-[12px] text-[#E6E8EB]">立即充值</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 rounded-md bg-[#0F1216] border border-[#1F242C] hover:border-[#58A6FF] hover:bg-[#171B21] transition-all group">
+<span class="material-symbols-outlined text-[20px] text-[#8B949E] group-hover:text-[#58A6FF] mb-2">menu_book</span>
+<span class="text-[12px] text-[#E6E8EB]">查阅文档</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 rounded-md bg-[#0F1216] border border-[#1F242C] hover:border-[#D29922] hover:bg-[#171B21] transition-all group">
+<span class="material-symbols-outlined text-[20px] text-[#8B949E] group-hover:text-[#D29922] mb-2">group_add</span>
+<span class="text-[12px] text-[#E6E8EB]">邀请好友</span>
+</button>
+</div>
+</div>
+<!-- Notifications Card -->
+<div class="bg-[#12151A] border border-[#1F242C] rounded-lg p-5">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-[14px] font-semibold text-[#E6E8EB]">系统公告</h3>
+<span class="bg-[#F85149] text-[#0B0D10] text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">2 NEW</span>
+</div>
+<div class="space-y-4">
+<div class="group cursor-pointer">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-[16px] text-[#58A6FF] mt-0.5">info</span>
+<div>
+<h4 class="text-[13px] font-medium text-[#E6E8EB] group-hover:text-[#C6F135] transition-colors leading-tight">新增 Claude 3.5 Sonnet 节点</h4>
+<p class="text-[11px] text-[#8B949E] mt-1 font-mono">2023-10-24 10:00</p>
+</div>
+</div>
+</div>
+<div class="w-full h-px bg-[#1F242C]"></div>
+<div class="group cursor-pointer">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-[16px] text-[#D29922] mt-0.5">warning</span>
+<div>
+<h4 class="text-[13px] font-medium text-[#E6E8EB] group-hover:text-[#C6F135] transition-colors leading-tight">周日凌晨系统维护通知</h4>
+<p class="text-[11px] text-[#8B949E] mt-1 font-mono">2023-10-23 15:30</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

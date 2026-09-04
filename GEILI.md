@@ -163,6 +163,17 @@ GoReleaser 构建二进制并推 `ghcr.io/qingsiliu/sub2api:X.Y.Z-geili.N`（附
 设计简报、屏清单、四层实施方案与验收标准见 [`frontend/src/geili/design/BRIEF.md`](frontend/src/geili/design/BRIEF.md)。
 Stitch 产出的 DESIGN.md / 关键屏 HTML / 截图入库到 `frontend/src/geili/design/stitch/`，实现时以它为唯一视觉真源。
 
+Stitch 通过官方 MCP（`https://stitch.googleapis.com/mcp`）驱动，封装在 `.github/geili/stitch.sh`：
+
+```bash
+.github/geili/stitch.sh tools                                   # 列出可用工具
+.github/geili/stitch.sh call list_design_systems '{"projectId":"…"}'
+.github/geili/stitch.sh screen <projectId> <screenId>           # 取屏（含 HTML / 截图下载 URL）
+```
+
+API key 只放本机（`STITCH_API_KEY` 或 `~/.cursor/mcp.json`），不入仓。项目 / 设计系统 / 屏的 ID 记在
+[`frontend/src/geili/design/STITCH.md`](frontend/src/geili/design/STITCH.md)。
+
 ## 7. 部署（ops 仓，非本仓）
 
 部署脚本与 compose 在 `~/code/geili/sub2api`（`QingsiLiu/geili-sub2api`），需要的改动：

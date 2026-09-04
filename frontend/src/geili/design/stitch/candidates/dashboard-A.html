@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>仪表盘 - 给力 API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: {
+                            light: "#F6F2EA",
+                            dark: "#17160F"
+                        },
+                        card: {
+                            light: "#FFFFFF",
+                            dark: "#201F18"
+                        },
+                        sidebar: {
+                            light: "#FBF8F2",
+                            dark: "#201F18"
+                        },
+                        border: {
+                            light: "#D9D2C5",
+                            dark: "#35332A"
+                        },
+                        divider: {
+                            light: "#E7E1D6",
+                            dark: "#35332A"
+                        },
+                        text: {
+                            primary: {
+                                light: "#1B1A17",
+                                dark: "#EDE8DC"
+                            },
+                            secondary: {
+                                light: "#6B665C",
+                                dark: "#A39E90"
+                            },
+                            placeholder: {
+                                light: "#9C968A",
+                                dark: "#6B665C"
+                            }
+                        },
+                        brand: {
+                            primary: {
+                                light: "#B7472A",
+                                dark: "#D9694A"
+                            },
+                            secondary: "#2B3A55",
+                            hover: {
+                                light: "#F1ECE2",
+                                dark: "#35332A"
+                            }
+                        },
+                        status: {
+                            success: "#3B7A57",
+                            warning: "#B8860B",
+                            danger: "#A23B2A",
+                            info: "#2B3A55"
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "md": "0.25rem",
+                        "lg": "0.25rem",
+                        "xl": "0.25rem",
+                        "full": "0.25rem"
+                    },
+                    fontFamily: {
+                        headline: ["\"Source Serif 4\"", "serif"],
+                        display: ["\"Source Serif 4\"", "serif"],
+                        body: ["\"Public Sans\"", "sans-serif"],
+                        label: ["\"Public Sans\"", "sans-serif"]
+                    },
+                    boxShadow: {
+                        sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                        none: 'none'
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-feature-settings: "tnum" on, "lnum" on;
+        }
+        .text-11px { font-size: 11px; }
+        .tracking-wider-sm { letter-spacing: 0.08em; }
+        
+        /* Scrollbar styling for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #D9D2C5;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #35332A;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9C968A;
+        }
+    </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark font-body antialiased selection:bg-brand-primary-light selection:text-white flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<aside class="w-60 h-screen border-r border-[#D9D2C5] dark:border-[#35332A] bg-[#FBF8F2] dark:bg-[#201F18] flex flex-col shrink-0">
+<!-- Brand -->
+<div class="h-14 flex items-center px-6 border-b border-[#E7E1D6] dark:border-[#35332A] shrink-0">
+<span class="material-symbols-outlined text-brand-primary-light dark:text-brand-primary-dark mr-2" style="font-variation-settings: 'FILL' 1;">api</span>
+<div class="flex flex-col">
+<span class="font-headline text-xl font-semibold text-[#1B1A17] dark:text-[#EDE8DC] leading-tight tracking-[-0.01em]">给力 API</span>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+<!-- Group 账户 -->
+<div>
+<div class="px-3 mb-2 text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-semibold">账户</div>
+<nav class="space-y-0.5">
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-[#B7472A] bg-[#F1ECE2] dark:bg-[#35332A] text-[#1B1A17] dark:text-[#EDE8DC] font-bold group transition-colors" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                        仪表盘
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">vpn_key</span>
+                        API 密钥
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">list_alt</span>
+                        使用记录
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">smart_toy</span>
+                        模型广场
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">hub</span>
+                        可用渠道
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">query_stats</span>
+                        渠道状态
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">photo_library</span>
+                        批量生图
+                    </a>
+</nav>
+</div>
+<!-- Group 付费 -->
+<div>
+<div class="px-3 mb-2 text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-semibold">付费</div>
+<nav class="space-y-0.5">
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">account_balance_wallet</span>
+                        充值/订阅
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">card_membership</span>
+                        我的订阅
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">receipt_long</span>
+                        我的订单
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">redeem</span>
+                        兑换
+                    </a>
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">group_add</span>
+                        邀请返利
+                    </a>
+</nav>
+</div>
+<!-- Group 设置 -->
+<div>
+<div class="px-3 mb-2 text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-semibold">设置</div>
+<nav class="space-y-0.5">
+<a class="flex items-center px-3 py-2 text-sm border-l-4 border-transparent text-[#6B665C] dark:text-[#A39E90] hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer active:opacity-80 ml-[4px]" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">settings</span>
+                        个人资料
+                    </a>
+</nav>
+</div>
+</div>
+<!-- Footer actions & Profile -->
+<div class="border-t border-[#D9D2C5] dark:border-[#35332A] p-3 flex flex-col gap-2 shrink-0 bg-[#FBF8F2] dark:bg-[#201F18]">
+<div class="flex justify-between px-2 text-[#6B665C] dark:text-[#A39E90]">
+<button class="p-1 hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] rounded transition-colors" title="语言切换">
+<span class="material-symbols-outlined text-[18px]">language</span>
+</button>
+<button class="p-1 hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] rounded transition-colors" onclick="document.documentElement.classList.toggle('dark')" title="深色模式">
+<span class="material-symbols-outlined text-[18px]">dark_mode</span>
+</button>
+<button class="p-1 hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] rounded transition-colors" title="折叠">
+<span class="material-symbols-outlined text-[18px]">menu_open</span>
+</button>
+</div>
+<div class="mt-2 flex items-center p-2 rounded hover:bg-[#F1ECE2] dark:hover:bg-[#35332A] transition-colors cursor-pointer border border-transparent">
+<div class="w-8 h-8 bg-brand-primary-light text-white flex items-center justify-center rounded font-bold text-sm shrink-0">D</div>
+<div class="ml-3 overflow-hidden">
+<div class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark truncate">dev@example.com</div>
+<div class="text-xs text-brand-primary-light dark:text-brand-primary-dark font-medium tracking-wide">¥1,284.50</div>
+</div>
+<button class="ml-auto p-1 text-[#6B665C] dark:text-[#A39E90] hover:text-[#1B1A17] dark:hover:text-[#EDE8DC]" title="退出登录">
+<span class="material-symbols-outlined text-[18px]">logout</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col min-w-0 bg-background-light dark:bg-background-dark overflow-hidden">
+<!-- TopNavBar -->
+<header class="h-14 w-full flex justify-between items-center px-6 bg-[#F6F2EA] dark:bg-[#17160F] border-b border-[#D9D2C5] dark:border-[#35332A] shrink-0">
+<div class="flex items-baseline space-x-4">
+<h1 class="font-headline text-lg font-bold text-[#1B1A17] dark:text-[#EDE8DC] tracking-tight">仪表盘</h1>
+<span class="text-sm text-text-secondary-light dark:text-text-secondary-dark hidden md:inline-block">欢迎回来！这是您账户的概览。</span>
+</div>
+<div class="flex items-center space-x-5">
+<a class="text-sm text-[#6B665C] dark:text-[#A39E90] hover:text-[#1B1A17] dark:hover:text-[#EDE8DC] transition-opacity flex items-center cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined mr-1 text-[18px]">description</span>
+                    文档
+                </a>
+<button class="relative text-[#6B665C] dark:text-[#A39E90] hover:text-[#1B1A17] dark:hover:text-[#EDE8DC] transition-opacity cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-brand-primary-light rounded-full border border-background-light dark:border-background-dark"></span>
+</button>
+<button class="text-[#6B665C] dark:text-[#A39E90] hover:text-[#1B1A17] dark:hover:text-[#EDE8DC] transition-opacity cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content -->
+<main class="flex-1 overflow-y-auto p-6 md:p-8">
+<div class="max-w-[1440px] mx-auto space-y-6">
+<!-- Row 1: 4 Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Stat 1: Balance -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex flex-col justify-between h-[104px]">
+<div class="flex justify-between items-start">
+<span class="text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">余额</span>
+<span class="material-symbols-outlined text-text-secondary-light/50 dark:text-text-secondary-dark/50 text-[18px]" style="font-variation-settings: 'wght' 200;">account_balance_wallet</span>
+</div>
+<div class="flex items-end justify-between">
+<div class="font-headline text-[28px] text-text-primary-light dark:text-text-primary-dark leading-none tracking-tight">¥1,284.50</div>
+<button class="px-2 py-1 bg-brand-primary-light text-white text-xs hover:bg-brand-primary-light/90 active:scale-95 transition-all">充值</button>
+</div>
+</div>
+<!-- Stat 2: API Keys -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex flex-col justify-between h-[104px]">
+<div class="flex justify-between items-start">
+<span class="text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">API 密钥</span>
+<span class="material-symbols-outlined text-text-secondary-light/50 dark:text-text-secondary-dark/50 text-[18px]" style="font-variation-settings: 'wght' 200;">vpn_key</span>
+</div>
+<div class="flex items-end justify-between">
+<div class="font-headline text-[28px] text-text-primary-light dark:text-text-primary-dark leading-none tracking-tight">6<span class="text-sm font-body text-text-secondary-light dark:text-text-secondary-dark ml-1 tracking-normal">个</span></div>
+<button class="px-2 py-1 bg-transparent border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark text-xs hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark active:scale-95 transition-all">创建密钥</button>
+</div>
+</div>
+<!-- Stat 3: Today's Requests -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex flex-col justify-between h-[104px]">
+<div class="flex justify-between items-start">
+<span class="text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">今日请求</span>
+<span class="material-symbols-outlined text-text-secondary-light/50 dark:text-text-secondary-dark/50 text-[18px]" style="font-variation-settings: 'wght' 200;">data_usage</span>
+</div>
+<div class="flex items-end justify-between">
+<div class="font-headline text-[28px] text-text-primary-light dark:text-text-primary-dark leading-none tracking-tight">12,408</div>
+<div class="text-xs text-status-success flex items-center font-medium">
+<span class="material-symbols-outlined text-[14px] mr-0.5">arrow_upward</span>8.2%
+                            </div>
+</div>
+</div>
+<!-- Stat 4: Today's Consumption -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex flex-col justify-between h-[104px]">
+<div class="flex justify-between items-start">
+<span class="text-11px uppercase tracking-wider-sm text-text-secondary-light dark:text-text-secondary-dark font-medium">今日消费</span>
+<span class="material-symbols-outlined text-text-secondary-light/50 dark:text-text-secondary-dark/50 text-[18px]" style="font-variation-settings: 'wght' 200;">payments</span>
+</div>
+<div class="flex flex-col items-start mt-auto">
+<div class="font-headline text-[28px] text-text-primary-light dark:text-text-primary-dark leading-none tracking-tight">¥86.32</div>
+<div class="text-[11px] text-text-secondary-light dark:text-text-secondary-dark mt-1 tracking-wide">今日 Token 4.2M · 今日缓存 38%</div>
+</div>
+</div>
+</div>
+<!-- Row 2: Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<!-- Chart 1: Token Usage Trend (2/3 width) -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-5 col-span-1 lg:col-span-2 flex flex-col h-[340px]">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline text-base font-semibold text-text-primary-light dark:text-text-primary-dark">Token 使用趋势</h2>
+<div class="flex space-x-2">
+<div class="flex border border-border-light dark:border-border-dark rounded overflow-hidden">
+<button class="px-2 py-1 text-11px font-medium bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark">7天</button>
+<button class="px-2 py-1 text-11px font-medium text-text-secondary-light dark:text-text-secondary-dark hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark">30天</button>
+</div>
+<div class="flex border border-border-light dark:border-border-dark rounded overflow-hidden">
+<button class="px-2 py-1 text-11px font-medium bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark">按天</button>
+<button class="px-2 py-1 text-11px font-medium text-text-secondary-light dark:text-text-secondary-dark hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark">按小时</button>
+</div>
+</div>
+</div>
+<div class="flex-1 relative w-full h-full">
+<canvas id="tokenUsageChart"></canvas>
+</div>
+</div>
+<!-- Chart 2: Model Distribution (1/3 width) -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-5 col-span-1 flex flex-col h-[340px]">
+<h2 class="font-headline text-base font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">模型分布</h2>
+<div class="flex flex-col h-full">
+<div class="relative h-40 w-full mb-4 flex justify-center">
+<canvas id="modelDistributionChart"></canvas>
+</div>
+<div class="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
+<!-- Legend Item 1 -->
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center">
+<span class="w-3 h-3 rounded-full bg-[#2B3A55] mr-2 shrink-0"></span>
+<span class="text-text-primary-light dark:text-text-primary-dark font-medium truncate max-w-[120px]">claude-sonnet-4</span>
+</div>
+<div class="flex items-center space-x-3 text-right">
+<span class="text-text-secondary-light dark:text-text-secondary-dark text-xs w-12">5,707次</span>
+<span class="font-semibold text-text-primary-light dark:text-text-primary-dark w-8">46%</span>
+</div>
+</div>
+<!-- Legend Item 2 -->
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center">
+<span class="w-3 h-3 rounded-full bg-[#B7472A] mr-2 shrink-0"></span>
+<span class="text-text-primary-light dark:text-text-primary-dark font-medium truncate max-w-[120px]">gpt-4.1</span>
+</div>
+<div class="flex items-center space-x-3 text-right">
+<span class="text-text-secondary-light dark:text-text-secondary-dark text-xs w-12">3,350次</span>
+<span class="font-semibold text-text-primary-light dark:text-text-primary-dark w-8">27%</span>
+</div>
+</div>
+<!-- Legend Item 3 -->
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center">
+<span class="w-3 h-3 rounded-full bg-[#D9D2C5] dark:bg-[#35332A] mr-2 shrink-0"></span>
+<span class="text-text-primary-light dark:text-text-primary-dark font-medium truncate max-w-[120px]">gemini-2.5-pro</span>
+</div>
+<div class="flex items-center space-x-3 text-right">
+<span class="text-text-secondary-light dark:text-text-secondary-dark text-xs w-12">2,233次</span>
+<span class="font-semibold text-text-primary-light dark:text-text-primary-dark w-8">18%</span>
+</div>
+</div>
+<!-- Legend Item 4 -->
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center">
+<span class="w-3 h-3 rounded-full bg-[#6B665C] mr-2 shrink-0"></span>
+<span class="text-text-primary-light dark:text-text-primary-dark font-medium truncate max-w-[120px]">其他</span>
+</div>
+<div class="flex items-center space-x-3 text-right">
+<span class="text-text-secondary-light dark:text-text-secondary-dark text-xs w-12">1,118次</span>
+<span class="font-semibold text-text-primary-light dark:text-text-primary-dark w-8">9%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 3: Tables and Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<!-- Recent Usage Table (2/3 width) -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark col-span-1 lg:col-span-2 flex flex-col h-[380px]">
+<div class="flex justify-between items-center p-4 border-b border-border-light dark:border-border-dark shrink-0">
+<h2 class="font-headline text-base font-semibold text-text-primary-light dark:text-text-primary-dark">最近使用</h2>
+<a class="text-xs font-medium text-brand-primary-light dark:text-brand-primary-dark hover:underline" href="#">查看全部</a>
+</div>
+<div class="overflow-x-auto overflow-y-auto flex-1">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="bg-background-light dark:bg-background-dark sticky top-0 z-10">
+<tr>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">时间</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">模型</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">API 密钥</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">输入/输出 Token</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">缓存</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">费用</th>
+<th class="px-4 py-2 font-semibold text-text-secondary-light dark:text-text-secondary-dark border-b border-border-light dark:border-border-dark">状态</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-light dark:divide-border-dark">
+<!-- Row 1 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:42:05</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">claude-sonnet-4</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...a1b2</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">4,096</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">1,024</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">0%</td>
+<td class="px-4 py-2.5 font-medium">¥0.14</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:40:12</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">gpt-4.1</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...c9d8</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">2,048</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">512</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">100%</td>
+<td class="px-4 py-2.5 font-medium">¥0.03</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:35:44</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">gemini-2.5-pro</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...e7f6</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">-</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">-</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">-</td>
+<td class="px-4 py-2.5 font-medium">¥0.00</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-danger/10 text-status-danger border border-status-danger/20">失败</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:30:21</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">claude-sonnet-4</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...a1b2</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">-</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">-</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">-</td>
+<td class="px-4 py-2.5 font-medium">¥0.00</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-warning/10 text-status-warning border border-status-warning/20">限流</span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:28:15</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">gpt-4.1</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...c9d8</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">8,192</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">2,048</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">50%</td>
+<td class="px-4 py-2.5 font-medium">¥0.22</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:15:02</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">claude-sonnet-4</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...a1b2</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">1,024</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">256</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">0%</td>
+<td class="px-4 py-2.5 font-medium">¥0.04</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+<!-- Row 7 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">10:05:33</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">gpt-4.1</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...c9d8</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">512</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">128</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">100%</td>
+<td class="px-4 py-2.5 font-medium">¥0.01</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+<!-- Row 8 -->
+<tr class="hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors">
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">09:50:11</td>
+<td class="px-4 py-2.5 font-medium text-text-primary-light dark:text-text-primary-dark">claude-sonnet-4</td>
+<td class="px-4 py-2.5 font-mono text-xs text-text-secondary-light dark:text-text-secondary-dark">sk-...a1b2</td>
+<td class="px-4 py-2.5">
+<span class="text-brand-secondary">16,384</span> / <span class="text-brand-primary-light dark:text-brand-primary-dark">4,096</span>
+</td>
+<td class="px-4 py-2.5 text-text-secondary-light dark:text-text-secondary-dark">0%</td>
+<td class="px-4 py-2.5 font-medium">¥0.56</td>
+<td class="px-4 py-2.5">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide bg-status-success/10 text-status-success border border-status-success/20">成功</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Actions & Announcements (1/3 width) -->
+<div class="col-span-1 flex flex-col gap-4 h-[380px]">
+<!-- Quick Actions -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex-shrink-0">
+<h2 class="font-headline text-base font-semibold text-text-primary-light dark:text-text-primary-dark mb-4">快捷操作</h2>
+<div class="grid grid-cols-2 gap-3">
+<button class="flex flex-col items-center justify-center p-3 border border-border-light dark:border-border-dark rounded hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors group">
+<span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-brand-primary-light dark:group-hover:text-brand-primary-dark mb-1 transition-colors">add_box</span>
+<span class="text-xs font-medium text-text-primary-light dark:text-text-primary-dark">创建 API 密钥</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 border border-border-light dark:border-border-dark rounded hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors group">
+<span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-brand-primary-light dark:group-hover:text-brand-primary-dark mb-1 transition-colors">menu_book</span>
+<span class="text-xs font-medium text-text-primary-light dark:text-text-primary-dark">查看文档</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 border border-border-light dark:border-border-dark rounded hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors group">
+<span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-brand-primary-light dark:group-hover:text-brand-primary-dark mb-1 transition-colors">add_card</span>
+<span class="text-xs font-medium text-text-primary-light dark:text-text-primary-dark">充值</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 border border-border-light dark:border-border-dark rounded hover:bg-brand-hover-light dark:hover:bg-brand-hover-dark transition-colors group">
+<span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark group-hover:text-brand-primary-light dark:group-hover:text-brand-primary-dark mb-1 transition-colors">person_add</span>
+<span class="text-xs font-medium text-text-primary-light dark:text-text-primary-dark">邀请好友</span>
+</button>
+</div>
+</div>
+<!-- Announcements -->
+<div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-4 flex-1 flex flex-col overflow-hidden">
+<div class="flex justify-between items-center mb-4 shrink-0">
+<h2 class="font-headline text-base font-semibold text-text-primary-light dark:text-text-primary-dark">公告</h2>
+<span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-[18px]">campaign</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-3">
+<a class="block group" href="#">
+<div class="text-xs text-brand-primary-light dark:text-brand-primary-dark mb-0.5">2023年10月24日</div>
+<h3 class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark group-hover:underline">新增 Claude 3.5 Sonnet 模型支持</h3>
+</a>
+<div class="h-px bg-border-light dark:bg-border-dark w-full"></div>
+<a class="block group" href="#">
+<div class="text-xs text-text-secondary-light dark:text-text-secondary-dark mb-0.5">2023年10月15日</div>
+<h3 class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark group-hover:underline">API 计费系统升级及缓存折扣说明</h3>
+</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+    // Check dark mode preference
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+    }
+
+    // Chart.js Configuration
+    document.addEventListener("DOMContentLoaded", function() {
+        // Theme Colors
+        const isDark = document.documentElement.classList.contains('dark');
+        const textColor = isDark ? '#EDE8DC' : '#1B1A17';
+        const gridColor = isDark ? '#35332A' : '#D9D2C5';
+        const fontFamily = '"Public Sans", sans-serif';
+
+        // Set default font
+        Chart.defaults.font.family = fontFamily;
+        Chart.defaults.color = textColor;
+
+        // 1. Token Usage Chart (Line/Area)
+        const ctxUsage = document.getElementById('tokenUsageChart').getContext('2d');
+        new Chart(ctxUsage, {
+            type: 'line',
+            data: {
+                labels: ['10-18', '10-19', '10-20', '10-21', '10-22', '10-23', '10-24'],
+                datasets: [
+                    {
+                        label: '输入',
+                        data: [120, 190, 150, 220, 180, 250, 210],
+                        borderColor: '#2B3A55',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: false
+                    },
+                    {
+                        label: '输出',
+                        data: [80, 110, 90, 130, 100, 160, 140],
+                        borderColor: '#B7472A',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: false
+                    },
+                    {
+                        label: '缓存',
+                        data: [40, 50, 45, 60, 55, 70, 65],
+                        borderColor: '#9C968A',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            boxWidth: 12,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? '#201F18' : '#FFFFFF',
+                        titleColor: textColor,
+                        bodyColor: textColor,
+                        borderColor: gridColor,
+                        borderWidth: 1,
+                        padding: 10,
+                        boxPadding: 4,
+                        usePointStyle: true
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: { size: 11 }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: gridColor,
+                            drawBorder: false,
+                            borderDash: [4, 4]
+                        },
+                        ticks: {
+                            font: { size: 11 },
+                            maxTicksLimit: 6
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // 2. Model Distribution Chart (Doughnut)
+        const ctxDist = document.getElementById('modelDistributionChart').getContext('2d');
+        new Chart(ctxDist, {
+            type: 'doughnut',
+            data: {
+                labels: ['claude-sonnet-4', 'gpt-4.1', 'gemini-2.5-pro', '其他'],
+                datasets: [{
+                    data: [46, 27, 18, 9],
+                    backgroundColor: [
+                        '#2B3A55',
+                        '#B7472A',
+                        isDark ? '#35332A' : '#D9D2C5',
+                        '#6B665C'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '75%',
+                plugins: {
+                    legend: {
+                        display: false // Using custom legend in HTML
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? '#201F18' : '#FFFFFF',
+                        titleColor: textColor,
+                        bodyColor: textColor,
+                        borderColor: gridColor,
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                return ' ' + context.label + ': ' + context.raw + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+</body></html>

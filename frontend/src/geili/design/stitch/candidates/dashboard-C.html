@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>用户仪表盘 - 给力 API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: '#2F4BFF',
+                            dark: '#6D83FF'
+                        },
+                        coral: {
+                            DEFAULT: '#FF6B4A',
+                            dark: '#FF8A6E'
+                        },
+                        success: '#16A34A',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#0EA5E9',
+                        bg: {
+                            light: '#F5F7FC',
+                            dark: '#0B1020'
+                        },
+                        surface: {
+                            light: '#FFFFFF',
+                            dark: '#121936'
+                        },
+                        border: {
+                            light: '#EEF1F7',
+                            dark: '#1E2A55'
+                        },
+                        text: {
+                            main: '#0F172A',
+                            secondary: '#64748B',
+                            placeholder: '#94A3B8',
+                            darkMain: '#E8ECFF',
+                            darkSecondary: '#93A0C8'
+                        },
+                        sidebar: {
+                            bg: '#0F1B4D',
+                            active: 'rgba(255,255,255,0.12)',
+                            hover: 'rgba(255,255,255,0.05)',
+                            text: 'rgba(255,255,255,0.64)',
+                            textActive: '#FFFFFF'
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem", // 12px for cards as requested in prompt, though config says 1rem, adjusting slightly for requirement
+                        "xl": "1rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans", "sans-serif"],
+                        "display": ["Plus Jakarta Sans", "sans-serif"],
+                        "body": ["Manrope", "sans-serif"],
+                        "label": ["Manrope", "sans-serif"]
+                    },
+                    boxShadow: {
+                        'card': '0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; background-color: #F5F7FC; color: #0F172A; }
+        h1, h2, h3, h4, h5, h6, .font-headline { font-family: 'Plus Jakarta Sans', sans-serif; letter-spacing: -0.02em; }
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        
+        /* Custom Scrollbar for subtle look */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden bg-bg-light text-text-main antialiased selection:bg-primary/20">
+<!-- SideNavBar (JSON Configured) -->
+<aside class="h-screen w-[240px] fixed left-0 top-0 bg-[#0F1B4D] border-r border-[#EEF1F7] shadow-lg flex flex-col py-4 z-50">
+<!-- Brand -->
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-[#0F1B4D] font-bold">G</div>
+<div>
+<div class="text-xl font-headline font-bold text-white">给力 API</div>
+<div class="text-white/60 text-xs font-medium uppercase tracking-wider">AI Gateway</div>
+</div>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 overflow-y-auto px-2 space-y-6">
+<!-- Group: 账户 -->
+<div>
+<div class="px-4 text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">账户</div>
+<ul class="space-y-1 font-body text-sm font-medium tabular-nums">
+<li><a class="flex items-center gap-3 px-3 py-2 bg-white/12 text-white rounded-lg mx-2 transition-all" href="#"><span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">dashboard</span> 仪表盘</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">key</span> API 密钥</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">monitoring</span> 使用记录</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">extension</span> 模型广场</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">hub</span> 可用渠道</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">wifi_tethering</span> 渠道状态</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">image_search</span> 批量生图</a></li>
+</ul>
+</div>
+<!-- Group: 付费 -->
+<div>
+<div class="px-4 text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">付费</div>
+<ul class="space-y-1 font-body text-sm font-medium tabular-nums">
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">payments</span> 充值/订阅</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">card_membership</span> 我的订阅</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">receipt_long</span> 我的订单</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">confirmation_number</span> 兑换</a></li>
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">group</span> 邀请返利</a></li>
+</ul>
+</div>
+<!-- Group: 设置 -->
+<div>
+<div class="px-4 text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">设置</div>
+<ul class="space-y-1 font-body text-sm font-medium tabular-nums">
+<li><a class="flex items-center gap-3 px-3 py-2 text-white/64 hover:text-white hover:bg-white/5 mx-2 rounded-lg transition-colors" href="#"><span class="material-symbols-outlined text-[20px]">person</span> 个人资料</a></li>
+</ul>
+</div>
+</nav>
+<!-- Footer Actions -->
+<div class="mt-auto px-4 space-y-2 pt-4 border-t border-white/10">
+<div class="flex items-center justify-between px-2 py-2 text-white/64">
+<button class="hover:text-white hover:bg-white/10 p-1.5 rounded transition-all flex items-center gap-2 text-sm" title="Language"><span class="material-symbols-outlined text-[18px]">translate</span> 中文</button>
+<button class="hover:text-white hover:bg-white/10 p-1.5 rounded transition-all" title="Dark Mode"><span class="material-symbols-outlined text-[18px]">dark_mode</span></button>
+<button class="hover:text-white hover:bg-white/10 p-1.5 rounded transition-all" title="Collapse"><span class="material-symbols-outlined text-[18px]">chevron_left</span></button>
+</div>
+<!-- User Info Profile Mini -->
+<div class="bg-white/5 rounded-lg p-3 flex items-center gap-3 hover:bg-white/10 transition-colors cursor-pointer group">
+<img class="w-9 h-9 rounded-full object-cover border border-white/20" data-alt="A small, stylized avatar of a developer, clean and minimalist design, soft lighting, tech-focused professional mood, bright light-mode aesthetic, deep blue and white palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYo7Hoq0D31wMg1poW-ghRNNZE-qXpRGn9egEGYun_BmHgDZP41kRZhrEgYXlIaXTGqxPJ0wTCELiPErc9hKu4VmHvSP69QBRKIIg-5TbnECz5tknwyMFgMbQ8QtKNXSwk-qPmd2oayzhPdsL8t3MdCf4mY6e8D6_DqOVmCzLuCpVk-eeI9f_HYjWgRNWHHHZy9dHaEVPjXJa9UTn8DRvg13rhcirupsYZTD8RaioLrMtzYXRPPEsegi04z3hAcA2N8zxzP3-Dm6Vi"/>
+<div class="flex-1 min-w-0">
+<div class="text-sm font-semibold text-white truncate">dev@example.com</div>
+<div class="text-xs text-coral font-medium tabular-nums mt-0.5">¥1,284.50</div>
+</div>
+<button class="text-white/40 group-hover:text-white transition-colors"><span class="material-symbols-outlined text-[18px]">logout</span></button>
+</div>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="flex-1 ml-[240px] flex flex-col h-screen">
+<!-- TopNavBar -->
+<header class="h-[56px] flex-shrink-0 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 border-b border-[#EEF1F7] z-40 sticky top-0">
+<div class="flex items-baseline gap-4">
+<h1 class="font-headline text-xl font-bold text-text-main">仪表盘</h1>
+<p class="text-sm text-text-secondary hidden md:block">欢迎回来！这是您账户的概览。</p>
+</div>
+<div class="flex items-center gap-6">
+<a class="text-sm font-medium text-text-secondary hover:text-primary transition-colors flex items-center gap-1" href="#">文档 <span class="material-symbols-outlined text-[16px]">open_in_new</span></a>
+<div class="h-5 w-px bg-border-light"></div>
+<button class="relative text-text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-coral rounded-full border border-white"></span>
+</button>
+<img class="w-8 h-8 rounded-full object-cover ring-2 ring-transparent hover:ring-primary/20 transition-all cursor-pointer" data-alt="User avatar for the top navigation bar, clean and minimalist design, soft lighting, tech-focused professional mood, bright light-mode aesthetic, deep blue and white palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5xN2rZr62FsdCiFgrbAKSqocbRhGyhb9PwgD90p9qkV5GI_RyJ3ylRIqEJRNjsH3hDzaWPY5RS1PHzCIlgGYvJFSAwjCM4cs8pjtzMVblgLyLH4Ty58PIpvJJAaoLSsesZXK78yFtiPFUvmhQdxwv-pmceiobU1vxMUhZVrhWB7Qr2KWjSDIKWBz-no5CY6yYCAnr6LNrZR26Csppwfa6paX5rBeaeMyLcA6g_CfSHuskekJr9KMfes-9LetfiSOLyce1thEU_9gW"/>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<main class="flex-1 overflow-y-auto p-8">
+<div class="max-w-[1600px] mx-auto space-y-6">
+<!-- Row 1: 4 Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Stat 1: Balance -->
+<div class="bg-surface-light rounded-lg shadow-card p-5 flex flex-col justify-between group hover:-translate-y-0.5 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<button class="bg-primary hover:bg-primary-dark text-white text-xs font-semibold px-3 py-1.5 rounded transition-all shadow-sm shadow-primary/20 hover:shadow-md hover:shadow-primary/30 active:scale-95">充值</button>
+</div>
+<div>
+<div class="text-sm text-text-secondary font-medium mb-1">账户余额</div>
+<div class="font-headline text-3xl font-bold tabular-nums text-text-main">¥1,284.50</div>
+</div>
+</div>
+<!-- Stat 2: API Keys -->
+<div class="bg-surface-light rounded-lg shadow-card p-5 flex flex-col justify-between group hover:-translate-y-0.5 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">key</span>
+</div>
+<button class="bg-white border border-slate-200 hover:border-primary hover:text-primary text-text-main text-xs font-medium px-3 py-1.5 rounded transition-all shadow-sm active:scale-95">创建 API 密钥</button>
+</div>
+<div>
+<div class="text-sm text-text-secondary font-medium mb-1">活跃 API 密钥</div>
+<div class="font-headline text-3xl font-bold tabular-nums text-text-main">6 个</div>
+</div>
+</div>
+<!-- Stat 3: Today's Requests -->
+<div class="bg-surface-light rounded-lg shadow-card p-5 flex flex-col justify-between group hover:-translate-y-0.5 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">data_usage</span>
+</div>
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-success/10 text-success text-xs font-semibold tabular-nums"><span class="material-symbols-outlined text-[14px]">trending_up</span> +8.2%</span>
+</div>
+<div>
+<div class="text-sm text-text-secondary font-medium mb-1">今日请求数</div>
+<div class="font-headline text-3xl font-bold tabular-nums text-text-main">12,408</div>
+</div>
+</div>
+<!-- Stat 4: Today's Spend -->
+<div class="bg-surface-light rounded-lg shadow-card p-5 flex flex-col justify-between group hover:-translate-y-0.5 transition-transform duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="w-10 h-10 rounded-full bg-coral/10 flex items-center justify-center text-coral group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined">payments</span>
+</div>
+</div>
+<div>
+<div class="text-sm text-text-secondary font-medium mb-1">今日消费</div>
+<div class="font-headline text-3xl font-bold tabular-nums text-text-main mb-1">¥86.32</div>
+<div class="text-xs text-text-placeholder tabular-nums">今日 Token 4.2M · 今日缓存 38%</div>
+</div>
+</div>
+</div>
+<!-- Row 2: Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[400px]">
+<!-- Main Chart: Token Usage Trend -->
+<div class="lg:col-span-2 bg-surface-light rounded-lg shadow-card p-6 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline font-bold text-lg">Token 使用趋势</h3>
+<div class="flex items-center gap-3">
+<div class="bg-bg-light p-1 rounded-md flex text-xs font-medium border border-border-light">
+<button class="px-3 py-1 bg-white shadow-sm rounded text-text-main">7 天</button>
+<button class="px-3 py-1 text-text-secondary hover:text-text-main transition-colors">30 天</button>
+</div>
+<div class="bg-bg-light p-1 rounded-md flex text-xs font-medium border border-border-light">
+<button class="px-3 py-1 bg-white shadow-sm rounded text-text-main">按天</button>
+<button class="px-3 py-1 text-text-secondary hover:text-text-main transition-colors">按小时</button>
+</div>
+</div>
+</div>
+<div class="flex-1 w-full" id="tokenChart"></div>
+</div>
+<!-- Donut Chart: Model Distribution -->
+<div class="lg:col-span-1 bg-surface-light rounded-lg shadow-card p-6 flex flex-col">
+<h3 class="font-headline font-bold text-lg mb-2">模型分布</h3>
+<p class="text-sm text-text-secondary mb-4">过去 7 天请求占比</p>
+<div class="flex-1 w-full min-h-[200px]" id="modelChart"></div>
+<div class="mt-4 space-y-3">
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#2F4BFF]"></span> <span class="font-medium">claude-sonnet-4</span></div>
+<span class="font-bold tabular-nums">46%</span>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#0EA5E9]"></span> <span class="font-medium">gpt-4.1</span></div>
+<span class="font-bold tabular-nums text-text-secondary">27%</span>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#FF6B4A]"></span> <span class="font-medium">gemini-2.5-pro</span></div>
+<span class="font-bold tabular-nums text-text-secondary">18%</span>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#94A3B8]"></span> <span class="font-medium">其他</span></div>
+<span class="font-bold tabular-nums text-text-secondary">9%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 3: Table & Side Cards -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Recent Usage Table -->
+<div class="lg:col-span-2 bg-surface-light rounded-lg shadow-card flex flex-col overflow-hidden">
+<div class="p-6 border-b border-border-light flex justify-between items-center">
+<h3 class="font-headline font-bold text-lg">最近使用</h3>
+<a class="text-sm font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1" href="#">查看全部 <span class="material-symbols-outlined text-[16px]">arrow_forward</span></a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="bg-bg-light/50 text-xs text-text-secondary uppercase tracking-wider font-semibold border-b border-border-light">
+<tr>
+<th class="px-6 py-4 font-medium">时间</th>
+<th class="px-6 py-4 font-medium">模型</th>
+<th class="px-6 py-4 font-medium">API 密钥</th>
+<th class="px-6 py-4 font-medium text-right">In/Out Token</th>
+<th class="px-6 py-4 font-medium text-right">缓存</th>
+<th class="px-6 py-4 font-medium text-right">费用</th>
+<th class="px-6 py-4 font-medium text-center">状态</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-light text-text-main tabular-nums">
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">10:42:15</td>
+<td class="px-6 py-4 font-medium">claude-sonnet-4</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…a1b2</td>
+<td class="px-6 py-4 text-right">452 / 1,024</td>
+<td class="px-6 py-4 text-right text-success">85%</td>
+<td class="px-6 py-4 text-right font-medium">¥0.14</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">10:38:02</td>
+<td class="px-6 py-4 font-medium">gpt-4.1</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…9x8c</td>
+<td class="px-6 py-4 text-right">12 / 0</td>
+<td class="px-6 py-4 text-right text-text-secondary">-</td>
+<td class="px-6 py-4 text-right font-medium">¥0.00</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-warning/10 text-warning">限流</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">10:35:44</td>
+<td class="px-6 py-4 font-medium">gemini-2.5-pro</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…a1b2</td>
+<td class="px-6 py-4 text-right">8,402 / 512</td>
+<td class="px-6 py-4 text-right text-success">100%</td>
+<td class="px-6 py-4 text-right font-medium">¥0.02</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">10:20:11</td>
+<td class="px-6 py-4 font-medium">claude-sonnet-4</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…d4e5</td>
+<td class="px-6 py-4 text-right">-</td>
+<td class="px-6 py-4 text-right text-text-secondary">-</td>
+<td class="px-6 py-4 text-right font-medium">¥0.00</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-danger/10 text-danger">失败</span></td>
+</tr>
+<!-- Padding rows to meet 8 rows request -->
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">09:55:30</td>
+<td class="px-6 py-4 font-medium">claude-sonnet-4</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…a1b2</td>
+<td class="px-6 py-4 text-right">120 / 45</td>
+<td class="px-6 py-4 text-right text-text-secondary">0%</td>
+<td class="px-6 py-4 text-right font-medium">¥0.05</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">09:12:05</td>
+<td class="px-6 py-4 font-medium">gpt-4.1</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…9x8c</td>
+<td class="px-6 py-4 text-right">3,021 / 890</td>
+<td class="px-6 py-4 text-right text-success">40%</td>
+<td class="px-6 py-4 text-right font-medium">¥0.82</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">08:45:22</td>
+<td class="px-6 py-4 font-medium">dall-e-3</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…d4e5</td>
+<td class="px-6 py-4 text-right">1 img</td>
+<td class="px-6 py-4 text-right text-text-secondary">-</td>
+<td class="px-6 py-4 text-right font-medium">¥0.30</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+<tr class="hover:bg-[#F3F5FF] transition-colors group">
+<td class="px-6 py-4">08:10:01</td>
+<td class="px-6 py-4 font-medium">claude-sonnet-4</td>
+<td class="px-6 py-4 text-text-secondary font-mono text-xs">sk-…a1b2</td>
+<td class="px-6 py-4 text-right">512 / 128</td>
+<td class="px-6 py-4 text-right text-success">90%</td>
+<td class="px-6 py-4 text-right font-medium">¥0.01</td>
+<td class="px-6 py-4 text-center"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">成功</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column: Quick Actions & Announcements -->
+<div class="lg:col-span-1 flex flex-col gap-6">
+<!-- Quick Actions -->
+<div class="bg-surface-light rounded-lg shadow-card p-6">
+<h3 class="font-headline font-bold text-lg mb-4">快捷操作</h3>
+<div class="space-y-2">
+<a class="group flex items-center p-3 rounded-lg border border-border-light hover:border-primary/30 hover:bg-primary/5 transition-all" href="#">
+<div class="w-8 h-8 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[18px]">key</span>
+</div>
+<span class="font-medium flex-1 text-sm">创建 API 密钥</span>
+<span class="material-symbols-outlined text-text-placeholder group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
+</a>
+<a class="group flex items-center p-3 rounded-lg border border-border-light hover:border-primary/30 hover:bg-primary/5 transition-all" href="#">
+<div class="w-8 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+</div>
+<span class="font-medium flex-1 text-sm">查看文档</span>
+<span class="material-symbols-outlined text-text-placeholder group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
+</a>
+<a class="group flex items-center p-3 rounded-lg border border-border-light hover:border-primary/30 hover:bg-primary/5 transition-all" href="#">
+<div class="w-8 h-8 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+</div>
+<span class="font-medium flex-1 text-sm">充值</span>
+<span class="material-symbols-outlined text-text-placeholder group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
+</a>
+<a class="group flex items-center p-3 rounded-lg border border-border-light hover:border-primary/30 hover:bg-primary/5 transition-all" href="#">
+<div class="w-8 h-8 rounded-md bg-coral/10 text-coral flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[18px]">group_add</span>
+</div>
+<span class="font-medium flex-1 text-sm">邀请好友</span>
+<span class="material-symbols-outlined text-text-placeholder group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
+</a>
+</div>
+</div>
+<!-- Announcements -->
+<div class="bg-surface-light rounded-lg shadow-card p-6 flex-1">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-headline font-bold text-lg">公告</h3>
+<a class="text-xs text-text-secondary hover:text-primary transition-colors" href="#">更多</a>
+</div>
+<div class="space-y-4">
+<div class="group cursor-pointer">
+<div class="text-xs text-text-secondary mb-1 flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-24</div>
+<h4 class="font-medium text-sm text-text-main group-hover:text-primary transition-colors line-clamp-2">关于 Claude 3.5 Sonnet 模型限流规则调整的通知及补偿方案</h4>
+</div>
+<div class="h-px bg-border-light"></div>
+<div class="group cursor-pointer">
+<div class="text-xs text-text-secondary mb-1 flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-18</div>
+<h4 class="font-medium text-sm text-text-main group-hover:text-primary transition-colors line-clamp-2">系统维护升级预告：预计于本周六凌晨 2:00 进行短暂网络切换</h4>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- ECharts Initialization -->
+<script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Token Chart
+            const tokenChartDom = document.getElementById('tokenChart');
+            if(tokenChartDom) {
+                const tokenChart = echarts.init(tokenChartDom);
+                const tokenOption = {
+                    tooltip: { trigger: 'axis', backgroundColor: 'rgba(255, 255, 255, 0.9)', borderColor: '#EEF1F7', textStyle: { color: '#0F172A' } },
+                    legend: { data: ['Input', 'Output', 'Cache'], bottom: 0, icon: 'circle', textStyle: { color: '#64748B' } },
+                    grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+                    xAxis: { type: 'category', boundaryGap: false, data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], axisLine: { lineStyle: { color: '#EEF1F7' } }, axisLabel: { color: '#64748B' } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#EEF1F7' } }, axisLabel: { color: '#64748B' } },
+                    series: [
+                        { name: 'Input', type: 'line', smooth: true, lineStyle: { width: 3 }, symbol: 'none', areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(47, 75, 255, 0.2)' }, { offset: 1, color: 'rgba(47, 75, 255, 0)' }]) }, itemStyle: { color: '#2F4BFF' }, data: [120, 132, 101, 134, 90, 230, 210] },
+                        { name: 'Output', type: 'line', smooth: true, lineStyle: { width: 3 }, symbol: 'none', itemStyle: { color: '#0EA5E9' }, data: [220, 182, 191, 234, 290, 330, 310] },
+                        { name: 'Cache', type: 'line', smooth: true, lineStyle: { width: 3, type: 'dashed' }, symbol: 'none', itemStyle: { color: '#16A34A' }, data: [150, 232, 201, 154, 190, 330, 410] }
+                    ]
+                };
+                tokenChart.setOption(tokenOption);
+                window.addEventListener('resize', () => tokenChart.resize());
+            }
+
+            // Model Distribution Chart
+            const modelChartDom = document.getElementById('modelChart');
+            if(modelChartDom) {
+                const modelChart = echarts.init(modelChartDom);
+                const modelOption = {
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', backgroundColor: 'rgba(255, 255, 255, 0.9)', borderColor: '#EEF1F7', textStyle: { color: '#0F172A' } },
+                    series: [
+                        {
+                            name: 'Model Usage', type: 'pie', radius: ['60%', '80%'], avoidLabelOverlap: false,
+                            itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+                            label: { show: false, position: 'center' },
+                            emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+                            labelLine: { show: false },
+                            data: [
+                                { value: 46, name: 'claude-sonnet-4', itemStyle: { color: '#2F4BFF' } },
+                                { value: 27, name: 'gpt-4.1', itemStyle: { color: '#0EA5E9' } },
+                                { value: 18, name: 'gemini-2.5-pro', itemStyle: { color: '#FF6B4A' } },
+                                { value: 9, name: '其他', itemStyle: { color: '#94A3B8' } }
+                            ]
+                        }
+                    ]
+                };
+                modelChart.setOption(modelOption);
+                window.addEventListener('resize', () => modelChart.resize());
+            }
+        });
+    </script>
+</body></html>
