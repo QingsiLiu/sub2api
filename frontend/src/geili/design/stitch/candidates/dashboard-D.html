@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>给力 API - 仪表盘</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Public+Sans:wght@400;500;600;700&amp;family=Syne:wght@600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#F3EEE6',
+                        surface: '#FAF7F2',
+                        border: '#DDD5C8',
+                        divider: '#E8E1D6',
+                        text: {
+                            main: '#1C1917',
+                            muted: '#78716C',
+                            disabled: '#A8A29E'
+                        },
+                        brand: {
+                            copper: '#9A5B3C',
+                            copperLighter: '#C4845A'
+                        },
+                        status: {
+                            success: '#3F6F5A',
+                            warning: '#A67C2D',
+                            danger: '#9B3D3D',
+                            info: '#4A5568'
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "8px",
+                        "lg": "8px",
+                        "xl": "8px",
+                        "full": "9999px",
+                        "btn": "6px"
+                    },
+                    fontFamily: {
+                        headline: ["Syne", "sans-serif"],
+                        display: ["Syne", "sans-serif"],
+                        body: ["Outfit", "sans-serif"],
+                        label: ["Outfit", "sans-serif"],
+                        mono: ["'IBM Plex Mono'", "monospace"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.text.main');
+            font-family: theme('fontFamily.body');
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Chart placeholder lines */
+        .chart-grid-line {
+            stroke: theme('colors.divider');
+            stroke-width: 1;
+        }
+        
+        .chart-line-main {
+            stroke: theme('colors.brand.copper');
+            stroke-width: 2;
+            fill: none;
+        }
+        
+        .chart-line-sub {
+            stroke: theme('colors.text.main');
+            stroke-width: 2;
+            fill: none;
+        }
+        
+        .chart-line-muted {
+            stroke: theme('colors.text.muted');
+            stroke-width: 2;
+            fill: none;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-sm">
+<!-- SideNavBar -->
+<nav class="w-64 h-full border-r border-[#DDD5C8] bg-[#F3EEE6] flex flex-col fixed left-0 top-0 overflow-y-auto px-4 py-6 gap-2 z-40">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-text-main flex items-center justify-center text-background font-headline font-bold text-lg">
+                G
+            </div>
+<div>
+<h1 class="font-['Syne'] font-bold text-xl tracking-tighter text-[#1C1917]">给力 API</h1>
+<p class="text-xs text-text-muted mt-0.5">AI 模型网关</p>
+</div>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded text-[#9A5B3C] bg-[#FAF7F2]/50 border-l-2 border-[#9A5B3C] font-semibold transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span>仪表盘</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">vpn_key</span>
+<span>API 密钥</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span>使用记录</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">grid_view</span>
+<span>模型广场</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">lan</span>
+<span>可用渠道</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span>渠道状态</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">image</span>
+<span>批量生图</span>
+</a>
+<div class="mt-6 mb-2 px-3 text-[11px] tracking-[0.12em] font-bold text-text-muted">BILLING</div>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+<span>充值/订阅</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">star</span>
+<span>我的订阅</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">receipt</span>
+<span>我的订单</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">redeem</span>
+<span>兑换</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">group_add</span>
+<span>邀请返利</span>
+</a>
+<div class="mt-6 mb-2 px-3 text-[11px] tracking-[0.12em] font-bold text-text-muted">ACCOUNT</div>
+<a class="flex items-center gap-3 px-3 py-2 rounded border-l-2 border-transparent text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">person</span>
+<span>个人资料</span>
+</a>
+</div>
+<div class="mt-auto border-t border-[#DDD5C8] pt-4 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span>帮助中心</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-[#78716C] hover:text-[#1C1917] hover:bg-[#FAF7F2] transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">dark_mode</span>
+<span>暗色模式</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 ml-64 flex flex-col min-h-screen bg-background">
+<!-- TopNavBar -->
+<header class="flex items-center justify-between w-full h-14 px-8 sticky top-0 z-30 bg-[#FAF7F2]/80 backdrop-blur-md border-b border-[#E8E1D6]">
+<div class="flex items-center gap-6">
+<h2 class="font-['Syne'] font-bold text-lg text-[#1C1917]">仪表盘</h2>
+<nav class="hidden md:flex items-center gap-4 text-sm font-['Outfit']">
+<a class="text-[#78716C] hover:text-[#9A5B3C] transition-colors" href="#">文档</a>
+<a class="text-[#78716C] hover:text-[#9A5B3C] transition-colors" href="#">GitHub</a>
+<a class="text-[#78716C] hover:text-[#9A5B3C] transition-colors" href="#">Status</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-[#78716C] hover:text-[#1C1917] transition-colors p-1">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-border overflow-hidden cursor-pointer border border-border">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A small, high-quality, professional user avatar placeholder for a modern, quiet luxury dashboard. Close up face, neutral lighting, soft grey background. Minimalist aesthetic, 8k resolution, photorealistic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQt7zpRHh6PJo_0xacCQSIQjwVUqZ2z9Iu1yS4p1ejPfxkKkLbnPlMZ92BGi1EPOQNy7zwjlQwzxZHjOaI_NipjHdubnEp_ThnqyQS2PpjU6l2pdFRoFRGYwEvhlg1cGqc5cvZe7hhafSNfDaslh9X0cH97gbUFhyf0RrOCHkFjSQmEwl9EyMeRltyEKgdUGaiX0y205CwZQvWsxpKBUfDxCPxQnshqrMIYisi8gCC3UxZeZcoHIXdJnXCeNVUEGCOx1vKpF1hbsw3"/>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 overflow-y-auto p-8 space-y-6">
+<!-- Row 1: 4 Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Balance -->
+<div class="bg-surface border border-border rounded-lg p-5 flex flex-col justify-between h-[120px]">
+<div class="flex justify-between items-start">
+<span class="text-text-muted text-xs font-medium">账户余额</span>
+<span class="material-symbols-outlined text-[18px] text-brand-copper">account_balance_wallet</span>
+</div>
+<div class="flex items-end justify-between">
+<div>
+<div class="flex items-baseline gap-1">
+<span class="text-text-muted text-sm font-mono">¥</span>
+<span class="text-[32px] font-mono leading-none tracking-tight text-text-main tabular-nums">1,284.50</span>
+</div>
+</div>
+<button class="bg-brand-copper text-white px-3 py-1.5 rounded-btn text-xs font-medium hover:bg-brand-copperLighter transition-colors">
+                            充值
+                        </button>
+</div>
+</div>
+<!-- API Keys -->
+<div class="bg-surface border border-border rounded-lg p-5 flex flex-col justify-between h-[120px]">
+<div class="flex justify-between items-start">
+<span class="text-text-muted text-xs font-medium">活跃 API 密钥</span>
+<span class="material-symbols-outlined text-[18px] text-text-muted">key</span>
+</div>
+<div class="flex items-end justify-between">
+<div class="text-[32px] font-mono leading-none tracking-tight text-text-main tabular-nums">6</div>
+<button class="border border-border text-text-main bg-background px-3 py-1.5 rounded-btn text-xs font-medium hover:bg-divider transition-colors">
+                            创建
+                        </button>
+</div>
+</div>
+<!-- Today Requests -->
+<div class="bg-surface border border-border rounded-lg p-5 flex flex-col justify-between h-[120px]">
+<div class="flex justify-between items-start">
+<span class="text-text-muted text-xs font-medium">今日请求数</span>
+<span class="material-symbols-outlined text-[18px] text-text-muted">insights</span>
+</div>
+<div>
+<div class="text-[32px] font-mono leading-none tracking-tight text-text-main tabular-nums">12,408</div>
+<div class="text-xs mt-1 flex items-center gap-1 text-status-success font-mono">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+                            8.2% <span class="text-text-muted font-body ml-1">较昨日</span>
+</div>
+</div>
+</div>
+<!-- Today Spend -->
+<div class="bg-surface border border-border rounded-lg p-5 flex flex-col justify-between h-[120px]">
+<div class="flex justify-between items-start">
+<span class="text-text-muted text-xs font-medium">今日消费</span>
+<span class="material-symbols-outlined text-[18px] text-text-muted">credit_card</span>
+</div>
+<div>
+<div class="flex items-baseline gap-1">
+<span class="text-text-muted text-sm font-mono">¥</span>
+<span class="text-[32px] font-mono leading-none tracking-tight text-text-main tabular-nums">86.32</span>
+</div>
+<div class="text-[11px] text-text-muted mt-1.5 flex gap-2 font-mono">
+<span>T: ¥72.10</span>
+<span class="text-divider">|</span>
+<span>C: ¥14.22</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 2: Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Trend Chart -->
+<div class="lg:col-span-2 bg-surface border border-border rounded-lg p-5">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-sm font-semibold text-text-main">Token 使用趋势</h3>
+<div class="flex gap-2">
+<div class="flex bg-background border border-border rounded-btn p-0.5 text-xs font-mono">
+<button class="px-2 py-1 bg-surface rounded-sm shadow-sm text-text-main">7天</button>
+<button class="px-2 py-1 text-text-muted hover:text-text-main">30天</button>
+</div>
+<div class="flex bg-background border border-border rounded-btn p-0.5 text-xs font-mono">
+<button class="px-2 py-1 bg-surface rounded-sm shadow-sm text-text-main">天</button>
+<button class="px-2 py-1 text-text-muted hover:text-text-main">时</button>
+</div>
+</div>
+</div>
+<div class="h-[240px] w-full relative">
+<!-- Pseudo Chart via SVG -->
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 800 200">
+<!-- Grid -->
+<line class="chart-grid-line" stroke-dasharray="2,2" x1="0" x2="800" y1="40" y2="40"></line>
+<line class="chart-grid-line" stroke-dasharray="2,2" x1="0" x2="800" y1="80" y2="80"></line>
+<line class="chart-grid-line" stroke-dasharray="2,2" x1="0" x2="800" y1="120" y2="120"></line>
+<line class="chart-grid-line" stroke-dasharray="2,2" x1="0" x2="800" y1="160" y2="160"></line>
+<line class="chart-grid-line" stroke-dasharray="2,2" x1="0" x2="800" y1="200" y2="200"></line>
+<!-- Input Line (Copper) -->
+<path class="chart-line-main" d="M0,180 Q100,150 200,160 T400,120 T600,80 T800,100"></path>
+<!-- Output Line (Charcoal) -->
+<path class="chart-line-sub" d="M0,190 Q100,170 200,175 T400,150 T600,120 T800,130"></path>
+<!-- Cache Line (Muted) -->
+<path class="chart-line-muted" d="M0,195 Q100,190 200,192 T400,180 T600,170 T800,185"></path>
+</svg>
+</div>
+<div class="flex justify-center gap-6 mt-4 text-xs">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-brand-copper"></span>
+<span class="text-text-muted">输入 Token</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-text-main"></span>
+<span class="text-text-muted">输出 Token</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-text-muted"></span>
+<span class="text-text-muted">缓存命中</span>
+</div>
+</div>
+</div>
+<!-- Model Distribution -->
+<div class="bg-surface border border-border rounded-lg p-5 flex flex-col">
+<h3 class="text-sm font-semibold text-text-main mb-6">模型分布</h3>
+<div class="flex-1 flex flex-col justify-center items-center relative">
+<!-- Donut Chart SVG -->
+<svg class="w-40 h-40 transform -rotate-90" viewbox="0 0 100 100">
+<!-- Background ring -->
+<circle class="text-divider" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-width="12"></circle>
+<!-- Claude (46%) -->
+<circle class="text-brand-copper" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="115.6 251.2" stroke-dashoffset="0" stroke-width="12"></circle>
+<!-- GPT (27%) -->
+<circle class="text-text-main" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="67.8 251.2" stroke-dashoffset="-115.6" stroke-width="12"></circle>
+<!-- Gemini (18%) -->
+<circle class="text-text-muted" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="45.2 251.2" stroke-dashoffset="-183.4" stroke-width="12"></circle>
+<!-- Others (9%) -->
+<circle class="text-status-info" cx="50" cy="50" fill="none" r="40" stroke="currentColor" stroke-dasharray="22.6 251.2" stroke-dashoffset="-228.6" stroke-width="12"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center pt-1">
+<span class="text-[24px] font-mono leading-none tracking-tight text-text-main">18<span class="text-sm text-text-muted">k</span></span>
+<span class="text-[10px] text-text-muted mt-1">总请求</span>
+</div>
+</div>
+<div class="mt-6 space-y-2">
+<div class="flex justify-between items-center text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-copper"></span>
+<span class="text-text-main font-body">Claude 3.5 Sonnet</span>
+</div>
+<span class="text-text-muted">46%</span>
+</div>
+<div class="flex justify-between items-center text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-text-main"></span>
+<span class="text-text-main font-body">GPT-4o</span>
+</div>
+<span class="text-text-muted">27%</span>
+</div>
+<div class="flex justify-between items-center text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-text-muted"></span>
+<span class="text-text-main font-body">Gemini 1.5 Pro</span>
+</div>
+<span class="text-text-muted">18%</span>
+</div>
+<div class="flex justify-between items-center text-xs font-mono">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-status-info"></span>
+<span class="text-text-main font-body">其他</span>
+</div>
+<span class="text-text-muted">9%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 3: Table and Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
+<!-- Recent Logs Table -->
+<div class="lg:col-span-2 bg-surface border border-border rounded-lg overflow-hidden">
+<div class="p-5 border-b border-divider flex justify-between items-center bg-surface">
+<h3 class="text-sm font-semibold text-text-main">最近使用记录</h3>
+<a class="text-xs text-text-muted hover:text-brand-copper transition-colors flex items-center gap-1" href="#">
+                            查看全部 <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-xs whitespace-nowrap">
+<thead>
+<tr class="text-text-muted border-b border-divider bg-background/50 font-medium font-body">
+<th class="px-5 py-3 w-[140px]">时间</th>
+<th class="px-5 py-3">模型</th>
+<th class="px-5 py-3">密钥</th>
+<th class="px-5 py-3 text-right">消耗 (In/Out)</th>
+<th class="px-5 py-3 text-right">费用 (¥)</th>
+<th class="px-5 py-3 w-[80px]">状态</th>
+</tr>
+</thead>
+<tbody class="font-mono text-[11.5px] tabular-nums divide-y divide-divider/60">
+<!-- Row 1 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 14:32:05</td>
+<td class="px-5 py-3 text-text-main font-medium">claude-3-5-sonnet</td>
+<td class="px-5 py-3 text-text-muted">sk-prod-ab3f...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">4,281</span> <span class="text-divider">/</span> <span class="text-text-main">1,024</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.124</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 14:30:12</td>
+<td class="px-5 py-3 text-text-main font-medium">gpt-4o</td>
+<td class="px-5 py-3 text-text-muted">sk-dev-8f92...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">842</span> <span class="text-divider">/</span> <span class="text-text-main">124</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.032</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 14:25:44</td>
+<td class="px-5 py-3 text-text-main font-medium">gemini-1.5-pro</td>
+<td class="px-5 py-3 text-text-muted">sk-prod-ab3f...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">1,024</span> <span class="text-divider">/</span> <span class="text-text-main">2,048</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.088</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 14:12:09</td>
+<td class="px-5 py-3 text-text-main font-medium">claude-3-haiku</td>
+<td class="px-5 py-3 text-text-muted">sk-test-99aa...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">45</span> <span class="text-divider">/</span> <span class="text-text-main">0</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.000</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-danger/10 text-status-danger border border-status-danger/20 font-body text-[10px]">超时</span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 14:05:33</td>
+<td class="px-5 py-3 text-text-main font-medium">gpt-4o-mini</td>
+<td class="px-5 py-3 text-text-muted">sk-prod-ab3f...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-status-info" title="Cache hit">24,000 (C)</span> <span class="text-divider">/</span> <span class="text-text-main">512</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.015</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 13:58:21</td>
+<td class="px-5 py-3 text-text-main font-medium">claude-3-5-sonnet</td>
+<td class="px-5 py-3 text-text-muted">sk-prod-ab3f...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">1,200</span> <span class="text-divider">/</span> <span class="text-text-main">400</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.045</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 7 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 13:45:10</td>
+<td class="px-5 py-3 text-text-main font-medium">dall-e-3</td>
+<td class="px-5 py-3 text-text-muted">sk-dev-8f92...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">-</span> <span class="text-divider">/</span> <span class="text-text-main">1 img</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.280</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-success/10 text-status-success border border-status-success/20 font-body text-[10px]">成功</span>
+</td>
+</tr>
+<!-- Row 8 -->
+<tr class="hover:bg-background/40 transition-colors">
+<td class="px-5 py-3 text-text-muted">10-24 13:30:05</td>
+<td class="px-5 py-3 text-text-main font-medium">gpt-3.5-turbo</td>
+<td class="px-5 py-3 text-text-muted">sk-test-99aa...</td>
+<td class="px-5 py-3 text-right">
+<span class="text-text-muted">450</span> <span class="text-divider">/</span> <span class="text-text-main">0</span>
+</td>
+<td class="px-5 py-3 text-right text-text-main">0.000</td>
+<td class="px-5 py-3">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-status-warning/10 text-status-warning border border-status-warning/20 font-body text-[10px]">流中断</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column: Shortcuts & Announcements -->
+<div class="flex flex-col gap-6">
+<!-- Shortcuts -->
+<div class="bg-surface border border-border rounded-lg p-5">
+<h3 class="text-sm font-semibold text-text-main mb-4">快捷操作</h3>
+<div class="grid grid-cols-2 gap-3">
+<a class="border border-border bg-background hover:bg-divider/30 rounded-btn p-3 flex flex-col items-center justify-center gap-2 transition-colors" href="#">
+<span class="material-symbols-outlined text-brand-copper text-[20px]">add_circle</span>
+<span class="text-xs text-text-main font-medium">新建密钥</span>
+</a>
+<a class="border border-border bg-background hover:bg-divider/30 rounded-btn p-3 flex flex-col items-center justify-center gap-2 transition-colors" href="#">
+<span class="material-symbols-outlined text-text-main text-[20px]">account_balance_wallet</span>
+<span class="text-xs text-text-main font-medium">充值额度</span>
+</a>
+<a class="border border-border bg-background hover:bg-divider/30 rounded-btn p-3 flex flex-col items-center justify-center gap-2 transition-colors" href="#">
+<span class="material-symbols-outlined text-text-main text-[20px]">integration_instructions</span>
+<span class="text-xs text-text-main font-medium">接入文档</span>
+</a>
+<a class="border border-border bg-background hover:bg-divider/30 rounded-btn p-3 flex flex-col items-center justify-center gap-2 transition-colors" href="#">
+<span class="material-symbols-outlined text-text-main text-[20px]">support_agent</span>
+<span class="text-xs text-text-main font-medium">联系客服</span>
+</a>
+</div>
+</div>
+<!-- Announcements -->
+<div class="bg-surface border border-border rounded-lg p-5 flex-1">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-sm font-semibold text-text-main">系统公告</h3>
+</div>
+<div class="space-y-4">
+<a class="block group" href="#">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-medium text-text-main group-hover:text-brand-copper transition-colors">Claude 3.5 Sonnet 模型降价通知</span>
+<span class="text-[10px] text-text-muted font-mono">10-20</span>
+</div>
+<p class="text-xs text-text-muted line-clamp-2">即日起，Claude 3.5 Sonnet API 调用费率下调 20%，详情请查看价格表。</p>
+</a>
+<div class="h-[1px] bg-divider/50 w-full"></div>
+<a class="block group" href="#">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-medium text-text-main group-hover:text-brand-copper transition-colors">新增 Gemini 1.5 Pro 渠道节点</span>
+<span class="text-[10px] text-text-muted font-mono">10-15</span>
+</div>
+<p class="text-xs text-text-muted line-clamp-2">为提升亚太地区访问速度，我们新增了东京与新加坡的高速节点。</p>
+</a>
+<div class="h-[1px] bg-divider/50 w-full"></div>
+<a class="block group" href="#">
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-medium text-text-main group-hover:text-brand-copper transition-colors">平台维护升级公告</span>
+<span class="text-[10px] text-text-muted font-mono">10-01</span>
+</div>
+<p class="text-xs text-text-muted line-clamp-2">预计于本周日凌晨进行系统升级，期间可能会有极短暂的连接中断。</p>
+</a>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
