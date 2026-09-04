@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login - GEILI API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700&amp;family=Public+Sans:wght@400;500;600&amp;family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#FCFCFC',
+                        surface: '#F6F6F5',
+                        border: '#E8E8E6',
+                        border_subtle: '#F0F0EE',
+                        text_primary: '#111111',
+                        text_secondary: '#6E6E6B',
+                        text_tertiary: '#9A9A96',
+                        accent: '#111111',
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem", // 4px hardcoded to Atelier Blanc spec
+                        lg: "0.25rem",
+                        xl: "0.25rem",
+                        full: "9999px" // Avatar/badge exceptions
+                    },
+                    spacing: {
+                        'section': '3.5rem', // 56px
+                        'component': '2.5rem', // 40px
+                        'margin': '2rem', // 32px
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        display: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        label: ["Space Mono", "monospace"] // Overridden to monospace for Atelier Blanc spec
+                    },
+                    fontSize: {
+                        'xs-mono': ['10px', { lineHeight: '1.2', letterSpacing: '0.14em' }],
+                        'h1-thin': ['44px', { lineHeight: '1.1', fontWeight: '300' }],
+                        'h2-thin': ['36px', { lineHeight: '1.2', fontWeight: '300' }],
+                        'h3-thin': ['28px', { lineHeight: '1.3', fontWeight: '300' }],
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-size: 16px;
+            font-weight: 300;
+            color: currentColor;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Custom input style for Atelier Blanc */
+        .input-blanc {
+            border: none;
+            border-bottom: 1px solid theme('colors.border');
+            background: transparent;
+            padding: 0.5rem 0;
+            font-family: theme('fontFamily.body');
+            color: theme('colors.text_primary');
+            transition: border-color 0.2s, border-width 0.2s;
+            border-radius: 0;
+        }
+        .input-blanc:focus {
+            outline: none;
+            box-shadow: none;
+            border-bottom: 1.5px solid theme('colors.text_primary');
+        }
+        .input-blanc::placeholder {
+            color: theme('colors.text_tertiary');
+        }
+        
+        /* Disable all focus rings for forms plugin to enforce strict Atelier Blanc styling */
+        [type='text']:focus, [type='email']:focus, [type='url']:focus, [type='password']:focus, [type='number']:focus, [type='date']:focus, [type='datetime-local']:focus, [type='month']:focus, [type='search']:focus, [type='tel']:focus, [type='time']:focus, [type='week']:focus, [multiple]:focus, textarea:focus, select:focus {
+            outline: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body class="h-full bg-background text-text_primary font-body antialiased flex selection:bg-text_primary selection:text-background">
+<!-- Left: Brand Area (40%) -->
+<div class="hidden md:flex w-[40%] bg-surface flex-col justify-between p-12 border-r border-border relative">
+<!-- Subtle Pattern Background to break absolute solidness without violating rules -->
+<div class="absolute inset-0 pointer-events-none opacity-[0.03]" style="background-image: radial-gradient(theme('colors.text_primary') 1px, transparent 1px); background-size: 24px 24px;"></div>
+<!-- Top: Logo -->
+<div class="flex items-center gap-3 relative z-10">
+<div class="w-6 h-6 bg-text_primary rounded-full flex items-center justify-center">
+<div class="w-2 h-2 bg-background rounded-full"></div>
+</div>
+<span class="font-label text-xs-mono text-text_primary font-bold">GEILI API</span>
+</div>
+<!-- Center: Statement -->
+<div class="relative z-10 space-y-4 max-w-sm">
+<h1 class="text-h3-thin text-text_primary tracking-tight">Access precision models with absolute clarity.</h1>
+<p class="text-sm text-text_secondary font-light leading-relaxed">
+                Connect your applications to the world's most advanced AI gateway, designed for scale and uncompromising performance.
+            </p>
+</div>
+<!-- Bottom: Legal -->
+<div class="relative z-10 font-label text-xs-mono text-text_tertiary uppercase flex flex-col gap-2">
+<span>© 2024 GEILI API ATELIER.</span>
+<span>ALL RIGHTS RESERVED.</span>
+</div>
+</div>
+<!-- Right: Form Area (60%) -->
+<div class="w-full md:w-[60%] flex items-center justify-center p-8 bg-background relative">
+<!-- Mobile Top Nav (visible only on small screens) -->
+<div class="md:hidden absolute top-0 left-0 w-full p-6 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-5 h-5 bg-text_primary rounded-full flex items-center justify-center">
+<div class="w-1.5 h-1.5 bg-background rounded-full"></div>
+</div>
+<span class="font-label text-xs-mono text-text_primary font-bold">GEILI API</span>
+</div>
+</div>
+<!-- Form Container -->
+<div class="w-full max-w-[360px] flex flex-col gap-10">
+<!-- Header -->
+<div class="space-y-2">
+<h2 class="text-h3-thin text-text_primary">登录</h2>
+<p class="text-sm text-text_secondary font-light">Enter your credentials to access the gateway.</p>
+</div>
+<!-- Form -->
+<form class="space-y-6" onsubmit="event.preventDefault();">
+<!-- Email -->
+<div class="space-y-2 flex flex-col">
+<label class="font-label text-xs-mono text-text_tertiary uppercase" for="email">EMAIL ADDRESS</label>
+<input class="input-blanc w-full text-base py-3" id="email" placeholder="name@company.com" required="" type="email"/>
+</div>
+<!-- Password -->
+<div class="space-y-2 flex flex-col relative group">
+<div class="flex justify-between items-end">
+<label class="font-label text-xs-mono text-text_tertiary uppercase" for="password">PASSWORD</label>
+</div>
+<div class="relative w-full">
+<input class="input-blanc w-full text-base py-3 pr-10" id="password" placeholder="••••••••" required="" type="password"/>
+<button class="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-text_tertiary hover:text-text_primary transition-colors focus:outline-none" type="button">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">visibility</span>
+</button>
+</div>
+<div class="flex justify-end pt-1">
+<a class="text-[12px] text-text_secondary hover:text-text_primary underline underline-offset-4 transition-colors" href="#">忘记密码</a>
+</div>
+</div>
+<!-- Captcha Placeholder -->
+<div class="space-y-2 flex flex-col">
+<label class="font-label text-xs-mono text-text_tertiary uppercase">SECURITY CHECK</label>
+<div class="flex items-end gap-4 border-b border-border pb-1">
+<input class="input-blanc flex-1 border-none focus:border-none p-0 h-[36px] bg-transparent text-base" placeholder="Enter code" type="text"/>
+<div class="w-[100px] h-[36px] border border-border flex items-center justify-center bg-surface relative overflow-hidden" data-alt="A highly abstract, distorted security CAPTCHA image featuring random jagged geometric lines and numeric characters intersecting in a minimalist black and white composition. The style is strictly stark and monochromatic, resembling an extreme modernist technical graphic, ensuring it fits perfectly within a precise, high-end UI aesthetic avoiding any colors." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBnhqoq-zUk5YVU_ivxP7Lq_wFFdpdZzB-SFZHmiKpJwBPmLkc1R6RmcpWBFXg8nF0kdoGfJaXDway9yZ-hBaloCWR0Ro4VXVVel3tXO-loJgX8SjE6hYzeZBZ4iEL9MKyjPY0Yu1K03xvkDeyeNHFQl-0AQXH01EMjK_sWC1Jfh6qYi7iseSV8umu_gTxtKC5tw6h6ctKIh-34YlZSGChHksHUm09LkhPOsR-Y1z8_rr5K66Ll3Yt7EmS4QQEZpdkN-TPhs7lcjwGH')">
+<!-- Visual representation of captcha -->
+<span class="font-label text-sm text-text_secondary tracking-widest absolute mix-blend-difference filter blur-[0.5px]">4X9A</span>
+</div>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full h-[44px] bg-text_primary text-background font-medium text-sm rounded transition-all hover:bg-black/90 active:scale-[0.99] mt-4 flex items-center justify-center gap-2" type="submit">
+                    登录
+                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</form>
+<!-- Separator -->
+<div class="relative flex items-center justify-center mt-component">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-border"></div>
+</div>
+<div class="relative bg-background px-4">
+<span class="font-label text-xs-mono text-text_tertiary">OR</span>
+</div>
+</div>
+<!-- OAuth Actions -->
+<div class="flex flex-col gap-3">
+<button class="w-full h-[44px] bg-background border border-border text-text_primary font-medium text-sm rounded hover:bg-surface transition-colors flex items-center justify-center gap-3">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24">
+<path clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" fill-rule="evenodd"></path>
+</svg>
+                    Continue with GitHub
+                </button>
+<button class="w-full h-[44px] bg-background border border-border text-text_primary font-medium text-sm rounded hover:bg-surface transition-colors flex items-center justify-center gap-3">
+<svg class="w-4 h-4" viewbox="0 0 24 24">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+</svg>
+                    Continue with Google
+                </button>
+</div>
+<!-- Bottom Links -->
+<div class="mt-8 flex flex-col gap-4 text-center items-center">
+<p class="text-sm text-text_secondary">
+                    还没有账号？ 
+                    <a class="text-text_primary hover:text-text_secondary underline underline-offset-4 transition-colors" href="#">注册</a>
+</p>
+<p class="text-[12px] text-text_tertiary max-w-[280px] leading-relaxed">
+                    By logging in, you agree to our 
+                    <a class="underline underline-offset-4 hover:text-text_secondary transition-colors" href="#">服务条款</a> and 
+                    <a class="underline underline-offset-4 hover:text-text_secondary transition-colors" href="#">隐私政策</a>.
+                </p>
+</div>
+</div>
+</div>
+</body></html>

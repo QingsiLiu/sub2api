@@ -1,14 +1,318 @@
 /*
- * Geili 样式层
+ * Geili 样式层 — 方向 F「素白 Atelier Blanc」
  *
- * 放 Geili 自有组件的基础样式与工具类。约定：
- * - 类名统一 `geili-` 前缀，避免与上游 `btn-*` / `card-*` 等冲突；
- * - 允许使用 @layer（本文件经 styles/index.css 与上游 style.css 一起交给 Tailwind 处理）；
- * - 不要在这里用宽泛选择器（如 `.bg-white`、`[class*="bg-gray"]`）去“盖”上游样式——
- *   2026-06 的 Ceramic Ink 注入方案已证明这条路会拖垮图表页性能。要改就用模块覆盖换掉组件。
+ * 两部分内容：
+ *   1. 对上游 `src/style.css` 语义类的【同名重定义】。色彩 / 圆角 / 阴影已经由
+ *      geili 的 tailwind.config.js 在 token 层换掉了，这里只处理光靠 token 换不掉的
+ *      「形态」差异：实心徽章要变描边、四边框输入要变单底线、表头底色要去掉、
+ *      图标底色块要拿走、渐变按钮要变实色。本文件在上游 style.css 之后加载，
+ *      同 layer 同特异性，后者胜出。
+ *   2. `geili-` 前缀的自有工具类（等宽大写标签、hairline 分栏、统计栏等）。
+ *
+ * 约定：
+ * - 不要用宽泛选择器（如 `.bg-white`、`[class*="bg-gray"]`）去“盖”上游样式——
+ *   2026-06 的 Ceramic Ink 注入方案已证明这条路会拖垮图表页性能。要改就同名重定义或换组件。
+ * - 出图真源见 `design/stitch/`，硬性规则见 `design/BRIEF.md`。
  */
 
 /* 标记 Geili UI 已接管，便于 e2e / 排障时一眼确认加载的是自有构建 */
 html[data-geili-ui] {
   --geili-ui: 1;
+}
+
+@layer components {
+  /* ============ 按钮：实色矩形，零阴影零渐变 ============ */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply rounded px-4 py-2 text-sm font-medium;
+    @apply transition-colors duration-150 ease-out;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-600/40 focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-40;
+    @apply active:scale-100;
+  }
+
+  /*
+   * 上游这几个按钮用的是 bg-gradient-to-r，光设 background-color 会被渐变图层盖住，
+   * 所以每个都要显式 bg-none。
+   */
+
+  /* 强调色即近黑；深色模式反转为白底黑字，是全屏唯一的实色块 */
+  .btn-primary {
+    @apply bg-primary-600 bg-none text-white hover:bg-primary-700;
+    @apply dark:text-[rgb(var(--geili-on-accent))];
+  }
+
+  .btn-secondary {
+    @apply border border-gray-300 bg-transparent bg-none text-gray-800;
+    @apply hover:border-gray-500 hover:bg-gray-100;
+    @apply dark:text-gray-100;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent bg-none text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+    @apply dark:text-gray-500 dark:hover:text-gray-900;
+  }
+
+  .btn-danger {
+    @apply bg-transparent bg-none text-red-500 hover:bg-red-50;
+    @apply border border-red-500/40 hover:border-red-500;
+  }
+
+  .btn-success {
+    @apply bg-transparent bg-none text-emerald-500 hover:bg-emerald-50;
+    @apply border border-emerald-500/40 hover:border-emerald-500;
+  }
+
+  .btn-warning {
+    @apply bg-transparent bg-none text-amber-500 hover:bg-amber-50;
+    @apply border border-amber-500/40 hover:border-amber-500;
+  }
+
+  .btn-sm {
+    @apply rounded px-3 py-1.5 text-xs;
+  }
+
+  .btn-md {
+    @apply rounded px-4 py-2 text-sm;
+  }
+
+  .btn-lg {
+    @apply rounded px-5 py-2.5 text-sm;
+  }
+
+  .btn-icon {
+    @apply rounded p-2;
+  }
+
+  /* ============ 输入：仅底部一条线，聚焦时线变黑加粗 ============ */
+  .input {
+    @apply w-full rounded-none border-0 border-b border-gray-300 bg-transparent px-0 py-2 text-sm;
+    @apply text-gray-900 placeholder:text-gray-500 dark:text-gray-900;
+    @apply transition-colors duration-150;
+    @apply focus:border-primary-600 focus:outline-none focus:ring-0;
+    @apply disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:border-red-500 focus:ring-0;
+  }
+
+  /* 字段标签统一为等宽大写小字，是本方向的签名 */
+  .input-label {
+    @apply mb-2 block font-mono uppercase text-gray-500;
+    font-size: var(--geili-label-size);
+    letter-spacing: var(--geili-label-tracking);
+  }
+
+  .input-hint {
+    @apply mt-1.5 text-xs text-gray-500;
+  }
+
+  .input-error-text {
+    @apply mt-1.5 text-xs text-red-500;
+  }
+
+  /* ============ 面板：hairline 边框，绝不投影，也不做玻璃 ============ */
+  .card {
+    @apply rounded border border-gray-300 bg-transparent;
+    @apply transition-colors duration-150;
+  }
+
+  .card-hover {
+    @apply hover:translate-y-0 hover:border-gray-500;
+  }
+
+  .card-glass {
+    @apply rounded border border-gray-300 bg-[rgb(var(--geili-surface))] backdrop-blur-none;
+  }
+
+  /* 上游给固定表头加了投影，本方向改用一条 hairline 表达同样的层次 */
+  .table-wrapper thead.sticky {
+    box-shadow: none;
+    border-bottom: var(--geili-hairline-width) solid rgb(var(--geili-hairline));
+  }
+
+  .card-header {
+    @apply border-b border-gray-300 px-5 py-4;
+  }
+
+  .card-body {
+    @apply p-5;
+  }
+
+  .card-footer {
+    @apply border-t border-gray-300 px-5 py-4;
+  }
+
+  /* ============ 统计：数值极大且细，标签极小且等宽大写，图标不带底色块 ============ */
+  .stat-card {
+    @apply flex items-start gap-4 rounded border-0 p-0;
+  }
+
+  .stat-icon {
+    @apply flex h-4 w-4 items-center justify-center rounded-none bg-transparent text-base;
+  }
+
+  .stat-icon-primary {
+    @apply bg-transparent text-gray-900 dark:bg-transparent;
+  }
+
+  .stat-icon-success {
+    @apply bg-transparent text-emerald-500 dark:bg-transparent;
+  }
+
+  .stat-icon-warning {
+    @apply bg-transparent text-amber-500 dark:bg-transparent;
+  }
+
+  .stat-icon-danger {
+    @apply bg-transparent text-red-500 dark:bg-transparent;
+  }
+
+  .stat-value {
+    @apply truncate text-4xl font-light tabular-nums tracking-tight text-gray-900;
+  }
+
+  .stat-label {
+    @apply font-mono uppercase text-gray-500;
+    font-size: var(--geili-label-size);
+    letter-spacing: var(--geili-label-tracking);
+  }
+
+  .stat-trend {
+    @apply mt-1 flex items-center gap-1 text-xs font-normal tabular-nums;
+  }
+
+  .stat-trend-up {
+    @apply text-emerald-500;
+  }
+
+  .stat-trend-down {
+    @apply text-red-500;
+  }
+
+  /* ============ 表格：无外框、无斑马、行高 52、表头等宽大写 ============ */
+  .table-container {
+    @apply overflow-x-auto rounded-none border-0;
+  }
+
+  .table th {
+    @apply border-b border-gray-300 bg-transparent px-3 py-3 text-left;
+    @apply font-mono font-normal uppercase text-gray-500;
+    font-size: var(--geili-label-size);
+    letter-spacing: var(--geili-label-tracking);
+  }
+
+  .table td {
+    @apply border-b border-gray-200 px-3 text-gray-800;
+    height: var(--geili-row-height);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .table tbody tr {
+    @apply transition-colors duration-150 hover:bg-gray-100;
+  }
+
+  /* ============ 徽章：一律细边框 + 彩色文字 + 透明底 ============ */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5;
+    @apply bg-transparent font-mono uppercase;
+    font-size: var(--geili-label-size);
+    letter-spacing: var(--geili-label-tracking);
+  }
+
+  .badge-primary {
+    @apply border-gray-500 bg-transparent text-gray-900 dark:bg-transparent;
+  }
+
+  .badge-success {
+    @apply border-emerald-500/50 bg-transparent text-emerald-600 dark:bg-transparent;
+  }
+
+  .badge-warning {
+    @apply border-amber-500/50 bg-transparent text-amber-600 dark:bg-transparent;
+  }
+
+  .badge-danger {
+    @apply border-red-500/50 bg-transparent text-red-600 dark:bg-transparent;
+  }
+
+  .badge-gray,
+  .badge-purple {
+    @apply border-gray-400 bg-transparent text-gray-600 dark:bg-transparent;
+  }
+
+  /* ============ 下拉与弹窗：靠 hairline 与遮罩建立层次，不用阴影和模糊 ============ */
+  .dropdown {
+    @apply rounded border border-gray-300 bg-[rgb(var(--geili-surface))] py-1;
+  }
+
+  .modal-overlay {
+    @apply bg-[rgb(var(--geili-primary-600))]/40 backdrop-blur-none;
+  }
+
+  .modal-content {
+    @apply rounded border border-gray-300 bg-[rgb(var(--geili-surface))];
+  }
+
+  .modal-header {
+    @apply border-gray-300;
+  }
+
+  .modal-title {
+    @apply text-lg font-normal text-gray-900;
+  }
+
+  .modal-footer {
+    @apply border-gray-300;
+  }
+}
+
+@layer utilities {
+  /* 上游把 .glass 与 .text-gradient 放在 utilities，必须在同一 layer 才盖得住 */
+  .glass {
+    @apply border border-gray-300 bg-[rgb(var(--geili-surface))] backdrop-blur-none;
+  }
+
+  .text-gradient {
+    @apply bg-none text-gray-900;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    -webkit-text-fill-color: currentColor;
+  }
+
+  /* 等宽大写小标签：F 的签名，覆盖组件里直接用它 */
+  .geili-label {
+    font-family: var(--geili-font-mono);
+    font-size: var(--geili-label-size);
+    letter-spacing: var(--geili-label-tracking);
+    text-transform: uppercase;
+    color: rgb(var(--geili-text-label));
+  }
+
+  /* 统计栏：四栏之间用竖直 hairline 分隔，而不是四张卡片 */
+  .geili-stat-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+
+  .geili-stat-row > * + * {
+    border-left: var(--geili-hairline-width) solid rgb(var(--geili-hairline));
+    padding-left: 1.5rem;
+  }
+
+  .geili-hairline-t {
+    border-top: var(--geili-hairline-width) solid rgb(var(--geili-hairline));
+  }
+
+  .geili-hairline-b {
+    border-bottom: var(--geili-hairline-width) solid rgb(var(--geili-hairline));
+  }
+
+  /* 区块节奏：内容区各段之间的统一留白 */
+  .geili-section + .geili-section {
+    margin-top: var(--geili-section-gap);
+  }
 }

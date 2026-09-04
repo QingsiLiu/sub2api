@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Google+Sans+Mono:wght@400;500&amp;family=Public+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+            "bg-dark": "#0E0E0D",
+            "bg-panel": "#161615",
+            "border-hairline": "#262624",
+            "text-primary": "#F2F2F0",
+            "text-secondary": "#8E8E8A",
+            "text-label": "#6E6E6B",
+            "status-success": "#46705C",
+            "status-warning": "#8A6A2F",
+            "status-danger": "#8C3A34",
+            "status-info": "#3F5470"
+        },
+        borderRadius: {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        fontFamily: {
+          "headline": ["Geist", "sans-serif"],
+          "display": ["Geist", "sans-serif"],
+          "body": ["Geist", "sans-serif"],
+          "mono": ["Google Sans Mono", "monospace"],
+          "label": ["Public Sans", "sans-serif"]
+        }
+      },
+    },
+  }
+</script>
+<style>
+    body { background-color: #0E0E0D; color: #F2F2F0; font-family: 'Geist', sans-serif; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="bg-bg-dark text-text-primary min-h-screen flex flex-col md:flex-row antialiased">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-screen w-64 border-r border-border-hairline bg-bg-dark py-6 flex-shrink-0 z-40 sticky top-0">
+<div class="px-6 mb-12">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-bg-panel border border-border-hairline flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px] text-text-primary">developer_board</span>
+</div>
+<div>
+<h1 class="font-display font-medium text-text-primary tracking-tight leading-tight">GEILI API</h1>
+<p class="font-mono text-[10px] tracking-[0.16em] uppercase text-text-secondary mt-0.5">V3.0</p>
+</div>
+</div>
+<button class="w-full mt-6 py-2 bg-text-primary text-bg-dark font-medium text-sm rounded transition-opacity hover:opacity-90 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">add</span>
+            New API Key
+        </button>
+</div>
+<div class="flex-1 overflow-y-auto px-4 space-y-1 scrollbar-hide">
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-3 py-2 text-text-primary border-l-2 border-text-primary bg-transparent font-medium hover:bg-bg-panel transition-all duration-150 rounded-r active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[16px]">dashboard</span>
+<span class="font-headline text-sm tracking-tight">DASHBOARD</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">vpn_key</span>
+<span class="font-headline text-sm tracking-tight">API KEYS</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">leaderboard</span>
+<span class="font-headline text-sm tracking-tight">USAGE</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">grid_view</span>
+<span class="font-headline text-sm tracking-tight">MODEL PLAZA</span>
+</a>
+<div class="pt-6 pb-2 px-3">
+<p class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">ROUTING</p>
+</div>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">hub</span>
+<span class="font-headline text-sm tracking-tight">CHANNELS</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">drive_image</span>
+<span class="font-headline text-sm tracking-tight">CHANNEL STATUS</span>
+</a>
+<div class="pt-6 pb-2 px-3">
+<p class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">TOOLS</p>
+</div>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">image_search</span>
+<span class="font-headline text-sm tracking-tight">BATCH IMAGE</span>
+</a>
+<div class="pt-6 pb-2 px-3">
+<p class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">ACCOUNT</p>
+</div>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">add_card</span>
+<span class="font-headline text-sm tracking-tight">TOP-UP</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">subscriptions</span>
+<span class="font-headline text-sm tracking-tight">MY SUBS</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">receipt_long</span>
+<span class="font-headline text-sm tracking-tight">MY ORDERS</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded active:scale-[0.98] border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined text-[16px]">person_outline</span>
+<span class="font-headline text-sm tracking-tight">PROFILE</span>
+</a>
+</div>
+<div class="px-4 pt-4 border-t border-border-hairline mt-auto space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded" href="#">
+<span class="material-symbols-outlined text-[16px]">language</span>
+<span class="font-headline text-sm tracking-tight">Language</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-panel transition-all duration-150 rounded" href="#">
+<span class="material-symbols-outlined text-[16px]">dark_mode</span>
+<span class="font-headline text-sm tracking-tight">Dark Mode</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-8 w-full sticky top-0 z-50 h-16 bg-bg-dark border-b border-border-hairline">
+<div class="flex items-center gap-6">
+<span class="text-lg font-medium text-text-primary uppercase tracking-widest font-display">OVERVIEW</span>
+<nav class="hidden md:flex gap-4">
+<a class="text-text-secondary hover:text-text-primary transition-colors text-sm font-headline tracking-tight" href="#">DOCS</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-text-secondary hover:text-text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+</div>
+</header>
+<main class="flex-1 p-8 lg:px-10 max-w-7xl mx-auto w-full space-y-12 pb-24">
+<!-- 1. Four Column Stats -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 border-y border-border-hairline py-8 gap-y-8">
+<!-- Col 1 -->
+<div class="px-6 lg:border-r border-border-hairline flex flex-col justify-between h-24">
+<div class="flex justify-between items-start">
+<span class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">BALANCE</span>
+<button class="font-mono text-[10px] text-text-primary border-b border-text-primary pb-px hover:opacity-70 transition-opacity uppercase">TOP UP</button>
+</div>
+<div class="font-display text-[40px] font-light text-text-primary tabular-nums tracking-tight leading-none">¥1,284.50</div>
+</div>
+<!-- Col 2 -->
+<div class="px-6 md:border-r border-border-hairline flex flex-col justify-between h-24">
+<div class="flex justify-between items-start">
+<span class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">API KEYS</span>
+<button class="font-mono text-[10px] text-text-primary border-b border-text-primary pb-px hover:opacity-70 transition-opacity uppercase">CREATE</button>
+</div>
+<div class="font-display text-[40px] font-light text-text-primary tabular-nums tracking-tight leading-none">6</div>
+</div>
+<!-- Col 3 -->
+<div class="px-6 lg:border-r border-border-hairline flex flex-col justify-between h-24">
+<div class="flex justify-between items-start">
+<span class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">DAILY REQUESTS</span>
+<span class="font-mono text-[10px] text-status-success uppercase">+8.2%</span>
+</div>
+<div class="font-display text-[40px] font-light text-text-primary tabular-nums tracking-tight leading-none">12,408</div>
+</div>
+<!-- Col 4 -->
+<div class="px-6 flex flex-col justify-between h-24">
+<div class="flex justify-between items-start">
+<span class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">DAILY SPEND</span>
+</div>
+<div>
+<div class="font-display text-[40px] font-light text-text-primary tabular-nums tracking-tight leading-none">¥86.32</div>
+<div class="font-mono text-[10px] text-text-secondary mt-2 tracking-wide uppercase">4.2M TOKENS · 38% CACHED</div>
+</div>
+</div>
+</section>
+<!-- Second Row: Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
+<!-- TOKEN USAGE TREND (2/3) -->
+<section class="lg:col-span-2 flex flex-col h-80">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">TOKEN USAGE TREND</h2>
+<div class="flex gap-4 font-mono text-[10px]">
+<div class="flex gap-2 text-text-secondary">
+<button class="text-text-primary border-b border-text-primary">7D</button>
+<span>/</span>
+<button class="hover:text-text-primary">30D</button>
+</div>
+<div class="w-px h-3 bg-border-hairline"></div>
+<div class="flex gap-2 text-text-secondary">
+<button class="text-text-primary border-b border-text-primary">DAY</button>
+<span>/</span>
+<button class="hover:text-text-primary">HOUR</button>
+</div>
+</div>
+</div>
+<div class="flex-1 relative border-l border-b border-border-hairline">
+<!-- Chart Mockup SVG -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Grid lines -->
+<line stroke="#262624" stroke-width="0.5" x1="0" x2="100" y1="25" y2="25"></line>
+<line stroke="#262624" stroke-width="0.5" x1="0" x2="100" y1="50" y2="50"></line>
+<line stroke="#262624" stroke-width="0.5" x1="0" x2="100" y1="75" y2="75"></line>
+<!-- CACHE (Dashed) -->
+<path d="M0,80 L20,75 L40,85 L60,70 L80,75 L100,60" fill="none" stroke="#6E6E6B" stroke-dasharray="2,2" stroke-width="1"></path>
+<!-- OUTPUT (Thin Gray) -->
+<path d="M0,70 L20,60 L40,65 L60,40 L80,50 L100,30" fill="none" stroke="#8E8E8A" stroke-width="1"></path>
+<!-- INPUT (Solid White) -->
+<path d="M0,50 L20,30 L40,40 L60,15 L80,25 L100,5" fill="none" stroke="#F2F2F0" stroke-width="1.5"></path>
+<!-- Subtle fill for Input -->
+<path d="M0,50 L20,30 L40,40 L60,15 L80,25 L100,5 L100,100 L0,100 Z" fill="#F2F2F0" fill-opacity="0.02"></path>
+</svg>
+<!-- Y-Axis Labels -->
+<div class="absolute -left-8 bottom-0 font-mono text-[9px] text-text-label tabular-nums">0</div>
+<div class="absolute -left-8 top-1/2 -translate-y-1/2 font-mono text-[9px] text-text-label tabular-nums">5M</div>
+<div class="absolute -left-10 top-0 font-mono text-[9px] text-text-label tabular-nums">10M</div>
+</div>
+<!-- Legend -->
+<div class="flex gap-6 mt-4 font-mono text-[9px] text-text-secondary tracking-widest uppercase justify-center">
+<div class="flex items-center gap-2"><div class="w-3 h-px bg-text-primary"></div>INPUT</div>
+<div class="flex items-center gap-2"><div class="w-3 h-px bg-text-secondary"></div>OUTPUT</div>
+<div class="flex items-center gap-2"><div class="w-3 h-px border-t border-dashed border-text-label"></div>CACHE</div>
+</div>
+</section>
+<!-- MODEL DISTRIBUTION (1/3) -->
+<section class="flex flex-col h-80">
+<h2 class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em] mb-6">MODEL DISTRIBUTION</h2>
+<div class="flex-1 flex flex-col items-center justify-center relative">
+<!-- Ring Chart Mockup -->
+<div class="w-48 h-48 rounded-full border border-border-hairline relative flex items-center justify-center">
+<!-- Simplified segments using borders/conic-gradient representation -->
+<div class="absolute inset-0 rounded-full" style="background: conic-gradient(from 0deg, #F2F2F0 0% 45%, #8E8E8A 45% 70%, #6E6E6B 70% 85%, #262624 85% 100%);"></div>
+<!-- Inner hole -->
+<div class="absolute inset-[1px] bg-bg-dark rounded-full"></div>
+<div class="absolute inset-[12px] bg-bg-panel rounded-full flex flex-col items-center justify-center">
+<span class="font-mono text-[10px] text-text-label uppercase tracking-[0.16em]">TOTAL</span>
+<span class="font-display text-2xl text-text-primary font-light tabular-nums mt-1">11.8M</span>
+</div>
+</div>
+<div class="w-full mt-8 space-y-2 px-4">
+<div class="flex justify-between items-center font-mono text-[10px]">
+<div class="flex items-center gap-2 text-text-primary uppercase"><div class="w-2 h-2 rounded-full bg-text-primary"></div>GPT-4-TURBO</div>
+<span class="tabular-nums">45%</span>
+</div>
+<div class="flex justify-between items-center font-mono text-[10px]">
+<div class="flex items-center gap-2 text-text-secondary uppercase"><div class="w-2 h-2 rounded-full bg-text-secondary"></div>CLAUDE-3-OPUS</div>
+<span class="tabular-nums text-text-secondary">25%</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</body></html>

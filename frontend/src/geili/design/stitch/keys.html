@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API - API Keys</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Public+Sans:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: {
+                            DEFAULT: '#FCFCFC',
+                            dark: '#0E0E0D'
+                        },
+                        surface: {
+                            DEFAULT: '#F6F6F5',
+                            dark: '#161615'
+                        },
+                        border: {
+                            DEFAULT: '#E8E8E6',
+                            subtle: '#F0F0EE',
+                            dark: '#262624'
+                        },
+                        content: {
+                            DEFAULT: '#111111',
+                            secondary: '#6E6E6B',
+                            tertiary: '#9A9A96',
+                            dark: '#F2F2F0',
+                            darkSecondary: '#8E8E8A'
+                        },
+                        status: {
+                            success: '#46705C',
+                            warning: '#8A6A2F',
+                            danger: '#8C3A34',
+                            info: '#3F5470'
+                        }
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem", // 4px hard rule
+                        lg: "0.25rem",
+                        xl: "0.25rem",
+                        full: "9999px" // Avatars/badges only
+                    },
+                    spacing: {
+                        '10': '2.5rem', // 40px margins
+                        '14': '3.5rem', // 56px vertical spacing
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        display: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        mono: ["Google Sans Mono", "monospace"],
+                        label: ["Public Sans", "sans-serif"]
+                    },
+                    fontSize: {
+                        'label-xs': ['10px', { lineHeight: '1', letterSpacing: '0.14em' }],
+                        'label-sm': ['11px', { lineHeight: '1', letterSpacing: '0.14em' }],
+                        'value-lg': ['40px', { lineHeight: '1', fontWeight: '300' }],
+                        'title': ['28px', { lineHeight: '1.2', fontWeight: '300' }]
+                    },
+                    boxShadow: {
+                        none: 'none'
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; background-color: #FCFCFC; color: #111111; }
+        .font-mono { font-family: 'Google Sans Mono', monospace; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20; font-size: 16px; }
+        
+        /* Input Resets & Styles */
+        input:focus, select:focus, textarea:focus { outline: none; box-shadow: none !important; }
+        .input-underline { border: none; border-bottom: 1px solid #E8E8E6; background: transparent; padding-left: 0; padding-right: 0; }
+        .input-underline:focus { border-bottom: 1.5px solid #111111; }
+        
+        /* Tabular nums */
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        
+        /* Hide scrollbar */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex selection:bg-content selection:text-white">
+<!-- SideNavBar -->
+<nav class="w-[240px] h-screen border-r border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex flex-col fixed left-0 top-0 bottom-0 z-10 shrink-0">
+<div class="p-6 h-[56px] flex items-center border-b border-transparent">
+<div class="flex items-center gap-3">
+<div class="w-6 h-6 rounded-full bg-content flex items-center justify-center shrink-0">
+<span class="text-white text-xs font-mono">G</span>
+</div>
+<div>
+<h1 class="font-display font-medium text-lg tracking-tighter text-[#111111] dark:text-[#F2F2F0] leading-none">GIVE ME API</h1>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em] text-content-secondary mt-1 block">V3.0 ATELIER</span>
+</div>
+</div>
+</div>
+<div class="mt-8 flex-1 overflow-y-auto px-4 space-y-1">
+<a class="flex items-center gap-3 text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615] rounded group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">DASHBOARD</span>
+</a>
+<a class="flex items-center gap-3 text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615] rounded group" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">USAGE</span>
+</a>
+<a class="flex items-center gap-3 text-[#111111] dark:text-[#F2F2F0] border-l-2 border-[#111111] dark:border-[#F2F2F0] bg-transparent pl-4 py-2 rounded-r bg-[#F6F6F5] transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined">vpn_key</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">API KEYS</span>
+</a>
+<a class="flex items-center gap-3 text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615] rounded group" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">BILLING</span>
+</a>
+<a class="flex items-center gap-3 text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615] rounded group" href="#">
+<span class="material-symbols-outlined">settings_input_component</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">CHANNELS</span>
+</a>
+<a class="flex items-center gap-3 text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615] rounded group" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">SETTINGS</span>
+</a>
+</div>
+<div class="p-6 border-t border-[#E8E8E6] dark:border-[#262624]">
+<div class="flex items-center gap-3 cursor-pointer group">
+<img alt="User Profile" class="w-8 h-8 rounded-full object-cover grayscale border border-border" data-alt="A minimalist, monochromatic geometric pattern avatar suitable for a high-end UI design. Sharp, clean lines, black and white palette, professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_R6nvlD05U7Ilv-Q9SwWJS8HqaiU99i_v-9EjQJQo4TBpobgCWBOF08M5jKj-Sp_f4qHlJzXFk-tMZ9vlw0Ua5P6XXs3vdEdQAtyqzscnVsD8BAMYAoREqA8bfVxefIUd6aozCoL1qYQ3SFxzSikcdqNY9Yz7-Xa1PUknAOsUm0lCDChdSuwGc7n3QOZ1zdWwlfB-IuQtaCqUt79syG8U4vZs-YvyNltpuylOPzOcClh95Rq8Uywz2o3u_2RQjy3GoNELOU4oXpmj"/>
+<div>
+<div class="font-body text-sm font-medium group-hover:text-content-secondary transition-colors">Admin User</div>
+<div class="font-body text-xs text-content-secondary">admin@geili.api</div>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 ml-[240px] flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<header class="h-[56px] w-full border-b border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex justify-between items-center px-10 shrink-0 sticky top-0 z-20">
+<div class="flex-1"></div> <!-- Spacer since search is on right -->
+<div class="flex items-center gap-6">
+<!-- Search -->
+<div class="relative group hidden md:block">
+<span class="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-content-secondary">search</span>
+<input class="font-mono text-[11px] uppercase tracking-[0.14em] pl-6 pr-2 py-1 w-24 group-hover:w-48 transition-all duration-300 input-underline text-content placeholder-content-tertiary" placeholder="CMD+K" type="text"/>
+</div>
+<div class="flex items-center gap-4 text-[#6E6E6B] dark:text-[#8E8E8A]">
+<button class="hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-opacity duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-opacity duration-200">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<button class="hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-opacity duration-200">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 px-10 py-12 flex flex-col gap-10">
+<!-- Header Section -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-title text-content">API Keys</h2>
+<p class="text-sm text-content-secondary mt-2">Manage your secret keys to access the gateway</p>
+</div>
+<button class="bg-content text-white h-[36px] px-6 rounded text-sm font-medium hover:bg-content-secondary transition-colors duration-200" onclick="document.getElementById('createKeyModal').classList.remove('hidden')">
+                    Create Key
+                </button>
+</div>
+<!-- Content Area -->
+<div class="flex flex-col gap-6">
+<!-- Filter Row -->
+<div class="flex justify-between items-end border-b border-border pb-3">
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-0 bottom-1 text-content-secondary text-sm">search</span>
+<input class="input-underline pl-6 pb-1 text-sm w-64 placeholder-content-tertiary text-content" placeholder="Search keys..." type="text"/>
+</div>
+<div class="flex gap-4">
+<select class="input-underline pb-1 text-sm text-content cursor-pointer appearance-none pr-6 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23111111%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[length:8px_8px] bg-[right_bottom_8px]">
+<option>Status: All</option>
+<option>Status: Active</option>
+<option>Status: Disabled</option>
+</select>
+<select class="input-underline pb-1 text-sm text-content cursor-pointer appearance-none pr-6 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23111111%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[length:8px_8px] bg-[right_bottom_8px]">
+<option>Group: All</option>
+<option>Production</option>
+<option>Dev</option>
+</select>
+</div>
+</div>
+<span class="font-mono text-label-xs text-content-secondary tabular-nums">10 OF 24</span>
+</div>
+<!-- Table -->
+<div class="w-full overflow-x-auto">
+<table class="w-full text-left whitespace-nowrap">
+<thead>
+<tr>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-1/4">NAME</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-1/5">KEY</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-[10%]">GROUP</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-1/5">QUOTA</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-[12%] text-right">LAST USED</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-[8%] text-center">STATUS</th>
+<th class="font-mono text-label-xs text-content-secondary pb-4 font-normal w-[5%] text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-subtle">
+<!-- Row 1 -->
+<tr class="h-[52px] group hover:bg-surface/50 transition-colors">
+<td>
+<div class="flex flex-col justify-center h-full">
+<span class="text-sm font-medium text-content">Production Default</span>
+<span class="text-[12px] text-content-secondary">Created Oct 24, 2023</span>
+</div>
+</td>
+<td>
+<div class="flex items-center gap-2 group/copy cursor-pointer">
+<span class="font-mono text-sm text-content tabular-nums tracking-tight">sk-...a1b2</span>
+<span class="material-symbols-outlined text-content-tertiary group-hover/copy:text-content transition-colors opacity-0 group-hover:opacity-100">content_copy</span>
+</div>
+</td>
+<td class="text-sm text-content-secondary">Production</td>
+<td>
+<div class="flex flex-col gap-1.5 w-32 justify-center h-full">
+<span class="text-xs text-content tabular-nums">142.5K / 500K</span>
+<div class="h-[2px] w-full bg-border-subtle rounded-full overflow-hidden">
+<div class="h-full bg-content w-[28%]"></div>
+</div>
+</div>
+</td>
+<td class="text-sm text-content-secondary text-right tabular-nums">2 mins ago</td>
+<td class="text-center">
+<span class="inline-block px-2 py-0.5 border border-status-success text-status-success font-mono text-label-xs rounded-full">ACTIVE</span>
+</td>
+<td class="text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-content-tertiary hover:text-content transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-content-tertiary hover:text-status-warning transition-colors"><span class="material-symbols-outlined">block</span></button>
+<button class="text-content-tertiary hover:text-status-danger transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="h-[52px] group hover:bg-surface/50 transition-colors">
+<td>
+<div class="flex flex-col justify-center h-full">
+<span class="text-sm font-medium text-content">Dev Environment</span>
+<span class="text-[12px] text-content-secondary">Created Oct 20, 2023</span>
+</div>
+</td>
+<td>
+<div class="flex items-center gap-2 group/copy cursor-pointer">
+<span class="font-mono text-sm text-content tabular-nums tracking-tight">sk-...x9y0</span>
+<span class="material-symbols-outlined text-content-tertiary group-hover/copy:text-content transition-colors opacity-0 group-hover:opacity-100">content_copy</span>
+</div>
+</td>
+<td class="text-sm text-content-secondary">Dev</td>
+<td>
+<div class="flex flex-col gap-1.5 w-32 justify-center h-full">
+<span class="text-xs text-content tabular-nums">4.2K / 10K</span>
+<div class="h-[2px] w-full bg-border-subtle rounded-full overflow-hidden">
+<div class="h-full bg-content w-[42%]"></div>
+</div>
+</div>
+</td>
+<td class="text-sm text-content-secondary text-right tabular-nums">5 hrs ago</td>
+<td class="text-center">
+<span class="inline-block px-2 py-0.5 border border-status-success text-status-success font-mono text-label-xs rounded-full">ACTIVE</span>
+</td>
+<td class="text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-content-tertiary hover:text-content transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-content-tertiary hover:text-status-warning transition-colors"><span class="material-symbols-outlined">block</span></button>
+<button class="text-content-tertiary hover:text-status-danger transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 (Disabled) -->
+<tr class="h-[52px] group hover:bg-surface/50 transition-colors opacity-60">
+<td>
+<div class="flex flex-col justify-center h-full">
+<span class="text-sm font-medium text-content line-through">Staging Old</span>
+<span class="text-[12px] text-content-secondary">Created Sep 15, 2023</span>
+</div>
+</td>
+<td>
+<div class="flex items-center gap-2 group/copy cursor-not-allowed">
+<span class="font-mono text-sm text-content-secondary tabular-nums tracking-tight line-through">sk-...m4n5</span>
+</div>
+</td>
+<td class="text-sm text-content-secondary">Staging</td>
+<td>
+<div class="flex flex-col gap-1.5 w-32 justify-center h-full">
+<span class="text-xs text-content-secondary tabular-nums">50K / 50K</span>
+<div class="h-[2px] w-full bg-border-subtle rounded-full overflow-hidden">
+<div class="h-full bg-content-tertiary w-full"></div>
+</div>
+</div>
+</td>
+<td class="text-sm text-content-secondary text-right tabular-nums">-</td>
+<td class="text-center">
+<span class="inline-block px-2 py-0.5 border border-content-tertiary text-content-tertiary font-mono text-label-xs rounded-full">DISABLED</span>
+</td>
+<td class="text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-content-tertiary hover:text-status-danger transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Rows 4-8 placeholder logic for compactness -->
+<!-- Row 4 -->
+<tr class="h-[52px] group hover:bg-surface/50 transition-colors">
+<td>
+<div class="flex flex-col justify-center h-full">
+<span class="text-sm font-medium text-content">Mobile App V2</span>
+<span class="text-[12px] text-content-secondary">Created Nov 01, 2023</span>
+</div>
+</td>
+<td>
+<div class="flex items-center gap-2 group/copy cursor-pointer">
+<span class="font-mono text-sm text-content tabular-nums tracking-tight">sk-...p7q8</span>
+<span class="material-symbols-outlined text-content-tertiary group-hover/copy:text-content transition-colors opacity-0 group-hover:opacity-100">content_copy</span>
+</div>
+</td>
+<td class="text-sm text-content-secondary">Production</td>
+<td>
+<div class="flex flex-col gap-1.5 w-32 justify-center h-full">
+<span class="text-xs text-content tabular-nums">89.1K / 100K</span>
+<div class="h-[2px] w-full bg-border-subtle rounded-full overflow-hidden">
+<div class="h-full bg-status-warning w-[89%]"></div>
+</div>
+</div>
+</td>
+<td class="text-sm text-content-secondary text-right tabular-nums">1 min ago</td>
+<td class="text-center">
+<span class="inline-block px-2 py-0.5 border border-status-success text-status-success font-mono text-label-xs rounded-full">ACTIVE</span>
+</td>
+<td class="text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-content-tertiary hover:text-content transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-content-tertiary hover:text-status-warning transition-colors"><span class="material-symbols-outlined">block</span></button>
+<button class="text-content-tertiary hover:text-status-danger transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="flex justify-between items-center pt-4 border-t border-border mt-4">
+<span class="font-mono text-label-xs text-content-secondary tabular-nums">1–8 OF 24</span>
+<div class="flex items-center gap-6">
+<button class="font-mono text-label-xs text-content-tertiary hover:text-content transition-colors cursor-not-allowed">PREVIOUS</button>
+<div class="flex gap-4 font-mono text-label-xs tabular-nums">
+<span class="text-content">1</span>
+<span class="text-content-tertiary hover:text-content cursor-pointer transition-colors">2</span>
+<span class="text-content-tertiary hover:text-content cursor-pointer transition-colors">3</span>
+</div>
+<button class="font-mono text-label-xs text-content hover:text-content-secondary transition-colors">NEXT</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center hidden" id="createKeyModal">
+<!-- Backdrop -->
+<div class="absolute inset-0 bg-[#111111]/40 backdrop-blur-[2px]" onclick="document.getElementById('createKeyModal').classList.add('hidden')"></div>
+<!-- Modal Panel -->
+<div class="relative bg-background w-[480px] rounded border border-border flex flex-col shadow-none">
+<!-- Header -->
+<div class="flex justify-between items-center px-8 py-6 border-b border-border">
+<h3 class="text-[20px] font-medium text-content">Create API Key</h3>
+<button class="text-content-tertiary hover:text-content transition-colors" onclick="document.getElementById('createKeyModal').classList.add('hidden')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Body -->
+<div class="p-8 flex flex-col gap-8">
+<!-- Name -->
+<div class="flex flex-col gap-2">
+<label class="font-mono text-label-xs text-content-secondary">NAME</label>
+<input class="input-underline text-sm pb-1 w-full text-content placeholder-content-tertiary" placeholder="e.g. Production Main" type="text"/>
+</div>
+<!-- Group -->
+<div class="flex flex-col gap-2">
+<label class="font-mono text-label-xs text-content-secondary">GROUP</label>
+<select class="input-underline text-sm pb-1 w-full text-content cursor-pointer appearance-none pr-6 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23111111%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[length:8px_8px] bg-[right_center]">
+<option>Production</option>
+<option>Development</option>
+<option>Staging</option>
+</select>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<!-- Quota -->
+<div class="flex flex-col gap-2">
+<label class="font-mono text-label-xs text-content-secondary">QUOTA LIMIT</label>
+<div class="flex items-end">
+<input class="input-underline text-sm pb-1 w-full text-content tabular-nums" placeholder="500" type="number"/>
+<span class="text-sm text-content-secondary ml-2 pb-1 border-b border-border">K</span>
+</div>
+</div>
+<!-- Expiration -->
+<div class="flex flex-col gap-2">
+<label class="font-mono text-label-xs text-content-secondary">EXPIRATION (OPTIONAL)</label>
+<input class="input-underline text-sm pb-1 w-full text-content text-content-secondary" type="date"/>
+</div>
+</div>
+<!-- Remarks -->
+<div class="flex flex-col gap-2">
+<label class="font-mono text-label-xs text-content-secondary">REMARKS (OPTIONAL)</label>
+<textarea class="input-underline text-sm pb-1 w-full text-content resize-none placeholder-content-tertiary" placeholder="Internal notes..." rows="2"></textarea>
+</div>
+</div>
+<!-- Footer -->
+<div class="px-8 py-6 border-t border-border flex justify-end gap-4 bg-surface rounded-b">
+<button class="text-sm font-medium text-content-secondary hover:text-content transition-colors px-4 py-2" onclick="document.getElementById('createKeyModal').classList.add('hidden')">
+                    Cancel
+                </button>
+<button class="bg-content text-white h-[36px] px-6 rounded text-sm font-medium hover:bg-content-secondary transition-colors duration-200">
+                    Create
+                </button>
+</div>
+</div>
+</div>
+<!-- Esc key listener for modal -->
+<script>
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                document.getElementById('createKeyModal').classList.add('hidden');
+            }
+        });
+    </script>
+</body></html>

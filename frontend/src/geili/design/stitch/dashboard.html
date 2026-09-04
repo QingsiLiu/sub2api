@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        /* Geist font face fallback */
+        @font-face {
+            font-family: 'Geist';
+            src: local('Helvetica Neue'), local('Arial'), sans-serif;
+            font-weight: 100 900;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: "#FCFCFC",
+                            bgDark: "#0E0E0D",
+                            surface: "#F6F6F5",
+                            surfaceDark: "#161615",
+                            border: "#E8E8E6",
+                            borderDark: "#262624",
+                            borderLight: "#F0F0EE",
+                            textMain: "#111111",
+                            textMainDark: "#F2F2F0",
+                            textSec: "#6E6E6B",
+                            textSecDark: "#8E8E8A",
+                            textLabel: "#9A9A96",
+                            success: "#46705C",
+                            warning: "#8A6A2F",
+                            danger: "#8C3A34",
+                            info: "#3F5470"
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem", /* 4px */
+                        "lg": "0.25rem",
+                        "xl": "0.25rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Geist", "sans-serif"],
+                        "display": ["Geist", "sans-serif"],
+                        "body": ["Geist", "sans-serif"],
+                        "label": ["'Space Mono'", "monospace"], /* Using standard monospace for fallback */
+                        "mono": ["'Space Mono'", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-brand-bg text-brand-textMain font-body antialiased selection:bg-brand-textMain selection:text-white flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="docked left-0 w-[240px] h-screen bg-[#FCFCFC] dark:bg-[#0E0E0D] border-r border-[#E8E8E6] dark:border-[#262624] flex flex-col h-full py-6 flex-shrink-0 z-10">
+<!-- Header -->
+<div class="px-6 mb-8 flex items-center justify-between">
+<div class="font-display font-medium text-[16px] tracking-[0.2em] text-[#111111] dark:text-[#F2F2F0]">GEILI API</div>
+<div class="text-[10px] font-mono text-brand-textLabel tracking-[0.16em]">V3.0</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto px-0">
+<ul class="space-y-[2px]">
+<!-- Active Item -->
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#111111] dark:text-[#F2F2F0] border-l-2 border-[#111111] dark:border-[#F2F2F0] font-medium bg-[#F6F6F5] dark:bg-[#161615]" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">dashboard</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Dashboard</span>
+</a>
+</li>
+<!-- Inactive Items -->
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">vpn_key</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">API Keys</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">leaderboard</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Usage</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">extension</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Model Plaza</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">hub</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Channels</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">wifi_tethering</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Channel Status</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">image_search</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Batch Image</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">account_balance_wallet</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Top-up</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">card_membership</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">My Subs</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">receipt_long</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">My Orders</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">confirmation_number</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Redeem</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">group_add</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Referral</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2.5 text-[#9A9A96] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors duration-150 scale-100 opacity-100 active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[16px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">person_outline</span>
+<span class="font-body text-[14px] leading-tight font-light uppercase tracking-[0.16em] font-label">Profile</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- Footer Actions -->
+<div class="px-6 pt-4 border-t border-brand-borderLight mt-auto flex flex-col space-y-4">
+<div class="flex justify-between items-center text-brand-textSec">
+<span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-brand-textMain transition-colors">translate</span>
+<span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-brand-textMain transition-colors">dark_mode</span>
+<span class="material-symbols-outlined text-[16px] cursor-pointer hover:text-brand-textMain transition-colors">menu_open</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[11px] font-mono text-brand-textSec tabular-nums">dev@example.com</span>
+<span class="text-[13px] font-mono text-brand-textMain tabular-nums mt-1 font-medium">¥1,284.50</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto flex flex-col bg-brand-bg relative">
+<!-- TopNavBar -->
+<header class="docked top-0 w-full h-[56px] bg-[#FCFCFC] dark:bg-[#0E0E0D] border-b border-[#E8E8E6] dark:border-[#262624] flex justify-between items-center px-8 flex-shrink-0 z-10 sticky">
+<div class="flex items-center space-x-6">
+<!-- Breadcrumb or Page Title could go here, for now keeping minimal -->
+<span class="font-display text-[15px] text-[#111111] dark:text-[#F2F2F0] font-medium tracking-wide">Overview</span>
+</div>
+<div class="flex items-center space-x-6">
+<a class="font-body text-[13px] font-normal text-[#6E6E6B] dark:text-[#8E8E8A] hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-opacity cursor-pointer active:scale-[0.99]" href="#">Docs</a>
+<button class="text-[#6E6E6B] dark:text-[#8E8E8A] hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-opacity cursor-pointer active:scale-[0.99]">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'wght' 300, 'FILL' 0;">notifications</span>
+</button>
+</div>
+</header>
+<!-- Canvas -->
+<div class="px-10 py-12 max-w-[1400px] w-full mx-auto flex flex-col space-y-14">
+<!-- 1. Stats Header Row -->
+<section class="grid grid-cols-4 w-full relative">
+<!-- Balance -->
+<div class="pr-8 border-r border-brand-border flex flex-col justify-start">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Balance</span>
+<button class="text-[11px] font-mono uppercase tracking-wider text-brand-textMain hover:underline underline-offset-4 decoration-1">Top up</button>
+</div>
+<div class="text-[40px] font-headline font-light text-brand-textMain leading-none tabular-nums tracking-tight">¥1,284.50</div>
+</div>
+<!-- API Keys -->
+<div class="px-8 border-r border-brand-border flex flex-col justify-start">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">API Keys</span>
+<button class="text-[11px] font-mono uppercase tracking-wider text-brand-textMain hover:underline underline-offset-4 decoration-1">Create</button>
+</div>
+<div class="text-[40px] font-headline font-light text-brand-textMain leading-none tabular-nums tracking-tight">6</div>
+</div>
+<!-- Daily Requests -->
+<div class="px-8 border-r border-brand-border flex flex-col justify-start">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Daily Requests</span>
+</div>
+<div class="flex items-baseline space-x-3">
+<div class="text-[40px] font-headline font-light text-brand-textMain leading-none tabular-nums tracking-tight">12,408</div>
+<span class="text-[12px] font-mono text-brand-success tabular-nums">+8.2%</span>
+</div>
+</div>
+<!-- Daily Spend -->
+<div class="pl-8 flex flex-col justify-start">
+<div class="flex justify-between items-center mb-4">
+<span class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Daily Spend</span>
+</div>
+<div class="text-[40px] font-headline font-light text-brand-textMain leading-none tabular-nums tracking-tight">¥86.32</div>
+<div class="text-[11px] font-mono text-brand-textSec mt-3 tracking-wide">4.2M TOKENS · 38% CACHED</div>
+</div>
+</section>
+<!-- 2. Middle Row -->
+<section class="grid grid-cols-3 gap-10">
+<!-- Token Usage Trend -->
+<div class="col-span-2 flex flex-col">
+<div class="flex justify-between items-end mb-6 pb-2 border-b border-brand-borderLight">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Token Usage Trend</h2>
+<div class="flex space-x-6 text-[11px] font-mono text-brand-textSec">
+<div class="flex space-x-3">
+<button class="text-brand-textMain pb-1 border-b border-brand-textMain">7D</button>
+<button class="hover:text-brand-textMain transition-colors">30D</button>
+</div>
+<div class="w-[1px] h-3 bg-brand-borderLight self-center"></div>
+<div class="flex space-x-3">
+<button class="text-brand-textMain pb-1 border-b border-brand-textMain">DAY</button>
+<button class="hover:text-brand-textMain transition-colors">HOUR</button>
+</div>
+</div>
+</div>
+<!-- Chart Placeholder -->
+<div class="h-[240px] w-full relative border-b border-brand-borderLight flex items-end">
+<!-- Abstract Chart Lines -->
+<svg class="w-full h-full absolute inset-0 text-brand-textMain" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Grid lines -->
+<line opacity="0.1" stroke="currentColor" stroke-width="0.1" x1="0" x2="100" y1="25" y2="25"></line>
+<line opacity="0.1" stroke="currentColor" stroke-width="0.1" x1="0" x2="100" y1="50" y2="50"></line>
+<line opacity="0.1" stroke="currentColor" stroke-width="0.1" x1="0" x2="100" y1="75" y2="75"></line>
+<!-- Input Line (Black) -->
+<path d="M0,80 Q20,60 40,70 T80,40 T100,30" fill="none" stroke="currentColor" stroke-width="0.5"></path>
+<!-- Output Line (Gray) -->
+<path d="M0,90 Q20,85 40,88 T80,70 T100,60" fill="none" stroke="#6E6E6B" stroke-dasharray="1 1" stroke-width="0.5"></path>
+<!-- Fill Area -->
+<path d="M0,100 L0,80 Q20,60 40,70 T80,40 T100,30 L100,100 Z" fill="currentColor" opacity="0.03"></path>
+</svg>
+<!-- Legend -->
+<div class="absolute top-4 left-4 flex space-x-6">
+<div class="flex items-center space-x-2">
+<div class="w-2 h-[1px] bg-brand-textMain"></div>
+<span class="text-[10px] font-mono text-brand-textSec">INPUT</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-2 h-[1px] bg-brand-textSec border-dashed border-t"></div>
+<span class="text-[10px] font-mono text-brand-textSec">OUTPUT</span>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-2 h-2 bg-brand-textMain opacity-10"></div>
+<span class="text-[10px] font-mono text-brand-textSec">CACHE</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Model Distribution -->
+<div class="col-span-1 flex flex-col">
+<div class="flex justify-between items-end mb-6 pb-2 border-b border-brand-borderLight">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Model Distribution</h2>
+</div>
+<div class="flex-1 flex flex-col justify-center items-center relative">
+<!-- Donut Placeholder -->
+<div class="w-[140px] h-[140px] rounded-full border border-brand-border relative flex items-center justify-center">
+<div class="w-[100px] h-[100px] rounded-full bg-brand-bg absolute"></div>
+<!-- Segments (Abstract representation) -->
+<svg class="absolute inset-0 w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="40" stroke="#111111" stroke-dasharray="115 251" stroke-width="1"></circle>
+<circle cx="50" cy="50" fill="none" r="40" stroke="#6E6E6B" stroke-dasharray="67 251" stroke-dashoffset="-115" stroke-width="1"></circle>
+<circle cx="50" cy="50" fill="none" r="40" stroke="#9A9A96" stroke-dasharray="45 251" stroke-dashoffset="-182" stroke-width="1"></circle>
+</svg>
+<div class="z-10 text-center flex flex-col">
+<span class="text-[10px] font-mono text-brand-textSec">TOTAL</span>
+<span class="text-[16px] font-body text-brand-textMain tabular-nums mt-1">11.8M</span>
+</div>
+</div>
+<!-- Legend List -->
+<div class="w-full mt-8 space-y-3">
+<div class="flex justify-between items-center text-[11px] font-mono">
+<div class="flex items-center space-x-2"><div class="w-2 h-[1px] bg-[#111111]"></div><span class="text-brand-textMain">Claude 3.5 Sonnet</span></div>
+<div class="flex space-x-3 tabular-nums text-brand-textSec"><span>5.4M</span><span class="text-brand-textMain w-6 text-right">46%</span></div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-mono">
+<div class="flex items-center space-x-2"><div class="w-2 h-[1px] bg-[#6E6E6B]"></div><span class="text-brand-textMain">GPT-4o</span></div>
+<div class="flex space-x-3 tabular-nums text-brand-textSec"><span>3.2M</span><span class="text-brand-textMain w-6 text-right">27%</span></div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-mono">
+<div class="flex items-center space-x-2"><div class="w-2 h-[1px] bg-[#9A9A96]"></div><span class="text-brand-textMain">Gemini 1.5 Pro</span></div>
+<div class="flex space-x-3 tabular-nums text-brand-textSec"><span>2.1M</span><span class="text-brand-textMain w-6 text-right">18%</span></div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-mono">
+<div class="flex items-center space-x-2"><div class="w-2 h-[1px] bg-brand-border"></div><span class="text-brand-textMain">Others</span></div>
+<div class="flex space-x-3 tabular-nums text-brand-textSec"><span>1.1M</span><span class="text-brand-textMain w-6 text-right">9%</span></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- 3. Bottom Row -->
+<section class="grid grid-cols-3 gap-10">
+<!-- Recent Usage Table -->
+<div class="col-span-2 flex flex-col">
+<div class="flex justify-between items-end mb-4 pb-2 border-b border-brand-borderLight">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Recent Usage</h2>
+<button class="text-[11px] font-mono uppercase tracking-wider text-brand-textMain hover:underline underline-offset-4 decoration-1">View All</button>
+</div>
+<div class="w-full">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-[10px] font-mono uppercase tracking-[0.1em] text-brand-textLabel border-b border-brand-borderLight">
+<th class="py-3 font-normal w-[120px]">Time</th>
+<th class="py-3 font-normal">Model</th>
+<th class="py-3 font-normal">API Key</th>
+<th class="py-3 font-normal text-right">In/Out</th>
+<th class="py-3 font-normal text-right">Fee</th>
+<th class="py-3 font-normal text-right pl-4">Status</th>
+</tr>
+</thead>
+<tbody class="text-[13px] font-mono tabular-nums text-brand-textMain">
+<!-- Row 1 -->
+<tr class="border-b border-brand-borderLight/50 hover:bg-brand-surface transition-colors h-[48px]">
+<td class="py-2 text-brand-textSec">10:42:15</td>
+<td class="py-2">claude-3-5-sonnet</td>
+<td class="py-2 text-brand-textSec text-[11px]">sk-...a1b2</td>
+<td class="py-2 text-right">842 / 1,024</td>
+<td class="py-2 text-right">¥0.014</td>
+<td class="py-2 text-right pl-4">
+<span class="inline-block px-2 py-0.5 border border-brand-success/30 text-brand-success text-[10px] rounded uppercase tracking-wider">Success</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-brand-borderLight/50 hover:bg-brand-surface transition-colors h-[48px]">
+<td class="py-2 text-brand-textSec">10:41:03</td>
+<td class="py-2">gpt-4o</td>
+<td class="py-2 text-brand-textSec text-[11px]">sk-...x9y8</td>
+<td class="py-2 text-right">120 / 45</td>
+<td class="py-2 text-right">¥0.002</td>
+<td class="py-2 text-right pl-4">
+<span class="inline-block px-2 py-0.5 border border-brand-success/30 text-brand-success text-[10px] rounded uppercase tracking-wider">Success</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="border-b border-brand-borderLight/50 hover:bg-brand-surface transition-colors h-[48px]">
+<td class="py-2 text-brand-textSec">10:38:55</td>
+<td class="py-2">claude-3-5-sonnet</td>
+<td class="py-2 text-brand-textSec text-[11px]">sk-...a1b2</td>
+<td class="py-2 text-right">4,096 / 0</td>
+<td class="py-2 text-right">¥0.000</td>
+<td class="py-2 text-right pl-4">
+<span class="inline-block px-2 py-0.5 border border-brand-danger/30 text-brand-danger text-[10px] rounded uppercase tracking-wider">Failed</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="border-b border-brand-borderLight/50 hover:bg-brand-surface transition-colors h-[48px]">
+<td class="py-2 text-brand-textSec">10:35:12</td>
+<td class="py-2">gemini-1.5-pro</td>
+<td class="py-2 text-brand-textSec text-[11px]">sk-...m4n5</td>
+<td class="py-2 text-right">1,024 / 512</td>
+<td class="py-2 text-right">¥0.008</td>
+<td class="py-2 text-right pl-4">
+<span class="inline-block px-2 py-0.5 border border-brand-warning/30 text-brand-warning text-[10px] rounded uppercase tracking-wider">RateLimit</span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-brand-surface transition-colors h-[48px]">
+<td class="py-2 text-brand-textSec">10:30:00</td>
+<td class="py-2">gpt-4o</td>
+<td class="py-2 text-brand-textSec text-[11px]">sk-...x9y8</td>
+<td class="py-2 text-right">56 / 12</td>
+<td class="py-2 text-right">¥0.001</td>
+<td class="py-2 text-right pl-4">
+<span class="inline-block px-2 py-0.5 border border-brand-success/30 text-brand-success text-[10px] rounded uppercase tracking-wider">Success</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Vertical Stack -->
+<div class="col-span-1 flex flex-col space-y-10">
+<!-- Quick Actions -->
+<div>
+<div class="flex justify-between items-end mb-4 pb-2 border-b border-brand-borderLight">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Quick Actions</h2>
+</div>
+<ul class="flex flex-col">
+<li class="border-b border-brand-borderLight/50">
+<a class="flex justify-between items-center py-4 text-[13px] hover:pl-2 transition-all duration-200 group" href="#">
+<span class="font-body text-brand-textMain">Create New API Key</span>
+<span class="material-symbols-outlined text-[14px] text-brand-textSec group-hover:text-brand-textMain transition-colors" style="font-variation-settings: 'wght' 300;">chevron_right</span>
+</a>
+</li>
+<li class="border-b border-brand-borderLight/50">
+<a class="flex justify-between items-center py-4 text-[13px] hover:pl-2 transition-all duration-200 group" href="#">
+<span class="font-body text-brand-textMain">Read Documentation</span>
+<span class="material-symbols-outlined text-[14px] text-brand-textSec group-hover:text-brand-textMain transition-colors" style="font-variation-settings: 'wght' 300;">chevron_right</span>
+</a>
+</li>
+<li class="border-b border-brand-borderLight/50">
+<a class="flex justify-between items-center py-4 text-[13px] hover:pl-2 transition-all duration-200 group" href="#">
+<span class="font-body text-brand-textMain">Top-up Balance</span>
+<span class="material-symbols-outlined text-[14px] text-brand-textSec group-hover:text-brand-textMain transition-colors" style="font-variation-settings: 'wght' 300;">chevron_right</span>
+</a>
+</li>
+<li class="border-b border-brand-borderLight/50">
+<a class="flex justify-between items-center py-4 text-[13px] hover:pl-2 transition-all duration-200 group" href="#">
+<span class="font-body text-brand-textMain">Invite Team Members</span>
+<span class="material-symbols-outlined text-[14px] text-brand-textSec group-hover:text-brand-textMain transition-colors" style="font-variation-settings: 'wght' 300;">chevron_right</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- Announcements -->
+<div>
+<div class="flex justify-between items-end mb-4 pb-2 border-b border-brand-borderLight">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-textLabel">Announcements</h2>
+</div>
+<div class="flex flex-col space-y-4">
+<div class="group cursor-pointer">
+<div class="text-[10px] font-mono text-brand-textSec mb-1 tabular-nums">2023.10.24</div>
+<div class="text-[13px] font-body text-brand-textMain group-hover:underline underline-offset-4 decoration-1 leading-snug">Claude 3.5 Haiku is now available on Geili API with 3x faster inference.</div>
+</div>
+<div class="group cursor-pointer">
+<div class="text-[10px] font-mono text-brand-textSec mb-1 tabular-nums">2023.10.15</div>
+<div class="text-[13px] font-body text-brand-textMain group-hover:underline underline-offset-4 decoration-1 leading-snug">Scheduled maintenance for billing system upgrade on Oct 28, 02:00 UTC.</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

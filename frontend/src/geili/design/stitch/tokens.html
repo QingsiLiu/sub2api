@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Atelier Blanc - Style Guide</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Public+Sans:wght@400;500&amp;family=Google+Sans+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        blanc: {
+                            surface: '#FCFCFC',
+                            raised: '#F6F6F5',
+                            hairline: '#E8E8E6',
+                            muted: '#F0F0EE',
+                            secondary: '#6E6E6B',
+                            primary: '#111111',
+                            label: '#9A9A96'
+                        },
+                        semantic: {
+                            success: '#46705C',
+                            warning: '#8A6A2F',
+                            danger: '#8C3A34',
+                            info: '#3F5470'
+                        }
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem", // 4px hard requirement
+                        sm: "0.25rem",
+                        md: "0.25rem",
+                        lg: "0.25rem",
+                        xl: "0.25rem",
+                        full: "9999px" // Reserved for avatars/badges
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        display: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        label: ["Google Sans Mono", "monospace"] // Overridden for mono uppercase aesthetic
+                    },
+                    letterSpacing: {
+                        label: '0.14em',
+                        group: '0.16em'
+                    },
+                    boxShadow: {
+                        none: 'none',
+                        // Strictly overriding all shadows to zero except for modal overlay which uses background color
+                        sm: 'none',
+                        DEFAULT: 'none',
+                        md: 'none',
+                        lg: 'none',
+                        xl: 'none',
+                        '2xl': 'none',
+                        inner: 'none',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FCFCFC;
+            color: #111111;
+            font-family: 'Geist', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Utility classes for Atelier Blanc strict styling */
+        .hairline-b { border-bottom: 1px solid #E8E8E6; }
+        .hairline-t { border-top: 1px solid #E8E8E6; }
+        .hairline-l { border-left: 1px solid #E8E8E6; }
+        .hairline-r { border-right: 1px solid #E8E8E6; }
+        .hairline-all { border: 1px solid #E8E8E6; }
+        
+        .section-title {
+            font-family: 'Google Sans Mono', monospace;
+            font-size: 10px;
+            color: #9A9A96;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            margin-bottom: 24px;
+        }
+
+        .label-text {
+            font-family: 'Google Sans Mono', monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+
+        .tabular-nums-override {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Form Inputs Strict Styling */
+        input[type="text"], input[type="password"], input[type="email"], select, textarea {
+            border: none;
+            border-bottom: 1px solid #E8E8E6;
+            background: transparent;
+            border-radius: 0;
+            padding: 8px 0;
+            box-shadow: none !important;
+            transition: border-bottom-color 0.2s, border-bottom-width 0.2s;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus, select:focus, textarea:focus {
+            outline: none;
+            border-bottom: 1.5px solid #111111;
+        }
+
+        input[type="text"].error, input[type="password"].error {
+            border-bottom: 1px solid #8C3A34;
+        }
+        input[type="text"].error:focus, input[type="password"].error:focus {
+            border-bottom: 1.5px solid #8C3A34;
+        }
+
+        /* Material Icons */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+            font-size: 16px;
+        }
+        
+        /* Spinner */
+        .spinner-thin {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #E8E8E6;
+            border-top: 1px solid #111111;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen px-8 md:px-16 lg:px-32 py-16 max-w-7xl mx-auto">
+<!-- Header -->
+<header class="mb-20">
+<h1 class="text-[40px] font-light tracking-tight text-blanc-primary">Atelier Blanc</h1>
+<p class="text-blanc-secondary mt-2 text-[14px]">Design System Style Guide V3.0</p>
+</header>
+<!-- 1. Palette -->
+<section class="mb-14">
+<h2 class="section-title">01 Palette</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6">
+<!-- Neutral -->
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full hairline-all rounded bg-blanc-surface"></div>
+<span class="label-text text-blanc-primary">Surface</span>
+<span class="text-[12px] text-blanc-secondary">#FCFCFC</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full hairline-all rounded bg-blanc-raised"></div>
+<span class="label-text text-blanc-primary">Raised</span>
+<span class="text-[12px] text-blanc-secondary">#F6F6F5</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-blanc-hairline"></div>
+<span class="label-text text-blanc-primary">Hairline</span>
+<span class="text-[12px] text-blanc-secondary">#E8E8E6</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-blanc-secondary"></div>
+<span class="label-text text-blanc-primary">Secondary</span>
+<span class="text-[12px] text-blanc-secondary">#6E6E6B</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-blanc-primary"></div>
+<span class="label-text text-blanc-primary">Primary</span>
+<span class="text-[12px] text-blanc-secondary">#111111</span>
+</div>
+<div class="hidden lg:block col-span-2"></div>
+<!-- Semantic -->
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-semantic-success"></div>
+<span class="label-text text-semantic-success">Success</span>
+<span class="text-[12px] text-blanc-secondary">#46705C</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-semantic-warning"></div>
+<span class="label-text text-semantic-warning">Warning</span>
+<span class="text-[12px] text-blanc-secondary">#8A6A2F</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-semantic-danger"></div>
+<span class="label-text text-semantic-danger">Danger</span>
+<span class="text-[12px] text-blanc-secondary">#8C3A34</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="h-16 w-full rounded bg-semantic-info"></div>
+<span class="label-text text-semantic-info">Info</span>
+<span class="text-[12px] text-blanc-secondary">#3F5470</span>
+</div>
+</div>
+</section>
+<div class="hairline-b w-full my-14"></div>
+<!-- 2. Typography -->
+<section class="mb-14">
+<h2 class="section-title">02 Typography</h2>
+<div class="flex flex-col gap-8">
+<div class="flex items-end justify-between">
+<span class="text-[40px] font-light leading-tight text-blanc-primary">Display 40/300</span>
+<span class="label-text text-blanc-label hidden md:block">Critical Values</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="text-[28px] font-normal leading-tight text-blanc-primary">Heading 1 28/400</span>
+<span class="label-text text-blanc-label hidden md:block">Page Titles</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="text-[20px] font-medium leading-tight text-blanc-primary">Heading 2 20/500</span>
+<span class="label-text text-blanc-label hidden md:block">Section Headers</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="text-[14px] font-normal leading-normal text-blanc-primary max-w-2xl">Body 14/400. This is standard paragraph text. It remains highly legible but sits quietly on the page. Line height is relaxed.</span>
+<span class="label-text text-blanc-label hidden md:block">Body Text</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="text-[12px] font-normal leading-normal text-blanc-secondary">Small 12/400. Used for secondary descriptions and helper text.</span>
+<span class="label-text text-blanc-label hidden md:block">Helper Text</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="font-label text-[10px] uppercase tracking-label text-blanc-secondary">Label 10 Mono 0.14em</span>
+<span class="label-text text-blanc-label hidden md:block">Meta / Tags</span>
+</div>
+</div>
+</section>
+<div class="hairline-b w-full my-14"></div>
+<!-- 3. Buttons -->
+<section class="mb-14">
+<h2 class="section-title">03 Buttons</h2>
+<div class="grid grid-cols-1 md:grid-cols-5 gap-y-8 gap-x-4 items-center">
+<!-- Headers -->
+<div class="label-text text-blanc-label hidden md:block">State</div>
+<div class="label-text text-blanc-label hidden md:block">Default</div>
+<div class="label-text text-blanc-label hidden md:block">Hover</div>
+<div class="label-text text-blanc-label hidden md:block">Focus / Ring</div>
+<div class="label-text text-blanc-label hidden md:block">Disabled</div>
+<!-- Primary -->
+<div class="label-text text-blanc-secondary">Primary</div>
+<div>
+<button class="bg-blanc-primary text-blanc-surface px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Primary</button>
+</div>
+<div>
+<button class="bg-blanc-secondary text-blanc-surface px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Hover</button>
+</div>
+<div>
+<button class="bg-blanc-primary text-blanc-surface px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px] ring-2 ring-offset-2 ring-blanc-primary outline-none">Focus</button>
+</div>
+<div>
+<button class="bg-blanc-hairline text-blanc-label px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px] cursor-not-allowed">Disabled</button>
+</div>
+<!-- Secondary -->
+<div class="label-text text-blanc-secondary">Secondary</div>
+<div>
+<button class="bg-transparent border border-blanc-primary text-blanc-primary px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Secondary</button>
+</div>
+<div>
+<button class="bg-blanc-raised border border-blanc-primary text-blanc-primary px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Hover</button>
+</div>
+<div>
+<button class="bg-transparent border border-blanc-primary text-blanc-primary px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px] ring-2 ring-offset-2 ring-blanc-primary outline-none">Focus</button>
+</div>
+<div>
+<button class="bg-transparent border border-blanc-hairline text-blanc-label px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px] cursor-not-allowed">Disabled</button>
+</div>
+<!-- Ghost / Semantic Row -->
+<div class="label-text text-blanc-secondary mt-4">Semantic &amp; Ghost</div>
+<div class="mt-4">
+<button class="bg-transparent text-blanc-primary px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px] hover:bg-blanc-raised transition-colors">Ghost</button>
+</div>
+<div class="mt-4">
+<button class="bg-semantic-danger text-blanc-surface px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Danger</button>
+</div>
+<div class="mt-4">
+<button class="bg-semantic-success text-blanc-surface px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Success</button>
+</div>
+<div class="mt-4">
+<button class="bg-transparent border border-semantic-warning text-semantic-warning px-4 py-2 rounded text-[14px] font-medium w-full max-w-[140px]">Warning</button>
+</div>
+</div>
+</section>
+</body></html>

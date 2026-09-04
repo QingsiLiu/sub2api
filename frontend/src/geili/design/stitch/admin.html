@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API - Accounts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600&display=swap');
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.0/fonts/geist-sans/Geist-Regular.woff2') format('woff2');
+            font-weight: 400;
+        }
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.0/fonts/geist-sans/Geist-Medium.woff2') format('woff2');
+            font-weight: 500;
+        }
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.0/fonts/geist-sans/Geist-Light.woff2') format('woff2');
+            font-weight: 300;
+        }
+        @font-face {
+            font-family: 'Geist';
+            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.0/fonts/geist-sans/Geist-Bold.woff2') format('woff2');
+            font-weight: 700;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: '#111111',
+                            container: '#FCFCFC'
+                        },
+                        neutral: {
+                            100: '#F6F6F5',
+                            200: '#F0F0EE',
+                            300: '#E8E8E6',
+                            500: '#9A9A96',
+                            700: '#6E6E6B',
+                            900: '#111111',
+                        },
+                        semantic: {
+                            success: '#46705C',
+                            warning: '#8A6A2F',
+                            danger: '#8C3A34',
+                            info: '#3F5470'
+                        }
+                    },
+                    borderRadius: {
+                        DEFAULT: "4px",
+                        lg: "4px",
+                        xl: "4px",
+                        full: "9999px"
+                    },
+                    spacing: {
+                        14: '3.5rem',
+                        '56': '14rem',
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        display: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        mono: ["JetBrains Mono", "monospace"],
+                        label: ["Public Sans", "sans-serif"]
+                    },
+                    fontSize: {
+                        'xs-mono': ['10px', { lineHeight: '1.2', letterSpacing: '0.16em' }],
+                        'sm-mono': ['11px', { lineHeight: '1.2', letterSpacing: '0.14em' }],
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        .hairline-b {
+            border-bottom: 1px solid theme('colors.neutral.300');
+        }
+        .hairline-r {
+            border-right: 1px solid theme('colors.neutral.300');
+        }
+        .hairline-t {
+            border-top: 1px solid theme('colors.neutral.300');
+        }
+        .hairline-border {
+            border: 1px solid theme('colors.neutral.300');
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+            font-size: 16px;
+        }
+        /* Custom scrollbar for minimalist look */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: theme('colors.neutral.300');
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.neutral.500');
+        }
+    </style>
+</head>
+<body class="bg-[#FCFCFC] text-[#111111] font-body flex h-screen overflow-hidden antialiased">
+<!-- SideNavBar (Predicted Component Logic) -->
+<aside class="w-64 h-screen border-r border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex flex-col py-8 overflow-y-auto flex-shrink-0">
+<div class="px-8 mb-10 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center">
+<span class="text-[#FCFCFC] font-headline font-bold text-sm">G</span>
+</div>
+<div>
+<h1 class="font-headline text-lg font-medium tracking-tight text-[#111111] dark:text-[#F2F2F0] leading-none">GEILI API</h1>
+<p class="font-mono text-[10px] tracking-[0.16em] uppercase text-[#6E6E6B] mt-1">GATEWAY</p>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-6">
+<!-- OVERVIEW -->
+<div>
+<h2 class="px-4 mb-2 font-mono text-[10px] tracking-[0.16em] uppercase text-[#9A9A96]">OVERVIEW</h2>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">DASHBOARD</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- USERS -->
+<div>
+<h2 class="px-4 mb-2 font-mono text-[10px] tracking-[0.16em] uppercase text-[#9A9A96]">USERS</h2>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">USERS</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">GROUPS</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- CHANNELS -->
+<div>
+<h2 class="px-4 mb-2 font-mono text-[10px] tracking-[0.16em] uppercase text-[#9A9A96]">CHANNELS</h2>
+<ul class="space-y-1">
+<li>
+<!-- ACTIVE NAVIGATION ITEM -->
+<a class="flex items-center gap-3 px-4 py-2 text-[#111111] dark:text-[#F2F2F0] border-l-2 border-[#111111] dark:border-[#F2F2F0] font-medium cursor-pointer duration-150 bg-[#F6F6F5]" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">ACCOUNTS</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="format_list_bulleted">format_list_bulleted</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">CHANNEL MANAGEMENT</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="monetization_on">monetization_on</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">CHANNEL PRICING</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="monitor_heart">monitor_heart</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">CHANNEL MONITOR</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- BILLING -->
+<div>
+<h2 class="px-4 mb-2 font-mono text-[10px] tracking-[0.16em] uppercase text-[#9A9A96]">BILLING</h2>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">ORDERS</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="subscriptions">subscriptions</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">PAYMENT PLANS</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="confirmation_number">confirmation_number</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">PROMO CODES</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- SYSTEM (truncated for brevity but retaining structure) -->
+<div>
+<h2 class="px-4 mb-2 font-mono text-[10px] tracking-[0.16em] uppercase text-[#9A9A96]">SYSTEM</h2>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2 text-[#6E6E6B] dark:text-[#8E8E8A] border-l-2 border-transparent hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors cursor-pointer duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-mono text-[11px] tracking-[0.14em] uppercase">SETTINGS</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<div class="px-8 mt-auto pt-8">
+<div class="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A minimalist black and white geometric avatar for an admin user profile, completely flat, highly professional" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPW6DnE2TEAAdJq-7y22arb9f5sL8w-8wPu90Owdckv4c22FQ7m7kjtHBHhYnCVjy1AgVj_ySl_Xj3LUDOR9YaDd-ACFLFXgwCDEs5ze81CF61I_mImzYsdD7YRBy-nvw1owadOMJhOEJaz3fvg5Cp9suH0ORy11bmS2O7RkbjMhk7_D-sw6UKctrC30O9SmGGH-nrDWU57OSm1c5F9ltmAA5EKiGuM7C6p-KZjdVNpxPFPQz12Mlfsn-MaukasbzOMYl6sBcJyt-Z"/>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-medium truncate">Admin User</p>
+<p class="text-[10px] text-neutral-500 font-mono truncate">SYSADMIN</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden bg-[#FCFCFC]">
+<!-- TopNavBar (Predicted Component Logic) -->
+<header class="w-full h-20 border-b border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex justify-between items-center px-10 flex-shrink-0">
+<div class="font-headline text-[28px] font-light text-[#111111] dark:text-[#F2F2F0] leading-none">
+                ACCOUNTS
+            </div>
+<div class="flex items-center gap-6">
+<!-- Trailing Icon Actions -->
+<button class="text-[#111111] dark:text-[#F2F2F0] hover:opacity-80 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-[#111111] dark:text-[#F2F2F0] hover:opacity-80 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<button class="text-[#111111] dark:text-[#F2F2F0] hover:opacity-80 transition-all duration-200">
+<span class="material-symbols-outlined" data-icon="dark_mode">dark_mode</span>
+</button>
+</div>
+</header>
+<!-- Page Content Scrollable Area -->
+<div class="flex-1 overflow-y-auto px-10 py-10">
+<!-- 1. Header Section -->
+<div class="flex justify-between items-end mb-10">
+<div>
+<h2 class="font-headline text-[28px] font-light text-[#111111] leading-none mb-3">Accounts</h2>
+<p class="text-[#6E6E6B] text-sm">Manage and monitor all provider accounts.</p>
+</div>
+<div class="flex gap-4">
+<button class="px-4 py-2 border border-[#E8E8E6] text-[#111111] text-sm font-medium rounded-[4px] hover:bg-[#F6F6F5] transition-colors">
+                        Import
+                    </button>
+<button class="px-4 py-2 bg-[#111111] text-white text-sm font-medium rounded-[4px] hover:bg-[#333333] transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]" data-icon="add">add</span>
+                        Add Account
+                    </button>
+</div>
+</div>
+<!-- 2. Bulk Action Bar (Active State) -->
+<div class="w-full border-t border-b border-[#E8E8E6] py-3 flex justify-between items-center mb-10">
+<div class="flex items-center gap-4">
+<span class="font-mono text-[10px] tracking-[0.16em] uppercase text-[#111111] font-bold">3 SELECTED</span>
+</div>
+<div class="flex items-center gap-6 text-sm">
+<button class="text-[#111111] hover:opacity-70 transition-opacity font-medium">Enable</button>
+<button class="text-[#111111] hover:opacity-70 transition-opacity font-medium">Disable</button>
+<button class="text-[#111111] hover:opacity-70 transition-opacity font-medium">Move to Group</button>
+<button class="text-semantic-danger hover:opacity-70 transition-opacity font-medium">Delete</button>
+</div>
+</div>
+<!-- 3. Filter Row -->
+<div class="flex gap-4 mb-6">
+<div class="relative flex-1 max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A96]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-transparent border-0 border-b border-[#E8E8E6] focus:ring-0 focus:border-[#111111] focus:border-b-[1.5px] text-sm transition-all rounded-none placeholder-[#9A9A96]" placeholder="Search accounts..." type="text"/>
+</div>
+<!-- Custom Dropdowns (Simplified for display) -->
+<div class="relative">
+<button class="px-4 py-2 border-b border-[#E8E8E6] text-sm flex items-center gap-2 hover:border-[#111111] transition-all">
+                        Platform: All <span class="material-symbols-outlined text-[#9A9A96]">arrow_drop_down</span>
+</button>
+</div>
+<div class="relative">
+<button class="px-4 py-2 border-b border-[#E8E8E6] text-sm flex items-center gap-2 hover:border-[#111111] transition-all">
+                        Status: All <span class="material-symbols-outlined text-[#9A9A96]">arrow_drop_down</span>
+</button>
+</div>
+<div class="relative">
+<button class="px-4 py-2 border-b border-[#E8E8E6] text-sm flex items-center gap-2 hover:border-[#111111] transition-all">
+                        Group: All <span class="material-symbols-outlined text-[#9A9A96]">arrow_drop_down</span>
+</button>
+</div>
+<div class="flex-1"></div>
+<div class="relative">
+<button class="px-4 py-2 border-b border-[#E8E8E6] text-sm flex items-center gap-2 hover:border-[#111111] transition-all text-[#6E6E6B]">
+<span class="material-symbols-outlined text-[16px]">sort</span> Sort
+                    </button>
+</div>
+</div>
+<!-- 4. Table (Dense) -->
+<div class="w-full mb-10 overflow-x-auto">
+<table class="w-full text-left text-sm border-collapse">
+<thead>
+<tr class="border-b border-[#E8E8E6] text-[#9A9A96]">
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal w-12">
+<input checked="" class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">NAME</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">PLATFORM</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">GROUP</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">STATUS</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal text-right">USAGE TODAY</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal text-right">RATE LIMIT</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">LAST ERROR</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal">UPDATED</th>
+<th class="py-3 px-4 font-mono text-[10px] tracking-[0.16em] uppercase font-normal text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="text-[#111111]">
+<!-- Row 1 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Claude-Main-01</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">api-user-1@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">smart_toy</span>
+<span>Anthropic</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Enterprise</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-success/30 text-semantic-success text-[10px] font-mono tracking-wider uppercase">Active</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$142.50</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[65%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">1000 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">1m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">GPT4-Prod-A</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">prod-sys@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">psychology</span>
+<span>OpenAI</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Default</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-warning/30 text-semantic-warning text-[10px] font-mono tracking-wider uppercase">Cooldown</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$890.00</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-semantic-warning w-[95%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">500 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">429 Too Many Req...</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">5m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 3 (Selected) -->
+<tr class="border-b border-[#F0F0EE] bg-[#F6F6F5] h-[52px]">
+<td class="py-2 px-4">
+<input checked="" class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Claude-Backup-01</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">backup@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">smart_toy</span>
+<span>Anthropic</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Enterprise</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-success/30 text-semantic-success text-[10px] font-mono tracking-wider uppercase">Active</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$5.20</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[5%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">1000 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">12m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Gemini-Pro-Dev</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">dev-team@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">memory</span>
+<span>Google</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Default</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-danger/30 text-semantic-danger text-[10px] font-mono tracking-wider uppercase">Error</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$0.00</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[0%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">300 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">401 Unauthorized...</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">1h ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 5 (Selected) -->
+<tr class="border-b border-[#F0F0EE] bg-[#F6F6F5] h-[52px]">
+<td class="py-2 px-4">
+<input checked="" class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">OpenAI-Legacy</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">legacy-sys@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">psychology</span>
+<span>OpenAI</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Default</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-[#6E6E6B]/30 text-[#6E6E6B] text-[10px] font-mono tracking-wider uppercase">Disabled</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$0.00</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[0%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">100 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">2d ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Claude-Opus-VIP</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">vip-client@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">smart_toy</span>
+<span>Anthropic</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Enterprise</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-success/30 text-semantic-success text-[10px] font-mono tracking-wider uppercase">Active</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$3,240.10</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[85%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">5000 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">1m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 7 (Selected) -->
+<tr class="border-b border-[#F0F0EE] bg-[#F6F6F5] h-[52px]">
+<td class="py-2 px-4">
+<input checked="" class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">GPT35-Turbo-Free</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">freemium@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">psychology</span>
+<span>OpenAI</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Default</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-warning/30 text-semantic-warning text-[10px] font-mono tracking-wider uppercase">Cooldown</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$42.50</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-semantic-warning w-[99%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">3500 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">Quota Exceeded...</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">10m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 8 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Cohere-Test-Env</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">qa@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">language</span>
+<span>Cohere</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Default</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-success/30 text-semantic-success text-[10px] font-mono tracking-wider uppercase">Active</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$1.20</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[2%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">200 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">3h ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 9 -->
+<tr class="border-b border-[#F0F0EE] hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Mistral-EU-Node</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">eu-ops@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">wind_power</span>
+<span>Mistral</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Enterprise</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-semantic-danger/30 text-semantic-danger text-[10px] font-mono tracking-wider uppercase">Error</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$56.00</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[40%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">800 RPM</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">503 Service Unav...</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">2m ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 10 -->
+<tr class="hover:bg-[#F6F6F5] transition-colors h-[52px]">
+<td class="py-2 px-4">
+<input class="rounded-[2px] border-[#E8E8E6] text-[#111111] focus:ring-[#111111]" type="checkbox"/>
+</td>
+<td class="py-2 px-4">
+<div class="font-mono text-xs">Llama3-Local-01</div>
+<div class="text-[10px] text-[#6E6E6B] mt-0.5">infra@example.com</div>
+</td>
+<td class="py-2 px-4 flex items-center gap-2 h-[52px]">
+<span class="material-symbols-outlined text-[16px] text-[#6E6E6B]">dns</span>
+<span>Self-Hosted</span>
+</td>
+<td class="py-2 px-4 text-[#6E6E6B]">Enterprise</td>
+<td class="py-2 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[2px] border border-[#6E6E6B]/30 text-[#6E6E6B] text-[10px] font-mono tracking-wider uppercase">Disabled</span>
+</td>
+<td class="py-2 px-4 text-right">
+<div class="tabular-nums">$0.00</div>
+<div class="w-16 h-[2px] bg-[#E8E8E6] ml-auto mt-1 rounded-full overflow-hidden">
+<div class="h-full bg-[#111111] w-[0%]"></div>
+</div>
+</td>
+<td class="py-2 px-4 text-right tabular-nums text-[#6E6E6B]">-</td>
+<td class="py-2 px-4 text-[#9A9A96] text-xs truncate max-w-[120px]">-</td>
+<td class="py-2 px-4 text-[#6E6E6B] text-xs">1w ago</td>
+<td class="py-2 px-4 text-right">
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">edit</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">play_arrow</span></button>
+<button class="text-[#6E6E6B] hover:text-[#111111] px-1"><span class="material-symbols-outlined text-[16px]">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- 5. Footer / Pagination -->
+<div class="flex justify-between items-center text-[#6E6E6B] text-sm border-t border-[#E8E8E6] pt-6 mb-10">
+<div class="flex items-center gap-2">
+<span>Rows per page:</span>
+<button class="flex items-center gap-1 hover:text-[#111111] transition-colors">
+                        10 <span class="material-symbols-outlined text-[16px]">arrow_drop_down</span>
+</button>
+</div>
+<div class="flex items-center gap-6">
+<span class="tabular-nums">1-10 of 248</span>
+<div class="flex gap-2">
+<button class="text-[#E8E8E6] cursor-not-allowed"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>
+<button class="text-[#111111] hover:opacity-70 transition-opacity"><span class="material-symbols-outlined text-[20px]">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

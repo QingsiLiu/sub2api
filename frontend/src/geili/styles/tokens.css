@@ -1,59 +1,203 @@
 /*
- * Geili 设计 token（唯一真源）
+ * Geili 设计 token（唯一真源）— 方向 F「素白 Atelier Blanc」
  *
  * 颜色一律写成不带 rgb() 的三元组 "R G B"，供 Tailwind 以
  * rgb(var(--geili-x) / <alpha-value>) 组合使用；也可以在任意 CSS 里直接
  * `color: rgb(var(--geili-primary-600))` 引用。
  *
- * 骨架阶段：数值与上游 tailwind.config.js 的色板逐一对应（teal 主色 + slate 中性色），
- * 因此与官方 UI 视觉零差异。视觉重塑从这里开始改。
+ * 设计原则（出图真源见 design/stitch/，规则见 design/BRIEF.md）：
+ *   近乎无彩 · 强调色就是近黑 · 圆角 4px · 零阴影 · hairline 分割 · 等宽大写标签
  *
- * 深色模式：上游使用 `dark:` 变体逐处写死，暂时不在这里重定义；
- * 待 Geili 组件替换到一定比例后，可在 `.dark { ... }` 块里集中覆盖语义 token。
+ * 之所以能不改上游一行代码就换掉全站视觉：上游的语义类与工具类都走
+ * primary / accent / dark / gray 这几组色板，geili 的 tailwind.config.js 把它们
+ * 全部重定向到这里的变量；深色模式在 .dark 作用域整体重定义。
  */
 :root {
-  /* 主色（上游 primary: teal） */
-  --geili-primary-50: 240 253 250;
-  --geili-primary-100: 204 251 241;
-  --geili-primary-200: 153 246 228;
-  --geili-primary-300: 94 234 212;
-  --geili-primary-400: 45 212 191;
-  --geili-primary-500: 20 184 166;
-  --geili-primary-600: 13 148 136;
-  --geili-primary-700: 15 118 110;
-  --geili-primary-800: 17 94 89;
-  --geili-primary-900: 19 78 74;
-  --geili-primary-950: 4 47 46;
+  /*
+   * 强调色 = 近黑。上游用 primary-600 做主按钮、primary-500 做焦点环，
+   * 因此 600 落在 #111111，往上收敛到纯黑，往下是可读的灰阶。
+   */
+  --geili-primary-50: 246 246 245;
+  --geili-primary-100: 237 237 235;
+  --geili-primary-200: 217 217 214;
+  --geili-primary-300: 181 181 177;
+  --geili-primary-400: 110 110 107;
+  --geili-primary-500: 46 46 44;
+  --geili-primary-600: 17 17 17;
+  --geili-primary-700: 8 8 8;
+  --geili-primary-800: 0 0 0;
+  --geili-primary-900: 0 0 0;
+  --geili-primary-950: 0 0 0;
 
-  /* 辅助色（上游 accent: slate） */
-  --geili-accent-50: 248 250 252;
-  --geili-accent-100: 241 245 249;
-  --geili-accent-200: 226 232 240;
-  --geili-accent-300: 203 213 225;
-  --geili-accent-400: 148 163 184;
-  --geili-accent-500: 100 116 139;
-  --geili-accent-600: 71 85 105;
-  --geili-accent-700: 51 65 85;
-  --geili-accent-800: 30 41 59;
-  --geili-accent-900: 15 23 42;
-  --geili-accent-950: 2 6 23;
+  /*
+   * 中性阶（暖灰）。同时供 accent 与 Tailwind 默认的 gray/slate/neutral/zinc/stone 使用，
+   * 上游散落的 text-gray-500 / border-gray-200 因此自动跟随。
+   */
+  --geili-neutral-50: 252 252 252;
+  --geili-neutral-100: 246 246 245;
+  --geili-neutral-200: 240 240 238;
+  --geili-neutral-300: 232 232 230;
+  --geili-neutral-400: 201 201 197;
+  --geili-neutral-500: 154 154 150;
+  --geili-neutral-600: 110 110 107;
+  --geili-neutral-700: 74 74 71;
+  --geili-neutral-800: 46 46 44;
+  --geili-neutral-900: 26 26 25;
+  --geili-neutral-950: 14 14 13;
 
-  /* 深色模式背景层（上游 dark: slate，与 accent 同值但语义独立，可分别调） */
-  --geili-dark-50: 248 250 252;
-  --geili-dark-100: 241 245 249;
-  --geili-dark-200: 226 232 240;
-  --geili-dark-300: 203 213 225;
-  --geili-dark-400: 148 163 184;
-  --geili-dark-500: 100 116 139;
-  --geili-dark-600: 71 85 105;
-  --geili-dark-700: 51 65 85;
-  --geili-dark-800: 30 41 59;
-  --geili-dark-900: 15 23 42;
-  --geili-dark-950: 2 6 23;
+  /* 深色模式背景层：数值即 F 的深色规格，浅色模式下仅被 dark: 变体引用 */
+  --geili-dark-50: 242 242 240;
+  --geili-dark-100: 226 226 223;
+  --geili-dark-200: 190 190 186;
+  --geili-dark-300: 142 142 138;
+  --geili-dark-400: 110 110 107;
+  --geili-dark-500: 74 74 71;
+  --geili-dark-600: 56 56 53;
+  --geili-dark-700: 38 38 36;
+  --geili-dark-800: 22 22 21;
+  --geili-dark-900: 14 14 13;
+  --geili-dark-950: 8 8 7;
 
-  /* 字体（骨架阶段沿用上游系统字体栈） */
-  --geili-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+  /*
+   * 状态色：低饱和，只在必要处出现。上游用 emerald / amber / red / blue 表达
+   * 成功 / 警告 / 危险 / 信息，这里给出同名阶供 tailwind.config.js 重定向。
+   */
+  --geili-success-50: 240 245 242;
+  --geili-success-100: 222 233 227;
+  --geili-success-200: 190 210 199;
+  --geili-success-300: 143 175 159;
+  --geili-success-400: 100 141 121;
+  --geili-success-500: 70 112 92;
+  --geili-success-600: 58 94 77;
+  --geili-success-700: 46 75 61;
+  --geili-success-800: 35 57 47;
+  --geili-success-900: 26 42 35;
+  --geili-success-950: 15 25 20;
+
+  --geili-warning-50: 248 245 238;
+  --geili-warning-100: 240 233 219;
+  --geili-warning-200: 224 210 183;
+  --geili-warning-300: 199 176 132;
+  --geili-warning-400: 168 137 80;
+  --geili-warning-500: 138 106 47;
+  --geili-warning-600: 116 89 39;
+  --geili-warning-700: 92 71 31;
+  --geili-warning-800: 70 54 24;
+  --geili-warning-900: 52 40 18;
+  --geili-warning-950: 30 23 10;
+
+  --geili-danger-50: 249 242 241;
+  --geili-danger-100: 242 227 226;
+  --geili-danger-200: 228 199 196;
+  --geili-danger-300: 206 160 155;
+  --geili-danger-400: 176 111 104;
+  --geili-danger-500: 140 58 52;
+  --geili-danger-600: 118 49 44;
+  --geili-danger-700: 94 39 35;
+  --geili-danger-800: 71 30 26;
+  --geili-danger-900: 53 22 20;
+  --geili-danger-950: 31 13 12;
+
+  --geili-info-50: 241 244 248;
+  --geili-info-100: 226 232 240;
+  --geili-info-200: 198 209 224;
+  --geili-info-300: 157 175 199;
+  --geili-info-400: 106 130 165;
+  --geili-info-500: 63 84 112;
+  --geili-info-600: 53 71 94;
+  --geili-info-700: 42 56 75;
+  --geili-info-800: 32 43 57;
+  --geili-info-900: 24 32 42;
+  --geili-info-950: 14 18 24;
+
+  /* ============ 语义别名（供 geili.css 与覆盖组件直接引用） ============ */
+  --geili-surface: var(--geili-neutral-50); /* 页面底 #FCFCFC */
+  --geili-raised: var(--geili-neutral-100); /* 抬起分区 #F6F6F5 */
+  --geili-hairline: var(--geili-neutral-300); /* 分割线 #E8E8E6 */
+  --geili-hairline-soft: var(--geili-neutral-200); /* 更弱的分割 #F0F0EE */
+  --geili-text: var(--geili-primary-600); /* 正文 #111111 */
+  --geili-text-secondary: var(--geili-neutral-600); /* 次级 #6E6E6B */
+  --geili-text-label: var(--geili-neutral-500); /* 标签灰 #9A9A96 */
+  --geili-on-accent: var(--geili-neutral-50); /* 主按钮上的文字 */
+
+  /* ============ 形状与节奏 ============ */
+  --geili-radius: 4px; /* 全站统一，按钮/输入/面板/弹窗 */
+  --geili-radius-sm: 2px;
+  --geili-hairline-width: 1px;
+  --geili-section-gap: 3rem; /* 区块之间 48px */
+  --geili-page-padding: 2.5rem; /* 内容区左右 40px */
+  --geili-row-height: 52px; /* 表格行高 */
+
+  /* ============ 字体 ============ */
+  --geili-font-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --geili-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --geili-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'PingFang SC', monospace;
   --geili-font-display: var(--geili-font-sans);
+
+  /* 等宽大写标签：F 的签名，供 .geili-label 与覆盖组件使用 */
+  --geili-label-size: 0.625rem; /* 10px */
+  --geili-label-tracking: 0.14em;
+
+  /* ============ 图表 ============ */
+  --geili-chart-1: var(--geili-primary-600);
+  --geili-chart-2: var(--geili-neutral-600);
+  --geili-chart-3: var(--geili-neutral-400);
+  --geili-chart-4: var(--geili-neutral-300);
+  --geili-chart-grid: var(--geili-neutral-200);
+  --geili-chart-fill-alpha: 0.04;
+}
+
+/*
+ * 深色模式：整体重定义同一组变量，语义别名因此自动跟随，
+ * 不需要在组件里逐处写 dark: 变体。
+ *
+ * 强调色在深色下反转为浅色（`text-primary-600` 之类才可读）；
+ * 主按钮「白底黑字」由 geili.css 的 .btn-primary 显式处理。
+ */
+.dark {
+  --geili-primary-50: 26 26 25;
+  --geili-primary-100: 38 38 36;
+  --geili-primary-200: 56 56 53;
+  --geili-primary-300: 110 110 107;
+  --geili-primary-400: 190 190 186;
+  --geili-primary-500: 226 226 223;
+  --geili-primary-600: 242 242 240;
+  --geili-primary-700: 250 250 249;
+  --geili-primary-800: 255 255 255;
+  --geili-primary-900: 255 255 255;
+  --geili-primary-950: 255 255 255;
+
+  --geili-neutral-50: 14 14 13;
+  --geili-neutral-100: 22 22 21;
+  --geili-neutral-200: 30 30 28;
+  --geili-neutral-300: 38 38 36;
+  --geili-neutral-400: 74 74 71;
+  --geili-neutral-500: 110 110 107;
+  --geili-neutral-600: 142 142 138;
+  --geili-neutral-700: 190 190 186;
+  --geili-neutral-800: 226 226 223;
+  --geili-neutral-900: 242 242 240;
+  --geili-neutral-950: 250 250 249;
+
+  /* 状态色在深色底上提亮，保持低饱和 */
+  --geili-success-500: 122 160 139;
+  --geili-success-600: 143 175 159;
+  --geili-warning-500: 186 156 100;
+  --geili-warning-600: 199 176 132;
+  --geili-danger-500: 186 124 117;
+  --geili-danger-600: 206 160 155;
+  --geili-info-500: 138 158 186;
+  --geili-info-600: 157 175 199;
+
+  --geili-surface: var(--geili-neutral-50); /* #0E0E0D */
+  --geili-raised: var(--geili-neutral-100); /* #161615 */
+  --geili-hairline: var(--geili-neutral-300); /* #262624 */
+  --geili-hairline-soft: var(--geili-neutral-200);
+  --geili-text: var(--geili-primary-600); /* #F2F2F0 */
+  --geili-text-secondary: var(--geili-neutral-600); /* #8E8E8A */
+  --geili-text-label: var(--geili-neutral-500); /* #6E6E6B */
+  --geili-on-accent: 14 14 13; /* 白底按钮上的黑字 */
+
+  --geili-chart-grid: var(--geili-neutral-300);
 }
