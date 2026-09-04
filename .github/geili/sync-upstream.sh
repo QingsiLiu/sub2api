@@ -48,7 +48,15 @@ echo "==> 上游基线 ${PREV} → ${TAG}"
 echo "==> 创建 ${BRANCH}（基于 ${BASE_REF}）"
 git switch -c "${BRANCH}" "${BASE_REF}"
 
+MERGED=0
 if git merge --no-ff --no-edit -m "sync: merge upstream ${TAG} into ${GEILI_BASE_BRANCH}" "${TAG}"; then
+  MERGED=1
+elif geili_resolve_version_only_conflict; then
+  MERGED=1
+  echo "==> ${GEILI_VERSION_FILE} 的冲突已自动以我方为准解决（发布时会按 tag 重写）"
+fi
+
+if [ "$MERGED" = 1 ]; then
   echo
   echo "==> 自动合并成功。以下上游改动涉及 Geili 覆盖/挂钩文件，请人工过目："
   geili_touched_watch_paths "${PREV}" "${TAG}" | sed 's/^/    /' || true
@@ -72,6 +80,7 @@ else
   * frontend/postcss.config.js 需保留：tailwindcss: { config: './src/geili/tailwind.config.js' }
   * backend/internal/service/update_service.go 需保留四处 selfUpdateDisabled() 守卫
   * frontend/src/geili/** 与 backend/**/update_service_geili*.go 是我们的文件，上游不会碰
+  * backend/cmd/server/VERSION 任取一方即可，发布时 release.yml 会按 tag 重写
 解决后：
   git add -A && git commit
   .github/geili/verify.sh

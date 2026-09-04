@@ -111,6 +111,8 @@ GEILI.md                                    本文
 
 冲突解决要点：
 
+- `backend/cmd/server/VERSION`：上游和我们的 `release.yml` 每次发布后都会把它提交回默认分支，所以**每次**合并都会冲突。
+  同步工作流与脚本在冲突仅限该文件时会自动以我方为准解决；手工遇到时任取一方即可，发布时会按 tag 重写。
 - `frontend/vite.config.ts`、`frontend/postcss.config.js`：以上游为准，再把那一两行挂钩加回去。
 - `backend/internal/service/update_service.go`：以上游为准，再把四处 `if s.selfUpdateDisabled() {...}` 加回去。
 - 上游改了被我们覆盖的文件（`App.vue`、`style.css`……）时 git 不会报冲突，但 wrapper 可能失去意义或漏掉新功能——
@@ -132,7 +134,11 @@ git switch geili/main && git pull
 ```
 
 `release.yml` 是上游原版：tag push → 写 `backend/cmd/server/VERSION=X.Y.Z-geili.N` → 构建前端（此时 Geili 覆盖生效）→
-GoReleaser 构建二进制并推 `ghcr.io/qingsiliu/sub2api:X.Y.Z-geili.N`（附带 `latest`、`X`、`X.Y` 标签，部署时**不要**用它们，只用完整 tag）。
+GoReleaser 构建二进制并推 `ghcr.io/qingsiliu/sub2api:X.Y.Z-geili.N`（附带 `latest`、`X`、`X.Y` 标签，部署时**不要**用它们，只用完整 tag）
+→ 把 VERSION 文件以 `chore: sync VERSION to ... [skip ci]` 提交回 `geili/main`（发布后记得 `git pull`）。
+
+首个版本 `v0.2.0-geili.1`（2026-09-04）已发布，镜像 `ghcr.io/qingsiliu/sub2api:0.2.0-geili.1`，视觉与官方 0.2.0 一致，
+区别仅为在线更新被禁用；用于验证流水线，尚未部署。
 
 可选：仓库 Variables 设 `SIMPLE_RELEASE=true` 只构建 x86_64 GHCR 镜像（跳过 arm64、Docker Hub、二进制归档），发布更快。
 

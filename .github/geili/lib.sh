@@ -34,6 +34,18 @@ geili_upstream_base_of() {
   git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-geili.*' "${1:-HEAD}"
 }
 
+# release.yml 在每次发布后都会把 backend/cmd/server/VERSION 提交回默认分支（上游、我们都是），
+# 因此每次合并上游该文件必然冲突。若冲突**仅限**这个文件，以我方为准解决并完成合并
+# （发布时 release.yml 会按 tag 重写它，仓库里的值只影响本地 go build 显示的版本号）。
+# 返回 0 = 已解决并提交；1 = 还有其他冲突，未做任何改动。
+GEILI_VERSION_FILE="backend/cmd/server/VERSION"
+geili_resolve_version_only_conflict() {
+  [ "$(git diff --name-only --diff-filter=U)" = "${GEILI_VERSION_FILE}" ] || return 1
+  git checkout --ours -- "${GEILI_VERSION_FILE}"
+  git add "${GEILI_VERSION_FILE}"
+  git -c core.editor=true commit --no-edit --quiet
+}
+
 # 列出 <from>..<to> 之间上游改动过的“需人工过目”文件
 geili_touched_watch_paths() {
   local from="$1" to="$2" root

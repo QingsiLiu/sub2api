@@ -112,6 +112,10 @@ jobs:
           geili_touched_watch_paths "${PREV}" "${TAG}" > /tmp/watch.txt || true
           if git merge --no-ff --no-edit -m "sync: merge upstream ${TAG} into ${BASE_BRANCH}" "${TAG}"; then
             echo "result=clean" >> "$GITHUB_OUTPUT"
+          elif geili_resolve_version_only_conflict; then
+            # 仅 VERSION 文件冲突：以我方为准自动解决（见 lib.sh 说明）
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+            echo "version_auto_resolved=true" >> "$GITHUB_OUTPUT"
           else
             git diff --name-only --diff-filter=U > /tmp/conflicts.txt
             git merge --abort
@@ -134,11 +138,16 @@ jobs:
           TAG: ${{ steps.pick.outputs.tag }}
           PREV: ${{ steps.pick.outputs.prev }}
           BRANCH: ${{ steps.pick.outputs.branch }}
+          VERSION_AUTO_RESOLVED: ${{ steps.merge.outputs.version_auto_resolved }}
         run: |
           set -euo pipefail
           git push -u origin "${BRANCH}"
           {
             echo "自动合并上游 **${TAG}**（当前基线 ${PREV}）到 \`${BASE_BRANCH}\`，git 未报冲突。"
+            if [ "${VERSION_AUTO_RESOLVED}" = "true" ]; then
+              echo
+              echo "> \`backend/cmd/server/VERSION\` 的冲突已自动以我方为准解决（两边的发布流程都会改写它，发布时按 tag 重写）。"
+            fi
             echo
             echo "上游对比：https://github.com/${UPSTREAM_REPO}/compare/${PREV}...${TAG}"
             echo
