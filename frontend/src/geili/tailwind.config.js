@@ -35,6 +35,8 @@ const upstreamExtend = upstream.theme?.extend ?? {}
 
 export default {
   ...upstream,
+  // 设计系统预览页是纯 HTML，不在上游的 content 范围里，得单独加进来
+  content: [...(upstream.content ?? []), './src/geili/design/preview.html'],
   theme: {
     ...upstream.theme,
     extend: {

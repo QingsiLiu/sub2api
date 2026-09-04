@@ -2,12 +2,16 @@
  * Geili 全站样式入口（通过 overrides.ts 替换上游 `src/style.css`）
  *
  * 顺序很重要：
- * 1. 上游 style.css：包含 @tailwind base/components/utilities 与上游 @layer 规则，原样保留；
- * 2. tokens.css：设计 token（CSS 变量），Tailwind 语义色板由它驱动；
- * 3. geili.css：Geili 自有样式层。
+ * 1. 品牌字体：Geist / Geist Mono 的可变字重版。包里 5 个 subset 的 @font-face 都会声明，
+ *    但浏览器按 unicode-range 只会下载 latin（正文 29KB + 等宽 23KB）；中文回退系统字体。
+ * 2. 上游 style.css：包含 @tailwind base/components/utilities 与上游 @layer 规则，原样保留；
+ * 3. tokens.css：设计 token（CSS 变量），Tailwind 语义色板由它驱动；
+ * 4. geili.css：Geili 自有样式层，同名重定义上游语义类（必须排在上游之后）。
  *
  * Vite 会先内联 @import 再交给 PostCSS/Tailwind，所以 geili.css 里可以继续使用 @layer。
  */
+@import '@fontsource-variable/geist/wght.css';
+@import '@fontsource-variable/geist-mono/wght.css';
 @import '../../style.css';
 @import './tokens.css';
 @import './geili.css';

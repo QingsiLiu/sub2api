@@ -6,22 +6,32 @@
 | --- | --- |
 | 项目 | `projects/10497566828730451080`（标题：给力 API · 视觉重塑 (Sub2API re-skin)） |
 
-## 第三轮定调（当前）
+## 已定调：F · 素白 Atelier Blanc
 
-用户对前两轮的评价：**都不够高级**。本轮把「高级」拆成可执行的十条硬性规则写进设计系统的 designMd
-（去卡片化 / 圆角 ≤4px / 零阴影 / 90% 中性色 / 极端字号对比 / hairline 分栏 / 表格无框 / 图表 1px 细线 /
-线性图标无底块 / 禁玻璃拟态与渐变），三套方向只在色彩纪律与材质上分野。
+第三轮把「高级」拆成十条硬性规则写进设计系统的 designMd（去卡片化 / 圆角 ≤4px / 零阴影 /
+90% 中性色 / 极端字号对比 / hairline 分栏 / 表格无框 / 图表 1px 细线 / 线性图标无底块 /
+禁玻璃拟态与渐变），三套方向只在色彩纪律与材质上分野。**2026-09-04 用户选定 F。**
 
-| 方向 | 设计系统 | 仪表盘 screenId | 气质 |
-| --- | --- | --- | --- |
-| **F · 素白 Atelier Blanc** | `assets/9863882573956697786` | `b4c83a16d6c54007bcecb6325ba30a61` | 近乎无彩，强调色就是近黑；Geist + Google Sans Mono 等宽大写标签；瑞士精工 |
-| **G · 夜丝绒 Nocturne** | `assets/11859685962158185669` | `659141592100422489391fd2d35dd7b4` | 暖调深炭多级明度，香槟金 `#C8A96E` 面积 <3%；Sora + Inter |
-| **H · 青瓷 Celadon** | `assets/12305910844357327277` | `78d2b4656eed4778a940aaff8cd9e4d7` | 米白 + 低饱和青瓷 `#6E8F84`，东方器物感 |
+设计系统 ID：`assets/9863882573956697786`
+
+| 屏 | screenId | 归档 |
+| --- | --- | --- |
+| 用户仪表盘（浅色，定调屏） | `b4c83a16d6c54007bcecb6325ba30a61` | [`stitch/dashboard.jpg`](stitch/) |
+| 设计系统总览 | `038a0a73e3dc453dac5935d7f11cac3e` | [`stitch/tokens.jpg`](stitch/) |
+| 登录 | `557b02dd44d84ac49258d23caaf116c9` | [`stitch/login.jpg`](stitch/) |
+| 用户仪表盘（深色） | `9131ea3ca3344b209ec3b4d9e7835c35` | [`stitch/dark.jpg`](stitch/)（表格与环形图渲染不全，仅取配色） |
+| API 密钥（含新建弹窗） | `bbcfc50f8cad46aead800f4504be23d3` | [`stitch/keys.jpg`](stitch/) |
+| 使用记录 | `a9c35ff7bb724b82bfccb030660a48fc` | [`stitch/usage.jpg`](stitch/) |
+| 管理端账号管理 | `81ff2dad8b1b4b4b8a682296c999a78e` | [`stitch/admin.jpg`](stitch/) |
 
 出图为英文示意，实现时按上游 i18n **1:1 锁死中英文案**。
-候选：[`stitch/candidates/dashboard-F.*`](stitch/candidates/)、`-G.*`、`-H.*`。
+
+**从设计稿到代码的真源**是 `stitch/*.html` 里的 tailwind.config 与 hex 值，已提取进
+[`../styles/tokens.css`](../styles/tokens.css)。实现效果对照页见
+[`preview.html`](preview.html)（`pnpm dev` 后访问 `/src/geili/design/preview.html`，不需要后端）。
 
 > 注：早期重试因 `stitch.sh` 解析缺陷重复创建过同名设计系统，以上表 ID 为选用项，其余忽略。
+> 落选方向：G · 夜丝绒 `assets/11859685962158185669`、H · 青瓷 `assets/12305910844357327277`。
 
 ## 第二轮（已否决）
 

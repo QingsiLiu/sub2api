@@ -11,10 +11,11 @@
 | `vite/geili-overrides.mjs` | Vite 插件，按 `overrides.ts` 在解析阶段透明替换模块 |
 | `App.vue` | 全站壳（替换上游 `src/App.vue`），骨架阶段 wrapper 上游 |
 | `i18n/` | `geili.*` 命名空间词条与注入逻辑 |
-| `styles/index.css` | 全站样式入口（替换上游 `src/style.css`） |
-| `styles/tokens.css` | 设计 token（CSS 变量），配色/字体的唯一真源 |
-| `styles/geili.css` | Geili 自有样式层，类名 `geili-` 前缀 |
-| `tailwind.config.js` | 包装上游 Tailwind 配置，把语义色板接到 token 上 |
+| `styles/index.css` | 全站样式入口（替换上游 `src/style.css`），也在这里引品牌字体 |
+| `styles/tokens.css` | 设计 token（CSS 变量），配色/字体/圆角/节奏的唯一真源 |
+| `styles/geili.css` | 上游语义类的同名重定义 + `geili-` 前缀自有工具类 |
+| `tailwind.config.js` | 包装上游 Tailwind 配置，把色板、圆角、阴影接到 token 上 |
+| `design/` | 设计方向真源：`BRIEF.md` 规则、`STITCH.md` 出图台账、`stitch/` 设计稿、`preview.html` 实现对照页 |
 | `__tests__/` | 覆盖表完整性、挂钩标记、重定向逻辑、i18n 注入的单测 |
 
 ## 上游挂钩点（改动上游文件的全部位置）
@@ -40,10 +41,29 @@
 
 ## 样式约定
 
-- 配色、字体只改 `styles/tokens.css`；Tailwind 的 `bg-primary-600`、`text-accent-500` 等会自动跟随。
-- 自有样式类名一律 `geili-` 前缀。
+当前视觉方向是 **F · 素白 Atelier Blanc**（近乎无彩 / 强调色即近黑 / 圆角 4px / 零阴影 /
+hairline 分割 / 等宽大写标签），规则见 `design/BRIEF.md`，设计稿见 `design/stitch/`。
+
+- 配色、字体、圆角只改 `styles/tokens.css`；`tailwind.config.js` 把上游用到的色板
+  （`primary`/`accent`/`dark`，以及 Tailwind 默认的 `gray`/`slate`/`emerald`/`red`…）
+  全部重定向到这些变量，上游 2500+ 处工具类自动跟随，不需要改上游一行代码。
+- 光靠 token 换不掉的「形态」（实心徽章、四边框输入、带底色的表头）在 `styles/geili.css` 里
+  **同名重定义**上游语义类。三个已经踩过的坑：
+  1. 上游 `bg-gradient-*` 的按钮要显式加 `bg-none`，否则渐变图层盖住新的实色背景；
+  2. `.glass` / `.text-gradient` 在上游属于 `@layer utilities`，必须在同一 layer 才盖得住；
+  3. **深色模式不要反转色阶**。上游已经用 `dark:text-gray-100`、`dark:bg-dark-800` 手工
+     处理好明暗关系，再反转一次就是黑底黑字。所有色阶保持「数字越大越深」，
+     自己的覆盖照上游的写法逐条加 `dark:` 变体。
+- 自有工具类一律 `geili-` 前缀，且刻意写在 `@layer` 之外——`@layer` 里的类会被
+  Tailwind 按 content 扫描结果 tree-shake 掉。
 - **禁止**用宽泛选择器覆盖上游样式（`.bg-white`、`[class*="..."]`）。2026-06 Nginx 注入方案
   已证明这会拖垮图表页性能，且随上游改动随时失效。要改外观就替换组件。
+
+改完样式用 `design/preview.html` 对照设计稿验证，深浅两套都要看：
+
+```bash
+pnpm dev   # 然后访问 http://localhost:3000/src/geili/design/preview.html
+```
 
 ## i18n
 
