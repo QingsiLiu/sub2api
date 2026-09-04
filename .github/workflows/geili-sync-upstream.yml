@@ -1,0 +1,198 @@
+name: Geili · Sync upstream
+
+# 每日检查上游 Wei-Shaw/sub2api 是否发布了新的正式 tag：
+#   * geili/main 已包含该 tag                → 什么都不做
+#   * 能干净合并                              → 推 sync/<tag> 分支并开 PR 到 geili/main
+#   * 有冲突                                  → 开 issue 列出冲突文件，交给人工（.github/geili/sync-upstream.sh）
+# 由人决定何时合并 PR、如何解决冲突；本工作流永远不会直接改动 geili/main。
+#
+# 如需让 sync/* 分支的推送触发 CI，请配置 secret GEILI_SYNC_TOKEN（有 contents/pull-requests/issues 写权限的
+# fine-grained PAT）；默认 GITHUB_TOKEN 推送的分支/PR 不会触发其他 workflow。
+
+on:
+  schedule:
+    - cron: '17 2 * * *' # UTC 02:17 ≈ 北京时间 10:17
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要同步的上游 tag（留空 = 最新正式 tag）'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: geili-sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: Wei-Shaw/sub2api
+  BASE_BRANCH: geili/main
+  LABEL: geili-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout geili/main
+        uses: actions/checkout@v6
+        with:
+          ref: geili/main
+          fetch-depth: 0
+          token: ${{ secrets.GEILI_SYNC_TOKEN || github.token }}
+
+      - name: Fetch upstream tags
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch --quiet --tags upstream
+
+      - name: Pick target tag
+        id: pick
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          source .github/geili/lib.sh
+          TAG="${INPUT_TAG:-$(geili_latest_upstream_tag)}"
+          git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null || { echo "::error::tag ${TAG} 不存在"; exit 1; }
+          if git merge-base --is-ancestor "${TAG}" HEAD; then
+            echo "geili/main 已包含 ${TAG}，无需同步" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PREV="$(geili_upstream_base_of HEAD)"
+          {
+            echo "tag=${TAG}"
+            echo "prev=${PREV}"
+            echo "branch=sync/${TAG}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Skip if branch or open issue already exists
+        id: exists
+        if: steps.pick.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null; then
+            echo "分支 ${BRANCH} 已存在（PR 待处理），跳过" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          OPEN_ISSUE="$(gh issue list --state open --label "${LABEL}" --search "\"sync: upstream ${TAG}\" in:title" --json number --jq '.[0].number // empty' || true)"
+          if [ -n "${OPEN_ISSUE}" ]; then
+            echo "已有未关闭的冲突 issue #${OPEN_ISSUE}，跳过" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure label
+        if: steps.pick.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh label create "${LABEL}" --force --color 0E8A16 --description "上游同步（自动创建）"
+
+      - name: Try merge
+        id: merge
+        if: steps.pick.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          PREV: ${{ steps.pick.outputs.prev }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          set -euo pipefail
+          source .github/geili/lib.sh
+          git config user.name "geili-sync[bot]"
+          git config user.email "geili-sync@users.noreply.github.com"
+          git switch -c "${BRANCH}"
+          geili_touched_watch_paths "${PREV}" "${TAG}" > /tmp/watch.txt || true
+          if git merge --no-ff --no-edit -m "sync: merge upstream ${TAG} into ${BASE_BRANCH}" "${TAG}"; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > /tmp/conflicts.txt
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch upstream release notes
+        if: steps.merge.outputs.result != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          gh release view "${TAG}" --repo "${UPSTREAM_REPO}" --json body --jq '.body' > /tmp/notes.md 2>/dev/null \
+            || echo "_（未能获取 ${TAG} 的 release notes）_" > /tmp/notes.md
+
+      - name: Push branch and open PR
+        if: steps.merge.outputs.result == 'clean'
+        env:
+          GH_TOKEN: ${{ secrets.GEILI_SYNC_TOKEN || github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          PREV: ${{ steps.pick.outputs.prev }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git push -u origin "${BRANCH}"
+          {
+            echo "自动合并上游 **${TAG}**（当前基线 ${PREV}）到 \`${BASE_BRANCH}\`，git 未报冲突。"
+            echo
+            echo "上游对比：https://github.com/${UPSTREAM_REPO}/compare/${PREV}...${TAG}"
+            echo
+            echo "## 上游改动触及的 Geili 覆盖/挂钩文件"
+            if [ -s /tmp/watch.txt ]; then
+              echo "即使无冲突，也请逐个确认语义是否仍与 \`frontend/src/geili/\` 与 \`update_service_geili.go\` 兼容："
+              sed 's/^/- `/; s/$/`/' /tmp/watch.txt
+            else
+              echo "无。"
+            fi
+            echo
+            echo "## 合并前确认"
+            echo "- [ ] Geili · CI 通过（前端构建 + 产物含 Geili 标记 + 后端守卫单测）"
+            echo "- [ ] 上述文件已过目"
+            echo "- [ ] 合并后执行 \`.github/geili/release.sh --push\` 打 \`${TAG}-geili.1\`"
+            echo
+            echo "## 上游 release notes"
+            cat /tmp/notes.md
+          } > /tmp/body.md
+          URL="$(gh pr create --base "${BASE_BRANCH}" --head "${BRANCH}" \
+            --title "sync: upstream ${TAG}" --body-file /tmp/body.md --label "${LABEL}")"
+          echo "已创建 PR：${URL}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Open conflict issue
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          PREV: ${{ steps.pick.outputs.prev }}
+        run: |
+          set -euo pipefail
+          {
+            echo "上游 **${TAG}**（当前基线 ${PREV}）与 \`${BASE_BRANCH}\` 自动合并失败，需要人工处理。"
+            echo
+            echo "上游对比：https://github.com/${UPSTREAM_REPO}/compare/${PREV}...${TAG}"
+            echo
+            echo "## 冲突文件"
+            sed 's/^/- `/; s/$/`/' /tmp/conflicts.txt
+            echo
+            echo "## 上游改动触及的 Geili 覆盖/挂钩文件"
+            if [ -s /tmp/watch.txt ]; then sed 's/^/- `/; s/$/`/' /tmp/watch.txt; else echo "无。"; fi
+            echo
+            echo "## 本地处理"
+            echo '```bash'
+            echo ".github/geili/sync-upstream.sh ${TAG}   # 停在冲突状态并给出提示"
+            echo "# 解决冲突后："
+            echo "git add -A && git commit && .github/geili/verify.sh"
+            echo "git push -u origin sync/${TAG}"
+            echo "gh pr create --base ${BASE_BRANCH} --title 'sync: upstream ${TAG}' --fill"
+            echo '```'
+            echo "处理完成后关闭本 issue；未关闭前每日任务不会重复创建。"
+            echo
+            echo "## 上游 release notes"
+            cat /tmp/notes.md
+          } > /tmp/body.md
+          URL="$(gh issue create --title "sync: upstream ${TAG} 合并冲突" --body-file /tmp/body.md --label "${LABEL}")"
+          echo "合并冲突，已创建 issue：${URL}" | tee -a "$GITHUB_STEP_SUMMARY"

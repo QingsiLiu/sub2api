@@ -1,0 +1,23 @@
+# 合并上游时需要人工过目的文件（即使 git 自动合并成功也要看语义）。
+# 同步工作流与 .github/geili/sync-upstream.sh 共用；一行一个 pathspec，# 开头为注释。
+#
+# 前端：被 Geili 覆盖的上游文件 & 挂钩文件
+frontend/vite.config.ts
+frontend/postcss.config.js
+frontend/tailwind.config.js
+frontend/tsconfig.json
+frontend/tsconfig.node.json
+frontend/src/main.ts
+frontend/src/App.vue
+frontend/src/style.css
+frontend/src/i18n/index.ts
+frontend/index.html
+# 后端：在线更新守卫所在文件
+backend/internal/service/update_service.go
+backend/internal/handler/admin/system_handler.go
+backend/cmd/server/main.go
+# 发布链路
+.github/workflows/release.yml
+.goreleaser.simple.yaml
+.goreleaser.yaml
+Dockerfile

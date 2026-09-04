@@ -1,0 +1,89 @@
+name: Geili · CI
+
+# 针对 Geili 二开层的检查，与 .github/geili/verify.sh 保持一致：
+#   * 前端：覆盖表完整性 / 挂钩标记 / i18n 注入单测 → typecheck + 生产构建 → 产物确含 Geili 标记
+#   * 后端：编译 → 在线更新守卫单测
+# 上游自带的 backend-ci.yml 仍会在这些分支上跑完整测试，这里只补上游不覆盖的部分。
+
+on:
+  push:
+    branches:
+      - 'geili/**'
+      - 'sync/**'
+  pull_request:
+    branches:
+      - 'geili/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geili-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend overrides
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Geili 单测（覆盖表 / 挂钩标记 / i18n）
+        working-directory: frontend
+        run: pnpm exec vitest run src/geili
+
+      - name: Typecheck + build
+        working-directory: frontend
+        run: pnpm build
+
+      - name: 构建产物必须来自 Geili 覆盖层
+        run: |
+          grep -rlq 'data-geili-ui' backend/internal/web/dist/assets || { echo "::error::dist 中未找到 data-geili-ui（App.vue 覆盖未生效）"; exit 1; }
+          grep -rlq -- '--geili-primary-600' backend/internal/web/dist/assets || { echo "::error::dist 中未找到 --geili-primary-600（style.css 覆盖未生效）"; exit 1; }
+
+  backend:
+    name: Backend self-update guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Build
+        working-directory: backend
+        run: go build ./...
+
+      - name: 在线更新守卫单测
+        working-directory: backend
+        run: go test -tags=unit ./internal/service/ -run 'Geili|UpdateService' -count=1
+
+  scripts:
+    name: Scripts syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: |
+          for f in .github/geili/*.sh; do bash -n "$f"; done
+          # 顺手确认 watch-paths 里列的文件都还存在，避免上游重命名后清单失效
+          grep -vE '^\s*(#|$)' .github/geili/watch-paths.txt | while read -r p; do
+            [ -e "$p" ] || echo "::warning file=.github/geili/watch-paths.txt::$p 不存在，请更新清单"
+          done
