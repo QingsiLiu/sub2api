@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard - 给力 API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=Google+Sans+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        background: {
+                            DEFAULT: '#F7F6F2',
+                            dark: '#141716'
+                        },
+                        surface: {
+                            DEFAULT: '#FFFFFF',
+                            dark: '#1B1F1D',
+                            alt: '#F2F1EC'
+                        },
+                        border: {
+                            DEFAULT: '#E4E3DD',
+                            dark: '#282D2A'
+                        },
+                        text: {
+                            main: '#1F2421',
+                            secondary: '#6B716C',
+                            muted: '#9AA09A',
+                            dark: {
+                                main: '#EDF0EC',
+                                secondary: '#9AA09A',
+                                muted: '#6B716C'
+                            }
+                        },
+                        brand: {
+                            DEFAULT: '#6E8F84',
+                            dark: '#8FB3A6',
+                            alt: '#3E4F4A'
+                        },
+                        status: {
+                            success: '#5B7F63',
+                            warning: '#94793C',
+                            danger: '#92514A',
+                            info: '#556E7E'
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        display: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        label: ["Google Sans Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; background-color: #F7F6F2; color: #1F2421; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+            font-size: 16px;
+        }
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        .chart-grid line { stroke: #E4E3DD; stroke-width: 0.5; stroke-dasharray: 2 2; }
+        .chart-axis text { fill: #9AA09A; font-family: 'Google Sans Mono', monospace; font-size: 10px; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden bg-background">
+<!-- SideNavBar -->
+<nav class="w-[240px] h-screen border-r border-border bg-surface-alt flex flex-col py-6 shrink-0 z-10">
+<!-- Brand -->
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold font-headline text-lg" data-alt="Abstract minimal logo with sharp geometric G shape, soft celadon green background, elegant light mode aesthetic, perfectly centered, flat design vector style.">G</div>
+<div>
+<div class="font-headline text-lg font-bold text-text-main">给力 API</div>
+<div class="text-[11px] text-text-muted font-label uppercase tracking-widest mt-0.5">AI Gateway</div>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-6 mb-6">
+<button class="w-full bg-brand text-white h-9 rounded text-[13px] font-medium flex items-center justify-center gap-2 hover:bg-brand-alt transition-colors duration-150 cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">add</span>
+                New Request
+            </button>
+</div>
+<!-- Scrollable Tabs -->
+<div class="flex-1 overflow-y-auto">
+<ul class="flex flex-col">
+<!-- Active: Dashboard -->
+<li class="bg-surface text-text-main border-l-2 border-brand font-semibold cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 font-body text-[13px] leading-tight tracking-tight">
+<span class="material-symbols-outlined text-brand">dashboard</span>
+                    Dashboard
+                </li>
+<!-- Inactive tabs -->
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">vpn_key</span> API Keys
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">leaderboard</span> Usage
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">grid_view</span> Model Plaza
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">hub</span> Channels
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">drive_image</span> Channel Status
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">waves</span> Batch Image
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight mt-6">
+<span class="material-symbols-outlined">account_balance_wallet</span> Top-up
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">card_membership</span> Subscriptions
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">receipt_long</span> Orders
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">redeem</span> Redeem
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">group_add</span> Referral
+                </li>
+<li class="text-text-secondary hover:text-text-main hover:bg-surface transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 px-6 py-2.5 border-l-2 border-transparent font-body text-[13px] leading-tight font-medium tracking-tight mt-6">
+<span class="material-symbols-outlined">settings</span> Profile
+                </li>
+</ul>
+</div>
+<!-- Footer Tabs -->
+<div class="mt-auto border-t border-border pt-4 px-6 flex flex-col gap-1">
+<div class="text-text-secondary hover:text-text-main transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 py-2 font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">dark_mode</span> Dark Mode
+            </div>
+<div class="text-text-secondary hover:text-text-main transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 py-2 font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">menu_open</span> Collapse
+            </div>
+<div class="text-text-secondary hover:text-text-main transition-colors duration-150 cursor-pointer active:opacity-80 flex items-center gap-3 py-2 font-body text-[13px] leading-tight font-medium tracking-tight">
+<span class="material-symbols-outlined">logout</span> Logout
+            </div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- TopAppBar -->
+<header class="bg-surface h-[56px] w-full border-b border-border flex justify-between items-center px-8 shrink-0">
+<div class="font-headline text-xl font-semibold text-text-main">
+                Dashboard
+            </div>
+<div class="flex items-center gap-6">
+<a class="font-headline text-sm font-medium text-text-secondary hover:text-text-main transition-opacity scale-95 active:scale-90 transition-transform" href="#">Docs</a>
+<button class="text-text-secondary hover:text-text-main transition-opacity scale-95 active:scale-90 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-border" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzaC_bGTBN8SzjD5SEDkjbevrHXbpMuOnUTguQ-vnp41nB8KC6ey6qksszooSo2GwmDRQPss3atBtdpG6V4N1ibzpOK3wV2Y5H45NH70O17I-vjp4TH3ummYq310bTp3wbWM37yLKFwdh-z5of116LPGQwUao_nZG8V2Z-YorfT_CO_uxfIVbkPn6FoHtx53Df3AjfmfL3UQ9NyKCEDLnjgob2cMDGbDMxDSLqVNPd19OTw83QScA0B4hBP2Wn-kN0cVb9rFuXmZ_n"/>
+</div>
+</header>
+<!-- Canvas (Scrollable) -->
+<main class="flex-1 overflow-y-auto px-10 py-10">
+<div class="max-w-[1200px] mx-auto flex flex-col gap-[48px]">
+<!-- Row 1: Statistics -->
+<section class="bg-surface border border-border rounded flex">
+<!-- Col 1 -->
+<div class="flex-1 p-6 relative">
+<div class="flex justify-between items-start mb-4">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-[0.14em]">BALANCE</span>
+<button class="text-[12px] text-brand hover:text-brand-alt font-medium border border-border rounded px-3 py-1 flex items-center gap-1 transition-colors">
+                                Top-up
+                            </button>
+</div>
+<div class="font-display text-[40px] font-light text-brand tabular-nums tracking-tight leading-none">
+                            ¥1,284.50
+                        </div>
+</div>
+<!-- Divider -->
+<div class="w-px bg-border my-6"></div>
+<!-- Col 2 -->
+<div class="flex-1 p-6 relative">
+<div class="flex justify-between items-start mb-4">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-[0.14em]">ACTIVE KEYS</span>
+<button class="text-[12px] text-text-secondary hover:text-text-main font-medium border border-border rounded px-3 py-1 flex items-center gap-1 transition-colors">
+                                Create Key
+                            </button>
+</div>
+<div class="font-display text-[40px] font-light text-text-main tabular-nums tracking-tight leading-none">
+                            6
+                        </div>
+</div>
+<!-- Divider -->
+<div class="w-px bg-border my-6"></div>
+<!-- Col 3 -->
+<div class="flex-1 p-6 relative">
+<div class="flex justify-between items-start mb-4">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-[0.14em]">TODAY REQUESTS</span>
+<span class="text-[11px] text-status-success font-medium flex items-center">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +8.2%
+                            </span>
+</div>
+<div class="font-display text-[40px] font-light text-text-main tabular-nums tracking-tight leading-none">
+                            12,408
+                        </div>
+</div>
+<!-- Divider -->
+<div class="w-px bg-border my-6"></div>
+<!-- Col 4 -->
+<div class="flex-1 p-6 relative">
+<div class="flex justify-between items-start mb-4">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-[0.14em]">TODAY SPEND</span>
+</div>
+<div class="font-display text-[40px] font-light text-text-main tabular-nums tracking-tight leading-none mb-3">
+                            ¥86.32
+                        </div>
+<div class="text-[11px] text-text-secondary font-label tabular-nums">
+                            4.2M Tokens · 38% Cache
+                        </div>
+</div>
+</section>
+<!-- Row 2: Trends & Distribution -->
+<section class="flex gap-[40px]">
+<!-- Chart -->
+<div class="w-2/3 flex flex-col">
+<div class="flex justify-between items-end mb-6">
+<div>
+<h2 class="text-[14px] font-medium text-text-main mb-1">Token Usage Trends</h2>
+<div class="flex items-center gap-4 text-[11px] font-label text-text-secondary">
+<span class="flex items-center gap-1.5"><div class="w-2 h-px bg-brand"></div>Input</span>
+<span class="flex items-center gap-1.5"><div class="w-2 h-px bg-text-main"></div>Output</span>
+<span class="flex items-center gap-1.5"><div class="w-2 h-px bg-border border-dashed border"></div>Cache</span>
+</div>
+</div>
+<div class="flex gap-2">
+<div class="flex border border-border rounded p-0.5 bg-surface">
+<button class="px-3 py-1 text-[11px] font-medium bg-border rounded-sm text-text-main">7d</button>
+<button class="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-main">30d</button>
+</div>
+<div class="flex border border-border rounded p-0.5 bg-surface">
+<button class="px-3 py-1 text-[11px] font-medium bg-border rounded-sm text-text-main">Day</button>
+<button class="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-main">Hour</button>
+</div>
+</div>
+</div>
+<div class="flex-1 bg-surface border border-border rounded p-6 min-h-[280px] relative">
+<!-- SVG Line Chart Placeholder -->
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 600 200">
+<g class="chart-grid">
+<line x1="0" x2="600" y1="50" y2="50"></line>
+<line x1="0" x2="600" y1="100" y2="100"></line>
+<line x1="0" x2="600" y1="150" y2="150"></line>
+</g>
+<g class="chart-axis">
+<text x="0" y="190">Mon</text>
+<text x="100" y="190">Tue</text>
+<text x="200" y="190">Wed</text>
+<text x="300" y="190">Thu</text>
+<text x="400" y="190">Fri</text>
+<text x="500" y="190">Sat</text>
+<text x="580" y="190">Sun</text>
+</g>
+<!-- Input (Brand) -->
+<path d="M0,150 C50,140 100,120 150,130 C200,140 250,90 300,100 C350,110 400,60 450,70 C500,80 550,40 600,50" fill="none" stroke="#6E8F84" stroke-width="1.25"></path>
+<!-- Output (Dark) -->
+<path d="M0,170 C50,165 100,155 150,160 C200,165 250,135 300,140 C350,145 400,115 450,120 C500,125 550,95 600,100" fill="none" stroke="#1F2421" stroke-width="1.25"></path>
+</svg>
+</div>
+</div>
+<!-- Donut -->
+<div class="w-1/3 flex flex-col">
+<div class="mb-6">
+<h2 class="text-[14px] font-medium text-text-main">Model Distribution</h2>
+</div>
+<div class="flex-1 bg-surface border border-border rounded p-6 flex flex-col items-center justify-center relative">
+<!-- SVG Donut Chart Placeholder -->
+<svg class="mb-6" height="160" viewbox="0 0 160 160" width="160">
+<!-- claude-sonnet (46%) -->
+<circle cx="80" cy="80" fill="none" r="60" stroke="#6E8F84" stroke-dasharray="173 377" stroke-width="20" transform="rotate(-90 80 80)"></circle>
+<!-- gpt-4.1 (27%) -->
+<circle cx="80" cy="80" fill="none" r="60" stroke="#1F2421" stroke-dasharray="101 377" stroke-dashoffset="-173" stroke-width="20" transform="rotate(-90 80 80)"></circle>
+<!-- gemini (18%) -->
+<circle cx="80" cy="80" fill="none" r="60" stroke="#9AA09A" stroke-dasharray="67 377" stroke-dashoffset="-274" stroke-width="20" transform="rotate(-90 80 80)"></circle>
+<!-- others (9%) -->
+<circle cx="80" cy="80" fill="none" r="60" stroke="#E4E3DD" stroke-dasharray="34 377" stroke-dashoffset="-341" stroke-width="20" transform="rotate(-90 80 80)"></circle>
+</svg>
+<div class="w-full space-y-3">
+<div class="flex justify-between items-center text-[11px] font-label">
+<div class="flex items-center gap-2"><div class="w-2 h-2 bg-brand rounded-full"></div>claude-sonnet-4</div>
+<div class="tabular-nums text-text-secondary">46%</div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-label">
+<div class="flex items-center gap-2"><div class="w-2 h-2 bg-text-main rounded-full"></div>gpt-4.1</div>
+<div class="tabular-nums text-text-secondary">27%</div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-label">
+<div class="flex items-center gap-2"><div class="w-2 h-2 bg-text-muted rounded-full"></div>gemini-2.5-pro</div>
+<div class="tabular-nums text-text-secondary">18%</div>
+</div>
+<div class="flex justify-between items-center text-[11px] font-label">
+<div class="flex items-center gap-2"><div class="w-2 h-2 bg-border rounded-full"></div>Others</div>
+<div class="tabular-nums text-text-secondary">9%</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Row 3: Logs & Tools -->
+<section class="flex gap-[40px]">
+<!-- Table -->
+<div class="w-2/3 flex flex-col">
+<div class="flex justify-between items-end mb-6">
+<h2 class="text-[14px] font-medium text-text-main">Recent Usage</h2>
+<a class="text-[12px] text-text-secondary hover:text-text-main transition-colors" href="#">View All →</a>
+</div>
+<div class="bg-surface border border-border rounded overflow-hidden">
+<table class="w-full text-[12px] text-left">
+<thead>
+<tr class="border-b border-border bg-surface-alt">
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em]">Time</th>
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em]">Model</th>
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em]">API Key</th>
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em] text-right">Tokens (In/Out)</th>
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em] text-right">Fee</th>
+<th class="py-3 px-4 font-label text-[10px] uppercase text-text-muted font-normal tracking-[0.14em]">Status</th>
+</tr>
+</thead>
+<tbody class="tabular-nums divide-y divide-border/50">
+<tr class="h-[52px] hover:bg-surface-alt/50 transition-colors">
+<td class="px-4 text-text-secondary">10:42:01</td>
+<td class="px-4 text-text-main">claude-sonnet-4</td>
+<td class="px-4 text-text-secondary font-label">sk-...a1b2</td>
+<td class="px-4 text-right">342 / 1,024</td>
+<td class="px-4 text-right">¥0.012</td>
+<td class="px-4"><span class="inline-block px-2 py-0.5 border border-status-success text-status-success rounded-[2px] text-[10px] uppercase tracking-wide">Success</span></td>
+</tr>
+<tr class="h-[52px] hover:bg-surface-alt/50 transition-colors">
+<td class="px-4 text-text-secondary">10:41:15</td>
+<td class="px-4 text-text-main">gpt-4.1</td>
+<td class="px-4 text-text-secondary font-label">sk-...x9y8</td>
+<td class="px-4 text-right">12 / 48</td>
+<td class="px-4 text-right">¥0.001</td>
+<td class="px-4"><span class="inline-block px-2 py-0.5 border border-status-success text-status-success rounded-[2px] text-[10px] uppercase tracking-wide">Success</span></td>
+</tr>
+<tr class="h-[52px] hover:bg-surface-alt/50 transition-colors">
+<td class="px-4 text-text-secondary">10:38:50</td>
+<td class="px-4 text-text-main">gemini-2.5-pro</td>
+<td class="px-4 text-text-secondary font-label">sk-...a1b2</td>
+<td class="px-4 text-right">5,092 / 0</td>
+<td class="px-4 text-right">¥0.000</td>
+<td class="px-4"><span class="inline-block px-2 py-0.5 border border-status-danger text-status-danger rounded-[2px] text-[10px] uppercase tracking-wide">Timeout</span></td>
+</tr>
+<tr class="h-[52px] hover:bg-surface-alt/50 transition-colors">
+<td class="px-4 text-text-secondary">10:35:22</td>
+<td class="px-4 text-text-main">claude-sonnet-4</td>
+<td class="px-4 text-text-secondary font-label">sk-...m3n4</td>
+<td class="px-4 text-right">89 / 234</td>
+<td class="px-4 text-right">¥0.004</td>
+<td class="px-4"><span class="inline-block px-2 py-0.5 border border-status-success text-status-success rounded-[2px] text-[10px] uppercase tracking-wide">Success</span></td>
+</tr>
+<tr class="h-[52px] hover:bg-surface-alt/50 transition-colors">
+<td class="px-4 text-text-secondary">10:22:11</td>
+<td class="px-4 text-text-main">dall-e-3</td>
+<td class="px-4 text-text-secondary font-label">sk-...a1b2</td>
+<td class="px-4 text-right">-</td>
+<td class="px-4 text-right">¥0.280</td>
+<td class="px-4"><span class="inline-block px-2 py-0.5 border border-status-success text-status-success rounded-[2px] text-[10px] uppercase tracking-wide">Success</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Stack -->
+<div class="w-1/3 flex flex-col gap-[40px]">
+<!-- Quick Actions -->
+<div>
+<h2 class="text-[14px] font-medium text-text-main mb-6">Quick Actions</h2>
+<div class="bg-surface border border-border rounded flex flex-col">
+<a class="flex justify-between items-center p-4 border-b border-border hover:bg-surface-alt transition-colors group" href="#">
+<span class="text-[13px] text-text-main group-hover:text-brand transition-colors">Create Key</span>
+<span class="material-symbols-outlined text-text-muted group-hover:text-brand transition-colors">arrow_forward</span>
+</a>
+<a class="flex justify-between items-center p-4 border-b border-border hover:bg-surface-alt transition-colors group" href="#">
+<span class="text-[13px] text-text-main group-hover:text-brand transition-colors">Docs</span>
+<span class="material-symbols-outlined text-text-muted group-hover:text-brand transition-colors">arrow_forward</span>
+</a>
+<a class="flex justify-between items-center p-4 border-b border-border hover:bg-surface-alt transition-colors group" href="#">
+<span class="text-[13px] text-text-main group-hover:text-brand transition-colors">Top-up</span>
+<span class="material-symbols-outlined text-text-muted group-hover:text-brand transition-colors">arrow_forward</span>
+</a>
+<a class="flex justify-between items-center p-4 hover:bg-surface-alt transition-colors group" href="#">
+<span class="text-[13px] text-text-main group-hover:text-brand transition-colors">Invite</span>
+<span class="material-symbols-outlined text-text-muted group-hover:text-brand transition-colors">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Announcements -->
+<div>
+<h2 class="text-[14px] font-medium text-text-main mb-6">Announcements</h2>
+<div class="bg-surface border border-border rounded p-4 flex flex-col gap-4">
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-widest tabular-nums">2023-10-24</span>
+<a class="text-[13px] text-text-main hover:text-brand transition-colors leading-relaxed" href="#">GPT-4 Turbo now available with reduced pricing and 128k context.</a>
+</div>
+<div class="w-full h-px bg-border"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-text-muted uppercase tracking-widest tabular-nums">2023-10-18</span>
+<a class="text-[13px] text-text-main hover:text-brand transition-colors leading-relaxed" href="#">Scheduled maintenance for billing subsystem completed.</a>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom spacer -->
+<div class="h-10"></div>
+</div>
+</main>
+</div>
+</body></html>

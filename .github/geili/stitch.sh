@@ -28,14 +28,23 @@ rpc() { # <method> <params-json>
     -d "$(jq -cn --arg m "$1" --argjson p "$2" '{jsonrpc:"2.0",id:1,method:$m,params:$p}')"
 }
 
-# MCP 工具结果放在 result.content[].text，通常是 JSON 字符串；能解析就解析后输出
+# MCP 工具结果放在 result.content[].text，通常是 JSON 字符串。Stitch 会把 designMd 的换行
+# 原样嵌进去，产出的 text 不是严格 JSON，jq 解析不了；用 strict=False 宽松解析后重新规范化输出。
 unwrap() {
-  jq -r '
-    if .error then ("RPC error: " + (.error|tojson)) | halt_error(1) else . end
-    | .result
-    | if .isError then ("tool error: " + ([.content[]?.text] | join("\n"))) | halt_error(1) else . end
-    | [.content[]? | select(.type=="text") | .text] | join("\n")
-    | (try fromjson catch .)'
+  python3 -c '
+import json, sys
+resp = json.load(sys.stdin)
+if "error" in resp:
+    sys.exit("RPC error: " + json.dumps(resp["error"], ensure_ascii=False))
+result = resp.get("result", {})
+text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
+if result.get("isError"):
+    sys.exit("tool error: " + text)
+try:
+    print(json.dumps(json.loads(text, strict=False), ensure_ascii=False, indent=2))
+except ValueError:
+    print(text)
+'
 }
 
 case "${1:-}" in

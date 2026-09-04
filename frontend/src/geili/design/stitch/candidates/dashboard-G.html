@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard - Geili API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&amp;family=Public+Sans:wght@400;500&amp;family=Sora:wght@400;500;600&amp;family=Google+Sans+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            gold: '#C8A96E',
+                            dark: '#0E0D0F',
+                            surface1: '#121113',
+                            surface2: '#18171A',
+                            surface3: '#1E1D21',
+                            textPrimary: '#EDEBE8',
+                            textSecondary: '#9B9791',
+                            textTertiary: '#6E6A65',
+                            border: 'rgba(255, 255, 255, 0.07)',
+                            success: '#6E9B7F',
+                            warning: '#C0A15E',
+                            danger: '#B4675F',
+                            info: '#7E93AE',
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.25rem", // Overriding to max 4px
+                        "full": "9999px" // Reserved for avatars/badges
+                    },
+                    fontFamily: {
+                        "headline": ["Sora", "sans-serif"],
+                        "display": ["Sora", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Google Sans Mono", "monospace"]
+                    },
+                    fontSize: {
+                        "label-sm": ["10px", { letterSpacing: "0.14em", lineHeight: "1" }],
+                        "stat": ["40px", { lineHeight: "1", fontWeight: "300" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #121113;
+            color: #EDEBE8;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        .material-symbols-outlined {
+            font-size: 16px;
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+            line-height: 1;
+        }
+        .hairline-b { border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+        .hairline-t { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+        .hairline-r { border-right: 1px solid rgba(255, 255, 255, 0.07); }
+        .hairline-l { border-left: 1px solid rgba(255, 255, 255, 0.07); }
+        .hairline-all { border: 1px solid rgba(255, 255, 255, 0.07); }
+        
+        /* Custom scrollbar for table if needed */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed inset-y-0 left-0 z-50 flex flex-col bg-[#0E0D0F] border-r border-white/5 w-64 h-screen">
+<!-- Brand / Header -->
+<div class="h-14 flex items-center px-6 hairline-b shrink-0">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-brand-gold text-xl" style="font-variation-settings: 'FILL' 1;">dataset</span>
+<div class="flex flex-col">
+<span class="font-headline text-[18px] font-semibold text-[#EDEBE8] tracking-[-0.02em] leading-none">给力 API</span>
+<span class="font-body text-[10px] text-brand-textSecondary mt-1 leading-none uppercase tracking-wider">AI Model Gateway</span>
+</div>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+<a class="flex items-center gap-3 bg-[#1E1D21] text-[#C8A96E] border-l-2 border-[#C8A96E] font-medium px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 rounded-r" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">vpn_key</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">API Keys</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Usage</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">extension</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Model Plaza</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Available Channels</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Channel Status</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">photo_library</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Batch Image</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Top-up</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">event_repeat</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Subscriptions</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Orders</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">confirmation_number</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Redeem</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">share</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Referral</span>
+</a>
+<a class="flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 border-l-2 border-transparent" href="#">
+<span class="material-symbols-outlined">person_outline</span>
+<span class="font-body text-[14px] leading-tight tracking-tight tabular-nums">Profile</span>
+</a>
+</nav>
+<!-- Footer Actions -->
+<div class="mt-auto px-2 py-4 hairline-t shrink-0 space-y-1">
+<button class="w-full flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 rounded text-left">
+<span class="material-symbols-outlined">language</span>
+<span class="font-body text-[14px] leading-tight tracking-tight">Language</span>
+</button>
+<button class="w-full flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 rounded text-left">
+<span class="material-symbols-outlined">dark_mode</span>
+<span class="font-body text-[14px] leading-tight tracking-tight">Dark Mode</span>
+</button>
+<button class="w-full flex items-center gap-3 text-[#9B9791] hover:text-[#EDEBE8] px-4 py-2 hover:bg-[#18171A] transition-colors duration-200 cursor-pointer active:opacity-80 rounded text-left">
+<span class="material-symbols-outlined">menu_open</span>
+<span class="font-body text-[14px] leading-tight tracking-tight">Collapse</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col ml-64 bg-[#121113] min-h-screen">
+<!-- TopNavBar -->
+<header class="sticky top-0 right-0 z-40 flex items-center justify-between px-8 w-full h-14 bg-[#121113] border-b border-white/5 shrink-0">
+<div class="flex items-center gap-4">
+<h1 class="font-headline text-[16px] font-medium text-[#EDEBE8]">Dashboard</h1>
+<span class="text-brand-textTertiary">/</span>
+<span class="font-body text-[14px] text-brand-textSecondary">Overview</span>
+</div>
+<div class="flex items-center gap-6">
+<a class="text-[#9B9791] hover:text-[#EDEBE8] transition-opacity font-body text-[14px]" href="#">Documentation</a>
+<div class="flex items-center gap-4 border-l border-white/5 pl-6">
+<button class="text-[#9B9791] hover:text-[#EDEBE8] transition-opacity">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-[#9B9791] hover:text-[#EDEBE8] transition-opacity">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<img alt="User Profile" class="w-7 h-7 rounded-full object-cover ml-2 hairline-all" data-alt="A small, ultra-minimalist geometric avatar on a dark background, evoking a high-end, abstract corporate identity. The visual tone is Nocturne, featuring deep charcoal tones with a subtle hint of metallic gold. Clean lines, flat design, no lighting effects, purely graphic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrVb20xo0UuEE01VnqVawWJM8iJjfrWYdzCUdw4AbYCfn1mox3e961GOwoawAgrleru5sKDa0nXOugJEr_oiyt_2k9uRcyqNPr30rRksQrQjJQGWtptAmTKpiY-gHv_DmupnI1eSQ1lqu0TLkPUNbrZW-BWZPN2cYLX-3CwFMpsFVKUs5V4cDwII637MIT23CgjJwxjmWWYQcoCkAuBmQLfKQkaMf1g1bqFXk4vf_keXBx9USgJY6zULWsCzx-u905lxLGf4ssF6Ai"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Canvas -->
+<div class="flex-1 overflow-y-auto p-8 space-y-12">
+<!-- TOP ROW: Statistics -->
+<section class="grid grid-cols-4 bg-[#18171A] rounded hairline-all">
+<!-- Stat 1 -->
+<div class="p-6 flex flex-col justify-between hairline-r relative group">
+<div class="flex justify-between items-start mb-6">
+<span class="font-label text-label-sm text-brand-textTertiary uppercase">Balance</span>
+<span class="material-symbols-outlined text-brand-textTertiary opacity-50">account_balance_wallet</span>
+</div>
+<div>
+<div class="text-stat text-brand-textPrimary tabular-nums tracking-tight">¥1,284.50</div>
+<div class="mt-4 flex items-center justify-between">
+<span class="text-xs text-brand-textSecondary font-body">Available funds</span>
+<button class="bg-brand-gold text-brand-dark px-3 py-1 text-xs font-medium rounded hover:opacity-90 transition-opacity">Top-up</button>
+</div>
+</div>
+</div>
+<!-- Stat 2 -->
+<div class="p-6 flex flex-col justify-between hairline-r relative group">
+<div class="flex justify-between items-start mb-6">
+<span class="font-label text-label-sm text-brand-textTertiary uppercase">API Keys</span>
+<span class="material-symbols-outlined text-brand-textTertiary opacity-50">vpn_key</span>
+</div>
+<div>
+<div class="text-stat text-brand-textPrimary tabular-nums tracking-tight">6</div>
+<div class="mt-4 flex items-center justify-between">
+<span class="text-xs text-brand-textSecondary font-body">Active tokens</span>
+<button class="border border-brand-border text-brand-textPrimary px-3 py-1 text-xs font-medium rounded hover:bg-brand-surface3 transition-colors">Create</button>
+</div>
+</div>
+</div>
+<!-- Stat 3 -->
+<div class="p-6 flex flex-col justify-between hairline-r relative group">
+<div class="flex justify-between items-start mb-6">
+<span class="font-label text-label-sm text-brand-textTertiary uppercase">Daily Requests</span>
+<span class="material-symbols-outlined text-brand-textTertiary opacity-50">data_usage</span>
+</div>
+<div>
+<div class="text-stat text-brand-textPrimary tabular-nums tracking-tight">12,408</div>
+<div class="mt-4 flex items-center gap-2">
+<span class="text-xs text-brand-success font-body flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">trending_up</span>+8.2%</span>
+<span class="text-xs text-brand-textSecondary font-body">vs yesterday</span>
+</div>
+</div>
+</div>
+<!-- Stat 4 -->
+<div class="p-6 flex flex-col justify-between relative group">
+<div class="flex justify-between items-start mb-6">
+<span class="font-label text-label-sm text-brand-textTertiary uppercase">Daily Spend</span>
+<span class="material-symbols-outlined text-brand-textTertiary opacity-50">payments</span>
+</div>
+<div>
+<div class="text-stat text-brand-textPrimary tabular-nums tracking-tight">¥86.32</div>
+<div class="mt-4 flex items-center gap-3">
+<span class="text-xs text-brand-textSecondary font-body">Token <span class="text-brand-textPrimary">4.2M</span></span>
+<span class="text-xs text-brand-textSecondary font-body">Cache <span class="text-brand-textPrimary">38%</span></span>
+</div>
+</div>
+</div>
+</section>
+<!-- SECOND ROW: Charts -->
+<section class="grid grid-cols-3 gap-10">
+<!-- Line Chart Area -->
+<div class="col-span-2 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline text-[14px] font-medium text-brand-textPrimary">Token Usage Trend</h2>
+<div class="flex gap-4">
+<div class="flex items-center gap-2 font-label text-[10px] text-brand-textSecondary uppercase tracking-wider">
+<button class="hover:text-brand-textPrimary transition-colors">Daily</button>
+<span>/</span>
+<button class="text-brand-gold">Hourly</button>
+</div>
+<div class="w-px h-3 bg-brand-border"></div>
+<div class="flex items-center gap-2 font-label text-[10px] text-brand-textSecondary uppercase tracking-wider">
+<button class="text-brand-gold">7D</button>
+<span>/</span>
+<button class="hover:text-brand-textPrimary transition-colors">30D</button>
+</div>
+</div>
+</div>
+<div class="flex-1 bg-[#18171A] rounded hairline-all p-6 relative flex items-end min-h-[300px]">
+<!-- Faint Grid lines -->
+<div class="absolute inset-0 p-6 flex flex-col justify-between pointer-events-none">
+<div class="w-full hairline-b h-0"></div>
+<div class="w-full hairline-b h-0"></div>
+<div class="w-full hairline-b h-0"></div>
+<div class="w-full hairline-b h-0"></div>
+<div class="w-full hairline-b h-0"></div>
+</div>
+<!-- Y-axis labels -->
+<div class="absolute left-2 top-6 bottom-6 flex flex-col justify-between text-brand-textTertiary font-label text-[10px] tabular-nums pointer-events-none z-10">
+<span>2.0M</span>
+<span>1.5M</span>
+<span>1.0M</span>
+<span>0.5M</span>
+<span>0</span>
+</div>
+<!-- X-axis labels -->
+<div class="absolute bottom-1 left-12 right-6 flex justify-between text-brand-textTertiary font-label text-[10px] tabular-nums pointer-events-none z-10">
+<span>Mon</span>
+<span>Tue</span>
+<span>Wed</span>
+<span>Thu</span>
+<span>Fri</span>
+<span>Sat</span>
+<span>Sun</span>
+</div>
+<!-- Mock SVG Line Chart -->
+<svg class="w-full h-[85%] ml-8 z-0 overflow-visible" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Gray baseline line -->
+<polyline fill="none" points="0,70 15,65 30,80 45,60 60,75 75,50 90,65 100,55" stroke="#6E6A65" stroke-opacity="0.5" stroke-width="1"></polyline>
+<!-- Gold main line -->
+<polyline fill="none" points="0,50 15,30 30,45 45,20 60,35 75,10 90,25 100,15" stroke="#C8A96E" stroke-width="1.25"></polyline>
+<!-- Current data point indicator -->
+<circle cx="75" cy="10" fill="#18171A" r="3" stroke="#C8A96E" stroke-width="1.5"></circle>
+<line opacity="0.3" stroke="#C8A96E" stroke-dasharray="2,2" stroke-width="1" x1="75" x2="75" y1="10" y2="100"></line>
+</svg>
+<!-- Tooltip mock -->
+<div class="absolute top-10 left-[68%] bg-[#1E1D21] hairline-all p-3 rounded shadow-none pointer-events-none z-20">
+<div class="text-brand-textPrimary font-label text-[10px] tabular-nums mb-1">SAT, 14:00</div>
+<div class="text-brand-gold text-[12px] tabular-nums font-medium">1.8M Tokens</div>
+<div class="text-brand-textSecondary text-[10px] tabular-nums mt-1 border-t border-white/5 pt-1">Cache: 42%</div>
+</div>
+</div>
+</div>
+<!-- Donut Chart Area -->
+<div class="col-span-1 flex flex-col">
+<h2 class="font-headline text-[14px] font-medium text-brand-textPrimary mb-6">Model Distribution</h2>
+<div class="flex-1 bg-[#18171A] rounded hairline-all p-6 flex flex-col">
+<div class="relative flex-1 flex items-center justify-center min-h-[160px]">
+<!-- SVG Donut Chart Mock -->
+<svg class="w-40 h-40 transform -rotate-90" viewbox="0 0 100 100">
+<!-- Background circle (Others 9%) -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#333" stroke-width="4"></circle>
+<!-- Claude 46% -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#C8A96E" stroke-dasharray="115.6 251.2" stroke-dashoffset="0" stroke-width="4"></circle>
+<!-- GPT 27% -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#EDEBE8" stroke-dasharray="67.8 251.2" stroke-dashoffset="-115.6" stroke-width="4"></circle>
+<!-- Gemini 18% -->
+<circle cx="50" cy="50" fill="transparent" r="40" stroke="#6E6A65" stroke-dasharray="45.2 251.2" stroke-dashoffset="-183.4" stroke-width="4"></circle>
+</svg>
+<!-- Center Text -->
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-[24px] font-light text-brand-textPrimary tabular-nums leading-none">12M</span>
+<span class="font-label text-[9px] text-brand-textTertiary uppercase mt-1 tracking-wider">Total Tokens</span>
+</div>
+</div>
+<!-- Legend -->
+<div class="mt-6 space-y-3">
+<div class="flex items-center justify-between text-[12px] font-body">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-brand-gold"></div>
+<span class="text-brand-textPrimary">Claude 3.5 Sonnet</span>
+</div>
+<span class="tabular-nums text-brand-textSecondary">46%</span>
+</div>
+<div class="flex items-center justify-between text-[12px] font-body">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-brand-textPrimary"></div>
+<span class="text-brand-textPrimary">GPT-4o</span>
+</div>
+<span class="tabular-nums text-brand-textSecondary">27%</span>
+</div>
+<div class="flex items-center justify-between text-[12px] font-body">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-brand-textTertiary"></div>
+<span class="text-brand-textPrimary">Gemini 1.5 Pro</span>
+</div>
+<span class="tabular-nums text-brand-textSecondary">18%</span>
+</div>
+<div class="flex items-center justify-between text-[12px] font-body">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-[#333]"></div>
+<span class="text-brand-textPrimary">Others</span>
+</div>
+<span class="tabular-nums text-brand-textSecondary">9%</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- THIRD ROW: Table & Actions -->
+<section class="grid grid-cols-3 gap-10">
+<!-- Recent Usage Table -->
+<div class="col-span-2 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline text-[14px] font-medium text-brand-textPrimary">Recent Usage</h2>
+<a class="text-brand-gold text-[12px] hover:underline font-body" href="#">View Full Logs</a>
+</div>
+<div class="bg-[#18171A] rounded hairline-all overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="hairline-b bg-[#1E1D21]">
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal w-24">Time</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal">Model</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal">Key</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal text-right">In/Out</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal text-right">Cache</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal text-right">Cost</th>
+<th class="py-3 px-4 font-label text-label-sm text-brand-textTertiary uppercase font-normal w-20 text-center">Status</th>
+</tr>
+</thead>
+<tbody class="text-[12px] font-body tabular-nums text-brand-textPrimary">
+<!-- Row 1 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:22:05</td>
+<td class="py-3 px-4">claude-3-5-sonnet</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-prod-9a...</td>
+<td class="py-3 px-4 text-right">1.2k / 450</td>
+<td class="py-3 px-4 text-right text-brand-success">85%</td>
+<td class="py-3 px-4 text-right">¥0.042</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:21:18</td>
+<td class="py-3 px-4">gpt-4o</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-dev-4f...</td>
+<td class="py-3 px-4 text-right">850 / 2.1k</td>
+<td class="py-3 px-4 text-right text-brand-textSecondary">-</td>
+<td class="py-3 px-4 text-right">¥0.115</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:18:44</td>
+<td class="py-3 px-4">gemini-1.5-pro</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-prod-9a...</td>
+<td class="py-3 px-4 text-right">4.5k / 0</td>
+<td class="py-3 px-4 text-right text-brand-textSecondary">-</td>
+<td class="py-3 px-4 text-right">¥0.000</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-danger text-brand-danger text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">429</span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:15:02</td>
+<td class="py-3 px-4">claude-3-opus</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-test-1b...</td>
+<td class="py-3 px-4 text-right">320 / 150</td>
+<td class="py-3 px-4 text-right text-brand-textSecondary">-</td>
+<td class="py-3 px-4 text-right">¥0.085</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:10:33</td>
+<td class="py-3 px-4">gpt-4o-mini</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-prod-9a...</td>
+<td class="py-3 px-4 text-right">12k / 4.2k</td>
+<td class="py-3 px-4 text-right text-brand-success">98%</td>
+<td class="py-3 px-4 text-right">¥0.012</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">14:05:11</td>
+<td class="py-3 px-4">midjourney-v6</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-img-7c...</td>
+<td class="py-3 px-4 text-right">0 / 0</td>
+<td class="py-3 px-4 text-right text-brand-textSecondary">-</td>
+<td class="py-3 px-4 text-right">¥0.350</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-warning text-brand-warning text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">202</span>
+</td>
+</tr>
+<!-- Row 7 -->
+<tr class="hairline-b hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">13:58:40</td>
+<td class="py-3 px-4">claude-3-5-sonnet</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-prod-9a...</td>
+<td class="py-3 px-4 text-right">450 / 890</td>
+<td class="py-3 px-4 text-right text-brand-success">12%</td>
+<td class="py-3 px-4 text-right">¥0.038</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+<!-- Row 8 -->
+<tr class="hover:bg-brand-surface3 transition-colors h-[52px]">
+<td class="py-3 px-4 text-brand-textSecondary">13:45:22</td>
+<td class="py-3 px-4">dall-e-3</td>
+<td class="py-3 px-4 text-brand-textSecondary font-label text-[10px]">sk-img-7c...</td>
+<td class="py-3 px-4 text-right">0 / 0</td>
+<td class="py-3 px-4 text-right text-brand-textSecondary">-</td>
+<td class="py-3 px-4 text-right">¥0.280</td>
+<td class="py-3 px-4 text-center">
+<span class="inline-flex items-center justify-center border border-brand-success text-brand-success text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">200</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Quick Actions & Announcements -->
+<div class="col-span-1 flex flex-col gap-10">
+<!-- Quick Actions -->
+<div>
+<h2 class="font-headline text-[14px] font-medium text-brand-textPrimary mb-6">Quick Actions</h2>
+<div class="flex flex-col hairline-t">
+<a class="group flex items-center justify-between py-4 hairline-b text-brand-textSecondary hover:text-brand-textPrimary transition-colors" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-brand-textTertiary group-hover:text-brand-gold transition-colors">add_circle</span>
+<span class="font-body text-[13px]">Create New API Key</span>
+</div>
+<span class="material-symbols-outlined text-[14px] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all">arrow_forward</span>
+</a>
+<a class="group flex items-center justify-between py-4 hairline-b text-brand-textSecondary hover:text-brand-textPrimary transition-colors" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-brand-textTertiary group-hover:text-brand-gold transition-colors">account_balance_wallet</span>
+<span class="font-body text-[13px]">Top-up Balance</span>
+</div>
+<span class="material-symbols-outlined text-[14px] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all">arrow_forward</span>
+</a>
+<a class="group flex items-center justify-between py-4 hairline-b text-brand-textSecondary hover:text-brand-textPrimary transition-colors" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-brand-textTertiary group-hover:text-brand-gold transition-colors">rule</span>
+<span class="font-body text-[13px]">Configure Rate Limits</span>
+</div>
+<span class="material-symbols-outlined text-[14px] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all">arrow_forward</span>
+</a>
+<a class="group flex items-center justify-between py-4 hairline-b text-brand-textSecondary hover:text-brand-textPrimary transition-colors" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-brand-textTertiary group-hover:text-brand-gold transition-colors">description</span>
+<span class="font-body text-[13px]">Read Integration Guide</span>
+</div>
+<span class="material-symbols-outlined text-[14px] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Announcements -->
+<div>
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline text-[14px] font-medium text-brand-textPrimary">Announcements</h2>
+<a class="text-brand-textTertiary text-[12px] hover:text-brand-textPrimary transition-colors font-body" href="#">View All</a>
+</div>
+<div class="space-y-4">
+<div class="bg-[#18171A] hairline-all p-4 rounded group hover:border-white/10 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<span class="border border-brand-info text-brand-info text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">Update</span>
+<span class="font-label text-[10px] text-brand-textTertiary tabular-nums">Oct 24, 2023</span>
+</div>
+<h3 class="font-body text-[13px] text-brand-textPrimary mb-1 group-hover:text-brand-gold transition-colors">Claude 3.5 Sonnet Integration Live</h3>
+<p class="font-body text-[11px] text-brand-textSecondary line-clamp-2 leading-relaxed">Full support for Anthropic's latest model is now available across all regions with native tool-use caching.</p>
+</div>
+<div class="bg-[#18171A] hairline-all p-4 rounded group hover:border-white/10 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<span class="border border-brand-warning text-brand-warning text-[9px] uppercase font-label px-2 py-0.5 rounded-full bg-transparent">Notice</span>
+<span class="font-label text-[10px] text-brand-textTertiary tabular-nums">Oct 21, 2023</span>
+</div>
+<h3 class="font-body text-[13px] text-brand-textPrimary mb-1 group-hover:text-brand-gold transition-colors">Scheduled Maintenance (AP-East)</h3>
+<p class="font-body text-[11px] text-brand-textSecondary line-clamp-2 leading-relaxed">Brief interruption expected for routing optimization in the Asia-Pacific region. Estimated downtime: 5 mins.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom padding for scrollability -->
+<div class="h-8"></div>
+</div>
+</main>
+</body></html>
