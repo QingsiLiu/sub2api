@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import checker from 'vite-plugin-checker'
 import { resolve } from 'path'
+import { geiliOverrides } from './src/geili/vite/geili-overrides.mjs' // geili hook: 模块覆盖
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
@@ -85,6 +86,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
+      geiliOverrides(__dirname), // geili hook: 见 src/geili/overrides.ts
       vue(),
       checker({
         vueTsc: true

@@ -1,0 +1,59 @@
+/*
+ * Geili 设计 token（唯一真源）
+ *
+ * 颜色一律写成不带 rgb() 的三元组 "R G B"，供 Tailwind 以
+ * rgb(var(--geili-x) / <alpha-value>) 组合使用；也可以在任意 CSS 里直接
+ * `color: rgb(var(--geili-primary-600))` 引用。
+ *
+ * 骨架阶段：数值与上游 tailwind.config.js 的色板逐一对应（teal 主色 + slate 中性色），
+ * 因此与官方 UI 视觉零差异。视觉重塑从这里开始改。
+ *
+ * 深色模式：上游使用 `dark:` 变体逐处写死，暂时不在这里重定义；
+ * 待 Geili 组件替换到一定比例后，可在 `.dark { ... }` 块里集中覆盖语义 token。
+ */
+:root {
+  /* 主色（上游 primary: teal） */
+  --geili-primary-50: 240 253 250;
+  --geili-primary-100: 204 251 241;
+  --geili-primary-200: 153 246 228;
+  --geili-primary-300: 94 234 212;
+  --geili-primary-400: 45 212 191;
+  --geili-primary-500: 20 184 166;
+  --geili-primary-600: 13 148 136;
+  --geili-primary-700: 15 118 110;
+  --geili-primary-800: 17 94 89;
+  --geili-primary-900: 19 78 74;
+  --geili-primary-950: 4 47 46;
+
+  /* 辅助色（上游 accent: slate） */
+  --geili-accent-50: 248 250 252;
+  --geili-accent-100: 241 245 249;
+  --geili-accent-200: 226 232 240;
+  --geili-accent-300: 203 213 225;
+  --geili-accent-400: 148 163 184;
+  --geili-accent-500: 100 116 139;
+  --geili-accent-600: 71 85 105;
+  --geili-accent-700: 51 65 85;
+  --geili-accent-800: 30 41 59;
+  --geili-accent-900: 15 23 42;
+  --geili-accent-950: 2 6 23;
+
+  /* 深色模式背景层（上游 dark: slate，与 accent 同值但语义独立，可分别调） */
+  --geili-dark-50: 248 250 252;
+  --geili-dark-100: 241 245 249;
+  --geili-dark-200: 226 232 240;
+  --geili-dark-300: 203 213 225;
+  --geili-dark-400: 148 163 184;
+  --geili-dark-500: 100 116 139;
+  --geili-dark-600: 71 85 105;
+  --geili-dark-700: 51 65 85;
+  --geili-dark-800: 30 41 59;
+  --geili-dark-900: 15 23 42;
+  --geili-dark-950: 2 6 23;
+
+  /* 字体（骨架阶段沿用上游系统字体栈） */
+  --geili-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --geili-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --geili-font-display: var(--geili-font-sans);
+}

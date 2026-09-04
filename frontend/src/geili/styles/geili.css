@@ -1,0 +1,14 @@
+/*
+ * Geili 样式层
+ *
+ * 放 Geili 自有组件的基础样式与工具类。约定：
+ * - 类名统一 `geili-` 前缀，避免与上游 `btn-*` / `card-*` 等冲突；
+ * - 允许使用 @layer（本文件经 styles/index.css 与上游 style.css 一起交给 Tailwind 处理）；
+ * - 不要在这里用宽泛选择器（如 `.bg-white`、`[class*="bg-gray"]`）去“盖”上游样式——
+ *   2026-06 的 Ceramic Ink 注入方案已证明这条路会拖垮图表页性能。要改就用模块覆盖换掉组件。
+ */
+
+/* 标记 Geili UI 已接管，便于 e2e / 排障时一眼确认加载的是自有构建 */
+html[data-geili-ui] {
+  --geili-ui: 1;
+}

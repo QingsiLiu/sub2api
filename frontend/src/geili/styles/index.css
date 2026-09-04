@@ -1,0 +1,13 @@
+/*
+ * Geili 全站样式入口（通过 overrides.ts 替换上游 `src/style.css`）
+ *
+ * 顺序很重要：
+ * 1. 上游 style.css：包含 @tailwind base/components/utilities 与上游 @layer 规则，原样保留；
+ * 2. tokens.css：设计 token（CSS 变量），Tailwind 语义色板由它驱动；
+ * 3. geili.css：Geili 自有样式层。
+ *
+ * Vite 会先内联 @import 再交给 PostCSS/Tailwind，所以 geili.css 里可以继续使用 @layer。
+ */
+@import '../../style.css';
+@import './tokens.css';
+@import './geili.css';
