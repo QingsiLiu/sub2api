@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API Management Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=Google+Sans+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#FCFCFC',
+              border: '#E8E8E6',
+              borderLight: '#F0F0EE',
+              textPrimary: '#111111',
+              textSecondary: '#6E6E6B',
+              textLabel: '#9A9A96',
+              sectionBg: '#F6F6F5',
+              success: '#46705C',
+              warning: '#8A6A2F',
+              danger: '#8C3A34',
+              info: '#3F5470'
+            }
+          },
+          borderRadius: {
+            "DEFAULT": "4px",
+            "lg": "4px",
+            "xl": "4px",
+            "full": "9999px"
+          },
+          fontFamily: {
+            headline: ["Geist", "sans-serif"],
+            display: ["Geist", "sans-serif"],
+            body: ["Geist", "sans-serif"],
+            label: ["'Google Sans Mono'", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    /* Global Styles & Overrides */
+    body {
+      background-color: #FCFCFC;
+      color: #111111;
+      font-family: 'Geist', sans-serif;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .font-label {
+      font-family: 'Google Sans Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .font-label-lg {
+        font-family: 'Google Sans Mono', monospace;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+    }
+    
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      font-size: 16px !important;
+      line-height: 1;
+    }
+    
+    /* Strict removal of shadows and rounded corners (except 4px) */
+    * {
+      box-shadow: none !important;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: #111111 !important;
+        border-width: 0 0 1.5px 0 !important;
+        box-shadow: none !important;
+    }
+    
+    input[type="text"], input[type="date"] {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid #E8E8E6;
+        border-radius: 0;
+        padding-left: 0;
+        padding-right: 0;
+        font-size: 14px;
+        color: #111111;
+    }
+
+    /* Minimal Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #FCFCFC;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #E8E8E6;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6E6E6B;
+    }
+  </style>
+</head>
+<body class="flex bg-app-bg min-h-screen text-app-textPrimary selection:bg-app-textPrimary selection:text-white">
+<!-- SideNavBar Component -->
+<nav class="w-[240px] h-screen border-r border-[#E8E8E6] bg-[#FCFCFC] flex flex-col py-6 shrink-0 sticky top-0">
+<div class="px-6 mb-12">
+<h1 class="font-headline font-bold text-[16px] tracking-tight text-[#111111] uppercase">GEILI API</h1>
+<p class="font-label text-app-textLabel mt-1">V3.0</p>
+</div>
+<div class="flex-1 overflow-y-auto px-6 space-y-1">
+<!-- Active Tab -->
+<a class="flex items-center gap-3 py-2 text-[#111111] border-l-2 border-[#111111] -ml-[2px] pl-[14px] bg-transparent font-medium group transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-lg tracking-[0.16em]">DASHBOARD</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">USERS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">GROUPS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">ACCOUNTS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">settings_input_component</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">CHANNEL MANAGEMENT</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">CHANNEL PRICING</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">CHANNEL MONITOR</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">ORDERS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">subscriptions</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">PAYMENT PLANS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">confirmation_number</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">PROMO CODES</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">redeem</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">REDEEM CODES</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">OPS MONITOR</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">AUDIT LOGS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">campaign</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">ANNOUNCEMENTS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">extension</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">PLUGINS</span>
+</a>
+<a class="flex items-center gap-3 py-2 text-[#6E6E6B] bg-transparent hover:text-[#111111] pl-4 transition-colors duration-150 group" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-lg tracking-[0.16em] group-hover:text-app-textPrimary">SETTINGS</span>
+</a>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="flex-1 flex flex-col min-w-0 bg-[#FCFCFC]">
+<!-- TopNavBar Component -->
+<header class="h-[56px] w-full border-b border-[#E8E8E6] bg-[#FCFCFC] flex items-center justify-between px-8 sticky top-0 z-10 shrink-0">
+<div class="flex items-center gap-6">
+<span class="font-label text-[#111111]">OVERVIEW</span>
+</div>
+<div class="flex items-center gap-4 text-[#111111]">
+<button class="hover:opacity-70 transition-opacity"><span class="material-symbols-outlined">notifications</span></button>
+<button class="hover:opacity-70 transition-opacity"><span class="material-symbols-outlined">dark_mode</span></button>
+<button class="hover:opacity-70 transition-opacity"><span class="material-symbols-outlined">account_circle</span></button>
+</div>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto">
+<div class="max-w-[1440px] mx-auto px-[40px] py-[56px] space-y-[56px]">
+<!-- Header & Quick Actions -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-[28px] font-headline font-[300] text-app-textPrimary leading-tight">管理控制台</h2>
+<p class="text-[14px] font-body text-app-textSecondary mt-2">系统概览与统计数据</p>
+</div>
+<div class="flex items-center gap-6">
+<a class="flex items-center gap-2 pb-1 border-b border-app-border hover:border-app-textPrimary transition-colors group" href="#">
+<span class="text-[14px] text-app-textPrimary">批量生图</span>
+<span class="material-symbols-outlined text-[16px] transition-transform group-hover:translate-x-1">arrow_forward</span>
+</a>
+<a class="flex items-center gap-2 pb-1 border-b border-app-border hover:border-app-textPrimary transition-colors group" href="#">
+<span class="text-[14px] text-app-textPrimary">分组定价</span>
+<span class="material-symbols-outlined text-[16px] transition-transform group-hover:translate-x-1">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Filter Bar -->
+<div class="flex justify-between items-center border-b border-app-border pb-4">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<input class="w-24 text-center font-label" readonly="" type="text" value="2023-10-01"/>
+<span class="text-app-textSecondary">-</span>
+<input class="w-24 text-center font-label" readonly="" type="text" value="2023-10-31"/>
+</div>
+<button class="text-app-textSecondary hover:text-app-textPrimary transition-colors">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+</div>
+<div class="flex items-center gap-6">
+<button class="font-label text-app-textPrimary border-b-2 border-app-textPrimary pb-1">DAY</button>
+<button class="font-label text-app-textLabel hover:text-app-textPrimary transition-colors pb-1">HOUR</button>
+</div>
+</div>
+<!-- Stats Grid (Matrix) -->
+<div class="grid grid-cols-4 gap-y-12">
+<!-- Row 1 -->
+<div class="pr-8 border-r border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">API KEYS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">128</div>
+<div class="font-label text-app-textSecondary mt-2">96 ACTIVE</div>
+</div>
+<div class="px-8 border-r border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">ACCOUNTS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">42</div>
+<div class="font-label text-app-textSecondary mt-2">38 OK · 4 <span class="text-app-danger">ERROR</span></div>
+</div>
+<div class="px-8 border-r border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">TODAY REQUESTS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">84,219</div>
+<div class="font-label text-app-textSecondary mt-2">TOTAL 12.4M</div>
+</div>
+<div class="pl-8 flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">USERS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">+18</div>
+<div class="font-label text-app-textSecondary mt-2">TOTAL 2,841</div>
+</div>
+<!-- Row 2 -->
+<div class="pr-8 border-r border-app-border pt-12 border-t border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">TODAY TOKENS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">128.4M</div>
+<div class="font-label text-app-textSecondary mt-2">ACTUAL ¥1,842 · COST ¥1,204 · STANDARD ¥2,310</div>
+</div>
+<div class="px-8 border-r border-app-border pt-12 border-t border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">TOTAL TOKENS</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">18.2B</div>
+<div class="font-label text-app-textSecondary mt-2">ACTUAL ¥284K</div>
+</div>
+<div class="px-8 border-r border-app-border pt-12 border-t border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">PERFORMANCE</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">1,240 <span class="text-[14px]">RPM</span></div>
+<div class="font-label text-app-textSecondary mt-2">86.4K TPM</div>
+</div>
+<div class="pl-8 pt-12 border-t border-app-border flex flex-col justify-between h-full">
+<span class="font-label text-app-textLabel mb-2">AVG LATENCY</span>
+<div class="text-[32px] font-headline font-[300] tabular-nums leading-none">1.28s</div>
+<div class="font-label text-app-textSecondary mt-2">412 ACTIVE USERS</div>
+</div>
+</div>
+<!-- Charts Layout (2 Columns) -->
+<div class="grid grid-cols-2 gap-12 border-t border-app-border pt-[56px]">
+<!-- Left: Model Distribution -->
+<div class="flex flex-col">
+<div class="font-label text-app-textLabel mb-8">MODEL DISTRIBUTION</div>
+<div class="flex-1 flex flex-col">
+<!-- Donut Chart Placeholder (CSS driven) -->
+<div class="relative w-full h-[240px] flex items-center justify-center mb-8">
+<svg class="w-[200px] h-[200px] -rotate-90" viewbox="0 0 100 100">
+<!-- Gray Scale thin rings -->
+<circle cx="50" cy="50" fill="transparent" r="48" stroke="#111111" stroke-dasharray="140 161.8" stroke-width="1"></circle>
+<circle cx="50" cy="50" fill="transparent" r="48" stroke="#6E6E6B" stroke-dasharray="80 221.8" stroke-dashoffset="-140" stroke-width="1"></circle>
+<circle cx="50" cy="50" fill="transparent" r="48" stroke="#9A9A96" stroke-dasharray="50 251.8" stroke-dashoffset="-220" stroke-width="1"></circle>
+<circle cx="50" cy="50" fill="transparent" r="48" stroke="#E8E8E6" stroke-dasharray="31.8 269.8" stroke-dashoffset="-270" stroke-width="1"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-label text-app-textLabel">TOTAL</span>
+<span class="text-[20px] font-headline font-[300] tabular-nums mt-1">128.4M</span>
+</div>
+</div>
+<!-- Details Table -->
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-app-borderLight">
+<th class="font-label text-app-textLabel py-3 font-normal">MODEL</th>
+<th class="font-label text-app-textLabel py-3 font-normal text-right">REQUESTS</th>
+<th class="font-label text-app-textLabel py-3 font-normal text-right">TOKENS</th>
+<th class="font-label text-app-textLabel py-3 font-normal text-right">ACTUAL</th>
+<th class="font-label text-app-textLabel py-3 font-normal text-right">COST</th>
+<th class="font-label text-app-textLabel py-3 font-normal text-right">STANDARD</th>
+</tr>
+</thead>
+<tbody class="font-label text-[11px] tabular-nums text-app-textPrimary">
+<tr class="border-b border-app-borderLight h-[40px]">
+<td>GPT-4</td>
+<td class="text-right">42,190</td>
+<td class="text-right">64.2M</td>
+<td class="text-right">¥942.0</td>
+<td class="text-right text-app-textSecondary">¥610.0</td>
+<td class="text-right text-app-textSecondary">¥1,180.0</td>
+</tr>
+<tr class="border-b border-app-borderLight h-[40px]">
+<td>CLAUDE-3</td>
+<td class="text-right">24,510</td>
+<td class="text-right">38.5M</td>
+<td class="text-right">¥580.5</td>
+<td class="text-right text-app-textSecondary">¥380.0</td>
+<td class="text-right text-app-textSecondary">¥710.0</td>
+</tr>
+<tr class="border-b border-app-borderLight h-[40px]">
+<td>GPT-3.5</td>
+<td class="text-right">12,040</td>
+<td class="text-right">18.4M</td>
+<td class="text-right">¥240.2</td>
+<td class="text-right text-app-textSecondary">¥150.0</td>
+<td class="text-right text-app-textSecondary">¥320.0</td>
+</tr>
+<tr class="h-[40px]">
+<td>O1-PREVIEW</td>
+<td class="text-right">5,479</td>
+<td class="text-right">7.3M</td>
+<td class="text-right">¥79.3</td>
+<td class="text-right text-app-textSecondary">¥64.0</td>
+<td class="text-right text-app-textSecondary">¥100.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right: Token Usage Trend -->
+<div class="flex flex-col border-l border-app-border pl-12">
+<div class="flex justify-between items-center mb-8">
+<div class="font-label text-app-textLabel">TOKEN USAGE TREND</div>
+<div class="flex gap-4 font-label text-[10px]">
+<span class="flex items-center gap-1"><span class="w-3 border-t border-[#111111]"></span> INPUT</span>
+<span class="flex items-center gap-1"><span class="w-3 border-t border-[#6E6E6B]"></span> OUTPUT</span>
+<span class="flex items-center gap-1"><span class="w-3 border-t border-[#9A9A96] border-dashed"></span> C-CREAT</span>
+<span class="flex items-center gap-1"><span class="w-3 border-t border-[#E8E8E6] border-dashed"></span> C-READ</span>
+</div>
+</div>
+<div class="flex-1 relative w-full h-[400px] border-b border-l border-app-borderLight">
+<!-- Line chart simulated using pure CSS/SVG -->
+<svg class="w-full h-full preserve-3d" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Y-Axis Grid Lines (extremely faint) -->
+<line stroke="#F0F0EE" stroke-width="0.5" x1="0" x2="100" y1="20" y2="20"></line>
+<line stroke="#F0F0EE" stroke-width="0.5" x1="0" x2="100" y1="40" y2="40"></line>
+<line stroke="#F0F0EE" stroke-width="0.5" x1="0" x2="100" y1="60" y2="60"></line>
+<line stroke="#F0F0EE" stroke-width="0.5" x1="0" x2="100" y1="80" y2="80"></line>
+<!-- Input (Black Solid) -->
+<polyline fill="none" points="0,70 10,65 20,40 30,55 40,30 50,45 60,20 70,35 80,15 90,25 100,10" stroke="#111111" stroke-width="0.5"></polyline>
+<!-- Output (Dark Gray Solid) -->
+<polyline fill="none" points="0,85 10,80 20,60 30,70 40,50 50,65 60,40 70,55 80,35 90,45 100,25" stroke="#6E6E6B" stroke-width="0.5"></polyline>
+<!-- Cache Creation (Mid Gray Dash) -->
+<polyline fill="none" points="0,95 10,90 20,85 30,80 40,75 50,70 60,65 70,60 80,55 90,50 100,45" stroke="#9A9A96" stroke-dasharray="2 1" stroke-width="0.5"></polyline>
+<!-- Cache Read (Light Gray Dash) -->
+<polyline fill="none" points="0,98 10,95 20,90 30,85 40,80 50,85 60,70 70,75 80,60 90,65 100,55" stroke="#E8E8E6" stroke-dasharray="2 1" stroke-width="0.5"></polyline>
+<!-- Hit Rate (Dot) -->
+<polyline fill="none" points="0,40 20,35 40,30 60,25 80,20 100,15" stroke="#6E6E6B" stroke-dasharray="0.5 1" stroke-width="0.5"></polyline>
+</svg>
+<!-- X-Axis Labels -->
+<div class="absolute -bottom-6 left-0 right-0 flex justify-between font-label text-app-textLabel text-[9px]">
+<span>00:00</span>
+<span>04:00</span>
+<span>08:00</span>
+<span>12:00</span>
+<span>16:00</span>
+<span>20:00</span>
+<span>24:00</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Full Width: Multi-line chart -->
+<div class="border-t border-app-border pt-[56px] flex flex-col pb-12">
+<div class="flex justify-between items-start mb-8">
+<div class="font-label text-app-textLabel">RECENT USAGE · TOP 12 USERS</div>
+<!-- Legend 2 columns -->
+<div class="grid grid-cols-2 gap-x-8 gap-y-2 font-label text-[10px] text-app-textSecondary">
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#111111]"></span> USR-A1X9</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#222222]"></span> USR-B2M4</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#333333]"></span> USR-C3P7</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#444444]"></span> USR-D4K2</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#555555]"></span> USR-E5Q8</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#666666]"></span> USR-F6W1</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#777777]"></span> USR-G7R5</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#888888]"></span> USR-H8T9</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#999999]"></span> USR-I9V3</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#AAAAAA]"></span> USR-J0N6</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#BBBBBB]"></span> USR-K1L4</div>
+<div class="flex items-center gap-2"><span class="w-3 border-t border-[#CCCCCC]"></span> USR-L2H7</div>
+</div>
+</div>
+<div class="w-full h-[200px] relative border-b border-app-borderLight">
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<!-- Multiple lines in grayscale luminosity steps -->
+<polyline fill="none" points="0,80 20,60 40,40 60,50 80,20 100,10" stroke="#111111" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,85 20,70 40,55 60,65 80,35 100,25" stroke="#222222" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,90 20,80 40,70 60,75 80,50 100,40" stroke="#333333" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,95 20,90 40,85 60,88 80,70 100,60" stroke="#444444" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,92 20,85 40,75 60,80 80,65 100,50" stroke="#555555" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,96 20,92 40,88 60,90 80,80 100,70" stroke="#666666" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,98 20,95 40,92 60,94 80,85 100,80" stroke="#777777" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,99 20,97 40,96 60,97 80,90 100,85" stroke="#888888" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,100 20,98 40,97 60,98 80,95 100,90" stroke="#999999" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,100 20,99 40,98 60,99 80,97 100,95" stroke="#AAAAAA" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,100 20,100 40,99 60,100 80,98 100,97" stroke="#BBBBBB" stroke-width="0.5"></polyline>
+<polyline fill="none" points="0,100 20,100 40,100 60,100 80,99 100,99" stroke="#CCCCCC" stroke-width="0.5"></polyline>
+</svg>
+<!-- X-Axis Labels -->
+<div class="absolute -bottom-6 left-0 right-0 flex justify-between font-label text-app-textLabel text-[9px]">
+<span>OCT 01</span>
+<span>OCT 08</span>
+<span>OCT 15</span>
+<span>OCT 22</span>
+<span>OCT 31</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

@@ -23,8 +23,17 @@
 | API 密钥（含新建弹窗） | `bbcfc50f8cad46aead800f4504be23d3` | [`stitch/keys.jpg`](stitch/) |
 | 使用记录 | `a9c35ff7bb724b82bfccb030660a48fc` | [`stitch/usage.jpg`](stitch/) |
 | 管理端账号管理 | `81ff2dad8b1b4b4b8a682296c999a78e` | [`stitch/admin.jpg`](stitch/) |
+| 充值 / 订阅 | `8a3c0899ae6041eb90dd1b54a3c19fff` | [`stitch/topup.jpg`](stitch/) |
+| 我的订单 | `bc0b5bd9b6354dd79b50f578cc2ef343` | [`stitch/orders.jpg`](stitch/) |
+| 管理端仪表盘 | `73adf921e6b645fca09623153a90f587` | [`stitch/admindash.jpg`](stitch/) |
+| 管理端系统设置（GENERAL Tab） | `08124b01230f45a0bddf9dc8e9d12670` | [`stitch/settings.jpg`](stitch/) |
+
+后四屏的信息架构取自真实代码（`PaymentView.vue` / `UserOrdersView.vue` /
+`admin/DashboardView.vue` / `admin/SettingsView.vue`），字段、列、Tab 顺序与之一致。
 
 出图为英文示意，实现时按上游 i18n **1:1 锁死中英文案**。
+另外 Stitch 每屏的侧栏菜单是自由发挥的，**菜单项一律以真实路由为准**，只取它的样式（分组标题
+10px 等宽大写、当前项左侧 2px 竖线、与背景同色仅右侧一条 hairline）。
 
 **从设计稿到代码的真源**是 `stitch/*.html` 里的 tailwind.config 与 hex 值，已提取进
 [`../styles/tokens.css`](../styles/tokens.css)。实现效果对照页见

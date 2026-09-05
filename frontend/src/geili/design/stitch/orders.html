@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>给力 API - My Orders</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700&amp;family=Public+Sans:wght@400;500&amp;family=Fira+Code:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: "#FCFCFC",
+                            surface: "#F6F6F5",
+                            border: "#E8E8E6",
+                            borderWeak: "#F0F0EE",
+                            textMain: "#111111",
+                            textSecondary: "#6E6E6B",
+                            textLabel: "#9A9A96",
+                            success: "#46705C",
+                            warning: "#8A6A2F",
+                            danger: "#8C3A34",
+                            info: "#3F5470"
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem",
+                        "brand": "4px"
+                    },
+                    fontFamily: {
+                        headline: ["Geist", "sans-serif"],
+                        body: ["Geist", "sans-serif"],
+                        mono: ["'Fira Code'", "monospace"], // Fallback since Google Sans Mono isn't free, Fira Code is a good mono sub
+                    },
+                    fontSize: {
+                        "brand-label": ["10px", { lineHeight: "1.2", letterSpacing: "0.14em" }],
+                        "brand-h1": ["36px", { lineHeight: "1.2", fontWeight: "300" }],
+                        "brand-h2": ["28px", { lineHeight: "1.2", fontWeight: "300" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FCFCFC;
+            color: #111111;
+            font-family: 'Geist', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .hairline-b { border-bottom: 1px solid #E8E8E6; }
+        .hairline-t { border-top: 1px solid #E8E8E6; }
+        .hairline-r { border-right: 1px solid #E8E8E6; }
+        .hairline-l { border-left: 1px solid #E8E8E6; }
+        
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        
+        /* Material symbols specific weight */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+<!-- Sidebar -->
+<aside class="w-[240px] h-screen hairline-r bg-brand-bg flex flex-col flex-shrink-0 z-10">
+<!-- Logo -->
+<div class="h-[56px] px-6 flex items-center">
+<span class="font-headline font-bold text-[16px] tracking-tight">给力 API</span>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 overflow-y-auto py-8 flex flex-col gap-8">
+<!-- ACCOUNT -->
+<div>
+<h3 class="px-6 text-brand-label text-brand-textLabel uppercase mb-4">ACCOUNT</h3>
+<ul class="flex flex-col">
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                            Dashboard
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">
+<span class="material-symbols-outlined">vpn_key</span>
+                            API Keys
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+                            Usage
+                        </a>
+</li>
+</ul>
+</div>
+<!-- BILLING -->
+<div>
+<h3 class="px-6 text-brand-label text-brand-textLabel uppercase mb-4">BILLING</h3>
+<ul class="flex flex-col">
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textMain font-medium border-l-2 border-brand-textMain bg-transparent" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+                            My Orders
+                        </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">
+<span class="material-symbols-outlined">payments</span>
+                            Invoices
+                        </a>
+</li>
+</ul>
+</div>
+<!-- SETTINGS -->
+<div>
+<h3 class="px-6 text-brand-label text-brand-textLabel uppercase mb-4">SETTINGS</h3>
+<ul class="flex flex-col">
+<li>
+<a class="flex items-center gap-3 px-6 py-2.5 text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+                            Preferences
+                        </a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Profile / Balance Bottom -->
+<div class="p-6 hairline-t">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-full bg-brand-surface overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Minimalist monochrome avatar illustration of a user silhouette against a bright white background, subtle gradients, high-end Swiss design aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyrVGufvof3LKiwnd2QF24lhb6DIH2DSawSuaZkTvKf7IBsH02Yx2jee-LUA96MUEJUxvpoSftEIX34j7ve961P7-OZEw-bf4GyQNJko1tH8d_zG4fFkeVPpZQ0O8ODcWQJAiK1a1LwIhzJVIDt7GNqQyvfV0ofFV33mm244ZG1PsdBiUUekZ_We332VAjCX-YEIwypaFJfMKN6MNuEXzvz1OqThJJFQrCYN_Yj485V-qKUekRIEyw8bGbzWTyojS2H2lDJzNpkIOt"/>
+</div>
+<div>
+<div class="text-[14px] font-medium leading-tight">User Profile</div>
+<div class="text-brand-label text-brand-textLabel mt-0.5">PRO PLAN</div>
+</div>
+</div>
+<div class="flex justify-between items-end mt-4">
+<span class="text-brand-label text-brand-textSecondary">BALANCE</span>
+<span class="font-mono text-[14px] tabular-nums">¥1,240.50</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col h-screen overflow-hidden">
+<!-- Top NavBar -->
+<header class="h-[56px] w-full hairline-b bg-brand-bg flex items-center justify-between px-8 flex-shrink-0">
+<div class="text-brand-label uppercase text-brand-textMain">MY ORDERS</div>
+<div class="flex items-center gap-6">
+<a class="text-[14px] text-brand-textSecondary hover:text-brand-textMain transition-colors" href="#">Docs</a>
+<button class="text-brand-textSecondary hover:text-brand-textMain flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-6 h-6 rounded-full bg-brand-surface overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Small minimalist avatar image, stark white background, abstract geometric face shape, strict monochrome." src="https://lh3.googleusercontent.com/aida-public/AB6AXuApbMf6g59OFfHzJArEOhm0t7W1adFY04LgGPIHAoD0MoobOce_tY39RIwrebnLLNkptKFODQ7UQu19Y5gyVyIECUvXJTvw2b-MkSC95U8ee0KE2Aie0bXyMRbPnjkOBgtHHROQuNXuRcCa1huQMuKzWBqQnpcnpXSjhIEOjr6HBMrCoi0GMItiEHqVTUKdxWyWCZK51duf1UzB7ARiozY7tyz54j4RTBLp4yiTj46JK9hImz6pNFSuIyKe8IP3F2wNt7B4Sa9y6ZeY"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Content Area -->
+<main class="flex-1 overflow-y-auto">
+<div class="px-8 py-10 max-w-7xl mx-auto">
+<!-- Header Section -->
+<div class="flex items-center justify-between mb-10">
+<h1 class="text-brand-h2">My Orders</h1>
+<div class="flex items-center gap-4">
+<button class="w-8 h-8 flex items-center justify-center hairline-l hairline-r hairline-t hairline-b rounded-brand hover:bg-brand-surface transition-colors" title="Refresh">
+<span class="material-symbols-outlined">refresh</span>
+</button>
+<button class="px-4 h-8 hairline-l hairline-r hairline-t hairline-b rounded-brand text-[14px] hover:bg-brand-surface transition-colors flex items-center">
+                            Return to Top-up
+                        </button>
+</div>
+</div>
+<!-- Filters -->
+<div class="flex items-center justify-between hairline-b mb-6">
+<div class="flex gap-6">
+<button class="pb-3 text-brand-label text-brand-textMain border-b border-brand-textMain">ALL</button>
+<button class="pb-3 text-brand-label text-brand-textLabel hover:text-brand-textMain transition-colors">PENDING</button>
+<button class="pb-3 text-brand-label text-brand-textLabel hover:text-brand-textMain transition-colors">COMPLETED</button>
+<button class="pb-3 text-brand-label text-brand-textLabel hover:text-brand-textMain transition-colors">FAILED</button>
+<button class="pb-3 text-brand-label text-brand-textLabel hover:text-brand-textMain transition-colors">REFUNDED</button>
+</div>
+<div class="pb-3 text-brand-label font-mono text-brand-textSecondary">
+                        24 ORDERS
+                    </div>
+</div>
+<!-- Table -->
+<div class="w-full">
+<!-- Header -->
+<div class="grid grid-cols-12 gap-4 pb-2 text-brand-label text-brand-textLabel hairline-b">
+<div class="col-span-1">ORDER ID</div>
+<div class="col-span-3">ORDER NO.</div>
+<div class="col-span-2 text-right">PAID / CREDITED</div>
+<div class="col-span-2">PAYMENT METHOD</div>
+<div class="col-span-1">STATUS</div>
+<div class="col-span-2">CREATED</div>
+<div class="col-span-1 text-right">ACTIONS</div>
+</div>
+<!-- Rows -->
+<div class="flex flex-col">
+<!-- Row 1 (Completed) -->
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1042</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_9x8c7v6b5n4m3l2k1</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥201.20</div>
+<div class="font-mono text-[10px] text-brand-textLabel">FEE 0.6%</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">credit_card</span>
+<span>Alipay</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-success text-brand-success text-[10px] font-mono rounded-[2px] uppercase">COMPLETED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-24 14:32</div>
+<div class="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-textSecondary hover:text-brand-textMain" title="Refund">
+<span class="material-symbols-outlined">currency_exchange</span>
+</button>
+</div>
+</div>
+<!-- Row 2 (Pending) -->
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1043</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_1a2b3c4d5e6f7g8h9</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥50.00</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">account_balance_wallet</span>
+<span>WeChat Pay</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-warning text-brand-warning text-[10px] font-mono rounded-[2px] uppercase">PENDING</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-25 09:15</div>
+<div class="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-textSecondary hover:text-brand-textMain" title="Cancel">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</div>
+<!-- Row 3 (Failed) -->
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1041</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_5z6x7c8v9b0n1m2k3</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥100.00</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">credit_card</span>
+<span>Visa ****4242</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-danger text-brand-danger text-[10px] font-mono rounded-[2px] uppercase">FAILED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-23 18:45</div>
+<div class="col-span-1 flex justify-end">
+<!-- No actions for failed usually -->
+</div>
+</div>
+<!-- Row 4 (Refunded) -->
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1040</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_q1w2e3r4t5y6u7i8o</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥500.00</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">account_balance</span>
+<span>Bank Transfer</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-textSecondary text-brand-textSecondary text-[10px] font-mono rounded-[2px] uppercase">REFUNDED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-20 11:20</div>
+<div class="col-span-1 flex justify-end">
+</div>
+</div>
+<!-- Rows 5-8 Filler for volume -->
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1039</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_p0o9i8u7y6t5r4e3w</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥20.00</div>
+<div class="font-mono text-[10px] text-brand-textLabel">FEE 0.0%</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">account_balance_wallet</span>
+<span>Balance</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-success text-brand-success text-[10px] font-mono rounded-[2px] uppercase">COMPLETED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-19 15:10</div>
+<div class="col-span-1 flex justify-end"></div>
+</div>
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1038</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_a1s2d3f4g5h6j7k8l</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥150.00</div>
+<div class="font-mono text-[10px] text-brand-textLabel">FEE 1.5%</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">credit_card</span>
+<span>Stripe</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-success text-brand-success text-[10px] font-mono rounded-[2px] uppercase">COMPLETED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-18 08:30</div>
+<div class="col-span-1 flex justify-end"></div>
+</div>
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1037</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_z1x2c3v4b5n6m7k8j</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥1,000.00</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">account_balance</span>
+<span>Bank Transfer</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-success text-brand-success text-[10px] font-mono rounded-[2px] uppercase">COMPLETED</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-15 10:00</div>
+<div class="col-span-1 flex justify-end"></div>
+</div>
+<div class="grid grid-cols-12 gap-4 items-center h-[52px] hairline-b group hover:bg-[#fafafa]">
+<div class="col-span-1 font-mono text-[13px] text-brand-textMain tabular-nums">#1036</div>
+<div class="col-span-3 font-mono text-[12px] text-brand-textSecondary truncate">ord_m1n2b3v4c5x6z7l8k</div>
+<div class="col-span-2 flex flex-col items-end justify-center">
+<div class="font-mono text-[13px] text-brand-textMain tabular-nums">¥30.00</div>
+</div>
+<div class="col-span-2 flex items-center gap-2 text-[13px]">
+<span class="material-symbols-outlined text-brand-textSecondary">credit_card</span>
+<span>Alipay</span>
+</div>
+<div class="col-span-1">
+<span class="inline-block px-1.5 py-0.5 border border-brand-warning text-brand-warning text-[10px] font-mono rounded-[2px] uppercase">PENDING</span>
+</div>
+<div class="col-span-2 font-mono text-[12px] text-brand-textSecondary tabular-nums">2023-10-14 22:15</div>
+<div class="col-span-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-textSecondary hover:text-brand-textMain" title="Cancel">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="flex items-center justify-between mt-8">
+<div class="font-mono text-[10px] text-brand-textSecondary tracking-[0.14em] uppercase">
+                        1-8 OF 24
+                    </div>
+<div class="flex items-center gap-4 text-brand-label">
+<button class="text-brand-textLabel hover:text-brand-textMain transition-colors disabled:opacity-50" disabled="">PREVIOUS</button>
+<div class="flex gap-2 font-mono text-[12px]">
+<button class="text-brand-textMain font-medium border-b border-brand-textMain leading-tight">1</button>
+<button class="text-brand-textSecondary hover:text-brand-textMain transition-colors leading-tight">2</button>
+<button class="text-brand-textSecondary hover:text-brand-textMain transition-colors leading-tight">3</button>
+</div>
+<button class="text-brand-textMain hover:text-brand-textSecondary transition-colors">NEXT</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

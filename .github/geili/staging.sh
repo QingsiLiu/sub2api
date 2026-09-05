@@ -63,9 +63,16 @@ ensure_docker() {
 cmd_up() {
   ensure_docker; ensure_env
   [ -n "${1:-}" ] && set_tag "$1"
-  local tag; tag="$(env_get GEILI_IMAGE_TAG)"
-  echo "==> 拉取 ghcr.io/qingsiliu/sub2api:${tag}"
-  compose pull sub2api
+  local tag image; tag="$(env_get GEILI_IMAGE_TAG)"
+  image="ghcr.io/qingsiliu/sub2api:${tag}"
+  # 还没推到 GHCR 的本地自建镜像（docker build -t …:<tag>）直接用，不去 pull。
+  # 视觉改动就是靠这条路径在推 tag 之前先验证的。
+  if docker image inspect "${image}" >/dev/null 2>&1; then
+    echo "==> 使用本地镜像 ${image}（跳过 pull）"
+  else
+    echo "==> 拉取 ${image}"
+    compose pull sub2api
+  fi
   echo "==> 启动 ${PROJECT}"
   compose up -d
   echo "==> 等待健康检查（最多 3 分钟）"

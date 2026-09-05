@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GEILI API - Top-up / Subscription</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Geist & Google Sans Mono (fallback to Roboto Mono if not available) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: '#FCFCFC',
+              raised: '#F6F6F5',
+              hairline: '#E8E8E6',
+              primary: '#111111',
+              secondary: '#6E6E6B',
+              label: '#9A9A96',
+              success: '#46705C',
+              warning: '#8A6A2F',
+              danger: '#8C3A34',
+              info: '#3F5470',
+            },
+            borderRadius: {
+              DEFAULT: "0.125rem",
+              lg: "0.25rem",
+              xl: "0.5rem",
+              full: "0.75rem"
+            },
+            fontFamily: {
+              headline: ["Geist", "sans-serif"],
+              display: ["Geist", "sans-serif"],
+              body: ["Geist", "sans-serif"],
+              label: ["'Roboto Mono'", "monospace"], // Using Roboto Mono as fallback for Google Sans Mono
+            },
+            fontSize: {
+              'xs-label': ['10px', '14px'],
+              'xs': ['13px', '20px'],
+              'sm': ['14px', '20px'],
+              'base': ['16px', '24px'],
+              'lg': ['20px', '28px'],
+              'xl': ['28px', '36px'],
+              '2xl': ['36px', '44px'],
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.primary');
+            font-family: theme('fontFamily.body');
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+            font-size: 16px;
+        }
+
+        /* Typography Utilities */
+        .text-label-caps {
+            font-family: theme('fontFamily.label');
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: theme('colors.label');
+        }
+        
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+            font-family: theme('fontFamily.label');
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] flex flex-col py-8 bg-[#FCFCFC] border-r border-[#E8E8E6] z-20">
+<!-- Header -->
+<div class="px-6 mb-10 flex items-center">
+<span class="font-display text-[14px] font-semibold tracking-tighter text-[#111111]">给力 API</span>
+<span class="text-[10px] text-[#9A9A96] ml-2 mt-1">V3.0 Atelier</span>
+</div>
+<!-- Navigation Group -->
+<div class="px-6 mb-4">
+<span class="font-label text-[10px] uppercase tracking-[0.16em] font-medium text-[#9A9A96]">GENERAL</span>
+</div>
+<nav class="flex-1 overflow-y-auto">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center px-6 py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span class="font-body text-[13px] tracking-tight">Overview</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">database</span>
+<span class="font-body text-[13px] tracking-tight">Quota</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">key</span>
+<span class="font-body text-[13px] tracking-tight">API Keys</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">lan</span>
+<span class="font-body text-[13px] tracking-tight">Channels</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-6 py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">history</span>
+<span class="font-body text-[13px] tracking-tight">Logs</span>
+</a>
+</li>
+<li>
+<!-- ACTIVE ITEM -->
+<a class="flex items-center px-[22px] py-2 text-[#111111] border-l-2 border-[#111111] bg-transparent font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">account_balance_wallet</span>
+<span class="font-body text-[13px] tracking-tight">Top-up</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- CTA & Footer Nav -->
+<div class="px-6 mt-auto">
+<button class="w-full h-8 mb-6 bg-[#111111] text-[#FCFCFC] rounded-lg text-[13px] font-medium transition-colors hover:bg-black">New Key</button>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">account_circle</span>
+<span class="font-body text-[13px] tracking-tight">Account</span>
+</a>
+</li>
+<li>
+<a class="flex items-center py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">receipt_long</span>
+<span class="font-body text-[13px] tracking-tight">Billing</span>
+</a>
+</li>
+<li>
+<a class="flex items-center py-2 text-[#9A9A96] bg-transparent hover:text-[#111111] transition-colors duration-150" href="#">
+<span class="material-symbols-outlined mr-3">settings</span>
+<span class="font-body text-[13px] tracking-tight">Settings</span>
+</a>
+</li>
+</ul>
+<div class="mt-4 pt-4 border-t border-[#E8E8E6]">
+<div class="text-[13px] text-[#111111] font-medium truncate">dev@example.com</div>
+<div class="text-[10px] font-label tabular-nums text-[#9A9A96] mt-1 uppercase tracking-[0.16em]">BAL: ¥1,284.50</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[240px] flex-1 flex flex-col min-w-0">
+<!-- TopAppBar -->
+<header class="w-full h-14 border-b border-[#E8E8E6] bg-[#FCFCFC] flex items-center justify-between px-10 sticky top-0 z-10">
+<div class="font-body text-[13px] font-medium text-[#111111]">
+                TOP-UP / SUBSCRIBE
+            </div>
+<div class="flex items-center space-x-6">
+<a class="font-body text-[13px] font-medium text-[#6E6E6B] hover:text-[#111111] transition-opacity duration-200 cursor-pointer active:opacity-70" href="#">Docs</a>
+<a class="font-body text-[13px] font-medium text-[#6E6E6B] hover:text-[#111111] transition-opacity duration-200 cursor-pointer active:opacity-70" href="#">Support</a>
+<a class="font-body text-[13px] font-medium text-[#6E6E6B] hover:text-[#111111] transition-opacity duration-200 cursor-pointer active:opacity-70" href="#">API Status</a>
+<div class="h-4 w-[1px] bg-[#E8E8E6] mx-2"></div>
+<button class="text-[#6E6E6B] hover:text-[#111111] transition-opacity duration-200 cursor-pointer active:opacity-70 flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-[#6E6E6B] hover:text-[#111111] transition-opacity duration-200 cursor-pointer active:opacity-70 flex items-center justify-center">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 p-10 max-w-[1440px] mx-auto w-full">
+<!-- Page Header -->
+<div class="mb-14">
+<h1 class="text-xl font-headline font-light text-primary mb-2">TOP-UP / SUBSCRIBE</h1>
+<p class="text-sm text-secondary">Through embedded pages to complete top-up/subscription</p>
+</div>
+<!-- Tabs -->
+<div class="flex space-x-8 border-b border-hairline mb-10">
+<button class="pb-3 border-b border-primary text-label-caps text-primary font-medium">TOP UP</button>
+<button class="pb-3 text-label-caps hover:text-primary transition-colors">SUBSCRIBE</button>
+</div>
+<!-- Account Info Section (Grid split) -->
+<div class="grid grid-cols-2 gap-10 mb-14 relative">
+<!-- Vertical hairline divider -->
+<div class="absolute left-1/2 top-0 bottom-0 w-[1px] bg-hairline -translate-x-1/2"></div>
+<div>
+<div class="text-label-caps mb-2">ACCOUNT</div>
+<div class="text-base text-primary">dev@example.com</div>
+</div>
+<div class="pl-10">
+<div class="text-label-caps mb-2">CURRENT BALANCE</div>
+<div class="text-2xl font-light text-primary tabular-nums">¥1,284.50</div>
+</div>
+</div>
+<!-- Amount Section -->
+<div class="mb-14">
+<div class="text-label-caps mb-6">AMOUNT</div>
+<div class="flex flex-wrap gap-4 mb-6">
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">10</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">20</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">50</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">100</button>
+<!-- Selected Button -->
+<button class="w-[96px] h-[44px] rounded-lg bg-primary text-background text-sm font-label tabular-nums transition-colors">200</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">500</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">1000</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">2000</button>
+<button class="w-[96px] h-[44px] rounded-lg border border-hairline text-sm font-label tabular-nums hover:border-primary transition-colors">5000</button>
+</div>
+<!-- Custom Amount -->
+<div class="w-64">
+<label class="sr-only" for="custom-amount">Custom Amount</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 flex items-center pointer-events-none">
+<span class="text-secondary font-label text-sm pl-2">¥</span>
+</div>
+<input class="block w-full border-0 border-b border-hairline bg-transparent py-2 pl-6 text-sm text-primary placeholder:text-secondary focus:ring-0 focus:border-primary focus:border-b-[1.5px] font-label tabular-nums transition-all" id="custom-amount" placeholder="Custom amount" type="text"/>
+</div>
+</div>
+</div>
+<!-- Payment Method -->
+<div class="mb-14 max-w-[800px]">
+<div class="text-label-caps mb-6">PAYMENT METHOD</div>
+<div class="border-t border-hairline">
+<!-- Alipay (Selected) -->
+<div class="flex items-center justify-between py-4 border-b border-hairline group cursor-pointer">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-primary mr-4">payment</span>
+<span class="text-sm font-medium text-primary">Alipay</span>
+</div>
+<div class="flex items-center">
+<span class="text-label-caps text-label mr-6">FEE 0.6%</span>
+<div class="w-4 h-4 rounded-full border-4 border-primary bg-background"></div>
+</div>
+</div>
+<!-- WeChat Pay -->
+<div class="flex items-center justify-between py-4 border-b border-hairline group cursor-pointer hover:bg-raised transition-colors px-2 -mx-2">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-secondary mr-4">chat_bubble_outline</span>
+<span class="text-sm text-secondary group-hover:text-primary transition-colors">WeChat Pay</span>
+</div>
+<div class="flex items-center">
+<span class="text-label-caps text-label mr-6">FEE 0.6%</span>
+<div class="w-4 h-4 rounded-full border border-hairline group-hover:border-secondary transition-colors"></div>
+</div>
+</div>
+<!-- Stripe -->
+<div class="flex items-center justify-between py-4 border-b border-hairline group cursor-pointer hover:bg-raised transition-colors px-2 -mx-2">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-secondary mr-4">credit_card</span>
+<span class="text-sm text-secondary group-hover:text-primary transition-colors">Stripe</span>
+</div>
+<div class="flex items-center">
+<span class="text-label-caps text-label mr-6">FEE 0.6%</span>
+<div class="w-4 h-4 rounded-full border border-hairline group-hover:border-secondary transition-colors"></div>
+</div>
+</div>
+<!-- Airwallex -->
+<div class="flex items-center justify-between py-4 border-b border-hairline group cursor-pointer hover:bg-raised transition-colors px-2 -mx-2">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-secondary mr-4">account_balance</span>
+<span class="text-sm text-secondary group-hover:text-primary transition-colors">Airwallex</span>
+</div>
+<div class="flex items-center">
+<span class="text-label-caps text-label mr-6">FEE 0.6%</span>
+<div class="w-4 h-4 rounded-full border border-hairline group-hover:border-secondary transition-colors"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Summary & Action -->
+<div class="flex justify-end mb-20 max-w-[800px]">
+<div class="w-full max-w-[400px]">
+<div class="space-y-3 mb-6 font-label tabular-nums text-sm text-right">
+<div class="flex justify-between text-secondary">
+<span>Payment:</span>
+<span>¥200.00</span>
+</div>
+<div class="flex justify-between text-secondary">
+<span>Fee (0.6%):</span>
+<span>¥1.20</span>
+</div>
+<div class="flex justify-between text-primary font-medium border-t border-hairline pt-3 text-lg">
+<span>Total Pay:</span>
+<span>¥201.20</span>
+</div>
+<div class="flex justify-between text-success mt-2">
+<span>Credited:</span>
+<span>¥200.00</span>
+</div>
+</div>
+<button class="w-[320px] h-[44px] float-right bg-primary text-background rounded-lg text-sm font-medium hover:bg-black transition-colors flex items-center justify-center">
+                        Confirm Payment ¥201.20
+                    </button>
+<div class="clear-both"></div>
+</div>
+</div>
+<!-- Help Footer -->
+<div class="mt-auto pt-10 border-t border-hairline flex items-start gap-10">
+<div class="flex-1">
+<div class="text-label-caps mb-4">NEED HELP?</div>
+<p class="text-sm text-secondary leading-relaxed">
+                        Encountered an issue with your payment? Check our <a class="text-primary underline underline-offset-2 decoration-hairline hover:decoration-primary transition-colors" href="#">troubleshooting guide</a>.<br/>
+                        Or contact support at <a class="text-primary underline underline-offset-2 decoration-hairline hover:decoration-primary transition-colors" href="mailto:billing@example.com">billing@example.com</a>.
+                    </p>
+</div>
+<!-- Decorative Image Placeholder -->
+<div class="w-[240px] h-[120px] border border-hairline rounded-lg overflow-hidden relative bg-raised flex items-center justify-center">
+<span class="text-label-caps text-label">AD SPACE</span>
+<div class="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-multiply" data-alt="A minimalist, high-key architectural detail shot featuring clean, precise lines of a modern building interior. White marble and brushed steel textures dominate, illuminated by soft, diffused daylight. A subtle accent of muted slate grey anchors the composition. The mood is pristine, quiet, and highly professional, perfectly aligning with a premium Swiss-design-inspired aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCdck5lBaarfI_pg3RuR25DezEphBPp7gU_iqAkTiqckl5IJd_6abtxmGj5jO4oFE1lKiR42BBGM10dfmia1130nzvzVZkzI4pVtCRj6buqU2b4QDfGAbf43GFJ9smDs-BZFsIlY3WTWSF5yRJMLViKyPSGF1N5Z_vrE77XtrHykmiytcZQstwtzIiwYGx79paIzWY4JOjcUF91Ftj2OSm3CJhMychBW6LjVH8xikQFbsHJUgQd_TSOVlDTCZwRXJ-mE5qf18aiw89-')"></div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

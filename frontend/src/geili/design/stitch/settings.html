@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>System Settings - Geili API Gateway</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-bg': '#FCFCFC',
+                        'brand-surface': '#F6F6F5',
+                        'brand-border': '#E8E8E6',
+                        'brand-border-light': '#F0F0EE',
+                        'brand-text': '#111111',
+                        'brand-secondary': '#6E6E6B',
+                        'brand-muted': '#9A9A96',
+                        'brand-success': '#46705C',
+                    },
+                    borderRadius: {
+                        "DEFAULT": "4px",
+                        "lg": "4px",
+                        "xl": "4px",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Geist", "sans-serif"],
+                        "display": ["Geist", "sans-serif"],
+                        "body": ["Geist", "sans-serif"],
+                        "mono": ["Space Mono", "monospace"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; background-color: #FCFCFC; color: #111111; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+        
+        /* Custom form styles to enforce underline design without plugin conflicts */
+        .input-underline {
+            appearance: none;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #E8E8E6;
+            border-radius: 0;
+            padding: 8px 0;
+            width: 100%;
+            color: #111111;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .input-underline:focus {
+            outline: none;
+            border-bottom: 1.5px solid #111111;
+            box-shadow: none;
+        }
+        .select-underline {
+            appearance: none;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #E8E8E6;
+            border-radius: 0;
+            padding: 8px 24px 8px 0;
+            width: 100%;
+            color: #111111;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .select-underline:focus {
+            outline: none;
+            border-bottom: 1.5px solid #111111;
+        }
+        .textarea-box {
+            appearance: none;
+            background: transparent;
+            border: 1px solid #E8E8E6;
+            border-radius: 4px;
+            padding: 12px;
+            width: 100%;
+            color: #111111;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .textarea-box:focus {
+            outline: none;
+            border-color: #111111;
+        }
+        
+        /* Tabular numbers for tables */
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden antialiased text-brand-text bg-brand-bg font-body selection:bg-brand-text selection:text-white">
+<!-- Shared Component: SideNavBar -->
+<nav class="w-[240px] h-screen border-r border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex flex-col fixed left-0 top-0 bottom-0 z-20 transition-colors duration-150 ease-in-out">
+<div class="px-6 py-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover grayscale opacity-80" data-alt="A minimalist, high-key macro photograph of a perfectly smooth, white ceramic sphere sitting on a pure white surface. Soft, diffused lighting creates subtle, elegant gradients and a profound sense of calm, precision, and modern premium aesthetics." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-iF9f18ELzGsRBW-1xUlEQh8aNtH8EbrzNiN2GtCEGnesmhYWvyHuK3wIv_G-Pw9_6rS7Vh-5Hsqq0PJy4z9knkzmS6pUBxDSO126TuMKCMZwx99OpGqk3lJE7NsLsJhnoq5s0M9xlSbrMd0WgGbn4onYVGewVG24erLRzXb15FfD1RqDOAkmvIn2I-wxykfP2aAty8iEPDmW_kkPmzdxe0vCHSEUHLNe0p7J1ONDaC4Z3hAr93zoE57nB1O9S8i9sea4_C1Rd4eK"/>
+</div>
+<div class="flex flex-col">
+<span class="font-display font-medium text-lg tracking-tighter text-[#111111] dark:text-[#F2F2F0] leading-none">GIVE ME API</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em] text-brand-muted mt-1 leading-none">V3.0 ATELIER</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col mt-4 font-body font-normal text-sm tracking-tight w-full">
+<!-- Inactive -->
+<a class="group text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] hover:bg-[#F6F6F5] dark:hover:bg-[#161615] flex items-center gap-3 border-l-2 border-transparent transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">DASHBOARD</span>
+</a>
+<!-- Inactive -->
+<a class="group text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] hover:bg-[#F6F6F5] dark:hover:bg-[#161615] flex items-center gap-3 border-l-2 border-transparent transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">bar_chart</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">USAGE</span>
+</a>
+<!-- Inactive -->
+<a class="group text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] hover:bg-[#F6F6F5] dark:hover:bg-[#161615] flex items-center gap-3 border-l-2 border-transparent transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">vpn_key</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">API KEYS</span>
+</a>
+<!-- Inactive -->
+<a class="group text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] hover:bg-[#F6F6F5] dark:hover:bg-[#161615] flex items-center gap-3 border-l-2 border-transparent transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">BILLING</span>
+</a>
+<!-- Inactive -->
+<a class="group text-[#9A9A96] dark:text-[#8E8E8A] bg-transparent pl-4 py-2 hover:text-[#111111] dark:hover:text-[#F2F2F0] hover:bg-[#F6F6F5] dark:hover:bg-[#161615] flex items-center gap-3 border-l-2 border-transparent transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">settings_input_component</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">CHANNELS</span>
+</a>
+<!-- Active -->
+<a class="text-[#111111] dark:text-[#F2F2F0] border-l-2 border-[#111111] dark:border-[#F2F2F0] bg-transparent pl-4 py-2 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-[#F6F6F5] dark:hover:bg-[#161615]" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+<span class="font-mono text-[10px] uppercase tracking-[0.16em]">SETTINGS</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-[240px] w-[calc(100%-240px)] flex flex-col h-full relative">
+<!-- Shared Component: TopNavBar -->
+<header class="h-[56px] w-full border-b border-[#E8E8E6] dark:border-[#262624] bg-[#FCFCFC] dark:bg-[#0E0E0D] flex justify-between items-center px-10 flex-shrink-0 z-10 transition-opacity duration-200">
+<div class="flex-1"></div> <!-- Spacer for search_bar on_right -->
+<div class="flex items-center gap-6">
+<!-- Search -->
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-0 text-brand-muted text-[16px]">search</span>
+<input class="pl-7 bg-transparent border-none focus:ring-0 text-[#111111] dark:text-[#F2F2F0] font-mono text-[11px] uppercase tracking-[0.14em] placeholder:text-[#9A9A96] w-48" placeholder="SEARCH..." type="text"/>
+</div>
+<div class="h-4 w-[1px] bg-brand-border mx-2"></div>
+<!-- Trailing Icons -->
+<button class="text-[#6E6E6B] dark:text-[#8E8E8A] hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+</button>
+<button class="text-[#6E6E6B] dark:text-[#8E8E8A] hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors">
+<span class="material-symbols-outlined text-[18px]">dark_mode</span>
+</button>
+<button class="text-[#6E6E6B] dark:text-[#8E8E8A] hover:text-[#111111] dark:hover:text-[#F2F2F0] transition-colors">
+<span class="material-symbols-outlined text-[18px]">help</span>
+</button>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto pb-24">
+<div class="px-10 py-12 max-w-5xl">
+<!-- Page Header -->
+<div class="mb-10">
+<h1 class="font-headline font-light text-[28px] text-brand-text tracking-tight">System Settings</h1>
+<p class="text-[14px] text-brand-secondary mt-2">Manage registration, email verification, defaults, and SMTP settings</p>
+</div>
+<!-- Tabs -->
+<div class="w-full border-b border-brand-border mb-12">
+<div class="flex items-center gap-[28px]">
+<button class="pb-3 border-b border-brand-text text-brand-text font-mono text-[10px] uppercase tracking-[0.14em]">GENERAL</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">AGREEMENT</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">FEATURES</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">SECURITY</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">USERS</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">GATEWAY</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">PAYMENT</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">EMAIL</button>
+<button class="pb-3 border-b border-transparent text-brand-muted hover:text-brand-text transition-colors font-mono text-[10px] uppercase tracking-[0.14em]">BACKUP</button>
+</div>
+</div>
+<!-- Section 1: SITE SETTINGS -->
+<div class="mb-14">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.16em] text-brand-muted mb-8">SITE SETTINGS</h2>
+<div class="flex flex-col gap-8">
+<!-- Row 1 -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-2">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Backend Mode</label>
+<p class="text-[12px] text-brand-secondary">Core routing architecture behavior.</p>
+</div>
+<div class="relative max-w-md">
+<select class="select-underline pr-8">
+<option>Distributed Mesh (V3)</option>
+<option>Monolithic Standard</option>
+<option>Edge Optimized</option>
+</select>
+<span class="material-symbols-outlined absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-brand-muted text-[18px]">expand_more</span>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-2">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Site Name</label>
+<p class="text-[12px] text-brand-secondary">Global display name for the instance.</p>
+</div>
+<div class="max-w-md">
+<input class="input-underline" type="text" value="Geili API Gateway"/>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-2">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">API Base URL</label>
+<p class="text-[12px] text-brand-secondary">Primary endpoint for downstream clients.</p>
+</div>
+<div class="max-w-md">
+<input class="input-underline font-mono text-[13px]" type="text" value="https://api.geili-gateway.io/v3"/>
+</div>
+</div>
+<!-- Row 4: Logo -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-2">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Site Logo</label>
+<p class="text-[12px] text-brand-secondary">SVG or PNG, max 1MB.</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 border border-brand-border rounded flex items-center justify-center bg-brand-surface">
+<span class="material-symbols-outlined text-brand-muted text-[20px]">image</span>
+</div>
+<button class="border border-brand-border bg-transparent text-brand-text rounded-[4px] px-3 py-1.5 text-xs font-medium hover:bg-brand-surface transition-colors">Upload</button>
+</div>
+</div>
+<!-- Row 5: Toggles -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-1">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Simple Homepage</label>
+<p class="text-[12px] text-brand-secondary">Bypass complex landing logic.</p>
+</div>
+<div class="pt-1">
+<!-- Active Black Toggle -->
+<button class="w-8 h-4 bg-[#111111] rounded-full relative transition-colors focus:outline-none" type="button">
+<span class="absolute top-[2px] left-[18px] w-3 h-3 bg-white rounded-full transition-all"></span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-1">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Hide CCS Import</label>
+<p class="text-[12px] text-brand-secondary">Disable legacy configuration imports.</p>
+</div>
+<div class="pt-1">
+<!-- Inactive Gray Toggle -->
+<button class="w-8 h-4 bg-brand-border rounded-full relative transition-colors focus:outline-none" type="button">
+<span class="absolute top-[2px] left-[2px] w-3 h-3 bg-white rounded-full transition-all border border-brand-border"></span>
+</button>
+</div>
+</div>
+<!-- Row 6: Textarea -->
+<div class="grid grid-cols-[280px_1fr] gap-x-12 items-start">
+<div class="flex flex-col gap-1 pt-2">
+<label class="font-mono text-[10px] uppercase tracking-[0.14em] text-brand-text">Homepage Content</label>
+<p class="text-[12px] text-brand-secondary">Raw HTML or markdown payload.</p>
+</div>
+<div class="max-w-2xl">
+<textarea class="textarea-box font-mono text-[12px]" rows="4">&lt;div class="hero"&gt;Welcome to Gateway V3&lt;/div&gt;</textarea>
+</div>
+</div>
+</div>
+</div>
+<hr class="border-t border-brand-border my-[56px] w-full"/>
+<!-- Section 2: CUSTOM MENU PAGES -->
+<div class="mb-8">
+<div class="flex items-center justify-between mb-8">
+<h2 class="font-mono text-[10px] uppercase tracking-[0.16em] text-brand-muted">CUSTOM MENU PAGES</h2>
+<button class="border border-brand-border bg-transparent text-brand-text rounded-[4px] px-3 py-1.5 text-xs font-medium hover:bg-brand-surface transition-colors flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]">add</span>
+                            Add Page
+                        </button>
+</div>
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-brand-border">
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[25%]">NAME</th>
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[20%]">VISIBLE ROLE</th>
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[30%]">URL</th>
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[10%] text-center">ICON</th>
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[5%] text-right">ORDER</th>
+<th class="py-3 font-mono text-[10px] text-brand-muted uppercase tracking-[0.14em] font-normal w-[10%] text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<tr class="border-b border-brand-border-light hover:bg-brand-surface transition-colors group">
+<td class="py-4">Developer Docs</td>
+<td class="py-4">
+<span class="border border-brand-border text-brand-secondary rounded px-1.5 py-0.5 text-[10px] font-mono tracking-wider">ALL</span>
+</td>
+<td class="py-4 font-mono text-[12px] text-brand-secondary truncate max-w-[200px]">/docs/v3/intro</td>
+<td class="py-4 text-center">
+<span class="material-symbols-outlined text-[16px] text-brand-secondary" style="font-weight: 300;">menu_book</span>
+</td>
+<td class="py-4 text-right tabular-nums text-brand-secondary">01</td>
+<td class="py-4 text-right">
+<div class="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-secondary hover:text-brand-text"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">edit</span></button>
+<button class="text-brand-secondary hover:text-[#8C3A34]"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">delete</span></button>
+</div>
+</td>
+</tr>
+<tr class="border-b border-brand-border-light hover:bg-brand-surface transition-colors group">
+<td class="py-4">Status Dashboard</td>
+<td class="py-4">
+<span class="border border-brand-border text-brand-text rounded px-1.5 py-0.5 text-[10px] font-mono tracking-wider">USER</span>
+</td>
+<td class="py-4 font-mono text-[12px] text-brand-secondary truncate max-w-[200px]">/status/cluster-a</td>
+<td class="py-4 text-center">
+<span class="material-symbols-outlined text-[16px] text-brand-secondary" style="font-weight: 300;">monitor_heart</span>
+</td>
+<td class="py-4 text-right tabular-nums text-brand-secondary">02</td>
+<td class="py-4 text-right">
+<div class="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-secondary hover:text-brand-text"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">edit</span></button>
+<button class="text-brand-secondary hover:text-[#8C3A34]"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">delete</span></button>
+</div>
+</td>
+</tr>
+<tr class="border-b border-brand-border-light hover:bg-brand-surface transition-colors group">
+<td class="py-4">Advanced Routing</td>
+<td class="py-4">
+<span class="border border-brand-text text-brand-text rounded px-1.5 py-0.5 text-[10px] font-mono tracking-wider font-medium">ADMIN</span>
+</td>
+<td class="py-4 font-mono text-[12px] text-brand-secondary truncate max-w-[200px]">/admin/routing-rules</td>
+<td class="py-4 text-center">
+<span class="material-symbols-outlined text-[16px] text-brand-secondary" style="font-weight: 300;">route</span>
+</td>
+<td class="py-4 text-right tabular-nums text-brand-secondary">03</td>
+<td class="py-4 text-right">
+<div class="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-brand-secondary hover:text-brand-text"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">edit</span></button>
+<button class="text-brand-secondary hover:text-[#8C3A34]"><span class="material-symbols-outlined text-[16px]" style="font-weight: 300;">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Fixed Bottom Bar -->
+<div class="fixed bottom-0 left-[240px] right-0 h-16 border-t border-brand-border bg-brand-bg flex items-center justify-end px-10 z-10">
+<button class="w-[140px] h-[40px] bg-[#111111] text-white flex items-center justify-center rounded-[4px] text-sm font-medium hover:bg-black transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-brand-bg focus:ring-[#111111]">
+                Save Settings
+            </button>
+</div>
+</main>
+</body></html>
