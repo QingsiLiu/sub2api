@@ -75,6 +75,15 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 
 	created, err := builder.Save(ctx)
 	if err == nil {
+		// geili hook: every subscription keeps its primary entitlement explicitly;
+		// additional bundled groups are added by the migration/plan flow.
+		_, entitlementErr := client.UserSubscriptionGroup.Create().
+			SetUserSubscriptionID(created.ID).
+			SetGroupID(created.GroupID).
+			Save(ctx)
+		if entitlementErr != nil {
+			return entitlementErr
+		}
 		applyUserSubscriptionEntityToService(sub, created)
 	}
 	return translatePersistenceError(err, nil, service.ErrSubscriptionAlreadyExists)

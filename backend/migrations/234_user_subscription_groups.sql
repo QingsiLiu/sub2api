@@ -16,3 +16,13 @@ INSERT INTO user_subscription_groups (user_subscription_id, group_id)
 SELECT id, group_id FROM user_subscriptions
 WHERE group_id IS NOT NULL
 ON CONFLICT (user_subscription_id, group_id) DO NOTHING;
+
+-- Existing GPT stable subscriptions receive Grok Heavy as the bundled group.
+-- Match by stable group names/IDs so this remains safe across repeated runs.
+INSERT INTO user_subscription_groups (user_subscription_id, group_id)
+SELECT us.id, grok.id
+FROM user_subscriptions us
+JOIN groups primary_group ON primary_group.id = us.group_id
+JOIN groups grok ON (grok.id = 88 OR lower(grok.name) = lower('Grok Heavy'))
+WHERE us.group_id = 4 OR lower(primary_group.name) = lower('GPT稳定')
+ON CONFLICT (user_subscription_id, group_id) DO NOTHING;
