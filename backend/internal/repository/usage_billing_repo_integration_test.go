@@ -146,6 +146,16 @@ func TestUserSubscriptionEntitlement_ResolvesSameSubscriptionForBundledGroups(t 
 	secondarySub, err := repo.(*userSubscriptionRepository).GetActiveByUserIDAndEntitledGroupID(ctx, user.ID, secondary.ID)
 	require.NoError(t, err)
 	require.Equal(t, primarySub.ID, secondarySub.ID)
+	firstID, secondID := uuid.NewString(), uuid.NewString()
+	for _, requestID := range []string{firstID, secondID} {
+		_, err = NewUsageBillingRepository(client, integrationDB).Apply(ctx, &service.UsageBillingCommand{
+			RequestID: requestID, UserID: user.ID, SubscriptionID: &sub.ID, SubscriptionCost: 1.25,
+		})
+		require.NoError(t, err)
+	}
+	var usage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT daily_usage_usd FROM user_subscriptions WHERE id = $1", sub.ID).Scan(&usage))
+	require.InDelta(t, 2.5, usage, 0.000001)
 }
 
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
