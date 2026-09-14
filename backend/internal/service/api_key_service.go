@@ -451,6 +451,15 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
+		// geili hook: bundled subscriptions authorize additional groups through
+		// the entitlement table while preserving the upstream lookup first.
+		if err != nil {
+			if resolver, ok := s.userSubRepo.(interface {
+				GetActiveByUserIDAndEntitledGroupID(context.Context, int64, int64) (*UserSubscription, error)
+			}); ok {
+				_, err = resolver.GetActiveByUserIDAndEntitledGroupID(ctx, user.ID, group.ID)
+			}
+		}
 		return err == nil // 有有效订阅则允许
 	}
 	// 标准类型分组：使用原有逻辑
