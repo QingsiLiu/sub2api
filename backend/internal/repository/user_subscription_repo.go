@@ -217,6 +217,7 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 	subs, err := client.UserSubscription.Query().
 		Where(usersubscription.UserIDEQ(userID)).
 		WithGroup().
+		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {
@@ -234,6 +235,7 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 			usersubscription.ExpiresAtGT(time.Now()),
 		).
 		WithGroup().
+		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {
@@ -254,6 +256,7 @@ func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID 
 	subs, err := q.
 		WithUser().
 		WithGroup().
+		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		Offset(params.Offset()).
 		Limit(params.Limit()).
