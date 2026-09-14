@@ -8,9 +8,24 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
+
+func uniquePlanGroupIDs(values []int64) []int64 {
+	seen := make(map[int64]struct{}, len(values))
+	out := make([]int64, 0, len(values))
+	for _, v := range values {
+		if v > 0 {
+			if _, ok := seen[v]; !ok {
+				seen[v] = struct{}{}
+				out = append(out, v)
+			}
+		}
+	}
+	return out
+}
 
 // normalizePlanCurrency validates and normalizes the display-only currency label.
 // Empty means "no label" and is kept as-is so existing plans stay unchanged.
@@ -125,11 +140,11 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 }
 
 func (s *PaymentConfigService) ListPlans(ctx context.Context) ([]*dbent.SubscriptionPlan, error) {
-	return s.entClient.SubscriptionPlan.Query().Order(subscriptionplan.BySortOrder()).All(ctx)
+	return s.entClient.SubscriptionPlan.Query().WithGroupEntitlements().Order(subscriptionplan.BySortOrder()).All(ctx)
 }
 
 func (s *PaymentConfigService) ListPlansForSale(ctx context.Context) ([]*dbent.SubscriptionPlan, error) {
-	return s.entClient.SubscriptionPlan.Query().Where(subscriptionplan.ForSaleEQ(true)).Order(subscriptionplan.BySortOrder()).All(ctx)
+	return s.entClient.SubscriptionPlan.Query().WithGroupEntitlements().Where(subscriptionplan.ForSaleEQ(true)).Order(subscriptionplan.BySortOrder()).All(ctx)
 }
 
 func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanRequest) (*dbent.SubscriptionPlan, error) {
@@ -148,7 +163,17 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
-	return b.Save(ctx)
+	plan, err := b.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groupIDs := append([]int64{req.GroupID}, req.GroupIDs...)
+	for _, gid := range uniquePlanGroupIDs(groupIDs) {
+		if _, err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(int64(plan.ID)).SetGroupID(gid).Save(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
 // UpdatePlan updates a subscription plan by ID (patch semantics).
@@ -199,7 +224,25 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if req.SortOrder != nil {
 		u.SetSortOrder(*req.SortOrder)
 	}
-	return u.Save(ctx)
+	plan, err := u.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.GroupIDs != nil {
+		if _, err := s.entClient.SubscriptionPlanGroup.Delete().Where(subscriptionplangroup.SubscriptionPlanIDEQ(id)).Exec(ctx); err != nil {
+			return nil, err
+		}
+		primary := plan.GroupID
+		if req.GroupID != nil {
+			primary = *req.GroupID
+		}
+		for _, gid := range uniquePlanGroupIDs(append([]int64{primary}, (*req.GroupIDs)...)) {
+			if _, err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(id).SetGroupID(gid).Save(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return plan, nil
 }
 
 func (s *PaymentConfigService) DeletePlan(ctx context.Context, id int64) error {

@@ -290,6 +290,7 @@ func (h *PaymentHandler) ListPlans(c *gin.Context) {
 type AdminSubscriptionPlanResult struct {
 	ID              int64     `json:"id"`
 	GroupID         int64     `json:"group_id"`
+	GroupIDs        []int64   `json:"group_ids,omitempty"`
 	GroupPlatform   string    `json:"group_platform,omitempty"`
 	GroupName       string    `json:"group_name,omitempty"`
 	RateMultiplier  float64   `json:"rate_multiplier,omitempty"`
@@ -322,6 +323,7 @@ func adminSubscriptionPlansForResponse(plans []*dbent.SubscriptionPlan, groupInf
 		result = append(result, AdminSubscriptionPlanResult{
 			ID:              int64(p.ID),
 			GroupID:         p.GroupID,
+			GroupIDs:        subscriptionPlanGroupIDs(p),
 			GroupPlatform:   gi.Platform,
 			GroupName:       gi.Name,
 			RateMultiplier:  gi.RateMultiplier,
@@ -345,6 +347,19 @@ func adminSubscriptionPlansForResponse(plans []*dbent.SubscriptionPlan, groupInf
 		})
 	}
 	return result
+}
+
+func subscriptionPlanGroupIDs(p *dbent.SubscriptionPlan) []int64 {
+	if p == nil {
+		return nil
+	}
+	ids := []int64{p.GroupID}
+	for _, e := range p.Edges.GroupEntitlements {
+		if e.GroupID != p.GroupID {
+			ids = append(ids, e.GroupID)
+		}
+	}
+	return ids
 }
 
 // CreatePlan creates a new subscription plan.
