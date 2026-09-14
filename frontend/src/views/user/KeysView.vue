@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <div class="signal-keys">
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col gap-3">
@@ -443,6 +444,7 @@
         />
       </template>
     </TablePageLayout>
+    </div>
 
     <!-- Create/Edit Modal -->
     <BaseDialog

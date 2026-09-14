@@ -70,6 +70,29 @@ html[data-geili-ui] {
   .signal-dashboard .signal-readouts > .grid > .card:nth-child(n + 3) { border-top: 1px solid rgb(var(--geili-hairline)); }
 }
 
+/* Page-level compositions from the Signal Observatory screens. */
+.signal-subscriptions .signal-subscription-panel {
+  border-color: rgb(var(--geili-hairline));
+  border-radius: var(--geili-radius);
+  background: rgb(var(--geili-raised));
+  box-shadow: none;
+}
+
+.signal-subscriptions .signal-subscription-panel > div:first-child {
+  padding: 1.25rem 1.5rem;
+  border-color: rgb(var(--geili-hairline));
+}
+
+.signal-subscriptions .signal-subscription-panel h3 { letter-spacing: -0.015em; }
+.signal-subscriptions .text-gray-400,
+.signal-keys .text-gray-400 { color: rgb(var(--geili-neutral-600)); }
+.dark .signal-subscriptions .text-gray-400,
+.dark .signal-keys .text-gray-400 { color: rgb(var(--geili-dark-300)); }
+
+.signal-keys .card,
+.signal-keys [class*="rounded-2xl"] { border-radius: var(--geili-radius); box-shadow: none; }
+.signal-keys .btn { min-height: 40px; }
+
 .dark .signal-shell,
 .dark .signal-main {
   background-color: rgb(var(--geili-surface));
