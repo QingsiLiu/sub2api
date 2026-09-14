@@ -19,26 +19,26 @@
    * 深色模式下不反转本阶（原因见文件末尾 .dark 的说明），
    * 深色下的「白底黑字」主按钮由 geili.css 的 .btn-primary 显式给出。
    */
-  --geili-primary-50: 246 246 245;
-  --geili-primary-100: 237 237 235;
-  --geili-primary-200: 217 217 214;
-  --geili-primary-300: 181 181 177;
-  --geili-primary-400: 110 110 107;
-  --geili-primary-500: 46 46 44;
-  --geili-primary-600: 17 17 17;
-  --geili-primary-700: 8 8 8;
-  --geili-primary-800: 0 0 0;
-  --geili-primary-900: 0 0 0;
-  --geili-primary-950: 0 0 0;
+  --geili-primary-50: 239 246 255;
+  --geili-primary-100: 219 234 254;
+  --geili-primary-200: 191 219 254;
+  --geili-primary-300: 147 197 253;
+  --geili-primary-400: 96 165 250;
+  --geili-primary-500: 59 130 246;
+  --geili-primary-600: 37 99 235;
+  --geili-primary-700: 29 78 216;
+  --geili-primary-800: 30 64 175;
+  --geili-primary-900: 30 58 138;
+  --geili-primary-950: 23 37 84;
 
   /*
    * 中性阶（暖灰）。同时供 accent 与 Tailwind 默认的 gray/slate/neutral/zinc/stone 使用，
    * 上游散落的 text-gray-500 / border-gray-200 因此自动跟随。
    */
-  --geili-neutral-50: 252 252 252;
-  --geili-neutral-100: 246 246 245;
-  --geili-neutral-200: 240 240 238;
-  --geili-neutral-300: 232 232 230;
+  --geili-neutral-50: 248 250 252;
+  --geili-neutral-100: 241 245 249;
+  --geili-neutral-200: 226 232 240;
+  --geili-neutral-300: 203 213 225;
   /* Text-facing gray steps are intentionally darker than the original draft.
    * The previous 154/154/150 label color failed normal-text contrast on white. */
   --geili-neutral-400: 142 142 138;
