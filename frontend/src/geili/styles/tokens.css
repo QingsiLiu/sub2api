@@ -115,22 +115,22 @@
   --geili-info-950: 14 18 24;
 
   /* ============ 语义别名（供 geili.css 与覆盖组件直接引用） ============ */
-  --geili-surface: var(--geili-neutral-50); /* 页面底 #FCFCFC */
-  --geili-raised: var(--geili-neutral-100); /* 抬起分区 #F6F6F5 */
-  --geili-hairline: var(--geili-neutral-300); /* 分割线 #E8E8E6 */
-  --geili-hairline-soft: var(--geili-neutral-200); /* 更弱的分割 #F0F0EE */
-  --geili-text: var(--geili-primary-600); /* 正文 #111111 */
+  --geili-surface: var(--geili-neutral-50); /* Clear Signal canvas */
+  --geili-raised: var(--geili-neutral-100); /* raised surface */
+  --geili-hairline: var(--geili-neutral-300); /* visible divider */
+  --geili-hairline-soft: var(--geili-neutral-200); /* subtle divider */
+  --geili-text: 15 23 42; /* slate-900: body text must never inherit brand blue */
   --geili-text-secondary: var(--geili-neutral-600); /* 次级文字，满足浅色对比度 */
   --geili-text-label: var(--geili-neutral-600); /* 标签文字不使用低对比度灰 */
   --geili-on-accent: var(--geili-neutral-50); /* 主按钮上的文字 */
 
   /* ============ 形状与节奏 ============ */
-  --geili-radius: 4px; /* 全站统一，按钮/输入/面板/弹窗 */
-  --geili-radius-sm: 2px;
+  --geili-radius: 8px; /* Clear Signal: friendly containment without pill shapes */
+  --geili-radius-sm: 4px;
   --geili-hairline-width: 1px;
   --geili-section-gap: 3rem; /* 区块之间 48px */
   --geili-page-padding: 2.5rem; /* 内容区左右 40px */
-  --geili-row-height: 52px; /* 表格行高 */
+  --geili-row-height: 48px; /* 表格行高 */
 
   /*
    * ============ 字体 ============
@@ -170,14 +170,14 @@
  *   2. Geili 自己覆盖的语义类，在 geili.css 里逐条显式写 dark: 变体，和上游同一套写法。
  */
 .dark {
-  --geili-surface: var(--geili-dark-900); /* #0E0E0D */
-  --geili-raised: var(--geili-dark-800); /* #161615 */
-  --geili-hairline: var(--geili-dark-700); /* #262624 */
-  --geili-hairline-soft: var(--geili-dark-800);
-  --geili-text: var(--geili-dark-50); /* #F2F2F0 */
-  --geili-text-secondary: var(--geili-dark-300); /* #8E8E8A */
-  --geili-text-label: var(--geili-dark-400); /* #6E6E6B */
-  --geili-on-accent: var(--geili-dark-900); /* 浅色按钮上的深色字 */
+  --geili-surface: 11 16 32; /* observatory canvas */
+  --geili-raised: 23 32 51; /* focused plane */
+  --geili-hairline: 51 65 85;
+  --geili-hairline-soft: 30 41 59;
+  --geili-text: 248 250 252;
+  --geili-text-secondary: 203 213 225;
+  --geili-text-label: 148 163 184;
+  --geili-on-accent: 8 47 73;
 
   /* 图表：深色底上的线与网格 */
   --geili-chart-1: var(--geili-dark-50);
