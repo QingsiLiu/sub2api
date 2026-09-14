@@ -1570,6 +1570,45 @@ var (
 			},
 		},
 	}
+	// SubscriptionPlanGroupsColumns holds the columns for the "subscription_plan_groups" table.
+	SubscriptionPlanGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "subscription_plan_id", Type: field.TypeInt64},
+	}
+	// SubscriptionPlanGroupsTable holds the schema information for the "subscription_plan_groups" table.
+	SubscriptionPlanGroupsTable = &schema.Table{
+		Name:       "subscription_plan_groups",
+		Columns:    SubscriptionPlanGroupsColumns,
+		PrimaryKey: []*schema.Column{SubscriptionPlanGroupsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_plan_groups_groups_plan_entitlements",
+				Columns:    []*schema.Column{SubscriptionPlanGroupsColumns[2]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "subscription_plan_groups_subscription_plans_group_entitlements",
+				Columns:    []*schema.Column{SubscriptionPlanGroupsColumns[3]},
+				RefColumns: []*schema.Column{SubscriptionPlansColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionplangroup_subscription_plan_id_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{SubscriptionPlanGroupsColumns[3], SubscriptionPlanGroupsColumns[2]},
+			},
+			{
+				Name:    "subscriptionplangroup_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionPlanGroupsColumns[2]},
+			},
+		},
+	}
 	// TLSFingerprintProfilesColumns holds the columns for the "tls_fingerprint_profiles" table.
 	TLSFingerprintProfilesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2156,6 +2195,7 @@ var (
 		SecuritySecretsTable,
 		SettingsTable,
 		SubscriptionPlansTable,
+		SubscriptionPlanGroupsTable,
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
@@ -2282,6 +2322,11 @@ func init() {
 	}
 	SubscriptionPlansTable.Annotation = &entsql.Annotation{
 		Table: "subscription_plans",
+	}
+	SubscriptionPlanGroupsTable.ForeignKeys[0].RefTable = GroupsTable
+	SubscriptionPlanGroupsTable.ForeignKeys[1].RefTable = SubscriptionPlansTable
+	SubscriptionPlanGroupsTable.Annotation = &entsql.Annotation{
+		Table: "subscription_plan_groups",
 	}
 	TLSFingerprintProfilesTable.Annotation = &entsql.Annotation{
 		Table: "tls_fingerprint_profiles",

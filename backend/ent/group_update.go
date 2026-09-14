@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -1265,6 +1266,21 @@ func (_u *GroupUpdate) AddSubscriptionEntitlements(v ...*UserSubscriptionGroup) 
 	return _u.AddSubscriptionEntitlementIDs(ids...)
 }
 
+// AddPlanEntitlementIDs adds the "plan_entitlements" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *GroupUpdate) AddPlanEntitlementIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.AddPlanEntitlementIDs(ids...)
+	return _u
+}
+
+// AddPlanEntitlements adds the "plan_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *GroupUpdate) AddPlanEntitlements(v ...*SubscriptionPlanGroup) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPlanEntitlementIDs(ids...)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *GroupUpdate) AddUsageLogIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -1397,6 +1413,27 @@ func (_u *GroupUpdate) RemoveSubscriptionEntitlements(v ...*UserSubscriptionGrou
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveSubscriptionEntitlementIDs(ids...)
+}
+
+// ClearPlanEntitlements clears all "plan_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *GroupUpdate) ClearPlanEntitlements() *GroupUpdate {
+	_u.mutation.ClearPlanEntitlements()
+	return _u
+}
+
+// RemovePlanEntitlementIDs removes the "plan_entitlements" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *GroupUpdate) RemovePlanEntitlementIDs(ids ...int64) *GroupUpdate {
+	_u.mutation.RemovePlanEntitlementIDs(ids...)
+	return _u
+}
+
+// RemovePlanEntitlements removes "plan_entitlements" edges to SubscriptionPlanGroup entities.
+func (_u *GroupUpdate) RemovePlanEntitlements(v ...*SubscriptionPlanGroup) *GroupUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePlanEntitlementIDs(ids...)
 }
 
 // ClearUsageLogs clears all "usage_logs" edges to the UsageLog entity.
@@ -2110,6 +2147,51 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscriptiongroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PlanEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPlanEntitlementsIDs(); len(nodes) > 0 && !_u.mutation.PlanEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PlanEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -3523,6 +3605,21 @@ func (_u *GroupUpdateOne) AddSubscriptionEntitlements(v ...*UserSubscriptionGrou
 	return _u.AddSubscriptionEntitlementIDs(ids...)
 }
 
+// AddPlanEntitlementIDs adds the "plan_entitlements" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *GroupUpdateOne) AddPlanEntitlementIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.AddPlanEntitlementIDs(ids...)
+	return _u
+}
+
+// AddPlanEntitlements adds the "plan_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *GroupUpdateOne) AddPlanEntitlements(v ...*SubscriptionPlanGroup) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPlanEntitlementIDs(ids...)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_u *GroupUpdateOne) AddUsageLogIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddUsageLogIDs(ids...)
@@ -3655,6 +3752,27 @@ func (_u *GroupUpdateOne) RemoveSubscriptionEntitlements(v ...*UserSubscriptionG
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveSubscriptionEntitlementIDs(ids...)
+}
+
+// ClearPlanEntitlements clears all "plan_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *GroupUpdateOne) ClearPlanEntitlements() *GroupUpdateOne {
+	_u.mutation.ClearPlanEntitlements()
+	return _u
+}
+
+// RemovePlanEntitlementIDs removes the "plan_entitlements" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *GroupUpdateOne) RemovePlanEntitlementIDs(ids ...int64) *GroupUpdateOne {
+	_u.mutation.RemovePlanEntitlementIDs(ids...)
+	return _u
+}
+
+// RemovePlanEntitlements removes "plan_entitlements" edges to SubscriptionPlanGroup entities.
+func (_u *GroupUpdateOne) RemovePlanEntitlements(v ...*SubscriptionPlanGroup) *GroupUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePlanEntitlementIDs(ids...)
 }
 
 // ClearUsageLogs clears all "usage_logs" edges to the UsageLog entity.
@@ -4398,6 +4516,51 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscriptiongroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PlanEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPlanEntitlementsIDs(); len(nodes) > 0 && !_u.mutation.PlanEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PlanEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.PlanEntitlementsTable,
+			Columns: []string{group.PlanEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

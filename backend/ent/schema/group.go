@@ -308,6 +308,7 @@ func (Group) Edges() []ent.Edge {
 		edge.To("redeem_codes", RedeemCode.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("subscription_entitlements", UserSubscriptionGroup.Type),
+		edge.To("plan_entitlements", SubscriptionPlanGroup.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.From("accounts", Account.Type).
 			Ref("groups").

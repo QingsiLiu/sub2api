@@ -154,6 +154,8 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeSubscriptionEntitlements holds the string denoting the subscription_entitlements edge name in mutations.
 	EdgeSubscriptionEntitlements = "subscription_entitlements"
+	// EdgePlanEntitlements holds the string denoting the plan_entitlements edge name in mutations.
+	EdgePlanEntitlements = "plan_entitlements"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
@@ -194,6 +196,13 @@ const (
 	SubscriptionEntitlementsInverseTable = "user_subscription_groups"
 	// SubscriptionEntitlementsColumn is the table column denoting the subscription_entitlements relation/edge.
 	SubscriptionEntitlementsColumn = "group_id"
+	// PlanEntitlementsTable is the table that holds the plan_entitlements relation/edge.
+	PlanEntitlementsTable = "subscription_plan_groups"
+	// PlanEntitlementsInverseTable is the table name for the SubscriptionPlanGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionplangroup" package.
+	PlanEntitlementsInverseTable = "subscription_plan_groups"
+	// PlanEntitlementsColumn is the table column denoting the plan_entitlements relation/edge.
+	PlanEntitlementsColumn = "group_id"
 	// UsageLogsTable is the table that holds the usage_logs relation/edge.
 	UsageLogsTable = "usage_logs"
 	// UsageLogsInverseTable is the table name for the UsageLog entity.
@@ -794,6 +803,20 @@ func BySubscriptionEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) Orde
 	}
 }
 
+// ByPlanEntitlementsCount orders the results by plan_entitlements count.
+func ByPlanEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPlanEntitlementsStep(), opts...)
+	}
+}
+
+// ByPlanEntitlements orders the results by plan_entitlements terms.
+func ByPlanEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPlanEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUsageLogsCount orders the results by usage_logs count.
 func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -889,6 +912,13 @@ func newSubscriptionEntitlementsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SubscriptionEntitlementsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionEntitlementsTable, SubscriptionEntitlementsColumn),
+	)
+}
+func newPlanEntitlementsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PlanEntitlementsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, PlanEntitlementsTable, PlanEntitlementsColumn),
 	)
 }
 func newUsageLogsStep() *sqlgraph.Step {

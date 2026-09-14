@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -37,6 +38,7 @@ type GroupQuery struct {
 	withRedeemCodes              *RedeemCodeQuery
 	withSubscriptions            *UserSubscriptionQuery
 	withSubscriptionEntitlements *UserSubscriptionGroupQuery
+	withPlanEntitlements         *SubscriptionPlanGroupQuery
 	withUsageLogs                *UsageLogQuery
 	withAccounts                 *AccountQuery
 	withAllowedUsers             *UserQuery
@@ -160,6 +162,28 @@ func (_q *GroupQuery) QuerySubscriptionEntitlements() *UserSubscriptionGroupQuer
 			sqlgraph.From(group.Table, group.FieldID, selector),
 			sqlgraph.To(usersubscriptiongroup.Table, usersubscriptiongroup.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.SubscriptionEntitlementsTable, group.SubscriptionEntitlementsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryPlanEntitlements chains the current query on the "plan_entitlements" edge.
+func (_q *GroupQuery) QueryPlanEntitlements() *SubscriptionPlanGroupQuery {
+	query := (&SubscriptionPlanGroupClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, selector),
+			sqlgraph.To(subscriptionplangroup.Table, subscriptionplangroup.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.PlanEntitlementsTable, group.PlanEntitlementsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -473,6 +497,7 @@ func (_q *GroupQuery) Clone() *GroupQuery {
 		withRedeemCodes:              _q.withRedeemCodes.Clone(),
 		withSubscriptions:            _q.withSubscriptions.Clone(),
 		withSubscriptionEntitlements: _q.withSubscriptionEntitlements.Clone(),
+		withPlanEntitlements:         _q.withPlanEntitlements.Clone(),
 		withUsageLogs:                _q.withUsageLogs.Clone(),
 		withAccounts:                 _q.withAccounts.Clone(),
 		withAllowedUsers:             _q.withAllowedUsers.Clone(),
@@ -525,6 +550,17 @@ func (_q *GroupQuery) WithSubscriptionEntitlements(opts ...func(*UserSubscriptio
 		opt(query)
 	}
 	_q.withSubscriptionEntitlements = query
+	return _q
+}
+
+// WithPlanEntitlements tells the query-builder to eager-load the nodes that are connected to
+// the "plan_entitlements" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *GroupQuery) WithPlanEntitlements(opts ...func(*SubscriptionPlanGroupQuery)) *GroupQuery {
+	query := (&SubscriptionPlanGroupClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withPlanEntitlements = query
 	return _q
 }
 
@@ -661,11 +697,12 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	var (
 		nodes       = []*Group{}
 		_spec       = _q.querySpec()
-		loadedTypes = [9]bool{
+		loadedTypes = [10]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
 			_q.withSubscriptionEntitlements != nil,
+			_q.withPlanEntitlements != nil,
 			_q.withUsageLogs != nil,
 			_q.withAccounts != nil,
 			_q.withAllowedUsers != nil,
@@ -720,6 +757,15 @@ func (_q *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 			func(n *Group) { n.Edges.SubscriptionEntitlements = []*UserSubscriptionGroup{} },
 			func(n *Group, e *UserSubscriptionGroup) {
 				n.Edges.SubscriptionEntitlements = append(n.Edges.SubscriptionEntitlements, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withPlanEntitlements; query != nil {
+		if err := _q.loadPlanEntitlements(ctx, query, nodes,
+			func(n *Group) { n.Edges.PlanEntitlements = []*SubscriptionPlanGroup{} },
+			func(n *Group, e *SubscriptionPlanGroup) {
+				n.Edges.PlanEntitlements = append(n.Edges.PlanEntitlements, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -873,6 +919,36 @@ func (_q *GroupQuery) loadSubscriptionEntitlements(ctx context.Context, query *U
 	}
 	query.Where(predicate.UserSubscriptionGroup(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(group.SubscriptionEntitlementsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GroupID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *GroupQuery) loadPlanEntitlements(ctx context.Context, query *SubscriptionPlanGroupQuery, nodes []*Group, init func(*Group), assign func(*Group, *SubscriptionPlanGroup)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*Group)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptionplangroup.FieldGroupID)
+	}
+	query.Where(predicate.SubscriptionPlanGroup(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(group.PlanEntitlementsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

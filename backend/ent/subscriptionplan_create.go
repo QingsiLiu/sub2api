@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 )
 
 // SubscriptionPlanCreate is the builder for creating a SubscriptionPlan entity.
@@ -192,6 +193,21 @@ func (_c *SubscriptionPlanCreate) SetNillableUpdatedAt(v *time.Time) *Subscripti
 		_c.SetUpdatedAt(*v)
 	}
 	return _c
+}
+
+// AddGroupEntitlementIDs adds the "group_entitlements" edge to the SubscriptionPlanGroup entity by IDs.
+func (_c *SubscriptionPlanCreate) AddGroupEntitlementIDs(ids ...int64) *SubscriptionPlanCreate {
+	_c.mutation.AddGroupEntitlementIDs(ids...)
+	return _c
+}
+
+// AddGroupEntitlements adds the "group_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_c *SubscriptionPlanCreate) AddGroupEntitlements(v ...*SubscriptionPlanGroup) *SubscriptionPlanCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGroupEntitlementIDs(ids...)
 }
 
 // Mutation returns the SubscriptionPlanMutation object of the builder.
@@ -414,6 +430,22 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if nodes := _c.mutation.GroupEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

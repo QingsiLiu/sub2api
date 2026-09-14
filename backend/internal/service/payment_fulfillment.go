@@ -16,6 +16,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -547,6 +548,22 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 				Notes:        orderNote,
 			}, true); err != nil {
 				return fmt.Errorf("assign subscription: %w", err)
+			}
+		}
+		// geili hook: link every group configured by the purchased plan to the
+		// same subscription row, preserving shared quota and expiry.
+		if o.PlanID != nil {
+			assigned, getErr := s.subscriptionSvc.userSubRepo.GetByUserIDAndGroupID(txCtx, o.UserID, groupID)
+			if getErr == nil && assigned != nil {
+				planGroups, queryErr := txClient.SubscriptionPlanGroup.Query().Where(subscriptionplangroup.SubscriptionPlanIDEQ(*o.PlanID)).All(txCtx)
+				if queryErr != nil {
+					return fmt.Errorf("load subscription plan groups: %w", queryErr)
+				}
+				for _, pg := range planGroups {
+					if _, saveErr := txClient.UserSubscriptionGroup.Create().SetUserSubscriptionID(assigned.ID).SetGroupID(pg.GroupID).Save(txCtx); saveErr != nil && !dbent.IsConstraintError(saveErr) {
+						return fmt.Errorf("assign bundled subscription group: %w", saveErr)
+					}
+				}
 			}
 		}
 

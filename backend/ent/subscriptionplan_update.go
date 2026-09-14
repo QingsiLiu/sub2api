@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 )
 
 // SubscriptionPlanUpdate is the builder for updating SubscriptionPlan entities.
@@ -243,9 +244,45 @@ func (_u *SubscriptionPlanUpdate) SetUpdatedAt(v time.Time) *SubscriptionPlanUpd
 	return _u
 }
 
+// AddGroupEntitlementIDs adds the "group_entitlements" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *SubscriptionPlanUpdate) AddGroupEntitlementIDs(ids ...int64) *SubscriptionPlanUpdate {
+	_u.mutation.AddGroupEntitlementIDs(ids...)
+	return _u
+}
+
+// AddGroupEntitlements adds the "group_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdate) AddGroupEntitlements(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGroupEntitlementIDs(ids...)
+}
+
 // Mutation returns the SubscriptionPlanMutation object of the builder.
 func (_u *SubscriptionPlanUpdate) Mutation() *SubscriptionPlanMutation {
 	return _u.mutation
+}
+
+// ClearGroupEntitlements clears all "group_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdate) ClearGroupEntitlements() *SubscriptionPlanUpdate {
+	_u.mutation.ClearGroupEntitlements()
+	return _u
+}
+
+// RemoveGroupEntitlementIDs removes the "group_entitlements" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *SubscriptionPlanUpdate) RemoveGroupEntitlementIDs(ids ...int64) *SubscriptionPlanUpdate {
+	_u.mutation.RemoveGroupEntitlementIDs(ids...)
+	return _u
+}
+
+// RemoveGroupEntitlements removes "group_entitlements" edges to SubscriptionPlanGroup entities.
+func (_u *SubscriptionPlanUpdate) RemoveGroupEntitlements(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGroupEntitlementIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -377,6 +414,51 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGroupEntitlementsIDs(); len(nodes) > 0 && !_u.mutation.GroupEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -613,9 +695,45 @@ func (_u *SubscriptionPlanUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionPlan
 	return _u
 }
 
+// AddGroupEntitlementIDs adds the "group_entitlements" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *SubscriptionPlanUpdateOne) AddGroupEntitlementIDs(ids ...int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddGroupEntitlementIDs(ids...)
+	return _u
+}
+
+// AddGroupEntitlements adds the "group_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdateOne) AddGroupEntitlements(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGroupEntitlementIDs(ids...)
+}
+
 // Mutation returns the SubscriptionPlanMutation object of the builder.
 func (_u *SubscriptionPlanUpdateOne) Mutation() *SubscriptionPlanMutation {
 	return _u.mutation
+}
+
+// ClearGroupEntitlements clears all "group_entitlements" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdateOne) ClearGroupEntitlements() *SubscriptionPlanUpdateOne {
+	_u.mutation.ClearGroupEntitlements()
+	return _u
+}
+
+// RemoveGroupEntitlementIDs removes the "group_entitlements" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *SubscriptionPlanUpdateOne) RemoveGroupEntitlementIDs(ids ...int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.RemoveGroupEntitlementIDs(ids...)
+	return _u
+}
+
+// RemoveGroupEntitlements removes "group_entitlements" edges to SubscriptionPlanGroup entities.
+func (_u *SubscriptionPlanUpdateOne) RemoveGroupEntitlements(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGroupEntitlementIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionPlanUpdate builder.
@@ -777,6 +895,51 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGroupEntitlementsIDs(); len(nodes) > 0 && !_u.mutation.GroupEntitlementsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupEntitlementsTable,
+			Columns: []string{subscriptionplan.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SubscriptionPlan{config: _u.config}
 	_spec.Assign = _node.assignValues

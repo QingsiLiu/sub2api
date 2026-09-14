@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -41,8 +42,17 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// EdgeGroupEntitlements holds the string denoting the group_entitlements edge name in mutations.
+	EdgeGroupEntitlements = "group_entitlements"
 	// Table holds the table name of the subscriptionplan in the database.
 	Table = "subscription_plans"
+	// GroupEntitlementsTable is the table that holds the group_entitlements relation/edge.
+	GroupEntitlementsTable = "subscription_plan_groups"
+	// GroupEntitlementsInverseTable is the table name for the SubscriptionPlanGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionplangroup" package.
+	GroupEntitlementsInverseTable = "subscription_plan_groups"
+	// GroupEntitlementsColumn is the table column denoting the group_entitlements relation/edge.
+	GroupEntitlementsColumn = "subscription_plan_id"
 )
 
 // Columns holds all SQL columns for subscriptionplan fields.
@@ -183,4 +193,25 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByGroupEntitlementsCount orders the results by group_entitlements count.
+func ByGroupEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newGroupEntitlementsStep(), opts...)
+	}
+}
+
+// ByGroupEntitlements orders the results by group_entitlements terms.
+func ByGroupEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newGroupEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newGroupEntitlementsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(GroupEntitlementsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, GroupEntitlementsTable, GroupEntitlementsColumn),
+	)
 }
