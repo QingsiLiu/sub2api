@@ -20,6 +20,34 @@ html[data-geili-ui] {
   --geili-ui: 1;
 }
 
+/* Signal Observatory layout: a continuous instrument canvas instead of a
+ * collection of floating cards. Keep selectors scoped so upstream pages stay
+ * structurally compatible while sharing one visual rhythm. */
+.signal-shell {
+  background: rgb(var(--geili-neutral-50));
+  color: rgb(var(--geili-text));
+}
+
+.signal-main {
+  background: rgb(var(--geili-surface));
+}
+
+.signal-canvas {
+  min-height: calc(100vh - 56px);
+  max-width: 1920px;
+  margin: 0 auto;
+}
+
+.dark .signal-shell,
+.dark .signal-main {
+  background-color: rgb(var(--geili-surface));
+  color: rgb(var(--geili-text));
+}
+
+.dark .signal-main {
+  background: rgb(var(--geili-surface));
+}
+
 @layer components {
   /* ============ 按钮：实色矩形，零阴影零渐变 ============ */
   .btn {
