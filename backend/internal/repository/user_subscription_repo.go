@@ -10,12 +10,31 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
 type userSubscriptionRepository struct {
 	client *dbent.Client
+}
+
+// GetActiveByUserIDAndEntitledGroupID resolves a shared subscription through
+// the Geili entitlement table while keeping the legacy repository contract.
+func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
+	client := clientFromContext(ctx, r.client)
+	link, err := client.UserSubscriptionGroup.Query().
+		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID))).
+		WithSubscription().
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	}
+	sub := link.Edges.Subscription
+	if sub == nil || sub.Status != service.SubscriptionStatusActive || !sub.ExpiresAt.After(time.Now()) {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	return userSubscriptionEntityToService(sub), nil
 }
 
 func NewUserSubscriptionRepository(client *dbent.Client) service.UserSubscriptionRepository {

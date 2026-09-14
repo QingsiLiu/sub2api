@@ -741,6 +741,15 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	// singleflight 防止并发击穿
 	value, err, _ := s.subCacheGroup.Do(key, func() (any, error) {
 		sub, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
+		// geili hook: resolve additional group entitlements only when the legacy
+		// single-group lookup misses; the upstream path remains unchanged.
+		if err != nil {
+			if resolver, ok := s.userSubRepo.(interface {
+				GetActiveByUserIDAndEntitledGroupID(context.Context, int64, int64) (*UserSubscription, error)
+			}); ok {
+				sub, err = resolver.GetActiveByUserIDAndEntitledGroupID(ctx, userID, groupID)
+			}
+		}
 		if err != nil {
 			return nil, err // 直接透传 repo 已翻译的错误（NotFound → ErrSubscriptionNotFound，其他错误原样返回）
 		}

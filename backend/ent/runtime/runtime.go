@@ -45,6 +45,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
@@ -2474,6 +2475,12 @@ func init() {
 	usersubscriptionDescAssignedAt := usersubscriptionFields[12].Descriptor()
 	// usersubscription.DefaultAssignedAt holds the default value on creation for the assigned_at field.
 	usersubscription.DefaultAssignedAt = usersubscriptionDescAssignedAt.Default.(func() time.Time)
+	usersubscriptiongroupFields := schema.UserSubscriptionGroup{}.Fields()
+	_ = usersubscriptiongroupFields
+	// usersubscriptiongroupDescCreatedAt is the schema descriptor for created_at field.
+	usersubscriptiongroupDescCreatedAt := usersubscriptiongroupFields[2].Descriptor()
+	// usersubscriptiongroup.DefaultCreatedAt holds the default value on creation for the created_at field.
+	usersubscriptiongroup.DefaultCreatedAt = usersubscriptiongroupDescCreatedAt.Default.(func() time.Time)
 }
 
 const (

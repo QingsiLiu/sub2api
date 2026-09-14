@@ -2719,6 +2719,29 @@ func HasSubscriptionsWith(preds ...predicate.UserSubscription) predicate.Group {
 	})
 }
 
+// HasSubscriptionEntitlements applies the HasEdge predicate on the "subscription_entitlements" edge.
+func HasSubscriptionEntitlements() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionEntitlementsTable, SubscriptionEntitlementsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionEntitlementsWith applies the HasEdge predicate on the "subscription_entitlements" edge with a given conditions (other predicates).
+func HasSubscriptionEntitlementsWith(preds ...predicate.UserSubscriptionGroup) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSubscriptionEntitlementsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUsageLogs applies the HasEdge predicate on the "usage_logs" edge.
 func HasUsageLogs() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {

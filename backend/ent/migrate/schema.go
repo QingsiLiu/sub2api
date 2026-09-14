@@ -2085,6 +2085,45 @@ var (
 			},
 		},
 	}
+	// UserSubscriptionGroupsColumns holds the columns for the "user_subscription_groups" table.
+	UserSubscriptionGroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "user_subscription_id", Type: field.TypeInt64},
+	}
+	// UserSubscriptionGroupsTable holds the schema information for the "user_subscription_groups" table.
+	UserSubscriptionGroupsTable = &schema.Table{
+		Name:       "user_subscription_groups",
+		Columns:    UserSubscriptionGroupsColumns,
+		PrimaryKey: []*schema.Column{UserSubscriptionGroupsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_subscription_groups_groups_subscription_entitlements",
+				Columns:    []*schema.Column{UserSubscriptionGroupsColumns[2]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "user_subscription_groups_user_subscriptions_group_entitlements",
+				Columns:    []*schema.Column{UserSubscriptionGroupsColumns[3]},
+				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usersubscriptiongroup_user_subscription_id_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{UserSubscriptionGroupsColumns[3], UserSubscriptionGroupsColumns[2]},
+			},
+			{
+				Name:    "usersubscriptiongroup_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserSubscriptionGroupsColumns[2]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		APIKeysTable,
@@ -2126,6 +2165,7 @@ var (
 		UserAttributeValuesTable,
 		UserPlatformQuotasTable,
 		UserSubscriptionsTable,
+		UserSubscriptionGroupsTable,
 	}
 )
 
@@ -2282,5 +2322,10 @@ func init() {
 	UserSubscriptionsTable.ForeignKeys[2].RefTable = UsersTable
 	UserSubscriptionsTable.Annotation = &entsql.Annotation{
 		Table: "user_subscriptions",
+	}
+	UserSubscriptionGroupsTable.ForeignKeys[0].RefTable = GroupsTable
+	UserSubscriptionGroupsTable.ForeignKeys[1].RefTable = UserSubscriptionsTable
+	UserSubscriptionGroupsTable.Annotation = &entsql.Annotation{
+		Table: "user_subscription_groups",
 	}
 }

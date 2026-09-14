@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 )
 
 // UserSubscriptionCreate is the builder for creating a UserSubscription entity.
@@ -273,6 +274,21 @@ func (_c *UserSubscriptionCreate) AddUsageLogs(v ...*UsageLog) *UserSubscription
 		ids[i] = v[i].ID
 	}
 	return _c.AddUsageLogIDs(ids...)
+}
+
+// AddGroupEntitlementIDs adds the "group_entitlements" edge to the UserSubscriptionGroup entity by IDs.
+func (_c *UserSubscriptionCreate) AddGroupEntitlementIDs(ids ...int64) *UserSubscriptionCreate {
+	_c.mutation.AddGroupEntitlementIDs(ids...)
+	return _c
+}
+
+// AddGroupEntitlements adds the "group_entitlements" edges to the UserSubscriptionGroup entity.
+func (_c *UserSubscriptionCreate) AddGroupEntitlements(v ...*UserSubscriptionGroup) *UserSubscriptionCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGroupEntitlementIDs(ids...)
 }
 
 // Mutation returns the UserSubscriptionMutation object of the builder.
@@ -541,6 +557,22 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.GroupEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usersubscription.GroupEntitlementsTable,
+			Columns: []string{usersubscription.GroupEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usersubscriptiongroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

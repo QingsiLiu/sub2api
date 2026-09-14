@@ -57,6 +57,8 @@ const (
 	EdgeAssignedByUser = "assigned_by_user"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeGroupEntitlements holds the string denoting the group_entitlements edge name in mutations.
+	EdgeGroupEntitlements = "group_entitlements"
 	// Table holds the table name of the usersubscription in the database.
 	Table = "user_subscriptions"
 	// UserTable is the table that holds the user relation/edge.
@@ -87,6 +89,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "subscription_id"
+	// GroupEntitlementsTable is the table that holds the group_entitlements relation/edge.
+	GroupEntitlementsTable = "user_subscription_groups"
+	// GroupEntitlementsInverseTable is the table name for the UserSubscriptionGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "usersubscriptiongroup" package.
+	GroupEntitlementsInverseTable = "user_subscription_groups"
+	// GroupEntitlementsColumn is the table column denoting the group_entitlements relation/edge.
+	GroupEntitlementsColumn = "user_subscription_id"
 )
 
 // Columns holds all SQL columns for usersubscription fields.
@@ -276,6 +285,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByGroupEntitlementsCount orders the results by group_entitlements count.
+func ByGroupEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newGroupEntitlementsStep(), opts...)
+	}
+}
+
+// ByGroupEntitlements orders the results by group_entitlements terms.
+func ByGroupEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newGroupEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -302,5 +325,12 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newGroupEntitlementsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(GroupEntitlementsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, GroupEntitlementsTable, GroupEntitlementsColumn),
 	)
 }

@@ -54,6 +54,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 
 	stdsql "database/sql"
 )
@@ -141,6 +142,8 @@ type Client struct {
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
+	// UserSubscriptionGroup is the client for interacting with the UserSubscriptionGroup builders.
+	UserSubscriptionGroup *UserSubscriptionGroupClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -191,6 +194,7 @@ func (c *Client) init() {
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
 	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
+	c.UserSubscriptionGroup = NewUserSubscriptionGroupClient(c.config)
 }
 
 type (
@@ -322,6 +326,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
+		UserSubscriptionGroup:         NewUserSubscriptionGroupClient(cfg),
 	}, nil
 }
 
@@ -380,6 +385,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
 		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
+		UserSubscriptionGroup:         NewUserSubscriptionGroupClient(cfg),
 	}, nil
 }
 
@@ -419,7 +425,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
 		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserPlatformQuota, c.UserSubscription, c.UserSubscriptionGroup,
 	} {
 		n.Use(hooks...)
 	}
@@ -439,7 +445,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
 		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserPlatformQuota, c.UserSubscription, c.UserSubscriptionGroup,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -526,6 +532,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserPlatformQuota.mutate(ctx, m)
 	case *UserSubscriptionMutation:
 		return c.UserSubscription.mutate(ctx, m)
+	case *UserSubscriptionGroupMutation:
+		return c.UserSubscriptionGroup.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -3165,6 +3173,22 @@ func (c *GroupClient) QuerySubscriptions(_m *Group) *UserSubscriptionQuery {
 			sqlgraph.From(group.Table, group.FieldID, id),
 			sqlgraph.To(usersubscription.Table, usersubscription.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.SubscriptionsTable, group.SubscriptionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySubscriptionEntitlements queries the subscription_entitlements edge of a Group.
+func (c *GroupClient) QuerySubscriptionEntitlements(_m *Group) *UserSubscriptionGroupQuery {
+	query := (&UserSubscriptionGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(usersubscriptiongroup.Table, usersubscriptiongroup.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.SubscriptionEntitlementsTable, group.SubscriptionEntitlementsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6795,6 +6819,22 @@ func (c *UserSubscriptionClient) QueryUsageLogs(_m *UserSubscription) *UsageLogQ
 	return query
 }
 
+// QueryGroupEntitlements queries the group_entitlements edge of a UserSubscription.
+func (c *UserSubscriptionClient) QueryGroupEntitlements(_m *UserSubscription) *UserSubscriptionGroupQuery {
+	query := (&UserSubscriptionGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, id),
+			sqlgraph.To(usersubscriptiongroup.Table, usersubscriptiongroup.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.GroupEntitlementsTable, usersubscription.GroupEntitlementsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserSubscriptionClient) Hooks() []Hook {
 	hooks := c.hooks.UserSubscription
@@ -6822,6 +6862,171 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 	}
 }
 
+// UserSubscriptionGroupClient is a client for the UserSubscriptionGroup schema.
+type UserSubscriptionGroupClient struct {
+	config
+}
+
+// NewUserSubscriptionGroupClient returns a client for the UserSubscriptionGroup from the given config.
+func NewUserSubscriptionGroupClient(c config) *UserSubscriptionGroupClient {
+	return &UserSubscriptionGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usersubscriptiongroup.Hooks(f(g(h())))`.
+func (c *UserSubscriptionGroupClient) Use(hooks ...Hook) {
+	c.hooks.UserSubscriptionGroup = append(c.hooks.UserSubscriptionGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usersubscriptiongroup.Intercept(f(g(h())))`.
+func (c *UserSubscriptionGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserSubscriptionGroup = append(c.inters.UserSubscriptionGroup, interceptors...)
+}
+
+// Create returns a builder for creating a UserSubscriptionGroup entity.
+func (c *UserSubscriptionGroupClient) Create() *UserSubscriptionGroupCreate {
+	mutation := newUserSubscriptionGroupMutation(c.config, OpCreate)
+	return &UserSubscriptionGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserSubscriptionGroup entities.
+func (c *UserSubscriptionGroupClient) CreateBulk(builders ...*UserSubscriptionGroupCreate) *UserSubscriptionGroupCreateBulk {
+	return &UserSubscriptionGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserSubscriptionGroupClient) MapCreateBulk(slice any, setFunc func(*UserSubscriptionGroupCreate, int)) *UserSubscriptionGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserSubscriptionGroupCreateBulk{err: fmt.Errorf("calling to UserSubscriptionGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserSubscriptionGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserSubscriptionGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserSubscriptionGroup.
+func (c *UserSubscriptionGroupClient) Update() *UserSubscriptionGroupUpdate {
+	mutation := newUserSubscriptionGroupMutation(c.config, OpUpdate)
+	return &UserSubscriptionGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserSubscriptionGroupClient) UpdateOne(_m *UserSubscriptionGroup) *UserSubscriptionGroupUpdateOne {
+	mutation := newUserSubscriptionGroupMutation(c.config, OpUpdateOne, withUserSubscriptionGroup(_m))
+	return &UserSubscriptionGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserSubscriptionGroupClient) UpdateOneID(id int64) *UserSubscriptionGroupUpdateOne {
+	mutation := newUserSubscriptionGroupMutation(c.config, OpUpdateOne, withUserSubscriptionGroupID(id))
+	return &UserSubscriptionGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserSubscriptionGroup.
+func (c *UserSubscriptionGroupClient) Delete() *UserSubscriptionGroupDelete {
+	mutation := newUserSubscriptionGroupMutation(c.config, OpDelete)
+	return &UserSubscriptionGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserSubscriptionGroupClient) DeleteOne(_m *UserSubscriptionGroup) *UserSubscriptionGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserSubscriptionGroupClient) DeleteOneID(id int64) *UserSubscriptionGroupDeleteOne {
+	builder := c.Delete().Where(usersubscriptiongroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserSubscriptionGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for UserSubscriptionGroup.
+func (c *UserSubscriptionGroupClient) Query() *UserSubscriptionGroupQuery {
+	return &UserSubscriptionGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserSubscriptionGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserSubscriptionGroup entity by its id.
+func (c *UserSubscriptionGroupClient) Get(ctx context.Context, id int64) (*UserSubscriptionGroup, error) {
+	return c.Query().Where(usersubscriptiongroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserSubscriptionGroupClient) GetX(ctx context.Context, id int64) *UserSubscriptionGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySubscription queries the subscription edge of a UserSubscriptionGroup.
+func (c *UserSubscriptionGroupClient) QuerySubscription(_m *UserSubscriptionGroup) *UserSubscriptionQuery {
+	query := (&UserSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscriptiongroup.Table, usersubscriptiongroup.FieldID, id),
+			sqlgraph.To(usersubscription.Table, usersubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usersubscriptiongroup.SubscriptionTable, usersubscriptiongroup.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a UserSubscriptionGroup.
+func (c *UserSubscriptionGroupClient) QueryGroup(_m *UserSubscriptionGroup) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscriptiongroup.Table, usersubscriptiongroup.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, usersubscriptiongroup.GroupTable, usersubscriptiongroup.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserSubscriptionGroupClient) Hooks() []Hook {
+	return c.hooks.UserSubscriptionGroup
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserSubscriptionGroupClient) Interceptors() []Interceptor {
+	return c.inters.UserSubscriptionGroup
+}
+
+func (c *UserSubscriptionGroupClient) mutate(ctx context.Context, m *UserSubscriptionGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserSubscriptionGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserSubscriptionGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserSubscriptionGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserSubscriptionGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserSubscriptionGroup mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
@@ -6834,7 +7039,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		UserSubscription, UserSubscriptionGroup []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6846,7 +7051,7 @@ type (
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		UserSubscription, UserSubscriptionGroup []ent.Interceptor
 	}
 )
 

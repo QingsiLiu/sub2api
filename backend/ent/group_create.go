@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
@@ -937,6 +938,21 @@ func (_c *GroupCreate) AddSubscriptions(v ...*UserSubscription) *GroupCreate {
 	return _c.AddSubscriptionIDs(ids...)
 }
 
+// AddSubscriptionEntitlementIDs adds the "subscription_entitlements" edge to the UserSubscriptionGroup entity by IDs.
+func (_c *GroupCreate) AddSubscriptionEntitlementIDs(ids ...int64) *GroupCreate {
+	_c.mutation.AddSubscriptionEntitlementIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionEntitlements adds the "subscription_entitlements" edges to the UserSubscriptionGroup entity.
+func (_c *GroupCreate) AddSubscriptionEntitlements(v ...*UserSubscriptionGroup) *GroupCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionEntitlementIDs(ids...)
+}
+
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_c *GroupCreate) AddUsageLogIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddUsageLogIDs(ids...)
@@ -1725,6 +1741,22 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usersubscription.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.SubscriptionEntitlementsTable,
+			Columns: []string{group.SubscriptionEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usersubscriptiongroup.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

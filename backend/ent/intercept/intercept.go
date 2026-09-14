@@ -48,6 +48,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 )
 
 // The Query interface represents an operation that queries a graph.
@@ -1159,6 +1160,33 @@ func (f TraverseUserSubscription) Traverse(ctx context.Context, q ent.Query) err
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserSubscriptionQuery", q)
 }
 
+// The UserSubscriptionGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserSubscriptionGroupFunc func(context.Context, *ent.UserSubscriptionGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserSubscriptionGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserSubscriptionGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserSubscriptionGroupQuery", q)
+}
+
+// The TraverseUserSubscriptionGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserSubscriptionGroup func(context.Context, *ent.UserSubscriptionGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserSubscriptionGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserSubscriptionGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserSubscriptionGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserSubscriptionGroupQuery", q)
+}
+
 // NewQuery returns the generic Query interface for the given typed query.
 func NewQuery(q ent.Query) (Query, error) {
 	switch q := q.(type) {
@@ -1240,6 +1268,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserPlatformQuotaQuery, predicate.UserPlatformQuota, userplatformquota.OrderOption]{typ: ent.TypeUserPlatformQuota, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
+	case *ent.UserSubscriptionGroupQuery:
+		return &query[*ent.UserSubscriptionGroupQuery, predicate.UserSubscriptionGroup, usersubscriptiongroup.OrderOption]{typ: ent.TypeUserSubscriptionGroup, tq: q}, nil
 	default:
 		return nil, fmt.Errorf("unknown query type %T", q)
 	}
