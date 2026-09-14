@@ -597,6 +597,7 @@ export default {
       tabUserSubs: 'User Subscriptions',
       selectGroup: 'Select a group',
       groupRequired: 'Please select a subscription group',
+      includedGroups: 'Included groups',
       priceRequired: 'Price must be greater than 0',
       validityRequired: 'Validity must be greater than 0',
       groupMissing: 'Missing',

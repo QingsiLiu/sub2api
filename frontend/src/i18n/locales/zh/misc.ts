@@ -621,6 +621,7 @@ export default {
       tabUserSubs: '用户订阅',
       selectGroup: '请选择分组',
       groupRequired: '请选择订阅分组',
+      includedGroups: '套餐包含分组',
       priceRequired: '价格必须大于 0',
       validityRequired: '有效期必须大于 0',
       groupMissing: '缺失',
