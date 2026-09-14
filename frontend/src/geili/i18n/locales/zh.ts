@@ -1,6 +1,6 @@
 /**
  * Geili 中文词条。全部挂在 `geili` 命名空间下，与上游词条永不冲突。
- * 上游词条继续用 `t('dashboard.title')`；Geili 自有组件用 `t('geili.xxx')`。
+ * 上游词条继续使用 dashboard 命名空间；Geili 自有组件使用 geili 命名空间。
  */
 export default {
   geili: {
