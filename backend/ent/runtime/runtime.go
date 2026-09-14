@@ -1893,7 +1893,7 @@ func init() {
 	subscriptionplangroupFields := schema.SubscriptionPlanGroup{}.Fields()
 	_ = subscriptionplangroupFields
 	// subscriptionplangroupDescCreatedAt is the schema descriptor for created_at field.
-	subscriptionplangroupDescCreatedAt := subscriptionplangroupFields[2].Descriptor()
+	subscriptionplangroupDescCreatedAt := subscriptionplangroupFields[3].Descriptor()
 	// subscriptionplangroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	subscriptionplangroup.DefaultCreatedAt = subscriptionplangroupDescCreatedAt.Default.(func() time.Time)
 	tlsfingerprintprofileMixin := schema.TLSFingerprintProfile{}.Mixin()
@@ -2485,7 +2485,7 @@ func init() {
 	usersubscriptiongroupFields := schema.UserSubscriptionGroup{}.Fields()
 	_ = usersubscriptiongroupFields
 	// usersubscriptiongroupDescCreatedAt is the schema descriptor for created_at field.
-	usersubscriptiongroupDescCreatedAt := usersubscriptiongroupFields[2].Descriptor()
+	usersubscriptiongroupDescCreatedAt := usersubscriptiongroupFields[3].Descriptor()
 	// usersubscriptiongroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	usersubscriptiongroup.DefaultCreatedAt = usersubscriptiongroupDescCreatedAt.Default.(func() time.Time)
 }

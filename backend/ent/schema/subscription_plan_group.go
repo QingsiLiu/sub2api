@@ -20,6 +20,7 @@ func (SubscriptionPlanGroup) Annotations() []schema.Annotation {
 }
 func (SubscriptionPlanGroup) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int64("id").Immutable().Unique(),
 		field.Int64("subscription_plan_id"), field.Int64("group_id"),
 		field.Time("created_at").Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 	}

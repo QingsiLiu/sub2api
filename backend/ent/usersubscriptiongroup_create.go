@@ -50,6 +50,12 @@ func (_c *UserSubscriptionGroupCreate) SetNillableCreatedAt(v *time.Time) *UserS
 	return _c
 }
 
+// SetID sets the "id" field.
+func (_c *UserSubscriptionGroupCreate) SetID(v int64) *UserSubscriptionGroupCreate {
+	_c.mutation.SetID(v)
+	return _c
+}
+
 // SetSubscriptionID sets the "subscription" edge to the UserSubscription entity by ID.
 func (_c *UserSubscriptionGroupCreate) SetSubscriptionID(id int64) *UserSubscriptionGroupCreate {
 	_c.mutation.SetSubscriptionID(id)
@@ -138,8 +144,10 @@ func (_c *UserSubscriptionGroupCreate) sqlSave(ctx context.Context) (*UserSubscr
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int64(id)
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
+	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
 	return _node, nil
@@ -151,6 +159,10 @@ func (_c *UserSubscriptionGroupCreate) createSpec() (*UserSubscriptionGroup, *sq
 		_spec = sqlgraph.NewCreateSpec(usersubscriptiongroup.Table, sqlgraph.NewFieldSpec(usersubscriptiongroup.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
+	if id, ok := _c.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(usersubscriptiongroup.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -277,16 +289,24 @@ func (u *UserSubscriptionGroupUpsert) UpdateCreatedAt() *UserSubscriptionGroupUp
 	return u
 }
 
-// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
 // Using this option is equivalent to using:
 //
 //	client.UserSubscriptionGroup.Create().
 //		OnConflict(
 //			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(usersubscriptiongroup.FieldID)
+//			}),
 //		).
 //		Exec(ctx)
 func (u *UserSubscriptionGroupUpsertOne) UpdateNewValues() *UserSubscriptionGroupUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(usersubscriptiongroup.FieldID)
+		}
+	}))
 	return u
 }
 
@@ -439,7 +459,7 @@ func (_c *UserSubscriptionGroupCreateBulk) Save(ctx context.Context) ([]*UserSub
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int64(id)
 				}
@@ -529,10 +549,20 @@ type UserSubscriptionGroupUpsertBulk struct {
 //	client.UserSubscriptionGroup.Create().
 //		OnConflict(
 //			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(usersubscriptiongroup.FieldID)
+//			}),
 //		).
 //		Exec(ctx)
 func (u *UserSubscriptionGroupUpsertBulk) UpdateNewValues() *UserSubscriptionGroupUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(usersubscriptiongroup.FieldID)
+			}
+		}
+	}))
 	return u
 }
 

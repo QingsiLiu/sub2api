@@ -7,9 +7,9 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"entgo.io/ent/schema/edge"
 )
 
 // UserSubscriptionGroup maps one shared subscription to an entitled group.
@@ -22,6 +22,7 @@ func (UserSubscriptionGroup) Annotations() []schema.Annotation {
 
 func (UserSubscriptionGroup) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int64("id").Immutable().Unique(),
 		field.Int64("user_subscription_id"),
 		field.Int64("group_id"),
 		field.Time("created_at").Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
