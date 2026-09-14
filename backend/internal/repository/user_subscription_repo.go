@@ -95,6 +95,7 @@ func (r *userSubscriptionRepository) GetByID(ctx context.Context, id int64) (*se
 		Where(usersubscription.IDEQ(id)).
 		WithUser().
 		WithGroup().
+		WithGroupEntitlements().
 		WithAssignedByUser().
 		Only(ctx)
 	if err != nil {
@@ -122,6 +123,7 @@ func (r *userSubscriptionRepository) GetByIDIncludeDeleted(ctx context.Context, 
 		Where(usersubscription.IDEQ(id)).
 		WithUser().
 		WithGroup().
+		WithGroupEntitlements().
 		WithAssignedByUser().
 		Only(queryCtx)
 	if err != nil {
@@ -696,6 +698,12 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 	}
 	if m.Edges.AssignedByUser != nil {
 		out.AssignedByUser = userEntityToService(m.Edges.AssignedByUser)
+	}
+	for _, entitlement := range m.Edges.GroupEntitlements {
+		out.EntitledGroupIDs = append(out.EntitledGroupIDs, entitlement.GroupID)
+	}
+	if len(out.EntitledGroupIDs) == 0 {
+		out.EntitledGroupIDs = []int64{out.GroupID}
 	}
 	return out
 }

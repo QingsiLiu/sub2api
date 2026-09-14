@@ -842,6 +842,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		ID:                 sub.ID,
 		UserID:             sub.UserID,
 		GroupID:            sub.GroupID,
+		EntitledGroupIDs:   append([]int64(nil), sub.EntitledGroupIDs...),
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,
