@@ -111,6 +111,8 @@ export interface PaymentOrder {
 export interface SubscriptionPlan {
   id: number
   group_id: number
+  /** Groups entitled by the plan; group_id remains the legacy primary group. */
+  group_ids?: number[]
   group_platform?: string
   group_name?: string
   rate_multiplier?: number

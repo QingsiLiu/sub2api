@@ -671,6 +671,8 @@ export type CompositeRouteSource = 'route' | 'detector' | string
 export interface CompositeModelRoute {
   id: number
   group_id: number
+  /** All groups covered by this shared subscription; absent on legacy responses. */
+  entitled_group_ids?: number[]
   public_model: string
   match_type: CompositeRouteMatchType
   target_platform: Exclude<GroupPlatform, 'composite'>
