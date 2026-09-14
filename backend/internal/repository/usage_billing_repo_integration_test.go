@@ -128,6 +128,26 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
+func TestUserSubscriptionEntitlement_ResolvesSameSubscriptionForBundledGroups(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUserSubscriptionRepository(client)
+	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("entitlement-user-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash"})
+	primary := mustCreateGroup(t, client, &service.Group{Name: "entitlement-primary-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
+	secondary := mustCreateGroup(t, client, &service.Group{Name: "entitlement-secondary-" + uuid.NewString(), Platform: "xai", SubscriptionType: service.SubscriptionTypeSubscription})
+	sub := mustCreateSubscription(t, client, &service.UserSubscription{UserID: user.ID, GroupID: primary.ID})
+	_, err := client.UserSubscriptionGroup.Create().SetUserSubscriptionID(sub.ID).SetGroupID(primary.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.UserSubscriptionGroup.Create().SetUserSubscriptionID(sub.ID).SetGroupID(secondary.ID).Save(ctx)
+	require.NoError(t, err)
+
+	primarySub, err := repo.GetActiveByUserIDAndGroupID(ctx, user.ID, primary.ID)
+	require.NoError(t, err)
+	secondarySub, err := repo.(*userSubscriptionRepository).GetActiveByUserIDAndEntitledGroupID(ctx, user.ID, secondary.ID)
+	require.NoError(t, err)
+	require.Equal(t, primarySub.ID, secondarySub.ID)
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
