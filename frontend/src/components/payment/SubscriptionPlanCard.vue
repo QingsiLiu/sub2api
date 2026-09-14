@@ -130,7 +130,9 @@ const { t } = useI18n()
 
 const platform = computed(() => props.plan.group_platform || '')
 const isRenewal = computed(() =>
-  props.activeSubscriptions?.some(s => s.group_id === props.plan.group_id && s.status === 'active') ?? false
+  props.activeSubscriptions?.some(s =>
+    s.status === 'active' && (s.group_id === props.plan.group_id || s.entitled_group_ids?.includes(props.plan.group_id)),
+  ) ?? false
 )
 
 // Derived color classes from central config

@@ -116,6 +116,7 @@ export default {
     noActiveSubscriptions: 'No Active Subscriptions',
     noActiveSubscriptionsDesc:
       "You don't have any active subscriptions. Contact administrator to get one.",
+    includedGroups: 'Included groups',
     failedToLoad: 'Failed to load subscriptions',
     status: {
       active: 'Active',
