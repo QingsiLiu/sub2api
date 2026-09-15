@@ -39,12 +39,10 @@
   --geili-neutral-100: 246 246 245;
   --geili-neutral-200: 240 240 238;
   --geili-neutral-300: 232 232 230;
-  /* Text-facing gray steps are intentionally darker than the original draft.
-   * The previous 154/154/150 label color failed normal-text contrast on white. */
-  --geili-neutral-400: 142 142 138;
-  --geili-neutral-500: 112 112 108;
-  --geili-neutral-600: 82 82 79;
-  --geili-neutral-700: 56 56 53;
+  --geili-neutral-400: 201 201 197;
+  --geili-neutral-500: 154 154 150;
+  --geili-neutral-600: 110 110 107;
+  --geili-neutral-700: 74 74 71;
   --geili-neutral-800: 46 46 44;
   --geili-neutral-900: 26 26 25;
   --geili-neutral-950: 14 14 13;
@@ -120,8 +118,8 @@
   --geili-hairline: var(--geili-neutral-300); /* 分割线 #E8E8E6 */
   --geili-hairline-soft: var(--geili-neutral-200); /* 更弱的分割 #F0F0EE */
   --geili-text: var(--geili-primary-600); /* 正文 #111111 */
-  --geili-text-secondary: var(--geili-neutral-600); /* 次级文字，满足浅色对比度 */
-  --geili-text-label: var(--geili-neutral-600); /* 标签文字不使用低对比度灰 */
+  --geili-text-secondary: var(--geili-neutral-600); /* 次级 #6E6E6B */
+  --geili-text-label: var(--geili-neutral-500); /* 标签灰 #9A9A96 */
   --geili-on-accent: var(--geili-neutral-50); /* 主按钮上的文字 */
 
   /* ============ 形状与节奏 ============ */
