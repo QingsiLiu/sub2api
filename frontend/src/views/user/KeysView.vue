@@ -580,6 +580,22 @@
           </Select>
         </div>
 
+        <div v-if="selectedFormGroup?.platform === 'composite'">
+          <label class="input-label">{{ t('keys.routePreferencesLabel') }}</label>
+          <textarea v-model="formData.route_preferences_json" class="input min-h-20 font-mono text-xs" placeholder='{"openai":"stable","anthropic":"standard"}' />
+          <p class="input-hint">{{ t('keys.routePreferencesHint') }}</p>
+        </div>
+
+        <div v-if="selectedFormGroup?.platform === 'composite' && activeSubscriptions.length">
+          <label class="input-label">{{ t('keys.subscriptionLabel') }}</label>
+          <select v-model.number="formData.subscription_id" class="input">
+            <option v-for="subscription in activeSubscriptions" :key="subscription.id" :value="subscription.id">
+              #{{ subscription.id }} · {{ subscription.group?.name || `Group ${subscription.group_id}` }}
+            </option>
+          </select>
+          <p class="input-hint">{{ t('keys.subscriptionHint') }}</p>
+        </div>
+
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -1207,6 +1223,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
+import subscriptionsAPI from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
@@ -1430,6 +1447,8 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
+  subscription_id: null as number | null,
+  route_preferences_json: '',
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1469,6 +1488,15 @@ const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
   { value: 'inactive', label: t('common.inactive') }
 ])
+
+const selectedFormGroup = computed(() => groups.value.find((group) => group.id === formData.value.group_id) ?? null)
+const activeSubscriptions = ref<import('@/types').UserSubscription[]>([])
+
+watch([selectedFormGroup, activeSubscriptions], () => {
+  if (selectedFormGroup.value?.platform === 'composite' && formData.value.subscription_id == null && activeSubscriptions.value.length === 1) {
+    formData.value.subscription_id = activeSubscriptions.value[0].id
+  }
+})
 
 const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
   if (key.status === 'quota_exhausted' || key.status === 'expired') {
@@ -1644,6 +1672,14 @@ const loadGroups = async () => {
   }
 }
 
+const loadSubscriptions = async () => {
+  try {
+    activeSubscriptions.value = await subscriptionsAPI.getActiveSubscriptions()
+  } catch (error) {
+    console.error('Failed to load subscriptions:', error)
+  }
+}
+
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1698,6 +1734,8 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
+    subscription_id: key.subscription_id ?? null,
+    route_preferences_json: key.route_preferences ? JSON.stringify(key.route_preferences) : '',
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1849,12 +1887,25 @@ const handleSubmit = async () => {
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
 
+  let routePreferences: Record<string, string> | undefined
+  if (formData.value.route_preferences_json.trim()) {
+    try {
+      const parsed = JSON.parse(formData.value.route_preferences_json)
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('object required')
+      routePreferences = Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]))
+    } catch {
+      appStore.showError(t('keys.routePreferencesInvalid'))
+      return
+    }
+  }
+
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_id: formData.value.group_id,
+        subscription_id: selectedFormGroup.value?.platform === 'composite' ? formData.value.subscription_id : undefined,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1862,6 +1913,7 @@ const handleSubmit = async () => {
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
+        route_preferences: routePreferences,
       }
       if (shouldSubmitEditStatus(selectedKey.value, formData.value.status)) {
         updates.status = formData.value.status
@@ -1878,7 +1930,9 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        selectedFormGroup.value?.platform === 'composite' ? formData.value.subscription_id : undefined,
+        routePreferences
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1924,6 +1978,8 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
+    subscription_id: null,
+    route_preferences_json: '',
     status: 'active',
     use_custom_key: false,
     custom_key: '',
@@ -2095,6 +2151,7 @@ onMounted(() => {
   loadSavedColumns()
   loadApiKeys()
   loadGroups()
+  loadSubscriptions()
   loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', closeGroupSelector)

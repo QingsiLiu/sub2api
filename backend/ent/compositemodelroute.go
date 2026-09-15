@@ -26,12 +26,16 @@ type CompositeModelRoute struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID int64 `json:"group_id,omitempty"`
+	// Concrete account pool group; nil keeps composite group scheduling
+	TargetGroupID *int64 `json:"target_group_id,omitempty"`
 	// Client-facing model identifier or prefix.
 	PublicModel string `json:"public_model,omitempty"`
 	// exact or prefix.
 	MatchType string `json:"match_type,omitempty"`
 	// Concrete provider platform.
 	TargetPlatform string `json:"target_platform,omitempty"`
+	// Optional subscription route preference key such as stable or pro
+	ProfileKey string `json:"profile_key,omitempty"`
 	// Provider model identifier; empty means public_model.
 	UpstreamModel string `json:"upstream_model,omitempty"`
 	// Endpoint scope such as any, messages, responses, chat_completions.
@@ -75,9 +79,9 @@ func (*CompositeModelRoute) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case compositemodelroute.FieldEnabled:
 			values[i] = new(sql.NullBool)
-		case compositemodelroute.FieldID, compositemodelroute.FieldGroupID, compositemodelroute.FieldPriority:
+		case compositemodelroute.FieldID, compositemodelroute.FieldGroupID, compositemodelroute.FieldTargetGroupID, compositemodelroute.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case compositemodelroute.FieldPublicModel, compositemodelroute.FieldMatchType, compositemodelroute.FieldTargetPlatform, compositemodelroute.FieldUpstreamModel, compositemodelroute.FieldEndpoint, compositemodelroute.FieldNotes:
+		case compositemodelroute.FieldPublicModel, compositemodelroute.FieldMatchType, compositemodelroute.FieldTargetPlatform, compositemodelroute.FieldProfileKey, compositemodelroute.FieldUpstreamModel, compositemodelroute.FieldEndpoint, compositemodelroute.FieldNotes:
 			values[i] = new(sql.NullString)
 		case compositemodelroute.FieldCreatedAt, compositemodelroute.FieldUpdatedAt, compositemodelroute.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -127,6 +131,13 @@ func (_m *CompositeModelRoute) assignValues(columns []string, values []any) erro
 			} else if value.Valid {
 				_m.GroupID = value.Int64
 			}
+		case compositemodelroute.FieldTargetGroupID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field target_group_id", values[i])
+			} else if value.Valid {
+				_m.TargetGroupID = new(int64)
+				*_m.TargetGroupID = value.Int64
+			}
 		case compositemodelroute.FieldPublicModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field public_model", values[i])
@@ -144,6 +155,12 @@ func (_m *CompositeModelRoute) assignValues(columns []string, values []any) erro
 				return fmt.Errorf("unexpected type %T for field target_platform", values[i])
 			} else if value.Valid {
 				_m.TargetPlatform = value.String
+			}
+		case compositemodelroute.FieldProfileKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field profile_key", values[i])
+			} else if value.Valid {
+				_m.ProfileKey = value.String
 			}
 		case compositemodelroute.FieldUpstreamModel:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -231,6 +248,11 @@ func (_m *CompositeModelRoute) String() string {
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
 	builder.WriteString(", ")
+	if v := _m.TargetGroupID; v != nil {
+		builder.WriteString("target_group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("public_model=")
 	builder.WriteString(_m.PublicModel)
 	builder.WriteString(", ")
@@ -239,6 +261,9 @@ func (_m *CompositeModelRoute) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("target_platform=")
 	builder.WriteString(_m.TargetPlatform)
+	builder.WriteString(", ")
+	builder.WriteString("profile_key=")
+	builder.WriteString(_m.ProfileKey)
 	builder.WriteString(", ")
 	builder.WriteString("upstream_model=")
 	builder.WriteString(_m.UpstreamModel)

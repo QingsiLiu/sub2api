@@ -71,6 +71,20 @@ func (_c *CompositeModelRouteCreate) SetGroupID(v int64) *CompositeModelRouteCre
 	return _c
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (_c *CompositeModelRouteCreate) SetTargetGroupID(v int64) *CompositeModelRouteCreate {
+	_c.mutation.SetTargetGroupID(v)
+	return _c
+}
+
+// SetNillableTargetGroupID sets the "target_group_id" field if the given value is not nil.
+func (_c *CompositeModelRouteCreate) SetNillableTargetGroupID(v *int64) *CompositeModelRouteCreate {
+	if v != nil {
+		_c.SetTargetGroupID(*v)
+	}
+	return _c
+}
+
 // SetPublicModel sets the "public_model" field.
 func (_c *CompositeModelRouteCreate) SetPublicModel(v string) *CompositeModelRouteCreate {
 	_c.mutation.SetPublicModel(v)
@@ -101,6 +115,20 @@ func (_c *CompositeModelRouteCreate) SetTargetPlatform(v string) *CompositeModel
 func (_c *CompositeModelRouteCreate) SetNillableTargetPlatform(v *string) *CompositeModelRouteCreate {
 	if v != nil {
 		_c.SetTargetPlatform(*v)
+	}
+	return _c
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (_c *CompositeModelRouteCreate) SetProfileKey(v string) *CompositeModelRouteCreate {
+	_c.mutation.SetProfileKey(v)
+	return _c
+}
+
+// SetNillableProfileKey sets the "profile_key" field if the given value is not nil.
+func (_c *CompositeModelRouteCreate) SetNillableProfileKey(v *string) *CompositeModelRouteCreate {
+	if v != nil {
+		_c.SetProfileKey(*v)
 	}
 	return _c
 }
@@ -239,6 +267,10 @@ func (_c *CompositeModelRouteCreate) defaults() error {
 		v := compositemodelroute.DefaultTargetPlatform
 		_c.mutation.SetTargetPlatform(v)
 	}
+	if _, ok := _c.mutation.ProfileKey(); !ok {
+		v := compositemodelroute.DefaultProfileKey
+		_c.mutation.SetProfileKey(v)
+	}
 	if _, ok := _c.mutation.UpstreamModel(); !ok {
 		v := compositemodelroute.DefaultUpstreamModel
 		_c.mutation.SetUpstreamModel(v)
@@ -291,6 +323,14 @@ func (_c *CompositeModelRouteCreate) check() error {
 	if v, ok := _c.mutation.TargetPlatform(); ok {
 		if err := compositemodelroute.TargetPlatformValidator(v); err != nil {
 			return &ValidationError{Name: "target_platform", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.target_platform": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ProfileKey(); !ok {
+		return &ValidationError{Name: "profile_key", err: errors.New(`ent: missing required field "CompositeModelRoute.profile_key"`)}
+	}
+	if v, ok := _c.mutation.ProfileKey(); ok {
+		if err := compositemodelroute.ProfileKeyValidator(v); err != nil {
+			return &ValidationError{Name: "profile_key", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.profile_key": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.UpstreamModel(); !ok {
@@ -357,6 +397,10 @@ func (_c *CompositeModelRouteCreate) createSpec() (*CompositeModelRoute, *sqlgra
 		_spec.SetField(compositemodelroute.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
 	}
+	if value, ok := _c.mutation.TargetGroupID(); ok {
+		_spec.SetField(compositemodelroute.FieldTargetGroupID, field.TypeInt64, value)
+		_node.TargetGroupID = &value
+	}
 	if value, ok := _c.mutation.PublicModel(); ok {
 		_spec.SetField(compositemodelroute.FieldPublicModel, field.TypeString, value)
 		_node.PublicModel = value
@@ -368,6 +412,10 @@ func (_c *CompositeModelRouteCreate) createSpec() (*CompositeModelRoute, *sqlgra
 	if value, ok := _c.mutation.TargetPlatform(); ok {
 		_spec.SetField(compositemodelroute.FieldTargetPlatform, field.TypeString, value)
 		_node.TargetPlatform = value
+	}
+	if value, ok := _c.mutation.ProfileKey(); ok {
+		_spec.SetField(compositemodelroute.FieldProfileKey, field.TypeString, value)
+		_node.ProfileKey = value
 	}
 	if value, ok := _c.mutation.UpstreamModel(); ok {
 		_spec.SetField(compositemodelroute.FieldUpstreamModel, field.TypeString, value)
@@ -500,6 +548,30 @@ func (u *CompositeModelRouteUpsert) UpdateGroupID() *CompositeModelRouteUpsert {
 	return u
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (u *CompositeModelRouteUpsert) SetTargetGroupID(v int64) *CompositeModelRouteUpsert {
+	u.Set(compositemodelroute.FieldTargetGroupID, v)
+	return u
+}
+
+// UpdateTargetGroupID sets the "target_group_id" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsert) UpdateTargetGroupID() *CompositeModelRouteUpsert {
+	u.SetExcluded(compositemodelroute.FieldTargetGroupID)
+	return u
+}
+
+// AddTargetGroupID adds v to the "target_group_id" field.
+func (u *CompositeModelRouteUpsert) AddTargetGroupID(v int64) *CompositeModelRouteUpsert {
+	u.Add(compositemodelroute.FieldTargetGroupID, v)
+	return u
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (u *CompositeModelRouteUpsert) ClearTargetGroupID() *CompositeModelRouteUpsert {
+	u.SetNull(compositemodelroute.FieldTargetGroupID)
+	return u
+}
+
 // SetPublicModel sets the "public_model" field.
 func (u *CompositeModelRouteUpsert) SetPublicModel(v string) *CompositeModelRouteUpsert {
 	u.Set(compositemodelroute.FieldPublicModel, v)
@@ -533,6 +605,18 @@ func (u *CompositeModelRouteUpsert) SetTargetPlatform(v string) *CompositeModelR
 // UpdateTargetPlatform sets the "target_platform" field to the value that was provided on create.
 func (u *CompositeModelRouteUpsert) UpdateTargetPlatform() *CompositeModelRouteUpsert {
 	u.SetExcluded(compositemodelroute.FieldTargetPlatform)
+	return u
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (u *CompositeModelRouteUpsert) SetProfileKey(v string) *CompositeModelRouteUpsert {
+	u.Set(compositemodelroute.FieldProfileKey, v)
+	return u
+}
+
+// UpdateProfileKey sets the "profile_key" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsert) UpdateProfileKey() *CompositeModelRouteUpsert {
+	u.SetExcluded(compositemodelroute.FieldProfileKey)
 	return u
 }
 
@@ -702,6 +786,34 @@ func (u *CompositeModelRouteUpsertOne) UpdateGroupID() *CompositeModelRouteUpser
 	})
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (u *CompositeModelRouteUpsertOne) SetTargetGroupID(v int64) *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.SetTargetGroupID(v)
+	})
+}
+
+// AddTargetGroupID adds v to the "target_group_id" field.
+func (u *CompositeModelRouteUpsertOne) AddTargetGroupID(v int64) *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.AddTargetGroupID(v)
+	})
+}
+
+// UpdateTargetGroupID sets the "target_group_id" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsertOne) UpdateTargetGroupID() *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.UpdateTargetGroupID()
+	})
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (u *CompositeModelRouteUpsertOne) ClearTargetGroupID() *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.ClearTargetGroupID()
+	})
+}
+
 // SetPublicModel sets the "public_model" field.
 func (u *CompositeModelRouteUpsertOne) SetPublicModel(v string) *CompositeModelRouteUpsertOne {
 	return u.Update(func(s *CompositeModelRouteUpsert) {
@@ -741,6 +853,20 @@ func (u *CompositeModelRouteUpsertOne) SetTargetPlatform(v string) *CompositeMod
 func (u *CompositeModelRouteUpsertOne) UpdateTargetPlatform() *CompositeModelRouteUpsertOne {
 	return u.Update(func(s *CompositeModelRouteUpsert) {
 		s.UpdateTargetPlatform()
+	})
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (u *CompositeModelRouteUpsertOne) SetProfileKey(v string) *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.SetProfileKey(v)
+	})
+}
+
+// UpdateProfileKey sets the "profile_key" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsertOne) UpdateProfileKey() *CompositeModelRouteUpsertOne {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.UpdateProfileKey()
 	})
 }
 
@@ -1088,6 +1214,34 @@ func (u *CompositeModelRouteUpsertBulk) UpdateGroupID() *CompositeModelRouteUpse
 	})
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (u *CompositeModelRouteUpsertBulk) SetTargetGroupID(v int64) *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.SetTargetGroupID(v)
+	})
+}
+
+// AddTargetGroupID adds v to the "target_group_id" field.
+func (u *CompositeModelRouteUpsertBulk) AddTargetGroupID(v int64) *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.AddTargetGroupID(v)
+	})
+}
+
+// UpdateTargetGroupID sets the "target_group_id" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsertBulk) UpdateTargetGroupID() *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.UpdateTargetGroupID()
+	})
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (u *CompositeModelRouteUpsertBulk) ClearTargetGroupID() *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.ClearTargetGroupID()
+	})
+}
+
 // SetPublicModel sets the "public_model" field.
 func (u *CompositeModelRouteUpsertBulk) SetPublicModel(v string) *CompositeModelRouteUpsertBulk {
 	return u.Update(func(s *CompositeModelRouteUpsert) {
@@ -1127,6 +1281,20 @@ func (u *CompositeModelRouteUpsertBulk) SetTargetPlatform(v string) *CompositeMo
 func (u *CompositeModelRouteUpsertBulk) UpdateTargetPlatform() *CompositeModelRouteUpsertBulk {
 	return u.Update(func(s *CompositeModelRouteUpsert) {
 		s.UpdateTargetPlatform()
+	})
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (u *CompositeModelRouteUpsertBulk) SetProfileKey(v string) *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.SetProfileKey(v)
+	})
+}
+
+// UpdateProfileKey sets the "profile_key" field to the value that was provided on create.
+func (u *CompositeModelRouteUpsertBulk) UpdateProfileKey() *CompositeModelRouteUpsertBulk {
+	return u.Update(func(s *CompositeModelRouteUpsert) {
+		s.UpdateProfileKey()
 	})
 }
 

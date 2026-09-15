@@ -116,6 +116,11 @@ export default {
     nameLabel: 'Name',
     namePlaceholder: 'My API Key',
     groupLabel: 'Group',
+    routePreferencesLabel: 'Route preferences (JSON)',
+    routePreferencesHint: 'Optional. Choose profile keys per provider, for example {"openai":"stable"}.',
+    routePreferencesInvalid: 'Route preferences must be a JSON object.',
+    subscriptionLabel: 'Subscription',
+    subscriptionHint: 'Select which active subscription this composite key should consume.',
     providerLabel: 'Provider',
     providers: {
       anthropic: 'Anthropic',

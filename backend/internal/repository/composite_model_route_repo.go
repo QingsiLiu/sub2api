@@ -43,9 +43,12 @@ func (r *compositeModelRouteRepository) Create(ctx context.Context, route *servi
 	}
 	created, err := clientFromContext(ctx, r.client).CompositeModelRoute.Create().
 		SetGroupID(route.GroupID).
+		SetNillableTargetGroupID(route.TargetGroupID).
 		SetPublicModel(route.PublicModel).
+		SetNillableTargetGroupID(route.TargetGroupID).
 		SetMatchType(route.MatchType).
 		SetTargetPlatform(route.TargetPlatform).
+		SetProfileKey(route.ProfileKey).
 		SetUpstreamModel(route.UpstreamModel).
 		SetEndpoint(route.Endpoint).
 		SetPriority(route.Priority).
@@ -67,6 +70,7 @@ func (r *compositeModelRouteRepository) Update(ctx context.Context, route *servi
 		SetPublicModel(route.PublicModel).
 		SetMatchType(route.MatchType).
 		SetTargetPlatform(route.TargetPlatform).
+		SetProfileKey(route.ProfileKey).
 		SetUpstreamModel(route.UpstreamModel).
 		SetEndpoint(route.Endpoint).
 		SetPriority(route.Priority).
@@ -102,6 +106,8 @@ func compositeModelRouteEntityToService(row *dbent.CompositeModelRoute) *service
 		PublicModel:    row.PublicModel,
 		MatchType:      row.MatchType,
 		TargetPlatform: row.TargetPlatform,
+		ProfileKey:     row.ProfileKey,
+		TargetGroupID:  row.TargetGroupID,
 		UpstreamModel:  row.UpstreamModel,
 		Endpoint:       row.Endpoint,
 		Priority:       row.Priority,

@@ -627,6 +627,11 @@
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
         </div>
         <div>
+          <label class="input-label">{{ t("admin.groups.form.subscriptionRateMultiplier") }}</label>
+          <input v-model.number="createForm.subscription_rate_multiplier" type="number" step="0.001" min="0" class="input" />
+          <p class="input-hint">{{ t("admin.groups.subscriptionRateMultiplierHint") }}</p>
+        </div>
+        <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
           <input
             v-model.number="createForm.rpm_limit"
@@ -2263,6 +2268,11 @@
             class="input"
             data-tour="group-form-multiplier"
           />
+        </div>
+        <div>
+          <label class="input-label">{{ t("admin.groups.form.subscriptionRateMultiplier") }}</label>
+          <input v-model.number="editForm.subscription_rate_multiplier" type="number" step="0.001" min="0" class="input" />
+          <p class="input-hint">{{ t("admin.groups.subscriptionRateMultiplierHint") }}</p>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -4085,6 +4095,15 @@
                 />
               </div>
               <div>
+                <label class="input-label">{{ t("admin.groups.compositeRoutes.targetGroup") }}</label>
+                <select v-model.number="compositeRouteForm.target_group_id" class="input">
+                  <option :value="null">{{ t("admin.groups.compositeRoutes.targetGroupAuto") }}</option>
+                  <option v-for="group in groups.filter((item) => item.platform === compositeRouteForm.target_platform)" :key="group.id" :value="group.id">
+                    {{ group.name }} (#{{ group.id }})
+                  </option>
+                </select>
+              </div>
+              <div>
                 <label class="input-label">{{
                   t("admin.groups.compositeRoutes.priority")
                 }}</label>
@@ -4096,6 +4115,11 @@
                   class="input"
                 />
               </div>
+            </div>
+
+            <div>
+              <label class="input-label">{{ t("admin.groups.compositeRoutes.profileKey") }}</label>
+              <input v-model.trim="compositeRouteForm.profile_key" type="text" class="input" placeholder="stable / pro / heavy" />
             </div>
 
             <div>
@@ -4839,6 +4863,8 @@ type CompositeRouteFormState = {
   public_model: string;
   match_type: CompositeRouteMatchType;
   target_platform: ConcreteGroupPlatform;
+  target_group_id: number | null;
+  profile_key: string;
   upstream_model: string;
   endpoint: CompositeRouteEndpoint;
   priority: number;
@@ -4860,6 +4886,8 @@ const compositeRouteForm = reactive<CompositeRouteFormState>({
   public_model: "",
   match_type: "exact",
   target_platform: "openai",
+  target_group_id: null,
+  profile_key: "",
   upstream_model: "",
   endpoint: "any",
   priority: 100,
@@ -4933,6 +4961,7 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  subscription_rate_multiplier: 1.0,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5297,6 +5326,7 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  subscription_rate_multiplier: 1.0,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5760,6 +5790,7 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.subscription_rate_multiplier = 1.0;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -6029,6 +6060,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.subscription_rate_multiplier = group.subscription_rate_multiplier ?? group.rate_multiplier ?? 1.0;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -6446,6 +6478,8 @@ const resetCompositeRouteForm = () => {
   compositeRouteForm.public_model = "";
   compositeRouteForm.match_type = "exact";
   compositeRouteForm.target_platform = "openai";
+  compositeRouteForm.target_group_id = null;
+  compositeRouteForm.profile_key = "";
   compositeRouteForm.upstream_model = "";
   compositeRouteForm.endpoint = "any";
   compositeRouteForm.priority = 100;
@@ -6457,6 +6491,8 @@ const toCompositeRouteInput = (): CompositeModelRouteInput => ({
   public_model: compositeRouteForm.public_model.trim(),
   match_type: compositeRouteForm.match_type,
   target_platform: compositeRouteForm.target_platform,
+  target_group_id: compositeRouteForm.target_group_id,
+  profile_key: compositeRouteForm.profile_key.trim(),
   upstream_model: compositeRouteForm.upstream_model.trim(),
   endpoint: compositeRouteForm.endpoint,
   priority: Number(compositeRouteForm.priority) || 100,
@@ -6510,6 +6546,8 @@ const editCompositeRoute = (route: CompositeModelRoute) => {
   compositeRouteForm.public_model = route.public_model;
   compositeRouteForm.match_type = route.match_type;
   compositeRouteForm.target_platform = route.target_platform;
+  compositeRouteForm.target_group_id = route.target_group_id ?? null;
+  compositeRouteForm.profile_key = route.profile_key || "";
   compositeRouteForm.upstream_model = route.upstream_model;
   compositeRouteForm.endpoint = route.endpoint;
   compositeRouteForm.priority = route.priority || 100;

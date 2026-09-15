@@ -745,8 +745,32 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		multiplier = s.cfg.Default.RateMultiplier
 	}
 	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
+		groupDefault := apiKey.Group.BillingRateMultiplier(subscription != nil)
+		rateGroupID := *apiKey.GroupID
+		if subscription != nil {
+			// Composite requests are billed with the concrete target group's
+			// subscription multiplier. The selected account normally carries the
+			// hydrated group list, avoiding an extra database lookup on the hot path.
+			if targetGroupID, ok := CompositeTargetGroupIDFromContext(ctx); ok {
+				rateGroupID = targetGroupID
+				var targetGroup *Group
+				if account != nil {
+					for _, candidate := range account.Groups {
+						if candidate != nil && candidate.ID == targetGroupID {
+							targetGroup = candidate
+							break
+						}
+					}
+				}
+				if targetGroup == nil && s.groupRepo != nil {
+					targetGroup, _ = s.groupRepo.GetByIDLite(ctx, targetGroupID)
+				}
+				if targetGroup != nil {
+					groupDefault = targetGroup.BillingRateMultiplier(true)
+				}
+			}
+		}
+		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, rateGroupID, groupDefault)
 	}
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。

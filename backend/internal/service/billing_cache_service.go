@@ -745,7 +745,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
 
 	if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
+		billingGroup := group
+		if subscription.Group != nil {
+			billingGroup = subscription.Group
+		}
+		if err := s.checkSubscriptionEligibility(ctx, user.ID, billingGroup, subscription); err != nil {
 			return err
 		}
 	} else {

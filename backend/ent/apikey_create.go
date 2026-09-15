@@ -99,6 +99,26 @@ func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	return _c
 }
 
+// SetSubscriptionID sets the "subscription_id" field.
+func (_c *APIKeyCreate) SetSubscriptionID(v int64) *APIKeyCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableSubscriptionID(v *int64) *APIKeyCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
+	}
+	return _c
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (_c *APIKeyCreate) SetRoutePreferences(v map[string]string) *APIKeyCreate {
+	_c.mutation.SetRoutePreferences(v)
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 	_c.mutation.SetStatus(v)
@@ -531,6 +551,14 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
+	if value, ok := _c.mutation.SubscriptionID(); ok {
+		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)
+		_node.SubscriptionID = &value
+	}
+	if value, ok := _c.mutation.RoutePreferences(); ok {
+		_spec.SetField(apikey.FieldRoutePreferences, field.TypeJSON, value)
+		_node.RoutePreferences = value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -778,6 +806,48 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
+	return u
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (u *APIKeyUpsert) SetSubscriptionID(v int64) *APIKeyUpsert {
+	u.Set(apikey.FieldSubscriptionID, v)
+	return u
+}
+
+// UpdateSubscriptionID sets the "subscription_id" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateSubscriptionID() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldSubscriptionID)
+	return u
+}
+
+// AddSubscriptionID adds v to the "subscription_id" field.
+func (u *APIKeyUpsert) AddSubscriptionID(v int64) *APIKeyUpsert {
+	u.Add(apikey.FieldSubscriptionID, v)
+	return u
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (u *APIKeyUpsert) ClearSubscriptionID() *APIKeyUpsert {
+	u.SetNull(apikey.FieldSubscriptionID)
+	return u
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (u *APIKeyUpsert) SetRoutePreferences(v map[string]string) *APIKeyUpsert {
+	u.Set(apikey.FieldRoutePreferences, v)
+	return u
+}
+
+// UpdateRoutePreferences sets the "route_preferences" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateRoutePreferences() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldRoutePreferences)
+	return u
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (u *APIKeyUpsert) ClearRoutePreferences() *APIKeyUpsert {
+	u.SetNull(apikey.FieldRoutePreferences)
 	return u
 }
 
@@ -1203,6 +1273,55 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (u *APIKeyUpsertOne) SetSubscriptionID(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetSubscriptionID(v)
+	})
+}
+
+// AddSubscriptionID adds v to the "subscription_id" field.
+func (u *APIKeyUpsertOne) AddSubscriptionID(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddSubscriptionID(v)
+	})
+}
+
+// UpdateSubscriptionID sets the "subscription_id" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateSubscriptionID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateSubscriptionID()
+	})
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (u *APIKeyUpsertOne) ClearSubscriptionID() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearSubscriptionID()
+	})
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (u *APIKeyUpsertOne) SetRoutePreferences(v map[string]string) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRoutePreferences(v)
+	})
+}
+
+// UpdateRoutePreferences sets the "route_preferences" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateRoutePreferences() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRoutePreferences()
+	})
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (u *APIKeyUpsertOne) ClearRoutePreferences() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearRoutePreferences()
 	})
 }
 
@@ -1841,6 +1960,55 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (u *APIKeyUpsertBulk) SetSubscriptionID(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetSubscriptionID(v)
+	})
+}
+
+// AddSubscriptionID adds v to the "subscription_id" field.
+func (u *APIKeyUpsertBulk) AddSubscriptionID(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddSubscriptionID(v)
+	})
+}
+
+// UpdateSubscriptionID sets the "subscription_id" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateSubscriptionID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateSubscriptionID()
+	})
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (u *APIKeyUpsertBulk) ClearSubscriptionID() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearSubscriptionID()
+	})
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (u *APIKeyUpsertBulk) SetRoutePreferences(v map[string]string) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRoutePreferences(v)
+	})
+}
+
+// UpdateRoutePreferences sets the "route_preferences" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateRoutePreferences() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRoutePreferences()
+	})
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (u *APIKeyUpsertBulk) ClearRoutePreferences() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearRoutePreferences()
 	})
 }
 

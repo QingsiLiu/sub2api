@@ -739,6 +739,34 @@ func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubsc
 	return s.userSubRepo.GetByID(ctx, id)
 }
 
+// GetActiveSubscriptionByIDForUser validates an explicitly pinned subscription
+// used by composite API keys. This prevents a user with multiple active plans
+// from resolving an arbitrary subscription through the shared facade group.
+func (s *SubscriptionService) GetActiveSubscriptionByIDForUser(ctx context.Context, userID, subscriptionID, groupID int64) (*UserSubscription, error) {
+	if subscriptionID <= 0 {
+		return nil, ErrSubscriptionNotFound
+	}
+	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
+	if err != nil || sub == nil || sub.UserID != userID || !sub.IsActive() {
+		return nil, ErrSubscriptionNotFound
+	}
+	if groupID > 0 {
+		allowed := sub.GroupID == groupID
+		if !allowed {
+			for _, entitledGroupID := range sub.EntitledGroupIDs {
+				if entitledGroupID == groupID {
+					allowed = true
+					break
+				}
+			}
+		}
+		if !allowed {
+			return nil, ErrSubscriptionNotFound
+		}
+	}
+	return sub, nil
+}
+
 // GetActiveSubscription 获取用户对特定分组的有效订阅
 // 使用 L1 缓存 + singleflight 加速中间件热路径。
 // 返回缓存对象的浅拷贝，调用方可安全修改字段而不会污染缓存或触发 data race。

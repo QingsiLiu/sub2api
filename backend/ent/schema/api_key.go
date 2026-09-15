@@ -44,6 +44,13 @@ func (APIKey) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.Int64("subscription_id").
+			Optional().
+			Nillable().
+			Comment("Pinned subscription for composite subscription keys"),
+		field.JSON("route_preferences", map[string]string{}).
+			Optional().
+			Comment("Provider to route profile preferences for composite subscription keys"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

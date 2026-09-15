@@ -69,6 +69,33 @@ func (_u *CompositeModelRouteUpdate) SetNillableGroupID(v *int64) *CompositeMode
 	return _u
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (_u *CompositeModelRouteUpdate) SetTargetGroupID(v int64) *CompositeModelRouteUpdate {
+	_u.mutation.ResetTargetGroupID()
+	_u.mutation.SetTargetGroupID(v)
+	return _u
+}
+
+// SetNillableTargetGroupID sets the "target_group_id" field if the given value is not nil.
+func (_u *CompositeModelRouteUpdate) SetNillableTargetGroupID(v *int64) *CompositeModelRouteUpdate {
+	if v != nil {
+		_u.SetTargetGroupID(*v)
+	}
+	return _u
+}
+
+// AddTargetGroupID adds value to the "target_group_id" field.
+func (_u *CompositeModelRouteUpdate) AddTargetGroupID(v int64) *CompositeModelRouteUpdate {
+	_u.mutation.AddTargetGroupID(v)
+	return _u
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (_u *CompositeModelRouteUpdate) ClearTargetGroupID() *CompositeModelRouteUpdate {
+	_u.mutation.ClearTargetGroupID()
+	return _u
+}
+
 // SetPublicModel sets the "public_model" field.
 func (_u *CompositeModelRouteUpdate) SetPublicModel(v string) *CompositeModelRouteUpdate {
 	_u.mutation.SetPublicModel(v)
@@ -107,6 +134,20 @@ func (_u *CompositeModelRouteUpdate) SetTargetPlatform(v string) *CompositeModel
 func (_u *CompositeModelRouteUpdate) SetNillableTargetPlatform(v *string) *CompositeModelRouteUpdate {
 	if v != nil {
 		_u.SetTargetPlatform(*v)
+	}
+	return _u
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (_u *CompositeModelRouteUpdate) SetProfileKey(v string) *CompositeModelRouteUpdate {
+	_u.mutation.SetProfileKey(v)
+	return _u
+}
+
+// SetNillableProfileKey sets the "profile_key" field if the given value is not nil.
+func (_u *CompositeModelRouteUpdate) SetNillableProfileKey(v *string) *CompositeModelRouteUpdate {
+	if v != nil {
+		_u.SetProfileKey(*v)
 	}
 	return _u
 }
@@ -269,6 +310,11 @@ func (_u *CompositeModelRouteUpdate) check() error {
 			return &ValidationError{Name: "target_platform", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.target_platform": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProfileKey(); ok {
+		if err := compositemodelroute.ProfileKeyValidator(v); err != nil {
+			return &ValidationError{Name: "profile_key", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.profile_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UpstreamModel(); ok {
 		if err := compositemodelroute.UpstreamModelValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.upstream_model": %w`, err)}
@@ -306,6 +352,15 @@ func (_u *CompositeModelRouteUpdate) sqlSave(ctx context.Context) (_node int, er
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(compositemodelroute.FieldDeletedAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.TargetGroupID(); ok {
+		_spec.SetField(compositemodelroute.FieldTargetGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedTargetGroupID(); ok {
+		_spec.AddField(compositemodelroute.FieldTargetGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.TargetGroupIDCleared() {
+		_spec.ClearField(compositemodelroute.FieldTargetGroupID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.PublicModel(); ok {
 		_spec.SetField(compositemodelroute.FieldPublicModel, field.TypeString, value)
 	}
@@ -314,6 +369,9 @@ func (_u *CompositeModelRouteUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if value, ok := _u.mutation.TargetPlatform(); ok {
 		_spec.SetField(compositemodelroute.FieldTargetPlatform, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProfileKey(); ok {
+		_spec.SetField(compositemodelroute.FieldProfileKey, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpstreamModel(); ok {
 		_spec.SetField(compositemodelroute.FieldUpstreamModel, field.TypeString, value)
@@ -425,6 +483,33 @@ func (_u *CompositeModelRouteUpdateOne) SetNillableGroupID(v *int64) *CompositeM
 	return _u
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (_u *CompositeModelRouteUpdateOne) SetTargetGroupID(v int64) *CompositeModelRouteUpdateOne {
+	_u.mutation.ResetTargetGroupID()
+	_u.mutation.SetTargetGroupID(v)
+	return _u
+}
+
+// SetNillableTargetGroupID sets the "target_group_id" field if the given value is not nil.
+func (_u *CompositeModelRouteUpdateOne) SetNillableTargetGroupID(v *int64) *CompositeModelRouteUpdateOne {
+	if v != nil {
+		_u.SetTargetGroupID(*v)
+	}
+	return _u
+}
+
+// AddTargetGroupID adds value to the "target_group_id" field.
+func (_u *CompositeModelRouteUpdateOne) AddTargetGroupID(v int64) *CompositeModelRouteUpdateOne {
+	_u.mutation.AddTargetGroupID(v)
+	return _u
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (_u *CompositeModelRouteUpdateOne) ClearTargetGroupID() *CompositeModelRouteUpdateOne {
+	_u.mutation.ClearTargetGroupID()
+	return _u
+}
+
 // SetPublicModel sets the "public_model" field.
 func (_u *CompositeModelRouteUpdateOne) SetPublicModel(v string) *CompositeModelRouteUpdateOne {
 	_u.mutation.SetPublicModel(v)
@@ -463,6 +548,20 @@ func (_u *CompositeModelRouteUpdateOne) SetTargetPlatform(v string) *CompositeMo
 func (_u *CompositeModelRouteUpdateOne) SetNillableTargetPlatform(v *string) *CompositeModelRouteUpdateOne {
 	if v != nil {
 		_u.SetTargetPlatform(*v)
+	}
+	return _u
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (_u *CompositeModelRouteUpdateOne) SetProfileKey(v string) *CompositeModelRouteUpdateOne {
+	_u.mutation.SetProfileKey(v)
+	return _u
+}
+
+// SetNillableProfileKey sets the "profile_key" field if the given value is not nil.
+func (_u *CompositeModelRouteUpdateOne) SetNillableProfileKey(v *string) *CompositeModelRouteUpdateOne {
+	if v != nil {
+		_u.SetProfileKey(*v)
 	}
 	return _u
 }
@@ -638,6 +737,11 @@ func (_u *CompositeModelRouteUpdateOne) check() error {
 			return &ValidationError{Name: "target_platform", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.target_platform": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProfileKey(); ok {
+		if err := compositemodelroute.ProfileKeyValidator(v); err != nil {
+			return &ValidationError{Name: "profile_key", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.profile_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UpstreamModel(); ok {
 		if err := compositemodelroute.UpstreamModelValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "CompositeModelRoute.upstream_model": %w`, err)}
@@ -692,6 +796,15 @@ func (_u *CompositeModelRouteUpdateOne) sqlSave(ctx context.Context) (_node *Com
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(compositemodelroute.FieldDeletedAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.TargetGroupID(); ok {
+		_spec.SetField(compositemodelroute.FieldTargetGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedTargetGroupID(); ok {
+		_spec.AddField(compositemodelroute.FieldTargetGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.TargetGroupIDCleared() {
+		_spec.ClearField(compositemodelroute.FieldTargetGroupID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.PublicModel(); ok {
 		_spec.SetField(compositemodelroute.FieldPublicModel, field.TypeString, value)
 	}
@@ -700,6 +813,9 @@ func (_u *CompositeModelRouteUpdateOne) sqlSave(ctx context.Context) (_node *Com
 	}
 	if value, ok := _u.mutation.TargetPlatform(); ok {
 		_spec.SetField(compositemodelroute.FieldTargetPlatform, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProfileKey(); ok {
+		_spec.SetField(compositemodelroute.FieldProfileKey, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpstreamModel(); ok {
 		_spec.SetField(compositemodelroute.FieldUpstreamModel, field.TypeString, value)

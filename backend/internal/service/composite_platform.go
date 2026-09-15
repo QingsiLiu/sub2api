@@ -45,7 +45,20 @@ func WithCompositeRouteDecision(ctx context.Context, decision CompositeRouteDeci
 	if source := strings.TrimSpace(decision.Source); source != "" {
 		ctx = context.WithValue(ctx, ctxkey.CompositeRouteSource, source)
 	}
+	if decision.TargetGroupID != nil && *decision.TargetGroupID > 0 {
+		ctx = context.WithValue(ctx, ctxkey.CompositeTargetGroupID, *decision.TargetGroupID)
+	}
 	return ctx
+}
+
+// CompositeTargetGroupIDFromContext returns the concrete account/pricing group
+// selected by an explicit composite route, when one was configured.
+func CompositeTargetGroupIDFromContext(ctx context.Context) (int64, bool) {
+	if ctx == nil {
+		return 0, false
+	}
+	id, ok := ctx.Value(ctxkey.CompositeTargetGroupID).(int64)
+	return id, ok && id > 0
 }
 
 func ResolvedUpstreamModelFromContext(ctx context.Context) (string, bool) {

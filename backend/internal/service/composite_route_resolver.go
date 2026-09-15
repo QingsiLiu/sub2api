@@ -23,6 +23,13 @@ func (r *CompositeRouteResolver) SetModelOwnershipResolver(resolver CompositeMod
 }
 
 func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, model, endpoint string) (CompositeRouteDecision, error) {
+	return r.ResolveForPreferences(ctx, groupID, model, endpoint, nil)
+}
+
+// ResolveForPreferences prefers an explicit profile key for the model's
+// detected provider while preserving the legacy route ordering when no
+// preference or matching profile is configured.
+func (r *CompositeRouteResolver) ResolveForPreferences(ctx context.Context, groupID int64, model, endpoint string, preferences map[string]string) (CompositeRouteDecision, error) {
 	model = strings.TrimSpace(model)
 	endpoint = normalizeCompositeRouteEndpoint(endpoint)
 	decision := CompositeRouteDecision{
@@ -40,7 +47,11 @@ func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, mod
 		if err != nil {
 			return decision, fmt.Errorf("list composite routes: %w", err)
 		}
-		if route, ok := matchCompositeRoute(routes, model, endpoint); ok {
+		preferred := ""
+		if platform, detectable := DetectModelPlatform(model); detectable && preferences != nil {
+			preferred = strings.ToLower(strings.TrimSpace(preferences[platform]))
+		}
+		if route, ok := matchCompositeRouteWithProfile(routes, model, endpoint, preferred); ok {
 			upstreamModel := strings.TrimSpace(route.UpstreamModel)
 			if upstreamModel == "" {
 				upstreamModel = model
@@ -51,6 +62,7 @@ func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, mod
 				GroupID:        groupID,
 				PublicModel:    model,
 				TargetPlatform: route.TargetPlatform,
+				TargetGroupID:  route.TargetGroupID,
 				UpstreamModel:  upstreamModel,
 				Endpoint:       endpoint,
 				Route:          &route,
@@ -100,6 +112,21 @@ func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, mod
 	}
 	decision.Reason = "no explicit route or built-in detector match"
 	return decision, nil
+}
+
+func matchCompositeRouteWithProfile(routes []CompositeModelRoute, model, endpoint, profile string) (CompositeModelRoute, bool) {
+	if strings.TrimSpace(profile) != "" {
+		filtered := make([]CompositeModelRoute, 0, len(routes))
+		for _, route := range routes {
+			if strings.EqualFold(strings.TrimSpace(route.ProfileKey), profile) {
+				filtered = append(filtered, route)
+			}
+		}
+		if route, ok := matchCompositeRoute(filtered, model, endpoint); ok {
+			return route, true
+		}
+	}
+	return matchCompositeRoute(routes, model, endpoint)
 }
 
 func matchCompositeRoute(routes []CompositeModelRoute, model, endpoint string) (CompositeModelRoute, bool) {

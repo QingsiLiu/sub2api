@@ -195,11 +195,13 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
 		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
-			sub, subErr := subscriptionService.GetActiveSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
+			var sub *service.UserSubscription
+			var subErr error
+			if apiKey.SubscriptionID != nil && *apiKey.SubscriptionID > 0 {
+				sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, apiKey.Group.ID)
+			} else {
+				sub, subErr = subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
+			}
 			if subErr != nil {
 				if !skipBilling {
 					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
@@ -236,7 +238,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 			// 订阅模式：验证订阅限额
 			if subscription != nil {
-				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				limitGroup := apiKey.Group
+				if subscription.Group != nil {
+					limitGroup = subscription.Group
+				}
+				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, limitGroup)
 				if needsMaintenance {
 					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
 					if maintenanceErr != nil {
@@ -244,7 +250,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 						return
 					}
 					subscription = refreshed
-					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, limitGroup)
 				}
 				if validateErr != nil {
 					code := "SUBSCRIPTION_INVALID"

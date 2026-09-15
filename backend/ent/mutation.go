@@ -120,6 +120,9 @@ type APIKeyMutation struct {
 	deleted_at         *time.Time
 	key                *string
 	name               *string
+	subscription_id    *int64
+	addsubscription_id *int64
+	route_preferences  *map[string]string
 	status             *string
 	last_used_at       *time.Time
 	ip_whitelist       *[]string
@@ -533,6 +536,125 @@ func (m *APIKeyMutation) GroupIDCleared() bool {
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, apikey.FieldGroupID)
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *APIKeyMutation) SetSubscriptionID(i int64) {
+	m.subscription_id = &i
+	m.addsubscription_id = nil
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *APIKeyMutation) SubscriptionID() (r int64, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldSubscriptionID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// AddSubscriptionID adds i to the "subscription_id" field.
+func (m *APIKeyMutation) AddSubscriptionID(i int64) {
+	if m.addsubscription_id != nil {
+		*m.addsubscription_id += i
+	} else {
+		m.addsubscription_id = &i
+	}
+}
+
+// AddedSubscriptionID returns the value that was added to the "subscription_id" field in this mutation.
+func (m *APIKeyMutation) AddedSubscriptionID() (r int64, exists bool) {
+	v := m.addsubscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (m *APIKeyMutation) ClearSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	m.clearedFields[apikey.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionIDCleared returns if the "subscription_id" field was cleared in this mutation.
+func (m *APIKeyMutation) SubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldSubscriptionID]
+	return ok
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *APIKeyMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+	m.addsubscription_id = nil
+	delete(m.clearedFields, apikey.FieldSubscriptionID)
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (m *APIKeyMutation) SetRoutePreferences(value map[string]string) {
+	m.route_preferences = &value
+}
+
+// RoutePreferences returns the value of the "route_preferences" field in the mutation.
+func (m *APIKeyMutation) RoutePreferences() (r map[string]string, exists bool) {
+	v := m.route_preferences
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRoutePreferences returns the old "route_preferences" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldRoutePreferences(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRoutePreferences is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRoutePreferences requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRoutePreferences: %w", err)
+	}
+	return oldValue.RoutePreferences, nil
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (m *APIKeyMutation) ClearRoutePreferences() {
+	m.route_preferences = nil
+	m.clearedFields[apikey.FieldRoutePreferences] = struct{}{}
+}
+
+// RoutePreferencesCleared returns if the "route_preferences" field was cleared in this mutation.
+func (m *APIKeyMutation) RoutePreferencesCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldRoutePreferences]
+	return ok
+}
+
+// ResetRoutePreferences resets all changes to the "route_preferences" field.
+func (m *APIKeyMutation) ResetRoutePreferences() {
+	m.route_preferences = nil
+	delete(m.clearedFields, apikey.FieldRoutePreferences)
 }
 
 // SetStatus sets the "status" field.
@@ -1536,7 +1658,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1557,6 +1679,12 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, apikey.FieldGroupID)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, apikey.FieldSubscriptionID)
+	}
+	if m.route_preferences != nil {
+		fields = append(fields, apikey.FieldRoutePreferences)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1628,6 +1756,10 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case apikey.FieldGroupID:
 		return m.GroupID()
+	case apikey.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case apikey.FieldRoutePreferences:
+		return m.RoutePreferences()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1683,6 +1815,10 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case apikey.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case apikey.FieldRoutePreferences:
+		return m.OldRoutePreferences(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1772,6 +1908,20 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case apikey.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case apikey.FieldRoutePreferences:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRoutePreferences(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -1893,6 +2043,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addsubscription_id != nil {
+		fields = append(fields, apikey.FieldSubscriptionID)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -1925,6 +2078,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldSubscriptionID:
+		return m.AddedSubscriptionID()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -1950,6 +2105,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionID(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -2020,6 +2182,12 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
+	if m.FieldCleared(apikey.FieldSubscriptionID) {
+		fields = append(fields, apikey.FieldSubscriptionID)
+	}
+	if m.FieldCleared(apikey.FieldRoutePreferences) {
+		fields = append(fields, apikey.FieldRoutePreferences)
+	}
 	if m.FieldCleared(apikey.FieldLastUsedAt) {
 		fields = append(fields, apikey.FieldLastUsedAt)
 	}
@@ -2060,6 +2228,12 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case apikey.FieldSubscriptionID:
+		m.ClearSubscriptionID()
+		return nil
+	case apikey.FieldRoutePreferences:
+		m.ClearRoutePreferences()
 		return nil
 	case apikey.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -2110,6 +2284,12 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case apikey.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case apikey.FieldRoutePreferences:
+		m.ResetRoutePreferences()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()
@@ -19711,27 +19891,30 @@ func (m *ChannelMonitorRequestTemplateMutation) ResetEdge(name string) error {
 // CompositeModelRouteMutation represents an operation that mutates the CompositeModelRoute nodes in the graph.
 type CompositeModelRouteMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int64
-	created_at      *time.Time
-	updated_at      *time.Time
-	deleted_at      *time.Time
-	public_model    *string
-	match_type      *string
-	target_platform *string
-	upstream_model  *string
-	endpoint        *string
-	priority        *int
-	addpriority     *int
-	enabled         *bool
-	notes           *string
-	clearedFields   map[string]struct{}
-	group           *int64
-	clearedgroup    bool
-	done            bool
-	oldValue        func(context.Context) (*CompositeModelRoute, error)
-	predicates      []predicate.CompositeModelRoute
+	op                 Op
+	typ                string
+	id                 *int64
+	created_at         *time.Time
+	updated_at         *time.Time
+	deleted_at         *time.Time
+	target_group_id    *int64
+	addtarget_group_id *int64
+	public_model       *string
+	match_type         *string
+	target_platform    *string
+	profile_key        *string
+	upstream_model     *string
+	endpoint           *string
+	priority           *int
+	addpriority        *int
+	enabled            *bool
+	notes              *string
+	clearedFields      map[string]struct{}
+	group              *int64
+	clearedgroup       bool
+	done               bool
+	oldValue           func(context.Context) (*CompositeModelRoute, error)
+	predicates         []predicate.CompositeModelRoute
 }
 
 var _ ent.Mutation = (*CompositeModelRouteMutation)(nil)
@@ -19989,6 +20172,76 @@ func (m *CompositeModelRouteMutation) ResetGroupID() {
 	m.group = nil
 }
 
+// SetTargetGroupID sets the "target_group_id" field.
+func (m *CompositeModelRouteMutation) SetTargetGroupID(i int64) {
+	m.target_group_id = &i
+	m.addtarget_group_id = nil
+}
+
+// TargetGroupID returns the value of the "target_group_id" field in the mutation.
+func (m *CompositeModelRouteMutation) TargetGroupID() (r int64, exists bool) {
+	v := m.target_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetGroupID returns the old "target_group_id" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldTargetGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetGroupID: %w", err)
+	}
+	return oldValue.TargetGroupID, nil
+}
+
+// AddTargetGroupID adds i to the "target_group_id" field.
+func (m *CompositeModelRouteMutation) AddTargetGroupID(i int64) {
+	if m.addtarget_group_id != nil {
+		*m.addtarget_group_id += i
+	} else {
+		m.addtarget_group_id = &i
+	}
+}
+
+// AddedTargetGroupID returns the value that was added to the "target_group_id" field in this mutation.
+func (m *CompositeModelRouteMutation) AddedTargetGroupID() (r int64, exists bool) {
+	v := m.addtarget_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTargetGroupID clears the value of the "target_group_id" field.
+func (m *CompositeModelRouteMutation) ClearTargetGroupID() {
+	m.target_group_id = nil
+	m.addtarget_group_id = nil
+	m.clearedFields[compositemodelroute.FieldTargetGroupID] = struct{}{}
+}
+
+// TargetGroupIDCleared returns if the "target_group_id" field was cleared in this mutation.
+func (m *CompositeModelRouteMutation) TargetGroupIDCleared() bool {
+	_, ok := m.clearedFields[compositemodelroute.FieldTargetGroupID]
+	return ok
+}
+
+// ResetTargetGroupID resets all changes to the "target_group_id" field.
+func (m *CompositeModelRouteMutation) ResetTargetGroupID() {
+	m.target_group_id = nil
+	m.addtarget_group_id = nil
+	delete(m.clearedFields, compositemodelroute.FieldTargetGroupID)
+}
+
 // SetPublicModel sets the "public_model" field.
 func (m *CompositeModelRouteMutation) SetPublicModel(s string) {
 	m.public_model = &s
@@ -20095,6 +20348,42 @@ func (m *CompositeModelRouteMutation) OldTargetPlatform(ctx context.Context) (v 
 // ResetTargetPlatform resets all changes to the "target_platform" field.
 func (m *CompositeModelRouteMutation) ResetTargetPlatform() {
 	m.target_platform = nil
+}
+
+// SetProfileKey sets the "profile_key" field.
+func (m *CompositeModelRouteMutation) SetProfileKey(s string) {
+	m.profile_key = &s
+}
+
+// ProfileKey returns the value of the "profile_key" field in the mutation.
+func (m *CompositeModelRouteMutation) ProfileKey() (r string, exists bool) {
+	v := m.profile_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProfileKey returns the old "profile_key" field's value of the CompositeModelRoute entity.
+// If the CompositeModelRoute object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompositeModelRouteMutation) OldProfileKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProfileKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProfileKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProfileKey: %w", err)
+	}
+	return oldValue.ProfileKey, nil
+}
+
+// ResetProfileKey resets all changes to the "profile_key" field.
+func (m *CompositeModelRouteMutation) ResetProfileKey() {
+	m.profile_key = nil
 }
 
 // SetUpstreamModel sets the "upstream_model" field.
@@ -20371,7 +20660,7 @@ func (m *CompositeModelRouteMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompositeModelRouteMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, compositemodelroute.FieldCreatedAt)
 	}
@@ -20384,6 +20673,9 @@ func (m *CompositeModelRouteMutation) Fields() []string {
 	if m.group != nil {
 		fields = append(fields, compositemodelroute.FieldGroupID)
 	}
+	if m.target_group_id != nil {
+		fields = append(fields, compositemodelroute.FieldTargetGroupID)
+	}
 	if m.public_model != nil {
 		fields = append(fields, compositemodelroute.FieldPublicModel)
 	}
@@ -20392,6 +20684,9 @@ func (m *CompositeModelRouteMutation) Fields() []string {
 	}
 	if m.target_platform != nil {
 		fields = append(fields, compositemodelroute.FieldTargetPlatform)
+	}
+	if m.profile_key != nil {
+		fields = append(fields, compositemodelroute.FieldProfileKey)
 	}
 	if m.upstream_model != nil {
 		fields = append(fields, compositemodelroute.FieldUpstreamModel)
@@ -20424,12 +20719,16 @@ func (m *CompositeModelRouteMutation) Field(name string) (ent.Value, bool) {
 		return m.DeletedAt()
 	case compositemodelroute.FieldGroupID:
 		return m.GroupID()
+	case compositemodelroute.FieldTargetGroupID:
+		return m.TargetGroupID()
 	case compositemodelroute.FieldPublicModel:
 		return m.PublicModel()
 	case compositemodelroute.FieldMatchType:
 		return m.MatchType()
 	case compositemodelroute.FieldTargetPlatform:
 		return m.TargetPlatform()
+	case compositemodelroute.FieldProfileKey:
+		return m.ProfileKey()
 	case compositemodelroute.FieldUpstreamModel:
 		return m.UpstreamModel()
 	case compositemodelroute.FieldEndpoint:
@@ -20457,12 +20756,16 @@ func (m *CompositeModelRouteMutation) OldField(ctx context.Context, name string)
 		return m.OldDeletedAt(ctx)
 	case compositemodelroute.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case compositemodelroute.FieldTargetGroupID:
+		return m.OldTargetGroupID(ctx)
 	case compositemodelroute.FieldPublicModel:
 		return m.OldPublicModel(ctx)
 	case compositemodelroute.FieldMatchType:
 		return m.OldMatchType(ctx)
 	case compositemodelroute.FieldTargetPlatform:
 		return m.OldTargetPlatform(ctx)
+	case compositemodelroute.FieldProfileKey:
+		return m.OldProfileKey(ctx)
 	case compositemodelroute.FieldUpstreamModel:
 		return m.OldUpstreamModel(ctx)
 	case compositemodelroute.FieldEndpoint:
@@ -20510,6 +20813,13 @@ func (m *CompositeModelRouteMutation) SetField(name string, value ent.Value) err
 		}
 		m.SetGroupID(v)
 		return nil
+	case compositemodelroute.FieldTargetGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetGroupID(v)
+		return nil
 	case compositemodelroute.FieldPublicModel:
 		v, ok := value.(string)
 		if !ok {
@@ -20530,6 +20840,13 @@ func (m *CompositeModelRouteMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTargetPlatform(v)
+		return nil
+	case compositemodelroute.FieldProfileKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProfileKey(v)
 		return nil
 	case compositemodelroute.FieldUpstreamModel:
 		v, ok := value.(string)
@@ -20574,6 +20891,9 @@ func (m *CompositeModelRouteMutation) SetField(name string, value ent.Value) err
 // this mutation.
 func (m *CompositeModelRouteMutation) AddedFields() []string {
 	var fields []string
+	if m.addtarget_group_id != nil {
+		fields = append(fields, compositemodelroute.FieldTargetGroupID)
+	}
 	if m.addpriority != nil {
 		fields = append(fields, compositemodelroute.FieldPriority)
 	}
@@ -20585,6 +20905,8 @@ func (m *CompositeModelRouteMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CompositeModelRouteMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case compositemodelroute.FieldTargetGroupID:
+		return m.AddedTargetGroupID()
 	case compositemodelroute.FieldPriority:
 		return m.AddedPriority()
 	}
@@ -20596,6 +20918,13 @@ func (m *CompositeModelRouteMutation) AddedField(name string) (ent.Value, bool) 
 // type.
 func (m *CompositeModelRouteMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case compositemodelroute.FieldTargetGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTargetGroupID(v)
+		return nil
 	case compositemodelroute.FieldPriority:
 		v, ok := value.(int)
 		if !ok {
@@ -20613,6 +20942,9 @@ func (m *CompositeModelRouteMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(compositemodelroute.FieldDeletedAt) {
 		fields = append(fields, compositemodelroute.FieldDeletedAt)
+	}
+	if m.FieldCleared(compositemodelroute.FieldTargetGroupID) {
+		fields = append(fields, compositemodelroute.FieldTargetGroupID)
 	}
 	if m.FieldCleared(compositemodelroute.FieldNotes) {
 		fields = append(fields, compositemodelroute.FieldNotes)
@@ -20633,6 +20965,9 @@ func (m *CompositeModelRouteMutation) ClearField(name string) error {
 	switch name {
 	case compositemodelroute.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case compositemodelroute.FieldTargetGroupID:
+		m.ClearTargetGroupID()
 		return nil
 	case compositemodelroute.FieldNotes:
 		m.ClearNotes()
@@ -20657,6 +20992,9 @@ func (m *CompositeModelRouteMutation) ResetField(name string) error {
 	case compositemodelroute.FieldGroupID:
 		m.ResetGroupID()
 		return nil
+	case compositemodelroute.FieldTargetGroupID:
+		m.ResetTargetGroupID()
+		return nil
 	case compositemodelroute.FieldPublicModel:
 		m.ResetPublicModel()
 		return nil
@@ -20665,6 +21003,9 @@ func (m *CompositeModelRouteMutation) ResetField(name string) error {
 		return nil
 	case compositemodelroute.FieldTargetPlatform:
 		m.ResetTargetPlatform()
+		return nil
+	case compositemodelroute.FieldProfileKey:
+		m.ResetProfileKey()
 		return nil
 	case compositemodelroute.FieldUpstreamModel:
 		m.ResetUpstreamModel()
@@ -22092,6 +22433,8 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	subscription_rate_multiplier            *float64
+	addsubscription_rate_multiplier         *float64
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -22569,6 +22912,62 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetSubscriptionRateMultiplier sets the "subscription_rate_multiplier" field.
+func (m *GroupMutation) SetSubscriptionRateMultiplier(f float64) {
+	m.subscription_rate_multiplier = &f
+	m.addsubscription_rate_multiplier = nil
+}
+
+// SubscriptionRateMultiplier returns the value of the "subscription_rate_multiplier" field in the mutation.
+func (m *GroupMutation) SubscriptionRateMultiplier() (r float64, exists bool) {
+	v := m.subscription_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionRateMultiplier returns the old "subscription_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldSubscriptionRateMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionRateMultiplier: %w", err)
+	}
+	return oldValue.SubscriptionRateMultiplier, nil
+}
+
+// AddSubscriptionRateMultiplier adds f to the "subscription_rate_multiplier" field.
+func (m *GroupMutation) AddSubscriptionRateMultiplier(f float64) {
+	if m.addsubscription_rate_multiplier != nil {
+		*m.addsubscription_rate_multiplier += f
+	} else {
+		m.addsubscription_rate_multiplier = &f
+	}
+}
+
+// AddedSubscriptionRateMultiplier returns the value that was added to the "subscription_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedSubscriptionRateMultiplier() (r float64, exists bool) {
+	v := m.addsubscription_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionRateMultiplier resets all changes to the "subscription_rate_multiplier" field.
+func (m *GroupMutation) ResetSubscriptionRateMultiplier() {
+	m.subscription_rate_multiplier = nil
+	m.addsubscription_rate_multiplier = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -26039,7 +26438,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 66)
+	fields := make([]string, 0, 67)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26057,6 +26456,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.subscription_rate_multiplier != nil {
+		fields = append(fields, group.FieldSubscriptionRateMultiplier)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -26258,6 +26660,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldSubscriptionRateMultiplier:
+		return m.SubscriptionRateMultiplier()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -26399,6 +26803,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldSubscriptionRateMultiplier:
+		return m.OldSubscriptionRateMultiplier(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -26569,6 +26975,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldSubscriptionRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionRateMultiplier(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -27001,6 +27414,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.addsubscription_rate_multiplier != nil {
+		fields = append(fields, group.FieldSubscriptionRateMultiplier)
+	}
 	if m.addpeak_rate_multiplier != nil {
 		fields = append(fields, group.FieldPeakRateMultiplier)
 	}
@@ -27089,6 +27505,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case group.FieldSubscriptionRateMultiplier:
+		return m.AddedSubscriptionRateMultiplier()
 	case group.FieldPeakRateMultiplier:
 		return m.AddedPeakRateMultiplier()
 	case group.FieldDailyLimitUsd:
@@ -27156,6 +27574,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case group.FieldSubscriptionRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionRateMultiplier(v)
 		return nil
 	case group.FieldPeakRateMultiplier:
 		v, ok := value.(float64)
@@ -27518,6 +27943,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldSubscriptionRateMultiplier:
+		m.ResetSubscriptionRateMultiplier()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

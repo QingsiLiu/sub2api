@@ -573,7 +573,7 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 		routePath := c.FullPath()
 		model := requestmodel.FromBodyForRoute(routePath, c.GetHeader("Content-Type"), body)
 		if model != "" {
-			decision, err := resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path))
+			decision, err := resolver.ResolveForPreferences(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path), apiKey.RoutePreferences)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
 				c.Abort()
@@ -604,7 +604,7 @@ func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteRes
 		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite {
 			model := compositeGeminiModelFromParams(c)
 			if model != "" {
-				decision, err := resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, service.CompositeRouteEndpointGemini)
+				decision, err := resolver.ResolveForPreferences(c.Request.Context(), apiKey.Group.ID, model, service.CompositeRouteEndpointGemini, apiKey.RoutePreferences)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
 					c.Abort()

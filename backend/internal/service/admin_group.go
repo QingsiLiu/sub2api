@@ -159,6 +159,9 @@ func (s *adminServiceImpl) CreateCompositeRoute(ctx context.Context, groupID int
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateCompositeTargetGroup(ctx, route); err != nil {
+		return nil, err
+	}
 	if err := s.compositeRouteRepo.Create(ctx, route); err != nil {
 		return nil, err
 	}
@@ -182,6 +185,9 @@ func (s *adminServiceImpl) UpdateCompositeRoute(ctx context.Context, groupID, ro
 	}
 	route, err := compositeRouteFromInput(groupID, input)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.validateCompositeTargetGroup(ctx, route); err != nil {
 		return nil, err
 	}
 	route.ID = routeID
@@ -267,12 +273,28 @@ func compositeRouteFromInput(groupID int64, input CompositeRouteInput) (*Composi
 		PublicModel:    input.PublicModel,
 		MatchType:      input.MatchType,
 		TargetPlatform: input.TargetPlatform,
+		TargetGroupID:  input.TargetGroupID,
+		ProfileKey:     input.ProfileKey,
 		UpstreamModel:  input.UpstreamModel,
 		Endpoint:       input.Endpoint,
 		Priority:       input.Priority,
 		Enabled:        input.Enabled,
 		Notes:          input.Notes,
 	}, nil
+}
+
+func (s *adminServiceImpl) validateCompositeTargetGroup(ctx context.Context, route *CompositeModelRoute) error {
+	if route == nil || route.TargetGroupID == nil {
+		return nil
+	}
+	target, err := s.groupRepo.GetByIDLite(ctx, *route.TargetGroupID)
+	if err != nil {
+		return fmt.Errorf("target_group_id: %w", err)
+	}
+	if target.Platform != route.TargetPlatform || target.Platform == PlatformComposite {
+		return fmt.Errorf("target_group_id platform must match target_platform")
+	}
+	return nil
 }
 
 func defaultModelsListCandidateIDs(platform string) []string {
@@ -383,6 +405,12 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
+	}
+	if input.SubscriptionRateMultiplier < 0 {
+		return nil, errors.New("subscription_rate_multiplier must be >= 0")
+	}
+	if input.SubscriptionRateMultiplier == 0 {
+		input.SubscriptionRateMultiplier = input.RateMultiplier
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
@@ -557,6 +585,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		SubscriptionRateMultiplier:      input.SubscriptionRateMultiplier,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -774,6 +803,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.SubscriptionRateMultiplier != nil {
+		if *input.SubscriptionRateMultiplier < 0 {
+			return nil, errors.New("subscription_rate_multiplier must be >= 0")
+		}
+		group.SubscriptionRateMultiplier = *input.SubscriptionRateMultiplier
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

@@ -25,7 +25,9 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx con
 	client := clientFromContext(ctx, r.client)
 	link, err := client.UserSubscriptionGroup.Query().
 		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID))).
-		WithSubscription().
+		WithSubscription(func(q *dbent.UserSubscriptionQuery) {
+			q.WithGroup()
+		}).
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)

@@ -806,6 +806,7 @@ export default {
         id: 'ID',
         platform: '平台',
         rateMultiplier: '费率倍数',
+        subscriptionRateMultiplier: '订阅费率倍数',
         rpmOverride: 'RPM 覆盖',
         rpmOverrideHint: '该用户在此分组的 RPM 上限；留空 = 使用分组默认；0 = 不限制',
         rateDefault: '默认',
@@ -837,6 +838,7 @@ export default {
         description: '描述',
         platform: '平台',
         rateMultiplier: '费率倍数',
+        subscriptionRateMultiplier: '订阅费率倍数',
         status: '状态',
         exclusive: '专属分组',
         nameLabel: '分组名称',
@@ -905,6 +907,7 @@ export default {
           '公开分组费率 0.8，您可以创建一个费率 0.7 的专属分组，手动分配给 VIP 用户，让他们享受更优惠的价格。'
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+      subscriptionRateMultiplierHint: '订阅请求使用此倍率；余额请求使用普通费率倍数。',
       platforms: {
         all: '全部平台',
         anthropic: 'Anthropic',
@@ -1124,6 +1127,9 @@ export default {
         matchType: '匹配方式',
         endpoint: '端点',
         targetPlatform: '目标平台',
+        targetGroup: '目标账号分组',
+        targetGroupAuto: '使用 Composite 分组调度',
+        profileKey: '线路标识',
         upstreamModel: '上游模型',
         upstreamModelHint: '留空表示透传原始请求模型：前缀匹配下每个命中模型各自原样转发（如 deepseek-v4-flash、deepseek-v4-pro 分别转发）；填写则所有命中请求都固定转发该模型。',
         notes: '备注',

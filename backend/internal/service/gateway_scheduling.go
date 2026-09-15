@@ -59,6 +59,9 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 			platform = decision.TargetPlatform
 			requestedModel = decision.UpstreamModel
 			ctx = WithCompositeRouteDecision(ctx, decision)
+			if targetGroupID, ok := CompositeTargetGroupIDFromContext(ctx); ok {
+				groupID = &targetGroupID
+			}
 		}
 	} else {
 		// 无分组时只使用原生 anthropic 平台
@@ -214,6 +217,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	platform, hasForcePlatform, err := s.resolvePlatform(ctx, groupID, group, requestedModel)
 	if err != nil {
 		return nil, err
+	}
+	if targetGroupID, ok := CompositeTargetGroupIDFromContext(ctx); ok {
+		groupID = &targetGroupID
 	}
 	preferOAuth := platform == PlatformGemini
 	if s.debugModelRoutingEnabled() && requestedModel != "" && modelRoutingAppliesToTargetPlatform(platform) {

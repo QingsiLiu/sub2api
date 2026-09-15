@@ -75,6 +75,11 @@ func GroupID(v int64) predicate.CompositeModelRoute {
 	return predicate.CompositeModelRoute(sql.FieldEQ(FieldGroupID, v))
 }
 
+// TargetGroupID applies equality check predicate on the "target_group_id" field. It's identical to TargetGroupIDEQ.
+func TargetGroupID(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldEQ(FieldTargetGroupID, v))
+}
+
 // PublicModel applies equality check predicate on the "public_model" field. It's identical to PublicModelEQ.
 func PublicModel(v string) predicate.CompositeModelRoute {
 	return predicate.CompositeModelRoute(sql.FieldEQ(FieldPublicModel, v))
@@ -88,6 +93,11 @@ func MatchType(v string) predicate.CompositeModelRoute {
 // TargetPlatform applies equality check predicate on the "target_platform" field. It's identical to TargetPlatformEQ.
 func TargetPlatform(v string) predicate.CompositeModelRoute {
 	return predicate.CompositeModelRoute(sql.FieldEQ(FieldTargetPlatform, v))
+}
+
+// ProfileKey applies equality check predicate on the "profile_key" field. It's identical to ProfileKeyEQ.
+func ProfileKey(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldEQ(FieldProfileKey, v))
 }
 
 // UpstreamModel applies equality check predicate on the "upstream_model" field. It's identical to UpstreamModelEQ.
@@ -263,6 +273,56 @@ func GroupIDIn(vs ...int64) predicate.CompositeModelRoute {
 // GroupIDNotIn applies the NotIn predicate on the "group_id" field.
 func GroupIDNotIn(vs ...int64) predicate.CompositeModelRoute {
 	return predicate.CompositeModelRoute(sql.FieldNotIn(FieldGroupID, vs...))
+}
+
+// TargetGroupIDEQ applies the EQ predicate on the "target_group_id" field.
+func TargetGroupIDEQ(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldEQ(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDNEQ applies the NEQ predicate on the "target_group_id" field.
+func TargetGroupIDNEQ(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldNEQ(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDIn applies the In predicate on the "target_group_id" field.
+func TargetGroupIDIn(vs ...int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldIn(FieldTargetGroupID, vs...))
+}
+
+// TargetGroupIDNotIn applies the NotIn predicate on the "target_group_id" field.
+func TargetGroupIDNotIn(vs ...int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldNotIn(FieldTargetGroupID, vs...))
+}
+
+// TargetGroupIDGT applies the GT predicate on the "target_group_id" field.
+func TargetGroupIDGT(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldGT(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDGTE applies the GTE predicate on the "target_group_id" field.
+func TargetGroupIDGTE(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldGTE(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDLT applies the LT predicate on the "target_group_id" field.
+func TargetGroupIDLT(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldLT(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDLTE applies the LTE predicate on the "target_group_id" field.
+func TargetGroupIDLTE(v int64) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldLTE(FieldTargetGroupID, v))
+}
+
+// TargetGroupIDIsNil applies the IsNil predicate on the "target_group_id" field.
+func TargetGroupIDIsNil() predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldIsNull(FieldTargetGroupID))
+}
+
+// TargetGroupIDNotNil applies the NotNil predicate on the "target_group_id" field.
+func TargetGroupIDNotNil() predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldNotNull(FieldTargetGroupID))
 }
 
 // PublicModelEQ applies the EQ predicate on the "public_model" field.
@@ -458,6 +518,71 @@ func TargetPlatformEqualFold(v string) predicate.CompositeModelRoute {
 // TargetPlatformContainsFold applies the ContainsFold predicate on the "target_platform" field.
 func TargetPlatformContainsFold(v string) predicate.CompositeModelRoute {
 	return predicate.CompositeModelRoute(sql.FieldContainsFold(FieldTargetPlatform, v))
+}
+
+// ProfileKeyEQ applies the EQ predicate on the "profile_key" field.
+func ProfileKeyEQ(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldEQ(FieldProfileKey, v))
+}
+
+// ProfileKeyNEQ applies the NEQ predicate on the "profile_key" field.
+func ProfileKeyNEQ(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldNEQ(FieldProfileKey, v))
+}
+
+// ProfileKeyIn applies the In predicate on the "profile_key" field.
+func ProfileKeyIn(vs ...string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldIn(FieldProfileKey, vs...))
+}
+
+// ProfileKeyNotIn applies the NotIn predicate on the "profile_key" field.
+func ProfileKeyNotIn(vs ...string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldNotIn(FieldProfileKey, vs...))
+}
+
+// ProfileKeyGT applies the GT predicate on the "profile_key" field.
+func ProfileKeyGT(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldGT(FieldProfileKey, v))
+}
+
+// ProfileKeyGTE applies the GTE predicate on the "profile_key" field.
+func ProfileKeyGTE(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldGTE(FieldProfileKey, v))
+}
+
+// ProfileKeyLT applies the LT predicate on the "profile_key" field.
+func ProfileKeyLT(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldLT(FieldProfileKey, v))
+}
+
+// ProfileKeyLTE applies the LTE predicate on the "profile_key" field.
+func ProfileKeyLTE(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldLTE(FieldProfileKey, v))
+}
+
+// ProfileKeyContains applies the Contains predicate on the "profile_key" field.
+func ProfileKeyContains(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldContains(FieldProfileKey, v))
+}
+
+// ProfileKeyHasPrefix applies the HasPrefix predicate on the "profile_key" field.
+func ProfileKeyHasPrefix(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldHasPrefix(FieldProfileKey, v))
+}
+
+// ProfileKeyHasSuffix applies the HasSuffix predicate on the "profile_key" field.
+func ProfileKeyHasSuffix(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldHasSuffix(FieldProfileKey, v))
+}
+
+// ProfileKeyEqualFold applies the EqualFold predicate on the "profile_key" field.
+func ProfileKeyEqualFold(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldEqualFold(FieldProfileKey, v))
+}
+
+// ProfileKeyContainsFold applies the ContainsFold predicate on the "profile_key" field.
+func ProfileKeyContainsFold(v string) predicate.CompositeModelRoute {
+	return predicate.CompositeModelRoute(sql.FieldContainsFold(FieldProfileKey, v))
 }
 
 // UpstreamModelEQ applies the EQ predicate on the "upstream_model" field.

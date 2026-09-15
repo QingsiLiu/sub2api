@@ -70,6 +70,20 @@ func TestCompositeRouteResolverExplicitExactRouteRewritesModel(t *testing.T) {
 	require.Equal(t, int64(10), decision.Route.ID)
 }
 
+func TestCompositeRouteResolverPrefersConfiguredProfileAndTargetGroup(t *testing.T) {
+	resolver := NewCompositeRouteResolver(compositeRouteRepoStub{routes: []CompositeModelRoute{
+		{ID: 1, GroupID: 7, PublicModel: "gpt-5.6", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformOpenAI, ProfileKey: "stable", TargetGroupID: compositeInt64Ptr(11), UpstreamModel: "gpt-5.6", Enabled: true},
+		{ID: 2, GroupID: 7, PublicModel: "gpt-5.6", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformOpenAI, ProfileKey: "pro", TargetGroupID: compositeInt64Ptr(22), UpstreamModel: "gpt-5.6-pro", Enabled: true},
+	}})
+	decision, err := resolver.ResolveForPreferences(context.Background(), 7, "gpt-5.6", CompositeRouteEndpointResponses, map[string]string{"openai": "pro"})
+	require.NoError(t, err)
+	require.True(t, decision.Matched)
+	require.Equal(t, int64(22), *decision.TargetGroupID)
+	require.Equal(t, "gpt-5.6-pro", decision.UpstreamModel)
+}
+
+func compositeInt64Ptr(v int64) *int64 { return &v }
+
 // Scenario: 唯一平台的精确别名可路由
 func TestCompositeRouteResolverUsesAccountModelOwnershipForUnprefixedAlias(t *testing.T) {
 	resolver := NewCompositeRouteResolver(nil)

@@ -116,6 +116,11 @@ export default {
     nameLabel: '名称',
     namePlaceholder: '我的 API 密钥',
     groupLabel: '分组',
+    routePreferencesLabel: '线路偏好（JSON）',
+    routePreferencesHint: '可选。按供应商填写线路，例如 {"openai":"stable"}。',
+    routePreferencesInvalid: '线路偏好必须是 JSON 对象。',
+    subscriptionLabel: '订阅额度',
+    subscriptionHint: '选择此通用密钥要消耗的有效订阅。',
     providerLabel: '厂商',
     providers: {
       anthropic: 'Anthropic',

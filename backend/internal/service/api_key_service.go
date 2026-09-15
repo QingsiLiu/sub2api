@@ -35,7 +35,8 @@ var (
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
-	ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key 额度已用完")
+	ErrAPIKeyQuotaExhausted          = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key 额度已用完")
+	ErrSubscriptionSelectionRequired = infraerrors.BadRequest("SUBSCRIPTION_SELECTION_REQUIRED", "select one active subscription for a composite API key")
 
 	// Rate limit errors
 	ErrAPIKeyRateLimit5hExceeded = infraerrors.TooManyRequests("API_KEY_RATE_5H_EXCEEDED", "api key 5小时限额已用完")
@@ -61,11 +62,13 @@ const (
 // 若编辑 Key 时无条件整行回写，并发累计的配额与限流计数就会被旧快照覆盖。
 // 因此调用方必须显式声明要改的列。
 type APIKeyUpdateFields struct {
-	Name      bool
-	Status    bool
-	Quota     bool
-	GroupID   bool
-	ExpiresAt bool
+	Name             bool
+	Status           bool
+	Quota            bool
+	GroupID          bool
+	SubscriptionID   bool
+	RoutePreferences bool
+	ExpiresAt        bool
 	// QuotaUsed 仅供"重置配额用量"路径声明；常规计费走 IncrementQuotaUsed。
 	QuotaUsed bool
 	// RateLimits 覆盖 rate_limit_5h / _1d / _7d 三个阈值。
@@ -209,11 +212,13 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name             string            `json:"name"`
+	GroupID          *int64            `json:"group_id"`
+	SubscriptionID   *int64            `json:"subscription_id"`
+	RoutePreferences map[string]string `json:"route_preferences"`
+	CustomKey        *string           `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist      []string          `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist      []string          `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -227,11 +232,13 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string   `json:"name"`
-	GroupID     *int64    `json:"group_id"`
-	Status      *string   `json:"status"`
-	IPWhitelist *[]string `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
-	IPBlacklist *[]string `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
+	Name             *string           `json:"name"`
+	GroupID          *int64            `json:"group_id"`
+	SubscriptionID   *int64            `json:"subscription_id"`
+	RoutePreferences map[string]string `json:"route_preferences"`
+	Status           *string           `json:"status"`
+	IPWhitelist      *[]string         `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
+	IPBlacklist      *[]string         `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -502,6 +509,13 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		if !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
 		}
+		if group.Platform == PlatformComposite && group.IsSubscriptionType() {
+			subscriptionID, err := s.resolveCompositeSubscriptionID(ctx, user.ID, group.ID, req.SubscriptionID)
+			if err != nil {
+				return nil, err
+			}
+			req.SubscriptionID = subscriptionID
+		}
 	}
 
 	var key string
@@ -541,18 +555,20 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        html.EscapeString(req.Name),
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:           userID,
+		Key:              key,
+		Name:             html.EscapeString(req.Name),
+		GroupID:          req.GroupID,
+		SubscriptionID:   req.SubscriptionID,
+		RoutePreferences: req.RoutePreferences,
+		Status:           StatusActive,
+		IPWhitelist:      req.IPWhitelist,
+		IPBlacklist:      req.IPBlacklist,
+		Quota:            req.Quota,
+		QuotaUsed:        0,
+		RateLimit5h:      req.RateLimit5h,
+		RateLimit1d:      req.RateLimit1d,
+		RateLimit7d:      req.RateLimit7d,
 	}
 
 	// Set expiration time if specified
@@ -569,6 +585,57 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	s.compileAPIKeyIPRules(apiKey)
 
 	return apiKey, nil
+}
+
+func (s *APIKeyService) resolveCompositeSubscriptionID(ctx context.Context, userID, groupID int64, requested *int64) (*int64, error) {
+	if requested != nil && *requested > 0 {
+		sub, err := s.userSubRepo.GetByID(ctx, *requested)
+		if err != nil || sub == nil || sub.UserID != userID || !sub.IsActive() {
+			return nil, ErrSubscriptionNotFound
+		}
+		if sub.GroupID != groupID {
+			allowed := false
+			for _, entitled := range sub.EntitledGroupIDs {
+				if entitled == groupID {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return nil, ErrSubscriptionNotFound
+			}
+		}
+		return requested, nil
+	}
+	active, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list active subscriptions: %w", err)
+	}
+	var candidate *int64
+	for i := range active {
+		sub := &active[i]
+		if sub.GroupID != groupID {
+			included := false
+			for _, entitled := range sub.EntitledGroupIDs {
+				if entitled == groupID {
+					included = true
+					break
+				}
+			}
+			if !included {
+				continue
+			}
+		}
+		if candidate != nil {
+			return nil, ErrSubscriptionSelectionRequired
+		}
+		id := sub.ID
+		candidate = &id
+	}
+	if candidate == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	return candidate, nil
 }
 
 // List 获取用户的API Key列表
@@ -823,7 +890,29 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		}
 
 		apiKey.GroupID = req.GroupID
+		apiKey.Group = group
 		fields.GroupID = true
+	}
+	if req.SubscriptionID != nil {
+		apiKey.SubscriptionID = req.SubscriptionID
+		fields.SubscriptionID = true
+	}
+	if req.RoutePreferences != nil {
+		apiKey.RoutePreferences = req.RoutePreferences
+		fields.RoutePreferences = true
+	}
+	if req.GroupID != nil || req.SubscriptionID != nil {
+		if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite && apiKey.Group.IsSubscriptionType() {
+			subscriptionID, resolveErr := s.resolveCompositeSubscriptionID(ctx, userID, apiKey.Group.ID, apiKey.SubscriptionID)
+			if resolveErr != nil {
+				return nil, resolveErr
+			}
+			apiKey.SubscriptionID = subscriptionID
+			fields.SubscriptionID = true
+		} else if apiKey.Group == nil || apiKey.Group.Platform != PlatformComposite {
+			apiKey.SubscriptionID = nil
+			fields.SubscriptionID = true
+		}
 	}
 
 	if req.Status != nil {

@@ -34,6 +34,10 @@ func (CompositeModelRoute) Mixin() []ent.Mixin {
 func (CompositeModelRoute) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("group_id"),
+		field.Int64("target_group_id").
+			Optional().
+			Nillable().
+			Comment("Concrete account pool group; nil keeps composite group scheduling"),
 		field.String("public_model").
 			MaxLen(200).
 			NotEmpty().
@@ -46,6 +50,10 @@ func (CompositeModelRoute) Fields() []ent.Field {
 			MaxLen(50).
 			Default(domain.PlatformOpenAI).
 			Comment("Concrete provider platform."),
+		field.String("profile_key").
+			MaxLen(50).
+			Default("").
+			Comment("Optional subscription route preference key such as stable or pro"),
 		field.String("upstream_model").
 			MaxLen(200).
 			Default("").

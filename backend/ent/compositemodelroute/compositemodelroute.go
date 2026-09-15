@@ -23,12 +23,16 @@ const (
 	FieldDeletedAt = "deleted_at"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldTargetGroupID holds the string denoting the target_group_id field in the database.
+	FieldTargetGroupID = "target_group_id"
 	// FieldPublicModel holds the string denoting the public_model field in the database.
 	FieldPublicModel = "public_model"
 	// FieldMatchType holds the string denoting the match_type field in the database.
 	FieldMatchType = "match_type"
 	// FieldTargetPlatform holds the string denoting the target_platform field in the database.
 	FieldTargetPlatform = "target_platform"
+	// FieldProfileKey holds the string denoting the profile_key field in the database.
+	FieldProfileKey = "profile_key"
 	// FieldUpstreamModel holds the string denoting the upstream_model field in the database.
 	FieldUpstreamModel = "upstream_model"
 	// FieldEndpoint holds the string denoting the endpoint field in the database.
@@ -59,9 +63,11 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldDeletedAt,
 	FieldGroupID,
+	FieldTargetGroupID,
 	FieldPublicModel,
 	FieldMatchType,
 	FieldTargetPlatform,
+	FieldProfileKey,
 	FieldUpstreamModel,
 	FieldEndpoint,
 	FieldPriority,
@@ -103,6 +109,10 @@ var (
 	DefaultTargetPlatform string
 	// TargetPlatformValidator is a validator for the "target_platform" field. It is called by the builders before save.
 	TargetPlatformValidator func(string) error
+	// DefaultProfileKey holds the default value on creation for the "profile_key" field.
+	DefaultProfileKey string
+	// ProfileKeyValidator is a validator for the "profile_key" field. It is called by the builders before save.
+	ProfileKeyValidator func(string) error
 	// DefaultUpstreamModel holds the default value on creation for the "upstream_model" field.
 	DefaultUpstreamModel string
 	// UpstreamModelValidator is a validator for the "upstream_model" field. It is called by the builders before save.
@@ -145,6 +155,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// ByTargetGroupID orders the results by the target_group_id field.
+func ByTargetGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetGroupID, opts...).ToFunc()
+}
+
 // ByPublicModel orders the results by the public_model field.
 func ByPublicModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPublicModel, opts...).ToFunc()
@@ -158,6 +173,11 @@ func ByMatchType(opts ...sql.OrderTermOption) OrderOption {
 // ByTargetPlatform orders the results by the target_platform field.
 func ByTargetPlatform(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTargetPlatform, opts...).ToFunc()
+}
+
+// ByProfileKey orders the results by the profile_key field.
+func ByProfileKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProfileKey, opts...).ToFunc()
 }
 
 // ByUpstreamModel orders the results by the upstream_model field.

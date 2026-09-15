@@ -120,6 +120,45 @@ func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	return _u
 }
 
+// SetSubscriptionID sets the "subscription_id" field.
+func (_u *APIKeyUpdate) SetSubscriptionID(v int64) *APIKeyUpdate {
+	_u.mutation.ResetSubscriptionID()
+	_u.mutation.SetSubscriptionID(v)
+	return _u
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableSubscriptionID(v *int64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionID adds value to the "subscription_id" field.
+func (_u *APIKeyUpdate) AddSubscriptionID(v int64) *APIKeyUpdate {
+	_u.mutation.AddSubscriptionID(v)
+	return _u
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (_u *APIKeyUpdate) ClearSubscriptionID() *APIKeyUpdate {
+	_u.mutation.ClearSubscriptionID()
+	return _u
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (_u *APIKeyUpdate) SetRoutePreferences(v map[string]string) *APIKeyUpdate {
+	_u.mutation.SetRoutePreferences(v)
+	return _u
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (_u *APIKeyUpdate) ClearRoutePreferences() *APIKeyUpdate {
+	_u.mutation.ClearRoutePreferences()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -593,6 +632,21 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.SubscriptionID(); ok {
+		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionID(); ok {
+		_spec.AddField(apikey.FieldSubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(apikey.FieldSubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RoutePreferences(); ok {
+		_spec.SetField(apikey.FieldRoutePreferences, field.TypeJSON, value)
+	}
+	if _u.mutation.RoutePreferencesCleared() {
+		_spec.ClearField(apikey.FieldRoutePreferences, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 	}
@@ -904,6 +958,45 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (_u *APIKeyUpdateOne) SetSubscriptionID(v int64) *APIKeyUpdateOne {
+	_u.mutation.ResetSubscriptionID()
+	_u.mutation.SetSubscriptionID(v)
+	return _u
+}
+
+// SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableSubscriptionID(v *int64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionID adds value to the "subscription_id" field.
+func (_u *APIKeyUpdateOne) AddSubscriptionID(v int64) *APIKeyUpdateOne {
+	_u.mutation.AddSubscriptionID(v)
+	return _u
+}
+
+// ClearSubscriptionID clears the value of the "subscription_id" field.
+func (_u *APIKeyUpdateOne) ClearSubscriptionID() *APIKeyUpdateOne {
+	_u.mutation.ClearSubscriptionID()
+	return _u
+}
+
+// SetRoutePreferences sets the "route_preferences" field.
+func (_u *APIKeyUpdateOne) SetRoutePreferences(v map[string]string) *APIKeyUpdateOne {
+	_u.mutation.SetRoutePreferences(v)
+	return _u
+}
+
+// ClearRoutePreferences clears the value of the "route_preferences" field.
+func (_u *APIKeyUpdateOne) ClearRoutePreferences() *APIKeyUpdateOne {
+	_u.mutation.ClearRoutePreferences()
 	return _u
 }
 
@@ -1409,6 +1502,21 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SubscriptionID(); ok {
+		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionID(); ok {
+		_spec.AddField(apikey.FieldSubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionIDCleared() {
+		_spec.ClearField(apikey.FieldSubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RoutePreferences(); ok {
+		_spec.SetField(apikey.FieldRoutePreferences, field.TypeJSON, value)
+	}
+	if _u.mutation.RoutePreferencesCleared() {
+		_spec.ClearField(apikey.FieldRoutePreferences, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)

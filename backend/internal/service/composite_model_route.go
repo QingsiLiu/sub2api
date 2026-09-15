@@ -46,9 +46,11 @@ var (
 type CompositeModelRoute struct {
 	ID             int64     `json:"id"`
 	GroupID        int64     `json:"group_id"`
+	TargetGroupID  *int64    `json:"target_group_id,omitempty"`
 	PublicModel    string    `json:"public_model"`
 	MatchType      string    `json:"match_type"`
 	TargetPlatform string    `json:"target_platform"`
+	ProfileKey     string    `json:"profile_key,omitempty"`
 	UpstreamModel  string    `json:"upstream_model"`
 	Endpoint       string    `json:"endpoint"`
 	Priority       int       `json:"priority"`
@@ -69,6 +71,7 @@ type CompositeRouteDecision struct {
 	GroupID        int64                `json:"group_id"`
 	PublicModel    string               `json:"public_model"`
 	TargetPlatform string               `json:"target_platform"`
+	TargetGroupID  *int64               `json:"target_group_id,omitempty"`
 	UpstreamModel  string               `json:"upstream_model"`
 	Endpoint       string               `json:"endpoint"`
 	Route          *CompositeModelRoute `json:"route,omitempty"`
@@ -79,6 +82,8 @@ type CompositeRouteInput struct {
 	PublicModel    string
 	MatchType      string
 	TargetPlatform string
+	ProfileKey     string
+	TargetGroupID  *int64
 	UpstreamModel  string
 	Endpoint       string
 	Priority       int
@@ -127,6 +132,7 @@ func normalizeCompositeRouteInput(input CompositeRouteInput) CompositeRouteInput
 	input.PublicModel = strings.TrimSpace(input.PublicModel)
 	input.MatchType = normalizeCompositeRouteMatchType(input.MatchType)
 	input.TargetPlatform = strings.TrimSpace(input.TargetPlatform)
+	input.ProfileKey = strings.ToLower(strings.TrimSpace(input.ProfileKey))
 	input.UpstreamModel = strings.TrimSpace(input.UpstreamModel)
 	input.Endpoint = normalizeCompositeRouteEndpoint(input.Endpoint)
 	// 仅对 exact 路由把空 upstream_model 回填成 public_model：exact 命中时请求模型
