@@ -21,7 +21,9 @@
  */
 export const GEILI_OVERRIDES: Readonly<Record<string, string>> = {
   // 全站壳：注册 Geili i18n 词条、标记 <html data-geili-ui>，其余委托给上游 App.vue
-  'App.vue': 'App.vue'
+  'App.vue': 'App.vue',
+  // 全站样式入口：先引入上游 style.css，再叠加设计 token 与 Geili 层
+  'style.css': 'styles/index.css'
 }
 
 /** `frontend/src/` 下需要保持“挂钩”的上游文件，及每个文件里必须存在的标记。 */
