@@ -38,38 +38,6 @@ html[data-geili-ui] {
   margin: 0 auto;
 }
 
-.signal-dashboard .signal-readouts > .grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  border-top: 1px solid rgb(var(--geili-hairline));
-  border-bottom: 1px solid rgb(var(--geili-hairline));
-}
-
-.signal-dashboard .signal-readouts > .grid + .grid {
-  margin-top: 1.5rem;
-}
-
-.signal-dashboard .signal-readouts > .grid > .card {
-  min-height: 112px;
-  border: 0;
-  border-right: 1px solid rgb(var(--geili-hairline));
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.signal-dashboard .signal-readouts > .grid > .card:last-child { border-right: 0; }
-.signal-dashboard .signal-readouts > .grid > .card > div { align-items: flex-start; }
-.signal-dashboard .signal-readouts > .grid > .card > div > div:first-child { display: none; }
-.signal-dashboard .signal-readouts .text-xl { font-size: 1.75rem; line-height: 2.25rem; letter-spacing: -0.03em; }
-.signal-dashboard .signal-readouts .text-xs { font-size: 0.75rem; line-height: 1.25rem; }
-
-@media (max-width: 767px) {
-  .signal-dashboard .signal-readouts > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .signal-dashboard .signal-readouts > .grid > .card:nth-child(2) { border-right: 0; }
-  .signal-dashboard .signal-readouts > .grid > .card:nth-child(n + 3) { border-top: 1px solid rgb(var(--geili-hairline)); }
-}
-
 .dark .signal-shell,
 .dark .signal-main {
   background-color: rgb(var(--geili-surface));

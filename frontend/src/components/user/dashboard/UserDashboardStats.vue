@@ -1,6 +1,5 @@
 <template>
   <!-- Row 1: Core Stats -->
-  <div class="signal-readouts space-y-8">
   <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
     <!-- Balance -->
     <div v-if="!isSimple" class="card p-4">
@@ -221,7 +220,6 @@
       </div>
     </div>
   </div>
-</div>
 </template>
 
 <script setup lang="ts">
