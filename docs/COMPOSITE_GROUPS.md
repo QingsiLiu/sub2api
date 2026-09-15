@@ -39,6 +39,12 @@ Each route belongs to one composite group and contains:
 - `public_model`: model identifier the client sends.
 - `match_type`: `exact` or `prefix`.
 - `target_platform`: concrete provider platform.
+- `target_group_id`: optional concrete account-pool group. When present, the
+  scheduler uses that group and subscription billing reads its
+  `subscription_rate_multiplier`.
+- `profile_key`: optional preference key such as `stable`, `pro`, or `heavy`.
+  Composite API keys can select this key per provider through
+  `route_preferences`.
 - `upstream_model`: model identifier sent upstream. If omitted, the public
   model is reused.
 - `endpoint`: `any`, `messages`, `count_tokens`, `responses`,
@@ -94,6 +100,9 @@ guessing a provider.
 - Channel configuration exposes composite groups in concrete provider sections.
   The channel `group_ids` payload is still flat; provider-specific model
   mapping and pricing remain keyed by concrete platform.
+- Groups expose independent `rate_multiplier` (balance billing) and
+  `subscription_rate_multiplier` (subscription billing) values. A request uses
+  exactly one according to its billing mode.
 
 ## Bucket 2 Setup: OpenAI + Claude + Gemini + Grok
 
