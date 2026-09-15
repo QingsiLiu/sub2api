@@ -22,8 +22,6 @@
 export const GEILI_OVERRIDES: Readonly<Record<string, string>> = {
   // 全站壳：注册 Geili i18n 词条、标记 <html data-geili-ui>，其余委托给上游 App.vue
   'App.vue': 'App.vue',
-  // Signal Observatory shell: continuous canvas and narrow navigation rail.
-  'components/layout/AppLayout.vue': 'components/layout/AppLayout.vue',
   // Stitch Clear Signal global shell: upstream components remain intact while
   // the tokenized Geili layer supplies the new typography and surfaces.
   'style.css': 'styles/index.css'
