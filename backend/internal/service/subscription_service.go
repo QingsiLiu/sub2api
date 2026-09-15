@@ -747,7 +747,7 @@ func (s *SubscriptionService) GetActiveSubscriptionByIDForUser(ctx context.Conte
 		return nil, ErrSubscriptionNotFound
 	}
 	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
-	if err != nil || sub == nil || sub.UserID != userID || !sub.IsActive() {
+	if err != nil || sub == nil || sub.UserID != userID || !sub.IsActive() || sub.StartsAt.After(time.Now()) {
 		return nil, ErrSubscriptionNotFound
 	}
 	if groupID > 0 {

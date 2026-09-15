@@ -18,7 +18,7 @@ const (
 	RequestedPublicModel Key = "ctx_requested_public_model"
 
 	// CompositeRouteSource 标识 composite 解析结果来自显式路由还是内置模型探测。
-	CompositeRouteSource Key = "ctx_composite_route_source"
+	CompositeRouteSource   Key = "ctx_composite_route_source"
 	CompositeTargetGroupID Key = "ctx_composite_target_group_id"
 
 	// RequestID 为服务端生成/透传的请求 ID。

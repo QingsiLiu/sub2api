@@ -770,6 +770,16 @@ func ChannelIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldChannelID))
 }
 
+// RouteBillingSnapshotIsNil applies the IsNil predicate on the "route_billing_snapshot" field.
+func RouteBillingSnapshotIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldRouteBillingSnapshot))
+}
+
+// RouteBillingSnapshotNotNil applies the NotNil predicate on the "route_billing_snapshot" field.
+func RouteBillingSnapshotNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldRouteBillingSnapshot))
+}
+
 // ModelMappingChainEQ applies the EQ predicate on the "model_mapping_chain" field.
 func ModelMappingChainEQ(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldModelMappingChain, v))

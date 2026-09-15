@@ -251,6 +251,7 @@ func TestAttachQuotaSnapshot_NoteOnlyWhenProbeMessageEmpty(t *testing.T) {
 // --- 校验矩阵 ---
 
 func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
+	// Validate mode requirements without depending on the host DNS/proxy setup.
 	accountID := int64(9)
 
 	cases := []struct {
@@ -270,7 +271,7 @@ func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
 			name: "probe requires api key",
 			params: ChannelMonitorCreateParams{
 				Provider: MonitorProviderOpenAI, CheckMode: MonitorCheckModeProbe,
-				Endpoint: "https://api.openai.com", IntervalSeconds: 60, PrimaryModel: "gpt-5",
+				Endpoint: "https://1.1.1.1", IntervalSeconds: 60, PrimaryModel: "gpt-5",
 			},
 			wantErr: ErrChannelMonitorMissingAPIKey,
 		},
@@ -302,7 +303,7 @@ func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
 			name: "antigravity probe unsupported",
 			params: ChannelMonitorCreateParams{
 				Provider: MonitorProviderAntigravity, CheckMode: MonitorCheckModeProbe,
-				Endpoint: "https://example.com", APIKey: "k",
+				Endpoint: "https://1.1.1.1", APIKey: "k",
 				IntervalSeconds: 60, AccountID: &accountID, PrimaryModel: "gemini-3-pro",
 			},
 			wantErr: ErrChannelMonitorInvalidCheckMode,
@@ -311,7 +312,7 @@ func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
 			name: "antigravity quota_probe unsupported",
 			params: ChannelMonitorCreateParams{
 				Provider: MonitorProviderAntigravity, CheckMode: MonitorCheckModeQuotaProbe,
-				Endpoint: "https://example.com", APIKey: "k",
+				Endpoint: "https://1.1.1.1", APIKey: "k",
 				IntervalSeconds: 60, AccountID: &accountID, PrimaryModel: "gemini-3-pro",
 			},
 			wantErr: ErrChannelMonitorInvalidCheckMode,
@@ -320,7 +321,7 @@ func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
 			name: "unknown mode rejected",
 			params: ChannelMonitorCreateParams{
 				Provider: MonitorProviderOpenAI, CheckMode: "auto",
-				Endpoint: "https://api.openai.com", APIKey: "sk",
+				Endpoint: "https://1.1.1.1", APIKey: "sk",
 				IntervalSeconds: 60, PrimaryModel: "gpt-5",
 			},
 			wantErr: ErrChannelMonitorInvalidCheckMode,
@@ -330,7 +331,7 @@ func TestValidateCreateParams_CheckModeMatrix(t *testing.T) {
 			name: "quota_probe requires primary model",
 			params: ChannelMonitorCreateParams{
 				Provider: MonitorProviderKimi, CheckMode: MonitorCheckModeQuotaProbe,
-				Endpoint: "https://api.kimi.com", APIKey: "sk",
+				Endpoint: "https://1.1.1.1", APIKey: "sk",
 				IntervalSeconds: 60, AccountID: &accountID,
 			},
 			wantErr: ErrChannelMonitorMissingPrimaryModel,
@@ -564,7 +565,7 @@ func TestApplyMonitorUpdate_ProviderOnlyRevalidatesCheckMode(t *testing.T) {
 	probeKimi := func() *ChannelMonitor {
 		return &ChannelMonitor{
 			Provider: MonitorProviderKimi, APIMode: MonitorAPIModeChatCompletions,
-			Endpoint: "https://api.kimi.com", PrimaryModel: "kimi-k2",
+			Endpoint: "https://1.1.1.1", PrimaryModel: "kimi-k2",
 			CheckMode: MonitorCheckModeProbe,
 		}
 	}
@@ -583,7 +584,7 @@ func TestApplyMonitorUpdate_ProviderOnlyRevalidatesCheckMode(t *testing.T) {
 	// 存量非法行（antigravity+probe）仅改名/停用不被砖化。
 	legacy := &ChannelMonitor{
 		Provider: MonitorProviderAntigravity, APIMode: MonitorAPIModeChatCompletions,
-		Endpoint: "https://example.com", PrimaryModel: "gemini-3-pro",
+		Endpoint: "https://1.1.1.1", PrimaryModel: "gemini-3-pro",
 		CheckMode: MonitorCheckModeProbe,
 	}
 	newName := "renamed"

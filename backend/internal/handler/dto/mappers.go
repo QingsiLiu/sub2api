@@ -768,6 +768,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		UpstreamModelMismatch:   l.UpstreamModelMismatch,
 		ChannelID:               l.ChannelID,
 		ModelMappingChain:       l.ModelMappingChain,
+		RouteBillingSnapshot:    l.RouteBillingSnapshot,
 		UpstreamRequestID:       l.UpstreamRequestID,
 		BillingTier:             l.BillingTier,
 		AccountRateMultiplier:   l.AccountRateMultiplier,

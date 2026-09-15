@@ -1,241 +1,970 @@
-{
-  "suite": "local HTTP + PostgreSQL + Redis + synthetic upstream",
-  "checks": [
-    {
-      "name": "stable /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "stable target group",
-      "passed": true
-    },
-    {
-      "name": "stable subscription multiplier",
-      "passed": true
-    },
-    {
-      "name": "stable same subscription",
-      "passed": true
-    },
-    {
-      "name": "claude /v1/messages JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "Anthropic response shape",
-      "passed": true
-    },
-    {
-      "name": "claude target group",
-      "passed": true
-    },
-    {
-      "name": "claude subscription multiplier",
-      "passed": true
-    },
-    {
-      "name": "claude same subscription",
-      "passed": true
-    },
-    {
-      "name": "grok /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "grok target group",
-      "passed": true
-    },
-    {
-      "name": "grok subscription multiplier",
-      "passed": true
-    },
-    {
-      "name": "grok same subscription",
-      "passed": true
-    },
-    {
-      "name": "deepseek /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "deepseek target group",
-      "passed": true
-    },
-    {
-      "name": "deepseek subscription multiplier",
-      "passed": true
-    },
-    {
-      "name": "deepseek same subscription",
-      "passed": true
-    },
-    {
-      "name": "shared quota equals all providers",
-      "passed": true
-    },
-    {
-      "name": "subscription leaves balance unchanged",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "balance multiplier independent after subscription cache",
-      "passed": true
-    },
-    {
-      "name": "pro /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "console preference selects Pro pool and rate",
-      "passed": true
-    },
-    {
-      "name": "pro /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "route target edit persists",
-      "passed": true
-    },
-    {
-      "name": "disabled selected profile fails closed",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/chat/completions SSE HTTP200",
-      "passed": true
-    },
-    {
-      "name": "stable stream content",
-      "passed": true
-    },
-    {
-      "name": "stable SSE billing",
-      "passed": true
-    },
-    {
-      "name": "claude /v1/messages SSE HTTP200",
-      "passed": true
-    },
-    {
-      "name": "claude stream content",
-      "passed": true
-    },
-    {
-      "name": "claude SSE billing",
-      "passed": true
-    },
-    {
-      "name": "grok /v1/chat/completions SSE HTTP200",
-      "passed": true
-    },
-    {
-      "name": "grok stream content",
-      "passed": true
-    },
-    {
-      "name": "grok SSE billing",
-      "passed": true
-    },
-    {
-      "name": "deepseek /v1/chat/completions SSE HTTP200",
-      "passed": true
-    },
-    {
-      "name": "deepseek stream content",
-      "passed": true
-    },
-    {
-      "name": "deepseek SSE billing",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/responses SSE HTTP200",
-      "passed": true
-    },
-    {
-      "name": "stable stream content",
-      "passed": true
-    },
-    {
-      "name": "Responses SSE billing",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "explicit zero subscription multiplier",
-      "passed": true
-    },
-    {
-      "name": "unpriced model rejected before forwarding",
-      "passed": true
-    },
-    {
-      "name": "unknown model rejected",
-      "passed": true
-    },
-    {
-      "name": "exhausted shared quota blocks calls",
-      "passed": true
-    },
-    {
-      "name": "exhaustion does not charge balance",
-      "passed": true
-    },
-    {
-      "name": "expired pinned subscription denied",
-      "passed": true
-    },
-    {
-      "name": "user route dropdown exposes provider prices",
-      "passed": true
-    },
-    {
-      "name": "eight concurrent calls succeed",
-      "passed": true
-    },
-    {
-      "name": "concurrent settlement has no lost or duplicate charges",
-      "passed": true
-    },
-    {
-      "name": "multiple subscriptions require explicit selection",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "selected second subscription owns the charge",
-      "passed": true
-    },
-    {
-      "name": "stable /v1/chat/completions JSON HTTP200",
-      "passed": true
-    },
-    {
-      "name": "legacy subscription key retains its quota owner and independent rate",
-      "passed": true
-    },
-    {
-      "name": "new manual assignments grant unified facade visibility",
-      "passed": true
-    },
-    {
-      "name": "another user cannot bind someone else subscription",
-      "passed": true
-    },
-    {
-      "name": "original visuals absent from served build",
-      "passed": true
+[
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-0843154907bb', 'object': 'chat.completion', 'created': 1789489587, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "stable target group",
+    "passed": true,
+    "detail": {
+      "id": 54,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
     }
-  ]
-}
+  },
+  {
+    "name": "stable subscription multiplier",
+    "passed": true,
+    "detail": {
+      "id": 54,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "stable same subscription",
+    "passed": true,
+    "detail": {
+      "id": 54,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "stable route billing snapshot",
+    "passed": true,
+    "detail": {
+      "raw_cost": 0.0012000000000000001,
+      "route_id": 25,
+      "actual_cost": 0.0012000000000000001,
+      "billing_mode": "subscription",
+      "upstream_model": "gpt-4.1-mini",
+      "requested_model": "gpt-4.1-mini",
+      "subscription_id": 6,
+      "target_group_id": 35,
+      "resolved_platform": "openai",
+      "effective_multiplier": 1
+    }
+  },
+  {
+    "name": "claude /v1/messages JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-8e02a41ff940', 'type': 'message', 'role': 'assistant', 'model': 'claude-sonnet-4-6', 'content': [{'type': 'text', 'text': 'acceptance ok'}], 'stop_reason': 'end_turn', 'usage': {'input_to"
+  },
+  {
+    "name": "Anthropic response shape",
+    "passed": true,
+    "detail": {
+      "id": "mock-8e02a41ff940",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-6",
+      "content": [
+        {
+          "type": "text",
+          "text": "acceptance ok"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 1000,
+        "output_tokens": 100
+      }
+    }
+  },
+  {
+    "name": "claude target group",
+    "passed": true,
+    "detail": {
+      "id": 55,
+      "model": "claude-sonnet-4-6",
+      "group_id": 37,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0024,
+      "rate_multiplier": 2.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 27,
+        "actual_cost": 0.0024000000000000002,
+        "billing_mode": "subscription",
+        "upstream_model": "claude-sonnet-4-6",
+        "requested_model": "claude-sonnet-4-6",
+        "subscription_id": 6,
+        "target_group_id": 37,
+        "resolved_platform": "anthropic",
+        "effective_multiplier": 2
+      }
+    }
+  },
+  {
+    "name": "claude subscription multiplier",
+    "passed": true,
+    "detail": {
+      "id": 55,
+      "model": "claude-sonnet-4-6",
+      "group_id": 37,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0024,
+      "rate_multiplier": 2.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 27,
+        "actual_cost": 0.0024000000000000002,
+        "billing_mode": "subscription",
+        "upstream_model": "claude-sonnet-4-6",
+        "requested_model": "claude-sonnet-4-6",
+        "subscription_id": 6,
+        "target_group_id": 37,
+        "resolved_platform": "anthropic",
+        "effective_multiplier": 2
+      }
+    }
+  },
+  {
+    "name": "claude same subscription",
+    "passed": true,
+    "detail": {
+      "id": 55,
+      "model": "claude-sonnet-4-6",
+      "group_id": 37,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0024,
+      "rate_multiplier": 2.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 27,
+        "actual_cost": 0.0024000000000000002,
+        "billing_mode": "subscription",
+        "upstream_model": "claude-sonnet-4-6",
+        "requested_model": "claude-sonnet-4-6",
+        "subscription_id": 6,
+        "target_group_id": 37,
+        "resolved_platform": "anthropic",
+        "effective_multiplier": 2
+      }
+    }
+  },
+  {
+    "name": "claude route billing snapshot",
+    "passed": true,
+    "detail": {
+      "raw_cost": 0.0012000000000000001,
+      "route_id": 27,
+      "actual_cost": 0.0024000000000000002,
+      "billing_mode": "subscription",
+      "upstream_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "subscription_id": 6,
+      "target_group_id": 37,
+      "resolved_platform": "anthropic",
+      "effective_multiplier": 2
+    }
+  },
+  {
+    "name": "grok /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-f512a925370e', 'object': 'chat.completion', 'created': 1789489588, 'model': 'grok-4.3', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_reas"
+  },
+  {
+    "name": "grok target group",
+    "passed": true,
+    "detail": {
+      "id": 56,
+      "model": "grok-4.3",
+      "group_id": 38,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0048,
+      "rate_multiplier": 4.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 28,
+        "actual_cost": 0.0048000000000000004,
+        "billing_mode": "subscription",
+        "upstream_model": "grok-4.3",
+        "requested_model": "grok-4.3",
+        "subscription_id": 6,
+        "target_group_id": 38,
+        "resolved_platform": "grok",
+        "effective_multiplier": 4
+      }
+    }
+  },
+  {
+    "name": "grok subscription multiplier",
+    "passed": true,
+    "detail": {
+      "id": 56,
+      "model": "grok-4.3",
+      "group_id": 38,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0048,
+      "rate_multiplier": 4.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 28,
+        "actual_cost": 0.0048000000000000004,
+        "billing_mode": "subscription",
+        "upstream_model": "grok-4.3",
+        "requested_model": "grok-4.3",
+        "subscription_id": 6,
+        "target_group_id": 38,
+        "resolved_platform": "grok",
+        "effective_multiplier": 4
+      }
+    }
+  },
+  {
+    "name": "grok same subscription",
+    "passed": true,
+    "detail": {
+      "id": 56,
+      "model": "grok-4.3",
+      "group_id": 38,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0048,
+      "rate_multiplier": 4.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 28,
+        "actual_cost": 0.0048000000000000004,
+        "billing_mode": "subscription",
+        "upstream_model": "grok-4.3",
+        "requested_model": "grok-4.3",
+        "subscription_id": 6,
+        "target_group_id": 38,
+        "resolved_platform": "grok",
+        "effective_multiplier": 4
+      }
+    }
+  },
+  {
+    "name": "grok route billing snapshot",
+    "passed": true,
+    "detail": {
+      "raw_cost": 0.0012000000000000001,
+      "route_id": 28,
+      "actual_cost": 0.0048000000000000004,
+      "billing_mode": "subscription",
+      "upstream_model": "grok-4.3",
+      "requested_model": "grok-4.3",
+      "subscription_id": 6,
+      "target_group_id": 38,
+      "resolved_platform": "grok",
+      "effective_multiplier": 4
+    }
+  },
+  {
+    "name": "deepseek /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-07ed18b906f4', 'object': 'chat.completion', 'created': 1789489588, 'model': 'deepseek-chat', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish"
+  },
+  {
+    "name": "deepseek target group",
+    "passed": true,
+    "detail": {
+      "id": 57,
+      "model": "deepseek-chat",
+      "group_id": 39,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0006,
+      "rate_multiplier": 0.5,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 29,
+        "actual_cost": 0.0006000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "deepseek-chat",
+        "requested_model": "deepseek-chat",
+        "subscription_id": 6,
+        "target_group_id": 39,
+        "resolved_platform": "deepseek",
+        "effective_multiplier": 0.5
+      }
+    }
+  },
+  {
+    "name": "deepseek subscription multiplier",
+    "passed": true,
+    "detail": {
+      "id": 57,
+      "model": "deepseek-chat",
+      "group_id": 39,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0006,
+      "rate_multiplier": 0.5,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 29,
+        "actual_cost": 0.0006000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "deepseek-chat",
+        "requested_model": "deepseek-chat",
+        "subscription_id": 6,
+        "target_group_id": 39,
+        "resolved_platform": "deepseek",
+        "effective_multiplier": 0.5
+      }
+    }
+  },
+  {
+    "name": "deepseek same subscription",
+    "passed": true,
+    "detail": {
+      "id": 57,
+      "model": "deepseek-chat",
+      "group_id": 39,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0006,
+      "rate_multiplier": 0.5,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 29,
+        "actual_cost": 0.0006000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "deepseek-chat",
+        "requested_model": "deepseek-chat",
+        "subscription_id": 6,
+        "target_group_id": 39,
+        "resolved_platform": "deepseek",
+        "effective_multiplier": 0.5
+      }
+    }
+  },
+  {
+    "name": "deepseek route billing snapshot",
+    "passed": true,
+    "detail": {
+      "raw_cost": 0.0012000000000000001,
+      "route_id": 29,
+      "actual_cost": 0.0006000000000000001,
+      "billing_mode": "subscription",
+      "upstream_model": "deepseek-chat",
+      "requested_model": "deepseek-chat",
+      "subscription_id": 6,
+      "target_group_id": 39,
+      "resolved_platform": "deepseek",
+      "effective_multiplier": 0.5
+    }
+  },
+  {
+    "name": "shared quota equals all providers",
+    "passed": true,
+    "detail": {
+      "used": 0.018,
+      "balance": 5.0
+    }
+  },
+  {
+    "name": "subscription leaves balance unchanged",
+    "passed": true,
+    "detail": {
+      "used": 0.018,
+      "balance": 5.0
+    }
+  },
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-b206a88966da', 'object': 'chat.completion', 'created': 1789489588, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "balance multiplier independent after subscription cache",
+    "passed": true,
+    "detail": {
+      "id": 58,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": null,
+      "total_cost": 0.0012,
+      "actual_cost": 0.00024,
+      "rate_multiplier": 0.2,
+      "billing_type": 0,
+      "route_billing_snapshot": null
+    }
+  },
+  {
+    "name": "pro /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-b0d521bd7fcd', 'object': 'chat.completion', 'created': 1789489588, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "console preference selects Pro pool and rate",
+    "passed": true,
+    "detail": {
+      "id": 59,
+      "model": "gpt-4.1-mini",
+      "group_id": 36,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0036,
+      "rate_multiplier": 3.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 26,
+        "actual_cost": 0.0036000000000000003,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 36,
+        "resolved_platform": "openai",
+        "effective_multiplier": 3
+      }
+    }
+  },
+  {
+    "name": "pro /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-48e285a07c6b', 'object': 'chat.completion', 'created': 1789489588, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "route target edit persists",
+    "passed": true,
+    "detail": {
+      "id": 60,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 26,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "disabled selected profile fails closed",
+    "passed": true,
+    "detail": 400
+  },
+  {
+    "name": "stable /v1/chat/completions SSE HTTP200",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-36c89f258985\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"gpt-4.1-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\"}"
+  },
+  {
+    "name": "stable stream content",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-36c89f258985\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"gpt-4.1-mini\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\"}"
+  },
+  {
+    "name": "stable SSE billing",
+    "passed": true,
+    "detail": {
+      "id": 61,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "claude /v1/messages SSE HTTP200",
+    "passed": true,
+    "detail": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"mock-91fbf62c7e4c\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-4-6\", \"content\": [], \"stop_reason\": null, \"u"
+  },
+  {
+    "name": "claude stream content",
+    "passed": true,
+    "detail": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"mock-91fbf62c7e4c\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"claude-sonnet-4-6\", \"content\": [], \"stop_reason\": null, \"u"
+  },
+  {
+    "name": "claude SSE billing",
+    "passed": true,
+    "detail": {
+      "id": 62,
+      "model": "claude-sonnet-4-6",
+      "group_id": 37,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0024,
+      "rate_multiplier": 2.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 27,
+        "actual_cost": 0.0024000000000000002,
+        "billing_mode": "subscription",
+        "upstream_model": "claude-sonnet-4-6",
+        "requested_model": "claude-sonnet-4-6",
+        "subscription_id": 6,
+        "target_group_id": 37,
+        "resolved_platform": "anthropic",
+        "effective_multiplier": 2
+      }
+    }
+  },
+  {
+    "name": "grok /v1/chat/completions SSE HTTP200",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-663842608faa\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"grok-4.3\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\"}, \"f"
+  },
+  {
+    "name": "grok stream content",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-663842608faa\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"grok-4.3\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\"}, \"f"
+  },
+  {
+    "name": "grok SSE billing",
+    "passed": true,
+    "detail": {
+      "id": 63,
+      "model": "grok-4.3",
+      "group_id": 38,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0048,
+      "rate_multiplier": 4.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 28,
+        "actual_cost": 0.0048000000000000004,
+        "billing_mode": "subscription",
+        "upstream_model": "grok-4.3",
+        "requested_model": "grok-4.3",
+        "subscription_id": 6,
+        "target_group_id": 38,
+        "resolved_platform": "grok",
+        "effective_multiplier": 4
+      }
+    }
+  },
+  {
+    "name": "deepseek /v1/chat/completions SSE HTTP200",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-cc08ed004a52\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"deepseek-chat\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\""
+  },
+  {
+    "name": "deepseek stream content",
+    "passed": true,
+    "detail": "data: {\"id\": \"mock-cc08ed004a52\", \"object\": \"chat.completion.chunk\", \"created\": 1789489589, \"model\": \"deepseek-chat\", \"choices\": [{\"index\": 0, \"delta\": {\"role\": \"assistant\", \"content\": \"acceptance ok\""
+  },
+  {
+    "name": "deepseek SSE billing",
+    "passed": true,
+    "detail": {
+      "id": 64,
+      "model": "deepseek-chat",
+      "group_id": 39,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0006,
+      "rate_multiplier": 0.5,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 29,
+        "actual_cost": 0.0006000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "deepseek-chat",
+        "requested_model": "deepseek-chat",
+        "subscription_id": 6,
+        "target_group_id": 39,
+        "resolved_platform": "deepseek",
+        "effective_multiplier": 0.5
+      }
+    }
+  },
+  {
+    "name": "stable /v1/responses SSE HTTP200",
+    "passed": true,
+    "detail": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"mock-0f347d9d22a7\",\"object\":\"response\",\"created_at\":1789489589,\"model\":\"gpt-4.1-mini\",\"status\":\"in_progress\",\"output\":[]},\"se"
+  },
+  {
+    "name": "stable stream content",
+    "passed": true,
+    "detail": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"mock-0f347d9d22a7\",\"object\":\"response\",\"created_at\":1789489589,\"model\":\"gpt-4.1-mini\",\"status\":\"in_progress\",\"output\":[]},\"se"
+  },
+  {
+    "name": "Responses SSE billing",
+    "passed": true,
+    "detail": {
+      "id": 65,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-db16a99a210b', 'object': 'chat.completion', 'created': 1789489589, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "explicit zero subscription multiplier",
+    "passed": true,
+    "detail": {
+      "id": 66,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0,
+      "rate_multiplier": 0.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 0
+      }
+    }
+  },
+  {
+    "name": "unpriced model rejected before forwarding",
+    "passed": true,
+    "detail": 400
+  },
+  {
+    "name": "unknown model rejected",
+    "passed": true,
+    "detail": 400
+  },
+  {
+    "name": "exhausted shared quota blocks calls",
+    "passed": true,
+    "detail": 429
+  },
+  {
+    "name": "exhaustion does not charge balance",
+    "passed": true,
+    "detail": {
+      "used": 0.033,
+      "balance": 4.99976
+    }
+  },
+  {
+    "name": "expired pinned subscription denied",
+    "passed": true,
+    "detail": 403
+  },
+  {
+    "name": "user route dropdown exposes provider prices",
+    "passed": true,
+    "detail": [
+      {
+        "provider": "openai",
+        "profile_key": "stable",
+        "group_id": 35,
+        "name": "acceptance-stable-1789489587",
+        "subscription_rate_multiplier": 1,
+        "models": [
+          "gpt-4.1-mini"
+        ]
+      },
+      {
+        "provider": "anthropic",
+        "profile_key": "claude",
+        "group_id": 37,
+        "name": "acceptance-claude-1789489587",
+        "subscription_rate_multiplier": 2,
+        "models": [
+          "claude-sonnet-4-6"
+        ]
+      },
+      {
+        "provider": "grok",
+        "profile_key": "grok",
+        "group_id": 38,
+        "name": "acceptance-grok-1789489587",
+        "subscription_rate_multiplier": 4,
+        "models": [
+          "grok-4.3"
+        ]
+      },
+      {
+        "provider": "deepseek",
+        "profile_key": "deepseek",
+        "group_id": 39,
+        "name": "acceptance-deepseek-1789489587",
+        "subscription_rate_multiplier": 0.5,
+        "models": [
+          "deepseek-chat"
+        ]
+      },
+      {
+        "provider": "openai",
+        "profile_key": "pro",
+        "group_id": 36,
+        "name": "acceptance-pro-1789489587",
+        "subscription_rate_multiplier": 3,
+        "models": [
+          "gpt-4.1-mini"
+        ]
+      },
+      {
+        "provider": "openai",
+        "profile_key": "",
+        "group_id": 35,
+        "name": "acceptance-stable-1789489587",
+        "subscription_rate_multiplier": 1,
+        "models": [
+          "mystery-unpriced-acceptance"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "eight concurrent calls succeed",
+    "passed": true,
+    "detail": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ]
+  },
+  {
+    "name": "concurrent settlement has no lost or duplicate charges",
+    "passed": true,
+    "detail": {
+      "used": 0.0426,
+      "balance": 4.99976
+    }
+  },
+  {
+    "name": "multiple subscriptions require explicit selection",
+    "passed": true,
+    "detail": 400
+  },
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-b4374eef3cfc', 'object': 'chat.completion', 'created': 1789489590, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "selected second subscription owns the charge",
+    "passed": true,
+    "detail": {
+      "id": 75,
+      "model": "gpt-4.1-mini",
+      "group_id": 35,
+      "subscription_id": 7,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 7,
+        "target_group_id": 35,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-488ee3e39bd6', 'object': 'chat.completion', 'created': 1789489590, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "legacy subscription key retains its quota owner and independent rate",
+    "passed": true,
+    "detail": {
+      "id": 76,
+      "model": "gpt-4.1-mini",
+      "group_id": 41,
+      "subscription_id": 7,
+      "total_cost": 0.0012,
+      "actual_cost": 0.00204,
+      "rate_multiplier": 1.7,
+      "billing_type": 1,
+      "route_billing_snapshot": null
+    }
+  },
+  {
+    "name": "new manual assignments grant unified facade visibility",
+    "passed": true,
+    "detail": null
+  },
+  {
+    "name": "another user cannot bind someone else subscription",
+    "passed": true,
+    "detail": 403
+  },
+  {
+    "name": "future pinned subscription denied",
+    "passed": true,
+    "detail": 403
+  },
+  {
+    "name": "stable /v1/chat/completions JSON HTTP200",
+    "passed": true,
+    "detail": "{'id': 'mock-12471ef9b108', 'object': 'chat.completion', 'created': 1789489591, 'model': 'gpt-4.1-mini', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'acceptance ok'}, 'finish_"
+  },
+  {
+    "name": "upstream 503 switches account within selected pool",
+    "passed": true,
+    "detail": [
+      {
+        "path": "/down/v1/responses",
+        "model": "gpt-4.1-mini"
+      },
+      {
+        "path": "/retry-ok/v1/chat/completions",
+        "model": "gpt-4.1-mini"
+      }
+    ]
+  },
+  {
+    "name": "failover settles only successful request once",
+    "passed": true,
+    "detail": {
+      "id": 77,
+      "model": "gpt-4.1-mini",
+      "group_id": 42,
+      "subscription_id": 6,
+      "total_cost": 0.0012,
+      "actual_cost": 0.0012,
+      "rate_multiplier": 1.0,
+      "billing_type": 1,
+      "route_billing_snapshot": {
+        "raw_cost": 0.0012000000000000001,
+        "route_id": 25,
+        "actual_cost": 0.0012000000000000001,
+        "billing_mode": "subscription",
+        "upstream_model": "gpt-4.1-mini",
+        "requested_model": "gpt-4.1-mini",
+        "subscription_id": 6,
+        "target_group_id": 42,
+        "resolved_platform": "openai",
+        "effective_multiplier": 1
+      }
+    }
+  },
+  {
+    "name": "custom visual overlay removed",
+    "passed": true,
+    "detail": null
+  }
+]

@@ -106,16 +106,17 @@ func TestUsageLogRepositoryCreate_BatchPathConcurrent(t *testing.T) {
 	for i := 0; i < total; i++ {
 		i := i
 		logs[i] = &service.UsageLog{
-			UserID:       user.ID,
-			APIKeyID:     apiKey.ID,
-			AccountID:    account.ID,
-			RequestID:    uuid.NewString(),
-			Model:        "claude-3",
-			InputTokens:  10 + i,
-			OutputTokens: 20 + i,
-			TotalCost:    0.5,
-			ActualCost:   0.5,
-			CreatedAt:    time.Now().UTC(),
+			UserID:               user.ID,
+			APIKeyID:             apiKey.ID,
+			AccountID:            account.ID,
+			RequestID:            uuid.NewString(),
+			Model:                "claude-3",
+			RouteBillingSnapshot: &service.RouteBillingSnapshot{RequestedModel: "public-claude", UpstreamModel: "claude-3", ResolvedPlatform: "anthropic", TargetGroupID: 42, BillingMode: "subscription", RawCost: .25, EffectiveMultiplier: 2, ActualCost: .5},
+			InputTokens:          10 + i,
+			OutputTokens:         20 + i,
+			TotalCost:            0.5,
+			ActualCost:           0.5,
+			CreatedAt:            time.Now().UTC(),
 		}
 		go func() {
 			defer wg.Done()
@@ -128,6 +129,9 @@ func TestUsageLogRepositoryCreate_BatchPathConcurrent(t *testing.T) {
 		require.NoError(t, errs[i])
 		require.True(t, results[i])
 		require.NotZero(t, logs[i].ID)
+		stored, err := repo.GetByID(ctx, logs[i].ID)
+		require.NoError(t, err)
+		require.Equal(t, logs[i].RouteBillingSnapshot, stored.RouteBillingSnapshot)
 	}
 
 	var count int

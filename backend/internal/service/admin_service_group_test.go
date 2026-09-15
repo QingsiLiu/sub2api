@@ -236,7 +236,7 @@ func TestAdminServiceSimpleModeNormalizesAllUnsupportedCreateFieldsDirectly(t *t
 	require.Same(t, repo.created, created)
 	require.Equal(t, CreateGroupInput{
 		Name: "simple", Description: "allowed", Platform: PlatformAnthropic,
-		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
+		RateMultiplier: 1, SubscriptionRateMultiplier: &one, SubscriptionType: SubscriptionTypeStandard,
 	}, *input)
 	require.Equal(t, 1.0, created.RateMultiplier)
 	require.Equal(t, SubscriptionTypeStandard, created.SubscriptionType)

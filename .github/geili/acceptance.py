@@ -175,7 +175,7 @@ def verify():
     def snapshot():
         return sql(f"SELECT json_build_object('used',daily_usage_usd,'balance',(SELECT balance FROM users WHERE id={uid})) FROM user_subscriptions WHERE id={sid};")[0]
     def lastlog(kid):
-        return sql(f"SELECT row_to_json(x) FROM (SELECT id,model,group_id,subscription_id,total_cost,actual_cost,rate_multiplier,billing_type FROM usage_logs WHERE api_key_id={kid} ORDER BY id DESC LIMIT 1) x;")[0]
+        return sql(f"SELECT row_to_json(x) FROM (SELECT id,model,group_id,subscription_id,total_cost,actual_cost,rate_multiplier,billing_type,route_billing_snapshot FROM usage_logs WHERE api_key_id={kid} ORDER BY id DESC LIMIT 1) x;")[0]
     def call(name, stream=False, credential=None, path=None):
         g=groups[name];path=path or ('/v1/messages' if name=='claude' else '/v1/chat/completions')
         before=sql('SELECT json_build_object(\'id\',COALESCE(MAX(id),0)) FROM usage_logs;')[0]['id']
@@ -196,6 +196,8 @@ def verify():
         check(name+' target group',row['group_id']==groups[name]['id'],row)
         check(name+' subscription multiplier',abs(row['actual_cost']-.0012*groups[name]['rate'])<1e-9,row)
         check(name+' same subscription',row['subscription_id']==sid,row)
+        trace=row['route_billing_snapshot']
+        check(name+' route billing snapshot',trace and trace['subscription_id']==sid and trace['target_group_id']==groups[name]['id'] and trace['route_id']>0 and trace['resolved_platform']==groups[name]['platform'] and abs(trace['raw_cost']*trace['effective_multiplier']-trace['actual_cost'])<1e-9,trace)
     expected=.0012*sum(groups[n]['rate'] for n in ['stable','claude','grok','deepseek'])
     after=snapshot();check('shared quota equals all providers',abs(after['used']-start['used']-expected)<1e-9,after)
     check('subscription leaves balance unchanged',after['balance']==start['balance'],after)
@@ -267,7 +269,23 @@ def verify():
     outsideToken=api('/auth/login',{'email':outsider['email'],'password':local_env()['admin_password']})['access_token']
     status,_=request('/api/v1/keys',{'name':'forged','group_id':fid,'subscription_id':sid},outsideToken)
     check('another user cannot bind someone else subscription',status>=400,status)
-    check('original visuals absent from served build',not (ROOT/'frontend/src/geili').exists())
+    sql(f"UPDATE user_subscriptions SET starts_at=NOW()+interval '1 day' WHERE id={sid};")
+    status,_=request('/v1/chat/completions',payload,key['key'])
+    check('future pinned subscription denied',status==403,status)
+    sql(f"UPDATE user_subscriptions SET starts_at=NOW()-interval '1 day' WHERE id={sid};")
+    # Force a fresh pool, with a failing first account and a working second one.
+    retryGroup=api('/admin/groups',{'name':'retry-pool-'+str(owner['id']),'platform':'openai','rate_multiplier':.2,'subscription_rate_multiplier':1,'model_pricing':[{'models':['gpt-4.1-mini'],'input_price':.000001,'output_price':.000002}]},admin)
+    for label,priority in [('down',1),('retry-ok',2)]:
+        api('/admin/accounts',{'name':label+'-'+str(owner['id']),'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':'http://127.0.0.1:18989/'+label,'model_mapping':{'gpt-4.1-mini':'gpt-4.1-mini'}},'group_ids':[retryGroup['id']],'concurrency':5,'priority':priority},admin)
+    stable=next(r for r in routes if r['profile_key']=='stable')
+    api('/admin/groups/'+str(fid)+'/composite-routes/'+str(stable['id']),{**stable,'target_group_id':retryGroup['id']},admin,'PUT')
+    before=snapshot();countBefore=len(request('/__calls',base='http://127.0.0.1:18989')[1])
+    row=call('stable')
+    calls=request('/__calls',base='http://127.0.0.1:18989')[1][countBefore:]
+    check('upstream 503 switches account within selected pool',any('/down/' in x['path'] for x in calls) and any('/retry-ok/' in x['path'] for x in calls),calls)
+    check('failover settles only successful request once',row['group_id']==retryGroup['id'] and abs(snapshot()['used']-before['used']-.0012)<1e-9,row)
+    api('/admin/groups/'+str(fid)+'/composite-routes/'+str(stable['id']),stable,admin,'PUT')
+    check('custom visual overlay removed',not (ROOT/'frontend/src/geili').exists())
     print(f'Acceptance complete: {len(checks)} checks passed',flush=True)
 
 if __name__=='__main__':

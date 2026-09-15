@@ -127,6 +127,12 @@ func (_c *UsageLogCreate) SetNillableChannelID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetRouteBillingSnapshot sets the "route_billing_snapshot" field.
+func (_c *UsageLogCreate) SetRouteBillingSnapshot(v map[string]interface{}) *UsageLogCreate {
+	_c.mutation.SetRouteBillingSnapshot(v)
+	return _c
+}
+
 // SetModelMappingChain sets the "model_mapping_chain" field.
 func (_c *UsageLogCreate) SetModelMappingChain(v string) *UsageLogCreate {
 	_c.mutation.SetModelMappingChain(v)
@@ -995,6 +1001,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldChannelID, field.TypeInt64, value)
 		_node.ChannelID = &value
 	}
+	if value, ok := _c.mutation.RouteBillingSnapshot(); ok {
+		_spec.SetField(usagelog.FieldRouteBillingSnapshot, field.TypeJSON, value)
+		_node.RouteBillingSnapshot = value
+	}
 	if value, ok := _c.mutation.ModelMappingChain(); ok {
 		_spec.SetField(usagelog.FieldModelMappingChain, field.TypeString, value)
 		_node.ModelMappingChain = &value
@@ -1425,6 +1435,24 @@ func (u *UsageLogUpsert) AddChannelID(v int64) *UsageLogUpsert {
 // ClearChannelID clears the value of the "channel_id" field.
 func (u *UsageLogUpsert) ClearChannelID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldChannelID)
+	return u
+}
+
+// SetRouteBillingSnapshot sets the "route_billing_snapshot" field.
+func (u *UsageLogUpsert) SetRouteBillingSnapshot(v map[string]interface{}) *UsageLogUpsert {
+	u.Set(usagelog.FieldRouteBillingSnapshot, v)
+	return u
+}
+
+// UpdateRouteBillingSnapshot sets the "route_billing_snapshot" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateRouteBillingSnapshot() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldRouteBillingSnapshot)
+	return u
+}
+
+// ClearRouteBillingSnapshot clears the value of the "route_billing_snapshot" field.
+func (u *UsageLogUpsert) ClearRouteBillingSnapshot() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldRouteBillingSnapshot)
 	return u
 }
 
@@ -2306,6 +2334,27 @@ func (u *UsageLogUpsertOne) UpdateChannelID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearChannelID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearChannelID()
+	})
+}
+
+// SetRouteBillingSnapshot sets the "route_billing_snapshot" field.
+func (u *UsageLogUpsertOne) SetRouteBillingSnapshot(v map[string]interface{}) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteBillingSnapshot(v)
+	})
+}
+
+// UpdateRouteBillingSnapshot sets the "route_billing_snapshot" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateRouteBillingSnapshot() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteBillingSnapshot()
+	})
+}
+
+// ClearRouteBillingSnapshot clears the value of the "route_billing_snapshot" field.
+func (u *UsageLogUpsertOne) ClearRouteBillingSnapshot() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearRouteBillingSnapshot()
 	})
 }
 
@@ -3462,6 +3511,27 @@ func (u *UsageLogUpsertBulk) UpdateChannelID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearChannelID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearChannelID()
+	})
+}
+
+// SetRouteBillingSnapshot sets the "route_billing_snapshot" field.
+func (u *UsageLogUpsertBulk) SetRouteBillingSnapshot(v map[string]interface{}) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteBillingSnapshot(v)
+	})
+}
+
+// UpdateRouteBillingSnapshot sets the "route_billing_snapshot" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateRouteBillingSnapshot() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteBillingSnapshot()
+	})
+}
+
+// ClearRouteBillingSnapshot clears the value of the "route_billing_snapshot" field.
+func (u *UsageLogUpsertBulk) ClearRouteBillingSnapshot() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearRouteBillingSnapshot()
 	})
 }
 

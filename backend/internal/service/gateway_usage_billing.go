@@ -1201,6 +1201,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		usageLog.LongContextBillingApplied = cost.LongContextBillingApplied
 	}
 
+	usageLog.CaptureRouteBilling(apiKey)
 	return usageLog
 }
 
