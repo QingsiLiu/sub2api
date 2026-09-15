@@ -169,7 +169,7 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	}
 	groupIDs := append([]int64{req.GroupID}, req.GroupIDs...)
 	for _, gid := range uniquePlanGroupIDs(groupIDs) {
-		if _, err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(int64(plan.ID)).SetGroupID(gid).Save(ctx); err != nil {
+		if err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(int64(plan.ID)).SetGroupID(gid).OnConflictColumns(subscriptionplangroup.FieldSubscriptionPlanID, subscriptionplangroup.FieldGroupID).DoNothing().Exec(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -236,7 +236,13 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		if req.GroupID != nil {
 			primary = *req.GroupID
 		}
-		for _, gid := range uniquePlanGroupIDs(append([]int64{primary}, (*req.GroupIDs)...)) {
+		ids := append([]int64{primary}, (*req.GroupIDs)...)
+		facades, err := s.entClient.Group.Query().Where(group.NameEQ("全模型订阅"), group.PlatformEQ(PlatformComposite), group.SubscriptionTypeEQ(SubscriptionTypeSubscription)).IDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, facades...)
+		for _, gid := range uniquePlanGroupIDs(ids) {
 			if _, err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(id).SetGroupID(gid).Save(ctx); err != nil {
 				return nil, err
 			}

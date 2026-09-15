@@ -66,6 +66,7 @@ type CompositeRoutePreviewRequest struct {
 }
 
 type CompositeRouteDecision struct {
+	TargetGroup    *Group               `json:"-"`
 	Matched        bool                 `json:"matched"`
 	Source         string               `json:"source"`
 	GroupID        int64                `json:"group_id"`

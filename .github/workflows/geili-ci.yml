@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend overrides
+    name: Frontend functionality and upstream visuals
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -45,16 +45,18 @@ jobs:
 
       - name: Geili 单测（覆盖表 / 挂钩标记 / i18n）
         working-directory: frontend
-        run: pnpm exec vitest run src/geili
+        run: pnpm exec vitest run src/views/user/__tests__/KeysView.spec.ts src/i18n/__tests__/localeKeyCompleteness.spec.ts
 
       - name: Typecheck + build
         working-directory: frontend
         run: pnpm build
 
-      - name: 构建产物必须来自 Geili 覆盖层
+      - name: Verify upstream visual assets
         run: |
-          grep -rlq 'data-geili-ui' backend/internal/web/dist/assets || { echo "::error::dist 中未找到 data-geili-ui（App.vue 覆盖未生效）"; exit 1; }
-          grep -rlq -- '--geili-primary-600' backend/internal/web/dist/assets || { echo "::error::dist 中未找到 --geili-primary-600（style.css 覆盖未生效）"; exit 1; }
+          if grep -rlq -e 'data-geili-ui' -e '\-\-geili-primary-600' backend/internal/web/dist/assets; then
+            echo "::error::Removed visual overrides were bundled"
+            exit 1
+          fi
 
   backend:
     name: Backend self-update guard

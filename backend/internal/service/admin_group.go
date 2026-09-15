@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -406,11 +407,11 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
 	}
-	if input.SubscriptionRateMultiplier < 0 {
+	if input.SubscriptionRateMultiplier != nil && (math.IsNaN(*input.SubscriptionRateMultiplier) || math.IsInf(*input.SubscriptionRateMultiplier, 0) || *input.SubscriptionRateMultiplier < 0) {
 		return nil, errors.New("subscription_rate_multiplier must be >= 0")
 	}
-	if input.SubscriptionRateMultiplier == 0 {
-		input.SubscriptionRateMultiplier = input.RateMultiplier
+	if input.SubscriptionRateMultiplier == nil {
+		input.SubscriptionRateMultiplier = &input.RateMultiplier
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
@@ -808,7 +809,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		if *input.SubscriptionRateMultiplier < 0 {
 			return nil, errors.New("subscription_rate_multiplier must be >= 0")
 		}
-		group.SubscriptionRateMultiplier = *input.SubscriptionRateMultiplier
+		group.SubscriptionRateMultiplier = input.SubscriptionRateMultiplier
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

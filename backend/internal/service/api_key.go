@@ -28,6 +28,7 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
+	CompositeRoute   *CompositeRouteDecision `json:"-"`
 	ID               int64
 	UserID           int64
 	Key              string

@@ -237,7 +237,7 @@ type CreateGroupInput struct {
 	Description                string
 	Platform                   string
 	RateMultiplier             float64
-	SubscriptionRateMultiplier float64
+	SubscriptionRateMultiplier *float64
 	IsExclusive                bool
 	SubscriptionType           string   // standard/subscription
 	DailyLimitUSD              *float64 // 日限额 (USD)

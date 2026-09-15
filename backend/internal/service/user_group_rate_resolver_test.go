@@ -50,14 +50,14 @@ func TestUserGroupRateResolverResolve_InvalidCacheEntryLoadsRepoAndCaches(t *tes
 	rate := 1.7
 	repo := &userGroupRateResolverRepoStub{rate: &rate}
 	cache := gocache.New(time.Minute, time.Minute)
-	cache.Set("101:202", "bad-cache", time.Minute)
+	cache.Set("101:202:1.2", "bad-cache", time.Minute)
 	resolver := newUserGroupRateResolver(repo, cache, time.Minute, nil, "service.test")
 
 	got := resolver.Resolve(context.Background(), 101, 202, 1.2)
 	require.Equal(t, rate, got)
 	require.Equal(t, 1, repo.calls)
 
-	cached, ok := cache.Get("101:202")
+	cached, ok := cache.Get("101:202:1.2")
 	require.True(t, ok)
 	require.Equal(t, rate, cached)
 
@@ -80,4 +80,12 @@ func TestGatewayServiceGetUserGroupRateMultiplier_FallbacksAndUsesExistingResolv
 	got := svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.2)
 	require.Equal(t, rate, got)
 	require.Equal(t, 1, repo.calls)
+}
+
+func TestUserGroupRateResolverKeepsBalanceAndSubscriptionDefaultsSeparate(t *testing.T) {
+	repo := &userGroupRateResolverRepoStub{}
+	resolver := newUserGroupRateResolver(repo, nil, time.Minute, nil, "test")
+	require.Equal(t, 0.2, resolver.Resolve(context.Background(), 5, 10, 0.2))
+	require.Equal(t, 3.0, resolver.Resolve(context.Background(), 5, 10, 3.0))
+	require.Equal(t, 0.0, resolver.Resolve(context.Background(), 5, 10, 0.0))
 }

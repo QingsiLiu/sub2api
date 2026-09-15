@@ -43,7 +43,6 @@ func (r *compositeModelRouteRepository) Create(ctx context.Context, route *servi
 	}
 	created, err := clientFromContext(ctx, r.client).CompositeModelRoute.Create().
 		SetGroupID(route.GroupID).
-		SetNillableTargetGroupID(route.TargetGroupID).
 		SetPublicModel(route.PublicModel).
 		SetNillableTargetGroupID(route.TargetGroupID).
 		SetMatchType(route.MatchType).
@@ -66,7 +65,7 @@ func (r *compositeModelRouteRepository) Update(ctx context.Context, route *servi
 	if route == nil {
 		return service.ErrCompositeRouteNotFound
 	}
-	updated, err := clientFromContext(ctx, r.client).CompositeModelRoute.UpdateOneID(route.ID).
+	builder := clientFromContext(ctx, r.client).CompositeModelRoute.UpdateOneID(route.ID).
 		SetPublicModel(route.PublicModel).
 		SetMatchType(route.MatchType).
 		SetTargetPlatform(route.TargetPlatform).
@@ -75,8 +74,13 @@ func (r *compositeModelRouteRepository) Update(ctx context.Context, route *servi
 		SetEndpoint(route.Endpoint).
 		SetPriority(route.Priority).
 		SetEnabled(route.Enabled).
-		SetNotes(route.Notes).
-		Save(ctx)
+		SetNotes(route.Notes)
+	if route.TargetGroupID != nil {
+		builder.SetTargetGroupID(*route.TargetGroupID)
+	} else {
+		builder.ClearTargetGroupID()
+	}
+	updated, err := builder.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrCompositeRouteNotFound, service.ErrCompositeRouteExists)
 	}

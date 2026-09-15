@@ -83,3 +83,8 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Acceptance credentials and local artifacts are never build inputs
+deploy/.secrets/
+.stitch/
+backend/bin/

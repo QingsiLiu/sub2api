@@ -24,11 +24,12 @@ type userSubscriptionRepository struct {
 func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 	client := clientFromContext(ctx, r.client)
 	link, err := client.UserSubscriptionGroup.Query().
-		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID))).
+		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID), usersubscription.StatusEQ(service.SubscriptionStatusActive), usersubscription.ExpiresAtGT(time.Now()), usersubscription.StartsAtLTE(time.Now()))).
 		WithSubscription(func(q *dbent.UserSubscriptionQuery) {
 			q.WithGroup()
 		}).
-		Only(ctx)
+		Order(usersubscriptiongroup.ByUserSubscriptionID()).
+		First(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
@@ -79,10 +80,10 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	if err == nil {
 		// geili hook: every subscription keeps its primary entitlement explicitly;
 		// additional bundled groups are added by the migration/plan flow.
-		_, entitlementErr := client.UserSubscriptionGroup.Create().
+		entitlementErr := client.UserSubscriptionGroup.Create().
 			SetUserSubscriptionID(created.ID).
 			SetGroupID(created.GroupID).
-			Save(ctx)
+			OnConflictColumns(usersubscriptiongroup.FieldUserSubscriptionID, usersubscriptiongroup.FieldGroupID).DoNothing().Exec(ctx)
 		if entitlementErr != nil {
 			return entitlementErr
 		}

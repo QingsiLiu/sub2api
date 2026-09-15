@@ -25,6 +25,9 @@ func (s *UserSubscriptionRepoSuite) SetupTest() {
 	s.ctx = context.Background()
 	tx := testEntTx(s.T())
 	s.client = tx.Client()
+	// Global billing fixtures commit rows; isolate unfiltered list assertions inside this rollback-only transaction.
+	_, err := s.client.ExecContext(s.ctx, "DELETE FROM user_subscriptions")
+	s.Require().NoError(err)
 	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)
 }
 

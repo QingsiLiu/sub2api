@@ -71,7 +71,7 @@ type CreateGroupRequest struct {
 	Name                       string   `json:"name"`
 	Description                string   `json:"description"`
 	RateMultiplier             float64  `json:"rate_multiplier"`
-	SubscriptionRateMultiplier float64  `json:"subscription_rate_multiplier"`
+	SubscriptionRateMultiplier *float64 `json:"subscription_rate_multiplier"`
 	IsExclusive                bool     `json:"is_exclusive"`
 	AllowImageGeneration       bool     `json:"allow_image_generation"`
 	ImageRateIndependent       bool     `json:"image_rate_independent"`
@@ -125,8 +125,8 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 
 	// 创建分组
 	subscriptionRateMultiplier := req.SubscriptionRateMultiplier
-	if subscriptionRateMultiplier == 0 {
-		subscriptionRateMultiplier = req.RateMultiplier
+	if subscriptionRateMultiplier == nil {
+		subscriptionRateMultiplier = &req.RateMultiplier
 	}
 	group := &Group{
 		Name:                       req.Name,
@@ -207,7 +207,7 @@ func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequ
 		if *req.SubscriptionRateMultiplier < 0 {
 			return nil, fmt.Errorf("subscription_rate_multiplier must be >= 0")
 		}
-		group.SubscriptionRateMultiplier = *req.SubscriptionRateMultiplier
+		group.SubscriptionRateMultiplier = req.SubscriptionRateMultiplier
 	}
 
 	if req.IsExclusive != nil {

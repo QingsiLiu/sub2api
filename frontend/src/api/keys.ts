@@ -161,7 +161,21 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
   return update(id, { status })
 }
 
+export interface SubscriptionRouteOption {
+  provider: string
+  profile_key: string
+  group_id: number
+  name: string
+  subscription_rate_multiplier: number
+  models: string[]
+}
+export async function getSubscriptionRoutes(groupId: number): Promise<SubscriptionRouteOption[]> {
+  const { data } = await apiClient.get<SubscriptionRouteOption[]>(`/groups/${groupId}/subscription-routes`)
+  return data
+}
+
 export const keysAPI = {
+  getSubscriptionRoutes,
   list,
   getById,
   create,

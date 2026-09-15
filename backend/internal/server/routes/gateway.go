@@ -34,8 +34,8 @@ func RegisterGatewayRoutes(
 	clientRequestID := middleware.ClientRequestID()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	endpointNorm := handler.InboundEndpointMiddleware()
-	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
-	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
+	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver, apiKeyService)
+	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver, apiKeyService)
 
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
@@ -539,7 +539,7 @@ func getGroupPlatform(c *gin.Context) string {
 	return apiKey.Group.Platform
 }
 
-func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver) gin.HandlerFunc {
+func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver, keyServices ...*service.APIKeyService) gin.HandlerFunc {
 	if resolver == nil {
 		resolver = service.NewCompositeRouteResolver(nil)
 	}
@@ -575,8 +575,11 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 		if model != "" {
 			decision, err := resolver.ResolveForPreferences(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path), apiKey.RoutePreferences)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
+				writeCompositeRouteError(c, err)
 				c.Abort()
+				return
+			}
+			if len(keyServices) > 0 && !bindCompositeResolvedKey(c, keyServices[0], apiKey, decision) {
 				return
 			}
 			if decision.Matched {
@@ -595,7 +598,7 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 	}
 }
 
-func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteResolver) gin.HandlerFunc {
+func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteResolver, keyServices ...*service.APIKeyService) gin.HandlerFunc {
 	if resolver == nil {
 		resolver = service.NewCompositeRouteResolver(nil)
 	}
@@ -606,8 +609,11 @@ func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteRes
 			if model != "" {
 				decision, err := resolver.ResolveForPreferences(c.Request.Context(), apiKey.Group.ID, model, service.CompositeRouteEndpointGemini, apiKey.RoutePreferences)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
+					writeCompositeRouteError(c, err)
 					c.Abort()
+					return
+				}
+				if len(keyServices) > 0 && !bindCompositeResolvedKey(c, keyServices[0], apiKey, decision) {
 					return
 				}
 				if decision.Matched {

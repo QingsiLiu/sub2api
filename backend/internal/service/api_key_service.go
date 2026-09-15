@@ -290,6 +290,7 @@ type RateLimitCacheInvalidator interface {
 }
 
 type APIKeyService struct {
+	compositeRouteRepo        CompositeModelRouteRepository
 	apiKeyRepo                APIKeyRepository
 	userRepo                  UserRepository
 	groupRepo                 GroupRepository
@@ -456,6 +457,23 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
 	// 订阅类型分组：需要有效订阅
+	if group.IsSubscriptionType() && group.Platform == PlatformComposite {
+		active, err := s.userSubRepo.ListActiveByUserID(ctx, user.ID)
+		if err != nil {
+			return false
+		}
+		for _, sub := range active {
+			if sub.GroupID == group.ID {
+				return true
+			}
+			for _, id := range sub.EntitledGroupIDs {
+				if id == group.ID {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	if group.IsSubscriptionType() {
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		// geili hook: bundled subscriptions authorize additional groups through
@@ -1138,6 +1156,9 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	subscribedGroupIDs := make(map[int64]bool)
 	for _, sub := range activeSubscriptions {
 		subscribedGroupIDs[sub.GroupID] = true
+		for _, id := range sub.EntitledGroupIDs {
+			subscribedGroupIDs[id] = true
+		}
 	}
 
 	// 过滤出用户有权限的分组

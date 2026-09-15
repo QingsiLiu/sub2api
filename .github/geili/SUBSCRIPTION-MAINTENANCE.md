@@ -2,7 +2,7 @@
 
 双分组订阅是 Geili 扩展，不得把业务规则散落到上游订阅、鉴权和计费实现中。
 
-- 自定义规则优先放在 `backend/internal/geili/subscription/`；前端放在 `frontend/src/geili/`。
+- 自定义规则优先放在 `backend/internal/geili/subscription/`；前端沿用官方组件和样式，不恢复已移除的主题覆盖。
 - 官方文件只允许保留带 `geili hook` 注释的最小适配点；同步上游后必须人工复核这些点。
 - `user_subscription_groups` 是幂等关联表；额度、窗口和到期时间仍以主订阅记录为准。
 - 没有 Geili 关联时必须走上游原有单分组路径。

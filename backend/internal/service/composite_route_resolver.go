@@ -8,12 +8,18 @@ import (
 )
 
 type CompositeRouteResolver struct {
+	groupRepo              GroupRepository
+	pricing                *ModelPricingResolver
 	repo                   CompositeModelRouteRepository
 	modelOwnershipResolver CompositeModelOwnershipResolver
 }
 
 func NewCompositeRouteResolver(repo CompositeModelRouteRepository) *CompositeRouteResolver {
 	return &CompositeRouteResolver{repo: repo}
+}
+
+func (r *CompositeRouteResolver) SetRouteValidation(groups GroupRepository, pricing *ModelPricingResolver) {
+	r.groupRepo, r.pricing = groups, pricing
 }
 
 func (r *CompositeRouteResolver) SetModelOwnershipResolver(resolver CompositeModelOwnershipResolver) {
@@ -52,6 +58,28 @@ func (r *CompositeRouteResolver) ResolveForPreferences(ctx context.Context, grou
 			preferred = strings.ToLower(strings.TrimSpace(preferences[platform]))
 		}
 		if route, ok := matchCompositeRouteWithProfile(routes, model, endpoint, preferred); ok {
+			var target *Group
+			if route.TargetGroupID != nil && r.groupRepo != nil {
+				var err error
+				target, err = r.groupRepo.GetByIDLite(ctx, *route.TargetGroupID)
+				if err != nil || target == nil || !target.IsActive() || target.Platform != route.TargetPlatform {
+					return decision, ErrCompositeTargetUnavailable
+				}
+				billable := strings.TrimSpace(route.UpstreamModel)
+				if billable == "" {
+					billable = model
+				}
+				if !target.ModelAllowlist.Allows(billable) {
+					return decision, ErrCompositeModelUnavailable
+				}
+				if r.pricing != nil {
+					price := r.pricing.Resolve(ctx, PricingInput{Model: billable, GroupID: &target.ID, Group: target})
+					if price == nil || (price.Mode == BillingModeToken && price.BasePricing == nil) {
+						return decision, ErrCompositeModelUnpriced
+					}
+				}
+			}
+
 			upstreamModel := strings.TrimSpace(route.UpstreamModel)
 			if upstreamModel == "" {
 				upstreamModel = model
@@ -59,6 +87,7 @@ func (r *CompositeRouteResolver) ResolveForPreferences(ctx context.Context, grou
 			return CompositeRouteDecision{
 				Matched:        true,
 				Source:         CompositeRouteSourceExplicit,
+				TargetGroup:    target,
 				GroupID:        groupID,
 				PublicModel:    model,
 				TargetPlatform: route.TargetPlatform,
@@ -67,6 +96,9 @@ func (r *CompositeRouteResolver) ResolveForPreferences(ctx context.Context, grou
 				Endpoint:       endpoint,
 				Route:          &route,
 			}, nil
+		}
+		if preferred != "" {
+			return decision, ErrCompositePreferenceUnavailable
 		}
 	}
 
@@ -122,9 +154,7 @@ func matchCompositeRouteWithProfile(routes []CompositeModelRoute, model, endpoin
 				filtered = append(filtered, route)
 			}
 		}
-		if route, ok := matchCompositeRoute(filtered, model, endpoint); ok {
-			return route, true
-		}
+		return matchCompositeRoute(filtered, model, endpoint)
 	}
 	return matchCompositeRoute(routes, model, endpoint)
 }

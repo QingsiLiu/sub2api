@@ -93,7 +93,7 @@ cmd_creds() {
 
 预发地址 : $(base_url)
 管理员   : $(env_get ADMIN_EMAIL)
-密码     : $(env_get ADMIN_PASSWORD)
+凭据文件 : ${ENV_FILE}（不输出密码）
 镜像 tag : $(env_get GEILI_IMAGE_TAG)
 EOF
 }
@@ -120,7 +120,7 @@ cmd_smoke() {
   for a in ${assets}; do
     if curl -fs -m 10 "${url}${a}" | grep -q -e 'data-geili-ui' -e '--geili-primary-600'; then found_marker=1; break; fi
   done
-  check "入口资源含 Geili 标记（data-geili-ui / --geili-primary）" test "${found_marker}" = 1
+  check "入口资源保持原版视觉，无 Geili 覆盖标记" test "${found_marker}" = 0
 
   # 管理员登录
   local token

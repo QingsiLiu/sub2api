@@ -46,7 +46,7 @@ func (r *userGroupRateResolver) Resolve(ctx context.Context, userID, groupID int
 		return groupDefaultMultiplier
 	}
 
-	key := fmt.Sprintf("%d:%d", userID, groupID)
+	key := fmt.Sprintf("%d:%d:%g", userID, groupID, groupDefaultMultiplier)
 	if r.cache != nil {
 		if cached, ok := r.cache.Get(key); ok {
 			if multiplier, castOK := cached.(float64); castOK {

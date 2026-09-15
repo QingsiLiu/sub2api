@@ -304,7 +304,7 @@ func TestGetUserGroupRateMultiplier_CacheHitAndNilRepo(t *testing.T) {
 		userGroupRateRepo:  repo,
 		userGroupRateCache: gocache.New(time.Minute, time.Minute),
 	}
-	key := "101:202"
+	key := "101:202:1.1"
 	svc.userGroupRateCache.Set(key, 2.3, time.Minute)
 
 	got := svc.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.1)
@@ -321,10 +321,10 @@ func TestGetUserGroupRateMultiplier_CacheHitAndNilRepo(t *testing.T) {
 	svc2 := &GatewayService{
 		userGroupRateCache: gocache.New(time.Minute, time.Minute),
 	}
-	svc2.userGroupRateCache.Set(key, 1.9, time.Minute)
+	svc2.userGroupRateCache.Set("101:202:1.4", 1.9, time.Minute)
 	require.Equal(t, 1.9, svc2.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.4))
 	require.Equal(t, 1.4, svc2.getUserGroupRateMultiplier(context.Background(), 0, 202, 1.4))
-	svc2.userGroupRateCache.Delete(key)
+	svc2.userGroupRateCache.Delete("101:202:1.4")
 	require.Equal(t, 1.4, svc2.getUserGroupRateMultiplier(context.Background(), 101, 202, 1.4))
 }
 

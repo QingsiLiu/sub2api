@@ -903,7 +903,25 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 // checkSubscriptionEligibility 检查订阅模式资格
 func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
 	// 获取订阅缓存数据
-	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
+	var subData *subscriptionCacheData
+	var err error
+	if subscription != nil && subscription.ID > 0 && s.subRepo != nil {
+		// The subscription ID is the quota owner across every provider. Read
+		// current committed usage rather than a separate target-group cache.
+		var fresh *UserSubscription
+		fresh, err = s.subRepo.GetByID(ctx, subscription.ID)
+		if err == nil && (fresh == nil || fresh.UserID != userID) {
+			err = ErrSubscriptionNotFound
+		}
+		if err == nil {
+			subData = &subscriptionCacheData{Status: fresh.Status, ExpiresAt: fresh.ExpiresAt, DailyUsage: fresh.DailyUsageUSD, WeeklyUsage: fresh.WeeklyUsageUSD, MonthlyUsage: fresh.MonthlyUsageUSD}
+			if fresh.Group != nil {
+				group = fresh.Group
+			}
+		}
+	} else {
+		subData, err = s.GetSubscriptionStatus(ctx, userID, group.ID)
+	}
 	if err != nil {
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)

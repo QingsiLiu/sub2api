@@ -580,16 +580,25 @@
           </Select>
         </div>
 
-        <div v-if="selectedFormGroup?.platform === 'composite'">
-          <label class="input-label">{{ t('keys.routePreferencesLabel') }}</label>
-          <textarea v-model="formData.route_preferences_json" class="input min-h-20 font-mono text-xs" placeholder='{"openai":"stable","anthropic":"standard"}' />
+        <div v-if="selectedFormGroup?.platform === 'composite'" class="space-y-3">
+          <p class="input-label">{{ t('keys.routePreferencesLabel') }}</p>
+          <p v-if="routeOptionsLoading" class="input-hint">{{ t('common.loading') }}</p>
+          <div v-for="provider in routeProviders" :key="provider">
+            <label :for="`route-${provider}`" class="input-label">{{ provider }}</label>
+            <select :id="`route-${provider}`" v-model="formData.route_preferences[provider]" class="input">
+              <option value="">{{ t('keys.routeDefault') }}</option>
+              <option v-for="route in routeOptions.filter(item => item.provider === provider && item.profile_key)" :key="route.profile_key" :value="route.profile_key">
+                {{ route.name }} · ×{{ route.subscription_rate_multiplier }}
+              </option>
+            </select>
+          </div>
           <p class="input-hint">{{ t('keys.routePreferencesHint') }}</p>
         </div>
 
-        <div v-if="selectedFormGroup?.platform === 'composite' && activeSubscriptions.length">
+        <div v-if="selectedFormGroup?.platform === 'composite' && eligibleSubscriptions.length">
           <label class="input-label">{{ t('keys.subscriptionLabel') }}</label>
           <select v-model.number="formData.subscription_id" class="input">
-            <option v-for="subscription in activeSubscriptions" :key="subscription.id" :value="subscription.id">
+            <option v-for="subscription in eligibleSubscriptions" :key="subscription.id" :value="subscription.id">
               #{{ subscription.id }} · {{ subscription.group?.name || `Group ${subscription.group_id}` }}
             </option>
           </select>
@@ -1448,7 +1457,7 @@ const formData = ref({
   name: '',
   group_id: null as number | null,
   subscription_id: null as number | null,
-  route_preferences_json: '',
+  route_preferences: {} as Record<string, string>,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1492,10 +1501,29 @@ const statusOptions = computed(() => [
 const selectedFormGroup = computed(() => groups.value.find((group) => group.id === formData.value.group_id) ?? null)
 const activeSubscriptions = ref<import('@/types').UserSubscription[]>([])
 
+const routeOptions = ref<import('@/api/keys').SubscriptionRouteOption[]>([])
+const routeOptionsLoading = ref(false)
+const routeProviders = computed(() => [...new Set(routeOptions.value.map(item => item.provider))])
+const eligibleSubscriptions = computed(() => activeSubscriptions.value.filter(sub =>
+  sub.group_id === formData.value.group_id || sub.entitled_group_ids?.includes(formData.value.group_id ?? 0)))
 watch([selectedFormGroup, activeSubscriptions], () => {
-  if (selectedFormGroup.value?.platform === 'composite' && formData.value.subscription_id == null && activeSubscriptions.value.length === 1) {
-    formData.value.subscription_id = activeSubscriptions.value[0].id
+  if (selectedFormGroup.value?.platform === 'composite' && formData.value.subscription_id == null && eligibleSubscriptions.value.length === 1) {
+    formData.value.subscription_id = eligibleSubscriptions.value[0].id
   }
+})
+watch([selectedFormGroup, showCreateModal, showEditModal], async ([group, creating, editing]) => {
+  if ((!creating && !editing) || group?.platform !== 'composite') { routeOptions.value = []; return }
+  routeOptionsLoading.value = true
+  try {
+    const [options, subscriptions] = await Promise.all([keysAPI.getSubscriptionRoutes(group.id), subscriptionsAPI.getActiveSubscriptions()])
+    if (formData.value.group_id !== group.id) return
+    routeOptions.value = options
+    activeSubscriptions.value = subscriptions
+    for (const provider of new Set(options.map(item => item.provider))) {
+      if (formData.value.route_preferences[provider] === undefined) formData.value.route_preferences[provider] = ''
+    }
+  } catch (error) { appStore.showError(t('keys.failedToLoadRoutes')) }
+  finally { routeOptionsLoading.value = false }
 })
 
 const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
@@ -1672,14 +1700,6 @@ const loadGroups = async () => {
   }
 }
 
-const loadSubscriptions = async () => {
-  try {
-    activeSubscriptions.value = await subscriptionsAPI.getActiveSubscriptions()
-  } catch (error) {
-    console.error('Failed to load subscriptions:', error)
-  }
-}
-
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1735,7 +1755,7 @@ const editKey = (key: ApiKey) => {
     name: key.name,
     group_id: key.group_id,
     subscription_id: key.subscription_id ?? null,
-    route_preferences_json: key.route_preferences ? JSON.stringify(key.route_preferences) : '',
+    route_preferences: { ...(key.route_preferences ?? {}) },
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1887,16 +1907,10 @@ const handleSubmit = async () => {
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
 
-  let routePreferences: Record<string, string> | undefined
-  if (formData.value.route_preferences_json.trim()) {
-    try {
-      const parsed = JSON.parse(formData.value.route_preferences_json)
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('object required')
-      routePreferences = Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]))
-    } catch {
-      appStore.showError(t('keys.routePreferencesInvalid'))
-      return
-    }
+  const routePreferences = selectedFormGroup.value?.platform === 'composite' ? formData.value.route_preferences : undefined
+  if (selectedFormGroup.value?.platform === 'composite' && eligibleSubscriptions.value.length > 1 && !formData.value.subscription_id) {
+    appStore.showError(t('keys.subscriptionRequired'))
+    return
   }
 
   submitting.value = true
@@ -1979,7 +1993,7 @@ const closeModals = () => {
     name: '',
     group_id: null,
     subscription_id: null,
-    route_preferences_json: '',
+    route_preferences: {} as Record<string, string>,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
@@ -2151,7 +2165,6 @@ onMounted(() => {
   loadSavedColumns()
   loadApiKeys()
   loadGroups()
-  loadSubscriptions()
   loadUserGroupRates()
   loadPublicSettings()
   document.addEventListener('click', closeGroupSelector)

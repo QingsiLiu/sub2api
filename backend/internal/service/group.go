@@ -21,7 +21,7 @@ type Group struct {
 	Description                string
 	Platform                   string
 	RateMultiplier             float64
-	SubscriptionRateMultiplier float64
+	SubscriptionRateMultiplier *float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
 	PeakRateEnabled    bool
@@ -156,18 +156,14 @@ func (g *Group) IsSubscriptionType() bool {
 	return g.SubscriptionType == SubscriptionTypeSubscription
 }
 
-// BillingRateMultiplier returns the multiplier for the request billing mode.
-// Older in-memory fixtures and rolling-upgrade cache entries may not carry the
-// subscription field; in that case a non-zero balance multiplier is the safe
-// compatibility fallback.
+// BillingRateMultiplier selects one price schedule. Nil represents legacy
+// in-memory callers; explicit zero is a valid free subscription multiplier.
 func (g *Group) BillingRateMultiplier(subscription bool) float64 {
 	if g == nil {
 		return 1
 	}
-	if subscription {
-		if g.SubscriptionRateMultiplier != 0 || g.RateMultiplier == 0 {
-			return g.SubscriptionRateMultiplier
-		}
+	if subscription && g.SubscriptionRateMultiplier != nil {
+		return *g.SubscriptionRateMultiplier
 	}
 	return g.RateMultiplier
 }

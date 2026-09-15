@@ -186,7 +186,7 @@ type CreateGroupRequest struct {
 	Description                string                        `json:"description"`
 	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
 	RateMultiplier             float64                       `json:"rate_multiplier"`
-	SubscriptionRateMultiplier float64                       `json:"subscription_rate_multiplier"`
+	SubscriptionRateMultiplier *float64                      `json:"subscription_rate_multiplier"`
 	IsExclusive                bool                          `json:"is_exclusive"`
 	SubscriptionType           string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
 	DailyLimitUSD              optionalLimitField            `json:"daily_limit_usd"`

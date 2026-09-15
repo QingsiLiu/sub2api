@@ -1,0 +1,69 @@
+name: Geili staging candidate
+on:
+  push:
+    branches: ['codex/subscription-multi-group-0.2.5']
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: geili-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Frontend validation and upstream visual build
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Validate subscriptions and compile candidate
+        working-directory: backend
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          go test ./internal/service ./internal/server/routes ./internal/server/middleware ./internal/handler/admin ./migrations
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embed -trimpath -ldflags="-s -w -X main.Version=0.2.5-geili.acceptance -X main.Commit=${CANDIDATE_SHA} -X main.BuildType=release" -o ../sub2api ./cmd/server
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish immutable candidate tag
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.goreleaser
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/qingsiliu/sub2api:acceptance-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.version=0.2.5-geili.acceptance
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/QingsiLiu/sub2api
+      - name: Record artifact identity
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+          REVISION: ${{ github.sha }}
+        run: |
+          printf '{"revision":"%s","image":"ghcr.io/qingsiliu/sub2api@%s"}\n' "$REVISION" "$DIGEST" > candidate.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: geili-candidate
+          path: candidate.json

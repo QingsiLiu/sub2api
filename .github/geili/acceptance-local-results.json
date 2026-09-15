@@ -1,0 +1,241 @@
+{
+  "suite": "local HTTP + PostgreSQL + Redis + synthetic upstream",
+  "checks": [
+    {
+      "name": "stable /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "stable target group",
+      "passed": true
+    },
+    {
+      "name": "stable subscription multiplier",
+      "passed": true
+    },
+    {
+      "name": "stable same subscription",
+      "passed": true
+    },
+    {
+      "name": "claude /v1/messages JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "Anthropic response shape",
+      "passed": true
+    },
+    {
+      "name": "claude target group",
+      "passed": true
+    },
+    {
+      "name": "claude subscription multiplier",
+      "passed": true
+    },
+    {
+      "name": "claude same subscription",
+      "passed": true
+    },
+    {
+      "name": "grok /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "grok target group",
+      "passed": true
+    },
+    {
+      "name": "grok subscription multiplier",
+      "passed": true
+    },
+    {
+      "name": "grok same subscription",
+      "passed": true
+    },
+    {
+      "name": "deepseek /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "deepseek target group",
+      "passed": true
+    },
+    {
+      "name": "deepseek subscription multiplier",
+      "passed": true
+    },
+    {
+      "name": "deepseek same subscription",
+      "passed": true
+    },
+    {
+      "name": "shared quota equals all providers",
+      "passed": true
+    },
+    {
+      "name": "subscription leaves balance unchanged",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "balance multiplier independent after subscription cache",
+      "passed": true
+    },
+    {
+      "name": "pro /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "console preference selects Pro pool and rate",
+      "passed": true
+    },
+    {
+      "name": "pro /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "route target edit persists",
+      "passed": true
+    },
+    {
+      "name": "disabled selected profile fails closed",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/chat/completions SSE HTTP200",
+      "passed": true
+    },
+    {
+      "name": "stable stream content",
+      "passed": true
+    },
+    {
+      "name": "stable SSE billing",
+      "passed": true
+    },
+    {
+      "name": "claude /v1/messages SSE HTTP200",
+      "passed": true
+    },
+    {
+      "name": "claude stream content",
+      "passed": true
+    },
+    {
+      "name": "claude SSE billing",
+      "passed": true
+    },
+    {
+      "name": "grok /v1/chat/completions SSE HTTP200",
+      "passed": true
+    },
+    {
+      "name": "grok stream content",
+      "passed": true
+    },
+    {
+      "name": "grok SSE billing",
+      "passed": true
+    },
+    {
+      "name": "deepseek /v1/chat/completions SSE HTTP200",
+      "passed": true
+    },
+    {
+      "name": "deepseek stream content",
+      "passed": true
+    },
+    {
+      "name": "deepseek SSE billing",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/responses SSE HTTP200",
+      "passed": true
+    },
+    {
+      "name": "stable stream content",
+      "passed": true
+    },
+    {
+      "name": "Responses SSE billing",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "explicit zero subscription multiplier",
+      "passed": true
+    },
+    {
+      "name": "unpriced model rejected before forwarding",
+      "passed": true
+    },
+    {
+      "name": "unknown model rejected",
+      "passed": true
+    },
+    {
+      "name": "exhausted shared quota blocks calls",
+      "passed": true
+    },
+    {
+      "name": "exhaustion does not charge balance",
+      "passed": true
+    },
+    {
+      "name": "expired pinned subscription denied",
+      "passed": true
+    },
+    {
+      "name": "user route dropdown exposes provider prices",
+      "passed": true
+    },
+    {
+      "name": "eight concurrent calls succeed",
+      "passed": true
+    },
+    {
+      "name": "concurrent settlement has no lost or duplicate charges",
+      "passed": true
+    },
+    {
+      "name": "multiple subscriptions require explicit selection",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "selected second subscription owns the charge",
+      "passed": true
+    },
+    {
+      "name": "stable /v1/chat/completions JSON HTTP200",
+      "passed": true
+    },
+    {
+      "name": "legacy subscription key retains its quota owner and independent rate",
+      "passed": true
+    },
+    {
+      "name": "new manual assignments grant unified facade visibility",
+      "passed": true
+    },
+    {
+      "name": "another user cannot bind someone else subscription",
+      "passed": true
+    },
+    {
+      "name": "original visuals absent from served build",
+      "passed": true
+    }
+  ]
+}
