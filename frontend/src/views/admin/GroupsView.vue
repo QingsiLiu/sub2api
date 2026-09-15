@@ -1177,8 +1177,8 @@
           </div>
         </div>
 
-        <!-- 高峰时段倍率配置（仅订阅类型分组） -->
-        <div v-if="createForm.subscription_type === 'subscription'" class="border-t pt-4">
+        <!-- 余额与订阅共用的高峰时段倍率 -->
+        <div class="border-t pt-4">
           <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -2822,8 +2822,8 @@
           </div>
         </div>
 
-        <!-- 高峰时段倍率配置（仅订阅类型分组） -->
-        <div v-if="editForm.subscription_type === 'subscription'" class="border-t pt-4">
+        <!-- 余额与订阅共用的高峰时段倍率 -->
+        <div class="border-t pt-4">
           <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -6662,31 +6662,13 @@ const confirmDelete = async () => {
   }
 };
 
-// 监听 subscription_type 变化，订阅模式时 is_exclusive 默认为 true；标准模式清空高峰配置
+// 订阅模式时 is_exclusive 默认为 true。
 watch(
   () => createForm.subscription_type,
   (newVal) => {
     if (newVal === "subscription") {
       createForm.is_exclusive = true;
       createForm.fallback_group_id_on_invalid_request = null;
-    } else {
-      createForm.peak_rate_enabled = false;
-      createForm.peak_start = "";
-      createForm.peak_end = "";
-      createForm.peak_rate_multiplier = 1.0;
-    }
-  },
-);
-
-// 编辑表单：切回标准模式时清空高峰配置，避免残留随更新请求提交被后端拒绝
-watch(
-  () => editForm.subscription_type,
-  (newVal) => {
-    if (newVal !== "subscription") {
-      editForm.peak_rate_enabled = false;
-      editForm.peak_start = "";
-      editForm.peak_end = "";
-      editForm.peak_rate_multiplier = 1.0;
     }
   },
 );

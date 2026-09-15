@@ -3,12 +3,36 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	gocache "github.com/patrickmn/go-cache"
 	"golang.org/x/sync/singleflight"
 )
+
+var userGroupRateResolvers sync.Map // *userGroupRateResolver
+
+// InvalidateUserGroupRateCaches invalidates both balance and subscription default-key entries.
+func InvalidateUserGroupRateCaches(groupID int64) {
+	if groupID <= 0 {
+		return
+	}
+	userGroupRateResolvers.Range(func(key, _ any) bool {
+		r, ok := key.(*userGroupRateResolver)
+		if !ok || r.cache == nil {
+			return true
+		}
+		for cacheKey := range r.cache.Items() {
+			parts := strings.SplitN(cacheKey, ":", 3)
+			if len(parts) == 3 && parts[1] == fmt.Sprint(groupID) {
+				r.cache.Delete(cacheKey)
+			}
+		}
+		return true
+	})
+}
 
 type userGroupRateResolver struct {
 	repo         UserGroupRateRepository
@@ -32,13 +56,15 @@ func newUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache
 		sf = &singleflight.Group{}
 	}
 
-	return &userGroupRateResolver{
+	r := &userGroupRateResolver{
 		repo:         repo,
 		cache:        cache,
 		cacheTTL:     cacheTTL,
 		sf:           sf,
 		logComponent: logComponent,
 	}
+	userGroupRateResolvers.Store(r, struct{}{})
+	return r
 }
 
 func (r *userGroupRateResolver) Resolve(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {

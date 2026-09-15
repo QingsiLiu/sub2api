@@ -1206,7 +1206,7 @@ func TestAdminService_UpdateGroup_PeakRateValidation(t *testing.T) {
 	}
 }
 
-func TestAdminService_UpdateGroup_ClearsPeakRateWhenChangingToStandard(t *testing.T) {
+func TestAdminService_UpdateGroup_PreservesPeakRateWhenChangingToStandard(t *testing.T) {
 	existingGroup := &Group{
 		ID:                 1,
 		Name:               "existing-group",
@@ -1228,10 +1228,10 @@ func TestAdminService_UpdateGroup_ClearsPeakRateWhenChangingToStandard(t *testin
 	require.NotNil(t, group)
 	require.NotNil(t, repo.updated)
 	require.Equal(t, SubscriptionTypeStandard, repo.updated.SubscriptionType)
-	require.False(t, repo.updated.PeakRateEnabled)
-	require.Equal(t, "", repo.updated.PeakStart)
-	require.Equal(t, "", repo.updated.PeakEnd)
-	require.Equal(t, 1.0, repo.updated.PeakRateMultiplier)
+	require.True(t, repo.updated.PeakRateEnabled)
+	require.Equal(t, "14:00", repo.updated.PeakStart)
+	require.Equal(t, "18:00", repo.updated.PeakEnd)
+	require.Equal(t, 3.0, repo.updated.PeakRateMultiplier)
 }
 
 func TestAdminService_CreateGroup_NormalizesMessagesDispatchModelConfig(t *testing.T) {
