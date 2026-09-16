@@ -44,6 +44,9 @@ func (APIKey) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.String("billing_source").Default("").MaxLen(20).Comment("Empty preserves legacy group-based settlement"),
+		field.String("routing_mode").Default("single").MaxLen(20),
+		field.JSON("group_ids", []int64{}).Optional().Comment("Ordered explicit group candidates for composite keys"),
 		field.Int64("subscription_id").
 			Optional().
 			Nillable().

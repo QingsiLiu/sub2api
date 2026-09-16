@@ -11,6 +11,7 @@ import (
 var usageStatsCache = newSnapshotCache(30 * time.Second)
 
 type usageStatsCacheKeyData struct {
+	SubscriptionID        int64  `json:"subscription_id"`
 	StartTime             string `json:"start_time"`
 	EndTime               string `json:"end_time"`
 	UserID                int64  `json:"user_id"`
@@ -42,6 +43,7 @@ func usageStatsCacheKey(filters usagestats.UsageLogFilters) string {
 		APIKeyID:              filters.APIKeyID,
 		AccountID:             filters.AccountID,
 		GroupID:               filters.GroupID,
+		SubscriptionID:        filters.SubscriptionID,
 		Model:                 filters.Model,
 		BillingMode:           filters.BillingMode,
 		RequestType:           filters.RequestType,

@@ -28,7 +28,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx con
 	link, err := client.UserSubscriptionGroup.Query().
 		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID), usersubscription.StatusEQ(service.SubscriptionStatusActive), usersubscription.ExpiresAtGT(time.Now()), usersubscription.StartsAtLTE(time.Now()))).
 		WithSubscription(func(q *dbent.UserSubscriptionQuery) {
-			q.WithGroup()
+			q.WithGroup().WithPlan()
 		}).
 		Order(usersubscriptiongroup.ByUserSubscriptionID()).
 		First(ctx)
@@ -54,7 +54,8 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	client := clientFromContext(ctx, r.client)
 	builder := client.UserSubscription.Create().
 		SetUserID(sub.UserID).
-		SetGroupID(sub.GroupID).
+		SetNillableGroupID(optionalPositiveInt64(sub.GroupID)).
+		SetNillablePlanID(sub.PlanID).
 		SetExpiresAt(sub.ExpiresAt).
 		SetNillableDailyWindowStart(sub.DailyWindowStart).
 		SetNillableWeeklyWindowStart(sub.WeeklyWindowStart).
@@ -82,16 +83,18 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	if err == nil {
 		// geili hook: every subscription keeps its primary entitlement explicitly;
 		// additional bundled groups are added by the migration/plan flow.
-		entitlementErr := client.UserSubscriptionGroup.Create().
-			SetUserSubscriptionID(created.ID).
-			SetGroupID(created.GroupID).
-			OnConflictColumns(usersubscriptiongroup.FieldUserSubscriptionID, usersubscriptiongroup.FieldGroupID).DoNothing().Exec(ctx)
-		// The unified-subscription trigger may have inserted this exact primary
-		// entitlement already. Ent's no-op upsert reports sql.ErrNoRows when the
-		// conflict path inserts nothing; that is a successful idempotent outcome,
-		// not a failed assignment.
-		if entitlementErr != nil && !errors.Is(entitlementErr, sql.ErrNoRows) {
-			return entitlementErr
+		if created.GroupID != nil {
+			entitlementErr := client.UserSubscriptionGroup.Create().
+				SetUserSubscriptionID(created.ID).
+				SetGroupID(*created.GroupID).
+				OnConflictColumns(usersubscriptiongroup.FieldUserSubscriptionID, usersubscriptiongroup.FieldGroupID).DoNothing().Exec(ctx)
+			// The unified-subscription trigger may have inserted this exact primary
+			// entitlement already. Ent's no-op upsert reports sql.ErrNoRows when the
+			// conflict path inserts nothing; that is a successful idempotent outcome,
+			// not a failed assignment.
+			if entitlementErr != nil && !errors.Is(entitlementErr, sql.ErrNoRows) {
+				return entitlementErr
+			}
 		}
 		applyUserSubscriptionEntityToService(sub, created)
 	}
@@ -103,7 +106,7 @@ func (r *userSubscriptionRepository) GetByID(ctx context.Context, id int64) (*se
 	m, err := client.UserSubscription.Query().
 		Where(usersubscription.IDEQ(id)).
 		WithUser().
-		WithGroup().
+		WithGroup().WithPlan().
 		WithGroupEntitlements().
 		WithAssignedByUser().
 		Only(ctx)
@@ -131,7 +134,7 @@ func (r *userSubscriptionRepository) GetByIDIncludeDeleted(ctx context.Context, 
 	m, err := client.UserSubscription.Query().
 		Where(usersubscription.IDEQ(id)).
 		WithUser().
-		WithGroup().
+		WithGroup().WithPlan().
 		WithGroupEntitlements().
 		WithAssignedByUser().
 		Only(queryCtx)
@@ -145,7 +148,7 @@ func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, 
 	client := clientFromContext(ctx, r.client)
 	m, err := client.UserSubscription.Query().
 		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID)).
-		WithGroup().
+		WithGroup().WithPlan().
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -162,7 +165,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Con
 			usersubscription.StatusEQ(service.SubscriptionStatusActive),
 			usersubscription.ExpiresAtGT(time.Now()),
 		).
-		WithGroup().
+		WithGroup().WithPlan().
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -178,7 +181,8 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 	client := clientFromContext(ctx, r.client)
 	builder := client.UserSubscription.UpdateOneID(sub.ID).
 		SetUserID(sub.UserID).
-		SetGroupID(sub.GroupID).
+		SetNillableGroupID(optionalPositiveInt64(sub.GroupID)).
+		SetNillablePlanID(sub.PlanID).
 		SetStartsAt(sub.StartsAt).
 		SetExpiresAt(sub.ExpiresAt).
 		SetStatus(sub.Status).
@@ -225,7 +229,7 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 	client := clientFromContext(ctx, r.client)
 	subs, err := client.UserSubscription.Query().
 		Where(usersubscription.UserIDEQ(userID)).
-		WithGroup().
+		WithGroup().WithPlan().
 		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
@@ -243,7 +247,7 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 			usersubscription.StatusEQ(service.SubscriptionStatusActive),
 			usersubscription.ExpiresAtGT(time.Now()),
 		).
-		WithGroup().
+		WithGroup().WithPlan().
 		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
@@ -264,7 +268,7 @@ func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID 
 
 	subs, err := q.
 		WithUser().
-		WithGroup().
+		WithGroup().WithPlan().
 		WithGroupEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		Offset(params.Offset()).
@@ -336,7 +340,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 	}
 
 	if !includeSoftDeleted {
-		q = q.WithUser().WithGroup().WithAssignedByUser()
+		q = q.WithUser().WithGroup().WithPlan().WithAssignedByUser()
 	}
 
 	// Determine sort field
@@ -685,7 +689,8 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 	out := &service.UserSubscription{
 		ID:                 m.ID,
 		UserID:             m.UserID,
-		GroupID:            m.GroupID,
+		GroupID:            derefInt64(m.GroupID),
+		PlanID:             m.PlanID,
 		StartsAt:           m.StartsAt,
 		ExpiresAt:          m.ExpiresAt,
 		Status:             status,
@@ -701,6 +706,10 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
 		DeletedAt:          m.DeletedAt,
+	}
+	if m.Edges.Plan != nil {
+		p := m.Edges.Plan
+		out.Plan = &service.SubscriptionQuotaPlan{ID: p.ID, Name: p.Name, DailyLimitUSD: p.DailyLimitUsd, WeeklyLimitUSD: p.WeeklyLimitUsd, MonthlyLimitUSD: p.MonthlyLimitUsd}
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -737,4 +746,17 @@ func applyUserSubscriptionEntityToService(dst *service.UserSubscription, src *db
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+}
+
+func optionalPositiveInt64(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+func derefInt64(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }

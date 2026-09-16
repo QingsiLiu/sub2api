@@ -13,8 +13,8 @@ import type { Group } from '@/types'
  * - Subscription groups: user has active subscription
  * @returns List of available groups
  */
-export async function getAvailable(): Promise<Group[]> {
-  const { data } = await apiClient.get<Group[]>('/groups/available')
+export async function getAvailable(billingSource?: 'balance' | 'subscription'): Promise<Group[]> {
+  const { data } = await apiClient.get<Group[]>('/groups/available', billingSource ? { params: { billing_source: billingSource } } : undefined)
   return data
 }
 

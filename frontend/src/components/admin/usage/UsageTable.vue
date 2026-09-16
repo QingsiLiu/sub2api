@@ -117,9 +117,19 @@
           </div>
         </template>
 
+        <template #cell-billing_source="{ row }">
+          <div class="text-xs text-gray-700 dark:text-gray-300">
+            <span v-if="row.billing_type === 1">{{ t('keys.subscriptionSource') }}: {{ row.subscription_name || row.subscription?.plan?.name || row.subscription?.group?.name || '' }} · #{{ row.subscription_id }}</span>
+            <span v-else>{{ t('keys.balanceSource') }}</span>
+          </div>
+        </template>
+        <template #cell-effective_multiplier="{ row }">
+          <span class="text-sm tabular-nums">×{{ formatMultiplier(row.rate_multiplier ?? 1) }}</span>
+        </template>
+
         <template #cell-group="{ row }">
-          <span v-if="row.group" class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-            {{ row.group.name }}
+          <span v-if="row.group || row.target_group_name" class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+            {{ row.target_group_name || row.group?.name }}
           </span>
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
@@ -207,6 +217,7 @@
 
         <template #cell-cost="{ row }">
           <div class="text-sm">
+            <span v-if="row.billing_type === 1" class="block text-[11px] text-gray-500 dark:text-gray-400">{{ t('keys.quotaConsumption') }}</span>
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
               <span
@@ -497,15 +508,21 @@
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
+            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier ?? 1) }}x</span>
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.original') }}</span>
             <span class="font-medium text-white">${{ tooltipData?.total_cost?.toFixed(8) || '0.00000000' }}</span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.userBilled') }}</span>
+            <span class="text-gray-400">{{ tooltipData?.billing_type === 1 ? t('keys.quotaConsumption') : t('usage.userBilled') }}</span>
             <span class="font-semibold text-green-400">${{ tooltipData?.actual_cost?.toFixed(8) || '0.00000000' }}</span>
+          </div>
+          <div v-if="showAccountBilling && tooltipData?.route_billing_snapshot?.attempts?.length" class="border-t border-gray-700 pt-1.5 text-xs">
+            <p class="text-gray-400">{{ t('keys.routeAttempts') }}</p>
+            <p v-for="(attempt, index) in tooltipData.route_billing_snapshot.attempts" :key="index" class="text-gray-200">
+              {{ index + 1 }}. #{{ attempt.group_id }} · {{ attempt.reason === 'selected' ? t('keys.routeSelected') : attempt.reason }}
+            </p>
           </div>
           <!-- Account billing (separated from user billing) -->
           <template v-if="showAccountBilling">

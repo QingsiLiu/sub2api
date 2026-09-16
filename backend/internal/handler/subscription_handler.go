@@ -148,18 +148,16 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 			MonthlyUsedUSD: sub.MonthlyUsageUSD,
 		}
 
-		// Add group info if preloaded
-		if sub.Group != nil {
-			item.GroupName = sub.Group.Name
-			if sub.Group.DailyLimitUSD != nil {
-				item.DailyLimitUSD = *sub.Group.DailyLimitUSD
-			}
-			if sub.Group.WeeklyLimitUSD != nil {
-				item.WeeklyLimitUSD = *sub.Group.WeeklyLimitUSD
-			}
-			if sub.Group.MonthlyLimitUSD != nil {
-				item.MonthlyLimitUSD = *sub.Group.MonthlyLimitUSD
-			}
+		item.GroupName = sub.QuotaName()
+		daily, weekly, monthly := sub.QuotaLimits(sub.Group)
+		if daily != nil {
+			item.DailyLimitUSD = *daily
+		}
+		if weekly != nil {
+			item.WeeklyLimitUSD = *weekly
+		}
+		if monthly != nil {
+			item.MonthlyLimitUSD = *monthly
 		}
 
 		// Format expiration time

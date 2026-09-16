@@ -289,7 +289,7 @@ func (h *PaymentHandler) ListPlans(c *gin.Context) {
 
 type AdminSubscriptionPlanResult struct {
 	ID              int64     `json:"id"`
-	GroupID         int64     `json:"group_id"`
+	GroupID         *int64    `json:"group_id"`
 	GroupIDs        []int64   `json:"group_ids,omitempty"`
 	GroupPlatform   string    `json:"group_platform,omitempty"`
 	GroupName       string    `json:"group_name,omitempty"`
@@ -319,7 +319,11 @@ func adminSubscriptionPlansForResponse(plans []*dbent.SubscriptionPlan, groupInf
 		if p == nil {
 			continue
 		}
-		gi := groupInfo[p.GroupID]
+		gi := service.PlanGroupInfo{}
+		if p.GroupID != nil {
+			gi = groupInfo[*p.GroupID]
+		}
+		gi.DailyLimitUSD, gi.WeeklyLimitUSD, gi.MonthlyLimitUSD = p.DailyLimitUsd, p.WeeklyLimitUsd, p.MonthlyLimitUsd
 		result = append(result, AdminSubscriptionPlanResult{
 			ID:              int64(p.ID),
 			GroupID:         p.GroupID,
@@ -353,9 +357,12 @@ func subscriptionPlanGroupIDs(p *dbent.SubscriptionPlan) []int64 {
 	if p == nil {
 		return nil
 	}
-	ids := []int64{p.GroupID}
+	ids := []int64{}
+	if p.GroupID != nil {
+		ids = append(ids, *p.GroupID)
+	}
 	for _, e := range p.Edges.GroupEntitlements {
-		if e.GroupID != p.GroupID {
+		if p.GroupID == nil || e.GroupID != *p.GroupID {
 			ids = append(ids, e.GroupID)
 		}
 	}

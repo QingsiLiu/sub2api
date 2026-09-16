@@ -671,6 +671,10 @@ func (r *usageLogRepository) GetStatsWithFilters(ctx context.Context, filters Us
 		conditions = append(conditions, fmt.Sprintf("account_id = $%d", len(args)+1))
 		args = append(args, filters.AccountID)
 	}
+	if filters.SubscriptionID > 0 {
+		conditions = append(conditions, fmt.Sprintf("subscription_id = $%d", len(args)+1))
+		args = append(args, filters.SubscriptionID)
+	}
 	if filters.GroupID > 0 {
 		conditions = append(conditions, fmt.Sprintf("group_id = $%d", len(args)+1))
 		args = append(args, filters.GroupID)

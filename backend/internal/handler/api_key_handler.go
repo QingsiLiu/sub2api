@@ -32,6 +32,9 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
+	BillingSource    string            `json:"billing_source"`
+	RoutingMode      string            `json:"routing_mode"`
+	GroupIDs         []int64           `json:"group_ids"`
 	Name             string            `json:"name" binding:"required"`
 	GroupID          *int64            `json:"group_id"` // nullable
 	SubscriptionID   *int64            `json:"subscription_id"`
@@ -50,6 +53,9 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest represents the update API key request payload
 type UpdateAPIKeyRequest struct {
+	BillingSource    *string           `json:"billing_source"`
+	RoutingMode      *string           `json:"routing_mode"`
+	GroupIDs         *[]int64          `json:"group_ids"`
 	Name             string            `json:"name"`
 	GroupID          *int64            `json:"group_id"`
 	SubscriptionID   *int64            `json:"subscription_id"`
@@ -201,6 +207,7 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	}
 
 	svcReq := service.CreateAPIKeyRequest{
+		BillingSource: req.BillingSource, RoutingMode: req.RoutingMode, GroupIDs: req.GroupIDs,
 		Name:             req.Name,
 		GroupID:          req.GroupID,
 		SubscriptionID:   req.SubscriptionID,
@@ -258,6 +265,7 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateAPIKeyRequest{
+		BillingSource: req.BillingSource, RoutingMode: req.RoutingMode, GroupIDs: req.GroupIDs,
 		IPWhitelist:         req.IPWhitelist,
 		IPBlacklist:         req.IPBlacklist,
 		Quota:               req.Quota,
@@ -334,7 +342,13 @@ func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 		return
 	}
 
-	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
+	var groups []service.Group
+	var err error
+	if source := c.Query("billing_source"); source != "" {
+		groups, err = h.apiKeyService.GetSettlementGroups(c.Request.Context(), subject.UserID, source)
+	} else {
+		groups, err = h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
+	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

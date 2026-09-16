@@ -67,9 +67,10 @@ export async function create(
   expiresInDays?: number,
   rateLimitData?: { rate_limit_5h?: number; rate_limit_1d?: number; rate_limit_7d?: number },
   subscriptionId?: number | null,
-  routePreferences?: Record<string, string>
+  routePreferences?: Record<string, string>,
+  settlement?: Pick<CreateApiKeyRequest, 'billing_source' | 'routing_mode' | 'group_ids'>
 ): Promise<ApiKey> {
-  const payload: CreateApiKeyRequest = { name }
+  const payload: CreateApiKeyRequest = { name, ...settlement }
   if (groupId !== undefined) {
     payload.group_id = groupId
   }

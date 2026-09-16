@@ -115,7 +115,10 @@ func (s *UserSubscriptionRepoSuite) TestCreate_UnifiedFacadePrimaryEntitlementIs
 	facade, err := s.client.Group.Query().
 		Where(group.NameEQ("全模型订阅"), group.PlatformEQ(service.PlatformComposite)).
 		Only(s.ctx)
-	s.Require().NoError(err, "unified facade must be present in migrated test schema")
+	if dbent.IsNotFound(err) {
+		facade, err = s.client.Group.Create().SetName("全模型订阅").SetPlatform(service.PlatformComposite).SetSubscriptionType(service.SubscriptionTypeSubscription).Save(s.ctx)
+	}
+	s.Require().NoError(err, "legacy facade fixture")
 
 	sub := &service.UserSubscription{
 		UserID:    user.ID,
@@ -123,7 +126,7 @@ func (s *UserSubscriptionRepoSuite) TestCreate_UnifiedFacadePrimaryEntitlementIs
 		Status:    service.SubscriptionStatusActive,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
-	s.Require().NoError(s.repo.Create(s.ctx, sub), "facade assignment must tolerate trigger-created primary entitlement")
+	s.Require().NoError(s.repo.Create(s.ctx, sub), "legacy facade assignment must still store one primary entitlement")
 	s.Require().NotZero(sub.ID)
 
 	links, err := s.client.UserSubscriptionGroup.Query().
@@ -945,4 +948,23 @@ func (s *UserSubscriptionRepoSuite) TestTxContext_RollbackIsolation() {
 
 	_, err = repo.GetByID(context.Background(), sub.ID)
 	s.Require().ErrorIs(err, service.ErrSubscriptionNotFound)
+}
+
+func (s *UserSubscriptionRepoSuite) TestCreate_PlanSubscriptionHasNoGroupOrEntitlement() {
+	user := s.mustCreateUser("independent-plan@test.com", service.RoleUser)
+	plan, err := s.client.SubscriptionPlan.Create().SetName("Independent plan").SetPrice(10).SetDailyLimitUsd(2).Save(s.ctx)
+	s.Require().NoError(err)
+	sub := &service.UserSubscription{UserID: user.ID, PlanID: &plan.ID, Status: service.SubscriptionStatusActive, StartsAt: time.Now(), ExpiresAt: time.Now().Add(24 * time.Hour)}
+	s.Require().NoError(s.repo.Create(s.ctx, sub))
+	row, err := s.client.UserSubscription.Get(s.ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Require().Nil(row.GroupID)
+	loaded, err := s.repo.GetByID(s.ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(&plan.ID, loaded.PlanID)
+	s.Require().NotNil(loaded.Plan)
+	s.Require().Equal(2.0, *loaded.Plan.DailyLimitUSD)
+	links, err := s.client.UserSubscriptionGroup.Query().Where(usersubscriptiongroup.UserSubscriptionIDEQ(sub.ID)).Count(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Zero(links)
 }

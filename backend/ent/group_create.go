@@ -108,6 +108,20 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (_c *GroupCreate) SetSubscriptionEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSubscriptionEnabled(v)
+	return _c
+}
+
+// SetNillableSubscriptionEnabled sets the "subscription_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSubscriptionEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSubscriptionEnabled(*v)
+	}
+	return _c
+}
+
 // SetSubscriptionRateMultiplier sets the "subscription_rate_multiplier" field.
 func (_c *GroupCreate) SetSubscriptionRateMultiplier(v float64) *GroupCreate {
 	_c.mutation.SetSubscriptionRateMultiplier(v)
@@ -1097,6 +1111,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.SubscriptionEnabled(); !ok {
+		v := group.DefaultSubscriptionEnabled
+		_c.mutation.SetSubscriptionEnabled(v)
+	}
 	if _, ok := _c.mutation.SubscriptionRateMultiplier(); !ok {
 		v := group.DefaultSubscriptionRateMultiplier
 		_c.mutation.SetSubscriptionRateMultiplier(v)
@@ -1282,6 +1300,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.SubscriptionEnabled(); !ok {
+		return &ValidationError{Name: "subscription_enabled", err: errors.New(`ent: missing required field "Group.subscription_enabled"`)}
 	}
 	if _, ok := _c.mutation.SubscriptionRateMultiplier(); !ok {
 		return &ValidationError{Name: "subscription_rate_multiplier", err: errors.New(`ent: missing required field "Group.subscription_rate_multiplier"`)}
@@ -1521,6 +1542,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.SubscriptionEnabled(); ok {
+		_spec.SetField(group.FieldSubscriptionEnabled, field.TypeBool, value)
+		_node.SubscriptionEnabled = value
 	}
 	if value, ok := _c.mutation.SubscriptionRateMultiplier(); ok {
 		_spec.SetField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)
@@ -2029,6 +2054,18 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (u *GroupUpsert) SetSubscriptionEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSubscriptionEnabled, v)
+	return u
+}
+
+// UpdateSubscriptionEnabled sets the "subscription_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSubscriptionEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSubscriptionEnabled)
 	return u
 }
 
@@ -3164,6 +3201,20 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (u *GroupUpsertOne) SetSubscriptionEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSubscriptionEnabled(v)
+	})
+}
+
+// UpdateSubscriptionEnabled sets the "subscription_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSubscriptionEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSubscriptionEnabled()
 	})
 }
 
@@ -4631,6 +4682,20 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (u *GroupUpsertBulk) SetSubscriptionEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSubscriptionEnabled(v)
+	})
+}
+
+// UpdateSubscriptionEnabled sets the "subscription_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSubscriptionEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSubscriptionEnabled()
 	})
 }
 

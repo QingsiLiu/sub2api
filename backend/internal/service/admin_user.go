@@ -1257,19 +1257,36 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		return nil, ErrRedeemCodeExpired
 	}
 
-	// 如果是订阅类型，验证必须有 GroupID
-	if input.Type == RedeemTypeSubscription {
-		if input.GroupID == nil {
-			return nil, errors.New("group_id is required for subscription type")
+	if input.Type == RedeemTypeSubscription && input.PlanID != nil {
+		if input.GroupID != nil {
+			return nil, infraerrors.BadRequest("REDEEM_TARGET_AMBIGUOUS", "choose a plan or legacy group, not both")
 		}
-		// 验证分组存在且为订阅类型
-		group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("group not found: %w", err)
+		if s.entClient == nil {
+			return nil, infraerrors.ServiceUnavailable("PLAN_UNAVAILABLE", "plan repository is unavailable")
 		}
-		if !group.IsSubscriptionType() {
-			return nil, errors.New("group must be subscription type")
+		plan, err := s.entClient.SubscriptionPlan.Get(ctx, *input.PlanID)
+		if err != nil || plan.ArchivedAt != nil {
+			return nil, infraerrors.BadRequest("PLAN_NOT_AVAILABLE", "subscription plan is unavailable")
 		}
+		if input.ValidityDays == 0 {
+			input.ValidityDays = psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
+		}
+	} else {
+		// 如果是订阅类型，验证必须有 GroupID
+		if input.Type == RedeemTypeSubscription {
+			if input.GroupID == nil {
+				return nil, errors.New("group_id is required for subscription type")
+			}
+			// 验证分组存在且为订阅类型
+			group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("group not found: %w", err)
+			}
+			if !group.IsSubscriptionType() {
+				return nil, errors.New("group must be subscription type")
+			}
+		}
+
 	}
 
 	codes := make([]RedeemCode, 0, input.Count)
@@ -1288,6 +1305,7 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
 			code.GroupID = input.GroupID
+			code.PlanID = input.PlanID
 			code.ValidityDays = input.ValidityDays
 			if code.ValidityDays <= 0 {
 				code.ValidityDays = 30 // 默认30天

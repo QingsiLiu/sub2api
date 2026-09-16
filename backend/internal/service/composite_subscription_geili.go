@@ -15,7 +15,7 @@ var (
 // SubscriptionBillingKey makes a request-local copy. Cached authentication
 // objects and persisted balance prices must never be rewritten by a request.
 func SubscriptionBillingKey(key *APIKey) *APIKey {
-	if key == nil || key.Group == nil {
+	if key == nil || key.Group == nil || key.BillingSource != "" {
 		return key
 	}
 	copyKey, copyGroup := *key, *key.Group

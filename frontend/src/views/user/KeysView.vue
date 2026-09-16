@@ -162,12 +162,13 @@
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
+                <span v-if="row.billing_source && row.routing_mode === 'composite'" class="text-sm text-primary-600 dark:text-primary-400">{{ t('keys.compositeKey') }} · {{ t('keys.selectedGroupsCount', { count: row.group_ids?.length || 0 }) }}</span>
                 <GroupBadge
-                  v-if="row.group"
+                  v-else-if="row.group"
                   :name="row.group.name"
                   :platform="row.group.platform"
-                  :subscription-type="row.group.subscription_type"
-                  :rate-multiplier="row.group.rate_multiplier"
+                  :subscription-type="row.billing_source ? 'standard' : row.group.subscription_type"
+                  :rate-multiplier="row.billing_source === 'subscription' ? (row.group.subscription_rate_multiplier ?? row.group.rate_multiplier) : row.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[row.group.id]"
                   :peak-rate-enabled="row.group.peak_rate_enabled"
                   :peak-start="row.group.peak_start"
@@ -485,55 +486,50 @@
           />
         </div>
 
-        <fieldset v-if="!showEditModal" data-tour="key-form-provider">
-          <legend class="input-label">{{ t('keys.providerLabel') }}</legend>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label
-              v-for="provider in createProviderOptions"
-              :key="provider.value"
-              class="relative min-w-0"
-              :class="provider.count === 0 ? 'cursor-not-allowed' : 'cursor-pointer'"
-            >
-              <input
-                type="radio"
-                name="key-provider"
-                :value="provider.value"
-                :checked="createProvider === provider.value"
-                :disabled="provider.count === 0"
-                class="peer sr-only"
-                @change="selectCreateProvider(provider.value)"
-              />
-              <span
-                class="flex h-full flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-3 text-center transition-colors peer-checked:border-primary-500 peer-checked:bg-primary-50/60 peer-checked:ring-1 peer-checked:ring-primary-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-500 peer-disabled:opacity-40 dark:border-dark-600 dark:bg-dark-800 dark:peer-checked:border-primary-500 dark:peer-checked:bg-primary-500/10"
-                :class="provider.count > 0 && 'hover:border-primary-300 dark:hover:border-primary-700'"
-              >
-                <span class="flex h-8 items-center justify-center gap-1.5" aria-hidden="true">
-                  <span
-                    v-for="platform in KEY_GROUP_PROVIDER_ICONS[provider.value]"
-                    :key="platform"
-                    class="flex h-8 w-8 items-center justify-center rounded-lg"
-                    :class="platformBadgeLightClass(platform)"
-                  >
-                    <PlatformIcon :platform="platform" size="lg" />
-                  </span>
-                </span>
-                <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ provider.label }}</span>
-              </span>
-              <span
-                v-if="createProvider === provider.value"
-                class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-white"
-                aria-hidden="true"
-              >
-                <Icon name="check" size="xs" :stroke-width="3" />
-              </span>
+        <div>
+          <label for="key-billing-source" class="input-label">{{ t('keys.billingSource') }}</label>
+          <select id="key-billing-source" v-model="formData.billing_source" class="input">
+            <option v-if="showEditModal && !selectedKey?.billing_source" value="" disabled>{{ t('keys.legacySettlement') }}</option>
+            <option value="balance">{{ t('keys.balanceOnly') }}</option>
+            <option value="subscription">{{ t('keys.specifiedSubscription') }}</option>
+          </select>
+          <p v-if="showEditModal && !selectedKey?.billing_source" class="input-hint">{{ t('keys.legacySettlementHint') }}</p>
+        </div>
+        <div v-if="formData.billing_source === 'subscription'">
+          <label for="key-subscription" class="input-label">{{ t('keys.subscriptionLabel') }}</label>
+          <select id="key-subscription" v-model.number="formData.subscription_id" class="input" :disabled="settlementOptionsLoading">
+            <option :value="null" disabled>{{ t('keys.subscriptionRequired') }}</option>
+            <option v-for="subscription in eligibleSubscriptions" :key="subscription.id" :value="subscription.id">{{ subscriptionOptionLabel(subscription) }}</option>
+          </select>
+          <p v-if="!settlementOptionsLoading && !eligibleSubscriptions.length" class="input-hint">{{ t('keys.noActiveSubscription') }}</p>
+        </div>
+        <div v-if="formData.billing_source">
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input data-test="composite-key-toggle" v-model="formData.routing_mode" type="checkbox" true-value="composite" false-value="single" class="rounded border-gray-300 text-primary-600" />
+            {{ t('keys.compositeKey') }}
+          </label>
+        </div>
+        <div v-if="formData.billing_source && formData.routing_mode === 'composite'" class="space-y-3">
+          <p class="input-label">{{ t('keys.orderedGroups') }}</p>
+          <div class="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+            <label v-for="group in settlementGroups" :key="group.id" class="flex items-center gap-2 text-sm">
+              <input data-test="key-group-choice" v-model="formData.group_ids" type="checkbox" :value="group.id" class="rounded border-gray-300 text-primary-600" />
+              <span>{{ group.name }} · ×{{ displayedGroupRate(group) }}</span>
             </label>
           </div>
-          <p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400" aria-live="polite">
-            {{ groups.length === 0 ? t('common.noGroupsAvailable') : t(`keys.providerHints.${createProvider}`) }}
-          </p>
-        </fieldset>
+          <ol class="space-y-2">
+            <li v-for="(id,index) in formData.group_ids" :key="id" class="flex items-center justify-between gap-2 text-sm">
+              <span>{{ index + 1 }}. {{ settlementGroups.find(group => group.id === id)?.name || `#${id}` }}</span>
+              <div class="flex gap-1">
+                <button type="button" class="btn btn-secondary btn-sm" :disabled="index===0" :aria-label="t('keys.moveUp')" @click="moveSelectedGroup(index,-1)">↑</button>
+                <button type="button" class="btn btn-secondary btn-sm" :disabled="index===formData.group_ids.length-1" :aria-label="t('keys.moveDown')" @click="moveSelectedGroup(index,1)">↓</button>
+              </div>
+            </li>
+          </ol>
+          <p class="input-hint">{{ t('keys.groupFallbackHint') }}</p>
+        </div>
 
-        <div>
+        <div v-if="!formData.billing_source || formData.routing_mode === 'single'">
           <label class="input-label" for="key-form-group">{{ t('keys.groupLabel') }}</label>
           <Select
             :key="showEditModal ? 'edit' : createProvider"
@@ -580,7 +576,7 @@
           </Select>
         </div>
 
-        <div v-if="selectedFormGroup?.platform === 'composite'" class="space-y-3">
+        <div v-if="!formData.billing_source && selectedFormGroup?.platform === 'composite'" class="space-y-3">
           <p class="input-label">{{ t('keys.routePreferencesLabel') }}</p>
           <p v-if="routeOptionsLoading" class="input-hint">{{ t('common.loading') }}</p>
           <div v-for="provider in routeProviders" :key="provider">
@@ -595,7 +591,7 @@
           <p class="input-hint">{{ t('keys.routePreferencesHint') }}</p>
         </div>
 
-        <div v-if="selectedFormGroup?.platform === 'composite' && eligibleSubscriptions.length">
+        <div v-if="!formData.billing_source && selectedFormGroup?.platform === 'composite' && eligibleSubscriptions.length">
           <label class="input-label">{{ t('keys.subscriptionLabel') }}</label>
           <select v-model.number="formData.subscription_id" class="input">
             <option v-for="subscription in eligibleSubscriptions" :key="subscription.id" :value="subscription.id">
@@ -1253,9 +1249,7 @@ import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
-import PlatformIcon from '@/components/common/PlatformIcon.vue'
-import { platformBadgeLightClass } from '@/utils/platformColors'
-import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
+import { KEY_GROUP_PROVIDERS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
 import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
@@ -1455,6 +1449,9 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 
 const formData = ref({
   name: '',
+  billing_source: 'balance' as '' | 'balance' | 'subscription',
+  routing_mode: 'single' as 'single' | 'composite',
+  group_ids: [] as number[],
   group_id: null as number | null,
   subscription_id: null as number | null,
   route_preferences: {} as Record<string, string>,
@@ -1498,21 +1495,24 @@ const statusOptions = computed(() => [
   { value: 'inactive', label: t('common.inactive') }
 ])
 
-const selectedFormGroup = computed(() => groups.value.find((group) => group.id === formData.value.group_id) ?? null)
+const settlementGroups = ref<Group[]>([])
+const settlementOptionsLoading = ref(false)
+const formAvailableGroups = computed(() => formData.value.billing_source ? settlementGroups.value : groups.value)
+const selectedFormGroup = computed(() => formAvailableGroups.value.find((group) => group.id === formData.value.group_id) ?? null)
 const activeSubscriptions = ref<import('@/types').UserSubscription[]>([])
 
 const routeOptions = ref<import('@/api/keys').SubscriptionRouteOption[]>([])
 const routeOptionsLoading = ref(false)
 const routeProviders = computed(() => [...new Set(routeOptions.value.map(item => item.provider))])
 const eligibleSubscriptions = computed(() => activeSubscriptions.value.filter(sub =>
-  sub.group_id === formData.value.group_id || sub.entitled_group_ids?.includes(formData.value.group_id ?? 0)))
+  (formData.value.billing_source === 'subscription' || sub.group_id === formData.value.group_id || sub.entitled_group_ids?.includes(formData.value.group_id ?? 0)) && new Date(sub.starts_at).getTime() <= Date.now()))
 watch([selectedFormGroup, activeSubscriptions], () => {
-  if (selectedFormGroup.value?.platform === 'composite' && formData.value.subscription_id == null && eligibleSubscriptions.value.length === 1) {
+  if ((formData.value.billing_source === 'subscription' || selectedFormGroup.value?.platform === 'composite') && formData.value.subscription_id == null && eligibleSubscriptions.value.length === 1) {
     formData.value.subscription_id = eligibleSubscriptions.value[0].id
   }
 })
 watch([selectedFormGroup, showCreateModal, showEditModal], async ([group, creating, editing]) => {
-  if ((!creating && !editing) || group?.platform !== 'composite') { routeOptions.value = []; return }
+  if ((!creating && !editing) || formData.value.billing_source || group?.platform !== 'composite') { routeOptions.value = []; return }
   routeOptionsLoading.value = true
   try {
     const [options, subscriptions] = await Promise.all([keysAPI.getSubscriptionRoutes(group.id), subscriptionsAPI.getActiveSubscriptions()])
@@ -1525,6 +1525,50 @@ watch([selectedFormGroup, showCreateModal, showEditModal], async ([group, creati
   } catch (error) { appStore.showError(t('keys.failedToLoadRoutes')) }
   finally { routeOptionsLoading.value = false }
 })
+
+let settlementLoadVersion = 0
+watch([() => formData.value.billing_source, showCreateModal, showEditModal], async ([source, creating, editing]) => {
+  const version = ++settlementLoadVersion
+  if ((!creating && !editing) || !source) return
+  settlementOptionsLoading.value = true
+  try {
+    const [available, subscriptions] = await Promise.all([
+      userGroupsAPI.getAvailable(source as 'balance' | 'subscription'),
+      source === 'subscription' ? subscriptionsAPI.getActiveSubscriptions() : Promise.resolve([])
+    ])
+    if (version !== settlementLoadVersion) return
+    settlementGroups.value = available
+    activeSubscriptions.value = subscriptions
+    if (formData.value.group_id && !available.some(group => group.id === formData.value.group_id)) formData.value.group_id = null
+    formData.value.group_ids = formData.value.group_ids.filter(id => available.some(group => group.id === id))
+    if (source === 'balance') formData.value.subscription_id = null
+    else if (subscriptions.length === 1 && !formData.value.subscription_id) formData.value.subscription_id = subscriptions[0].id
+  } catch { appStore.showError(t('keys.failedToLoadRoutes')) }
+  finally { if (version === settlementLoadVersion) settlementOptionsLoading.value = false }
+})
+watch(() => formData.value.routing_mode, mode => {
+  if (!formData.value.billing_source) return
+  if (mode === 'composite') formData.value.group_id = null
+  else formData.value.group_ids = []
+})
+const displayedGroupRate = (group: Group) => userGroupRates.value[group.id] ??
+  (formData.value.billing_source === 'subscription' ? (group.subscription_rate_multiplier ?? group.rate_multiplier) : group.rate_multiplier)
+const moveSelectedGroup = (index: number, delta: number) => {
+  const items = [...formData.value.group_ids]
+  const target = index + delta
+  if (target < 0 || target >= items.length) return
+  ;[items[index], items[target]] = [items[target], items[index]]
+  formData.value.group_ids = items
+}
+const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
+  const quota = sub.plan ?? sub.group
+  const available: number[] = []
+  if (quota?.daily_limit_usd && quota.daily_limit_usd > 0) available.push(Math.max(0, quota.daily_limit_usd - sub.daily_usage_usd))
+  if (quota?.weekly_limit_usd && quota.weekly_limit_usd > 0) available.push(Math.max(0, quota.weekly_limit_usd - sub.weekly_usage_usd))
+  if (quota?.monthly_limit_usd && quota.monthly_limit_usd > 0) available.push(Math.max(0, quota.monthly_limit_usd - sub.monthly_usage_usd))
+  const remaining = available.length ? '$' + Math.min(...available).toFixed(4) : t('payment.admin.unlimited')
+  return `#${sub.id} · ${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
+}
 
 const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
   if (key.status === 'quota_exhausted' || key.status === 'expired') {
@@ -1588,9 +1632,9 @@ const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => 
   count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
 })))
 
-const formGroupOptions = computed(() => showEditModal.value
-  ? groupOptions.value
-  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+const formGroupOptions = computed(() => formData.value.billing_source
+  ? settlementGroups.value.map(group => ({ value: group.id, label: group.name, description: group.description, rate: displayedGroupRate(group), userRate: null, subscriptionType: 'standard', platform: group.platform, peakRateEnabled: group.peak_rate_enabled, peakStart: group.peak_start, peakEnd: group.peak_end, peakRateMultiplier: group.peak_rate_multiplier }))
+  : groupOptions.value
 )
 
 const selectCreateProvider = (provider: KeyGroupProvider) => {
@@ -1601,7 +1645,7 @@ const selectCreateProvider = (provider: KeyGroupProvider) => {
 
 // Also handles groups arriving after the create dialog has already opened.
 watch([showCreateModal, createProviderOptions], ([isOpen, providers], [wasOpen]) => {
-  if (!isOpen) return
+  if (!isOpen || formData.value.billing_source) return
   if (!wasOpen || !providers.some((provider) => provider.value === createProvider.value && provider.count > 0)) {
     selectCreateProvider(providers.find((provider) => provider.count > 0)?.value ?? 'anthropic')
   }
@@ -1753,6 +1797,9 @@ const editKey = (key: ApiKey) => {
   const hasExpiration = !!key.expires_at
   formData.value = {
     name: key.name,
+    billing_source: key.billing_source ?? '',
+    routing_mode: key.routing_mode ?? 'single',
+    group_ids: [...(key.group_ids ?? [])],
     group_id: key.group_id,
     subscription_id: key.subscription_id ?? null,
     route_preferences: { ...(key.route_preferences ?? {}) },
@@ -1789,6 +1836,7 @@ const toggleKeyStatus = async (key: ApiKey) => {
 }
 
 const openGroupSelector = (key: ApiKey) => {
+  if (key.billing_source) { editKey(key); return }
   if (groupSelectorKeyId.value === key.id) {
     groupSelectorKeyId.value = null
     dropdownPosition.value = null
@@ -1855,7 +1903,7 @@ const confirmDelete = (key: ApiKey) => {
 
 const handleSubmit = async () => {
   // Validate group_id is required
-  if (formData.value.group_id === null) {
+  if (formData.value.routing_mode === 'composite' ? formData.value.group_ids.length === 0 : formData.value.group_id === null) {
     appStore.showError(t('keys.groupRequired'))
     return
   }
@@ -1907,8 +1955,8 @@ const handleSubmit = async () => {
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
 
-  const routePreferences = selectedFormGroup.value?.platform === 'composite' ? formData.value.route_preferences : undefined
-  if (selectedFormGroup.value?.platform === 'composite' && eligibleSubscriptions.value.length > 1 && !formData.value.subscription_id) {
+  const routePreferences = !formData.value.billing_source && selectedFormGroup.value?.platform === 'composite' ? formData.value.route_preferences : undefined
+  if ((formData.value.billing_source === 'subscription' || (selectedFormGroup.value?.platform === 'composite' && eligibleSubscriptions.value.length > 1)) && !formData.value.subscription_id) {
     appStore.showError(t('keys.subscriptionRequired'))
     return
   }
@@ -1919,7 +1967,10 @@ const handleSubmit = async () => {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_id: formData.value.group_id,
-        subscription_id: selectedFormGroup.value?.platform === 'composite' ? formData.value.subscription_id : undefined,
+        subscription_id: formData.value.billing_source === 'subscription' || (!formData.value.billing_source && selectedFormGroup.value?.platform === 'composite') ? formData.value.subscription_id : undefined,
+        billing_source: formData.value.billing_source || undefined,
+        routing_mode: formData.value.billing_source ? formData.value.routing_mode : undefined,
+        group_ids: formData.value.billing_source && formData.value.routing_mode === 'composite' ? formData.value.group_ids : undefined,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1945,8 +1996,9 @@ const handleSubmit = async () => {
         quota,
         expiresInDays,
         rateLimitData,
-        selectedFormGroup.value?.platform === 'composite' ? formData.value.subscription_id : undefined,
-        routePreferences
+        formData.value.billing_source === 'subscription' ? formData.value.subscription_id : undefined,
+        routePreferences,
+        { billing_source: formData.value.billing_source || undefined, routing_mode: formData.value.routing_mode, group_ids: formData.value.routing_mode === 'composite' ? formData.value.group_ids : undefined }
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1957,7 +2009,7 @@ const handleSubmit = async () => {
     closeModals()
     loadApiKeys()
   } catch (error: any) {
-    const errorMsg = error.response?.data?.detail || t('keys.failedToSave')
+    const errorMsg = error.response?.data?.detail || error.message || t('keys.failedToSave')
     appStore.showError(errorMsg)
     // Don't advance tour on error
   } finally {
@@ -1991,6 +2043,9 @@ const closeModals = () => {
   selectedKey.value = null
   formData.value = {
     name: '',
+    billing_source: 'balance',
+    routing_mode: 'single',
+    group_ids: [],
     group_id: null,
     subscription_id: null,
     route_preferences: {} as Record<string, string>,

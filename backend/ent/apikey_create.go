@@ -99,6 +99,40 @@ func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	return _c
 }
 
+// SetBillingSource sets the "billing_source" field.
+func (_c *APIKeyCreate) SetBillingSource(v string) *APIKeyCreate {
+	_c.mutation.SetBillingSource(v)
+	return _c
+}
+
+// SetNillableBillingSource sets the "billing_source" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableBillingSource(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetBillingSource(*v)
+	}
+	return _c
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (_c *APIKeyCreate) SetRoutingMode(v string) *APIKeyCreate {
+	_c.mutation.SetRoutingMode(v)
+	return _c
+}
+
+// SetNillableRoutingMode sets the "routing_mode" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableRoutingMode(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetRoutingMode(*v)
+	}
+	return _c
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (_c *APIKeyCreate) SetGroupIds(v []int64) *APIKeyCreate {
+	_c.mutation.SetGroupIds(v)
+	return _c
+}
+
 // SetSubscriptionID sets the "subscription_id" field.
 func (_c *APIKeyCreate) SetSubscriptionID(v int64) *APIKeyCreate {
 	_c.mutation.SetSubscriptionID(v)
@@ -403,6 +437,14 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.BillingSource(); !ok {
+		v := apikey.DefaultBillingSource
+		_c.mutation.SetBillingSource(v)
+	}
+	if _, ok := _c.mutation.RoutingMode(); !ok {
+		v := apikey.DefaultRoutingMode
+		_c.mutation.SetRoutingMode(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -467,6 +509,22 @@ func (_c *APIKeyCreate) check() error {
 	if v, ok := _c.mutation.Name(); ok {
 		if err := apikey.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.BillingSource(); !ok {
+		return &ValidationError{Name: "billing_source", err: errors.New(`ent: missing required field "APIKey.billing_source"`)}
+	}
+	if v, ok := _c.mutation.BillingSource(); ok {
+		if err := apikey.BillingSourceValidator(v); err != nil {
+			return &ValidationError{Name: "billing_source", err: fmt.Errorf(`ent: validator failed for field "APIKey.billing_source": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RoutingMode(); !ok {
+		return &ValidationError{Name: "routing_mode", err: errors.New(`ent: missing required field "APIKey.routing_mode"`)}
+	}
+	if v, ok := _c.mutation.RoutingMode(); ok {
+		if err := apikey.RoutingModeValidator(v); err != nil {
+			return &ValidationError{Name: "routing_mode", err: fmt.Errorf(`ent: validator failed for field "APIKey.routing_mode": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
@@ -550,6 +608,18 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.BillingSource(); ok {
+		_spec.SetField(apikey.FieldBillingSource, field.TypeString, value)
+		_node.BillingSource = value
+	}
+	if value, ok := _c.mutation.RoutingMode(); ok {
+		_spec.SetField(apikey.FieldRoutingMode, field.TypeString, value)
+		_node.RoutingMode = value
+	}
+	if value, ok := _c.mutation.GroupIds(); ok {
+		_spec.SetField(apikey.FieldGroupIds, field.TypeJSON, value)
+		_node.GroupIds = value
 	}
 	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)
@@ -806,6 +876,48 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
+	return u
+}
+
+// SetBillingSource sets the "billing_source" field.
+func (u *APIKeyUpsert) SetBillingSource(v string) *APIKeyUpsert {
+	u.Set(apikey.FieldBillingSource, v)
+	return u
+}
+
+// UpdateBillingSource sets the "billing_source" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateBillingSource() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldBillingSource)
+	return u
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (u *APIKeyUpsert) SetRoutingMode(v string) *APIKeyUpsert {
+	u.Set(apikey.FieldRoutingMode, v)
+	return u
+}
+
+// UpdateRoutingMode sets the "routing_mode" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateRoutingMode() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldRoutingMode)
+	return u
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsert) SetGroupIds(v []int64) *APIKeyUpsert {
+	u.Set(apikey.FieldGroupIds, v)
+	return u
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateGroupIds() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldGroupIds)
+	return u
+}
+
+// ClearGroupIds clears the value of the "group_ids" field.
+func (u *APIKeyUpsert) ClearGroupIds() *APIKeyUpsert {
+	u.SetNull(apikey.FieldGroupIds)
 	return u
 }
 
@@ -1273,6 +1385,55 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetBillingSource sets the "billing_source" field.
+func (u *APIKeyUpsertOne) SetBillingSource(v string) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetBillingSource(v)
+	})
+}
+
+// UpdateBillingSource sets the "billing_source" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateBillingSource() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateBillingSource()
+	})
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (u *APIKeyUpsertOne) SetRoutingMode(v string) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRoutingMode(v)
+	})
+}
+
+// UpdateRoutingMode sets the "routing_mode" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateRoutingMode() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRoutingMode()
+	})
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsertOne) SetGroupIds(v []int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetGroupIds(v)
+	})
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateGroupIds() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateGroupIds()
+	})
+}
+
+// ClearGroupIds clears the value of the "group_ids" field.
+func (u *APIKeyUpsertOne) ClearGroupIds() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearGroupIds()
 	})
 }
 
@@ -1960,6 +2121,55 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetBillingSource sets the "billing_source" field.
+func (u *APIKeyUpsertBulk) SetBillingSource(v string) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetBillingSource(v)
+	})
+}
+
+// UpdateBillingSource sets the "billing_source" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateBillingSource() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateBillingSource()
+	})
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (u *APIKeyUpsertBulk) SetRoutingMode(v string) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRoutingMode(v)
+	})
+}
+
+// UpdateRoutingMode sets the "routing_mode" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateRoutingMode() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRoutingMode()
+	})
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (u *APIKeyUpsertBulk) SetGroupIds(v []int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetGroupIds(v)
+	})
+}
+
+// UpdateGroupIds sets the "group_ids" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateGroupIds() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateGroupIds()
+	})
+}
+
+// ClearGroupIds clears the value of the "group_ids" field.
+func (u *APIKeyUpsertBulk) ClearGroupIds() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearGroupIds()
 	})
 }
 

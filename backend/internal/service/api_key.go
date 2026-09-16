@@ -28,6 +28,10 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
+	RouteAttempts    []KeyRouteAttempt `json:"-"`
+	BillingSource    string
+	RoutingMode      string
+	GroupIDs         []int64
 	CompositeRoute   *CompositeRouteDecision `json:"-"`
 	ID               int64
 	UserID           int64
@@ -145,4 +149,19 @@ type APIKeyListFilters struct {
 	Search  string
 	Status  string
 	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
+}
+
+// UsesSubscriptionBilling keeps legacy Keys on their old group-based contract.
+// Explicit Keys choose settlement independently from the selected group type.
+func (k *APIKey) UsesSubscriptionBilling() bool {
+	if k == nil {
+		return false
+	}
+	if k.BillingSource != "" {
+		return k.BillingSource == "subscription"
+	}
+	return k.Group != nil && k.Group.IsSubscriptionType()
+}
+func (k *APIKey) UsesGroupListRouting() bool {
+	return k != nil && k.BillingSource != "" && k.RoutingMode == "composite"
 }

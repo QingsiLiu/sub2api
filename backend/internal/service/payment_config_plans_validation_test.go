@@ -25,10 +25,9 @@ func TestValidatePlanRequired_WhitespaceName(t *testing.T) {
 	require.Contains(t, err.Error(), "plan name")
 }
 
-func TestValidatePlanRequired_ZeroGroupID(t *testing.T) {
+func TestValidatePlanRequired_GroupOptional(t *testing.T) {
 	err := validatePlanRequired("Pro", 0, 9.99, 30, "days", nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "group")
+	require.NoError(t, err)
 }
 
 func TestValidatePlanRequired_NegativeGroupID(t *testing.T) {

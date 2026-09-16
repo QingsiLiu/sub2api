@@ -115,6 +115,10 @@
               <label class="input-label">{{ t('usage.compactionFilter') }}</label>
               <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="applyFilters" />
             </div>
+            <div v-if="subscriptionFeatureEnabled" class="w-full sm:w-auto sm:min-w-[220px]">
+              <label class="input-label">{{ t('keys.subscriptionLabel') }}</label>
+              <Select v-model="filters.subscription_id" :options="subscriptionOptions" searchable @change="applyFilters" />
+            </div>
             <div v-if="subscriptionFeatureEnabled" class="w-full sm:w-auto sm:min-w-[200px]">
               <label class="input-label">{{ t('admin.usage.billingType') }}</label>
               <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="applyFilters" />
@@ -224,6 +228,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
+import * as subscriptionsAPI from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
@@ -364,6 +369,7 @@ const filters = ref<UsageQueryParams>({
   request_type: undefined,
   native_compaction_v2: null,
   billing_type: null,
+  subscription_id: null,
   billing_mode: null,
 })
 
@@ -422,6 +428,12 @@ const groupOptions = computed<SelectOption[]>(() => [
 const modelOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('admin.usage.allModels') },
   ...modelOptionValues.value.map((model) => ({ value: model, label: model })),
+])
+
+const filterSubscriptions = ref<import('@/types').UserSubscription[]>([])
+const subscriptionOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('keys.allSubscriptions') },
+  ...filterSubscriptions.value.map(sub => ({ value: sub.id, label: `#${sub.id} · ${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')}` }))
 ])
 
 const normalizedFilters = computed<UsageQueryParams>(() => {
@@ -567,6 +579,7 @@ const resetFilters = () => {
     request_type: undefined,
     native_compaction_v2: null,
     billing_type: null,
+  subscription_id: null,
     billing_mode: null,
   }
   granularity.value = getGranularityForRange(range.start, range.end)
@@ -723,6 +736,8 @@ const allColumns = computed<Column[]>(() => [
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
+  { key: 'billing_source', label: t('keys.billingSourceColumn'), sortable: false },
+  { key: 'effective_multiplier', label: t('keys.finalMultiplier'), sortable: false },
   { key: 'cost', label: t('usage.cost'), sortable: false },
   { key: 'latency', label: t('usage.latency'), sortable: false },
   { key: 'created_at', label: t('usage.time'), sortable: true },
@@ -827,16 +842,12 @@ const loadApiKeys = async () => {
 }
 
 const loadFilterOptions = async () => {
-  try {
-    const [keys, availableGroups] = await Promise.all([
-      loadApiKeys(),
-      userGroupsAPI.getAvailable(),
-    ])
-    apiKeys.value = keys
-    groups.value = availableGroups
-  } catch (error) {
-    console.error('Failed to load usage filter options:', error)
-  }
+  const results = await Promise.allSettled([
+    loadApiKeys().then(value => { apiKeys.value = value }),
+    userGroupsAPI.getAvailable().then(value => { groups.value = value }),
+    subscriptionsAPI.getMySubscriptions().then(value => { filterSubscriptions.value = value }),
+  ])
+  results.forEach(result => { if (result.status === 'rejected') console.error('Failed to load usage filter options:', result.reason) })
 }
 
 const resetErrorRows = () => {

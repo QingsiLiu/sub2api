@@ -165,14 +165,24 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		isSubscriptionType := apiKey.UsesSubscriptionBilling()
+		legacySubscriptionGroupID := int64(0)
+		if apiKey.BillingSource == "" && apiKey.Group != nil {
+			legacySubscriptionGroupID = apiKey.Group.ID
+		}
+		if apiKey.BillingSource == service.BillingSourceSubscription && subscriptionService == nil {
+			abortWithGoogleError(c, 503, "subscription service is unavailable")
+			return
+		}
 		if isSubscriptionType && subscriptionService != nil {
 			var subscription *service.UserSubscription
 			var err error
 			if apiKey.SubscriptionID != nil && *apiKey.SubscriptionID > 0 {
-				subscription, err = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, apiKey.Group.ID)
-			} else {
+				subscription, err = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, legacySubscriptionGroupID)
+			} else if apiKey.BillingSource == "" && apiKey.Group != nil {
 				subscription, err = subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
+			} else {
+				err = service.ErrSubscriptionNotFound
 			}
 			if err != nil {
 				abortWithGoogleError(c, 403, "No active subscription found for this group")

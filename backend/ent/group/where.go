@@ -85,6 +85,11 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// SubscriptionEnabled applies equality check predicate on the "subscription_enabled" field. It's identical to SubscriptionEnabledEQ.
+func SubscriptionEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSubscriptionEnabled, v))
+}
+
 // SubscriptionRateMultiplier applies equality check predicate on the "subscription_rate_multiplier" field. It's identical to SubscriptionRateMultiplierEQ.
 func SubscriptionRateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSubscriptionRateMultiplier, v))
@@ -658,6 +663,16 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// SubscriptionEnabledEQ applies the EQ predicate on the "subscription_enabled" field.
+func SubscriptionEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSubscriptionEnabled, v))
+}
+
+// SubscriptionEnabledNEQ applies the NEQ predicate on the "subscription_enabled" field.
+func SubscriptionEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSubscriptionEnabled, v))
 }
 
 // SubscriptionRateMultiplierEQ applies the EQ predicate on the "subscription_rate_multiplier" field.

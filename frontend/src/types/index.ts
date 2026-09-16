@@ -561,6 +561,7 @@ export interface ReasoningEffortMapping {
 }
 
 export interface Group {
+  subscription_enabled?: boolean
   id: number
   name: string
   description: string | null
@@ -732,6 +733,9 @@ export interface CompositeRouteDecision {
 }
 
 export interface ApiKey {
+  billing_source?: '' | 'balance' | 'subscription'
+  routing_mode?: 'single' | 'composite'
+  group_ids?: number[]
   id: number
   user_id: number
   key: string
@@ -766,6 +770,9 @@ export interface ApiKey {
 }
 
 export interface CreateApiKeyRequest {
+  billing_source?: '' | 'balance' | 'subscription'
+  routing_mode?: 'single' | 'composite'
+  group_ids?: number[]
   name: string
   group_id?: number | null
   subscription_id?: number | null
@@ -781,6 +788,9 @@ export interface CreateApiKeyRequest {
 }
 
 export interface UpdateApiKeyRequest {
+  billing_source?: '' | 'balance' | 'subscription'
+  routing_mode?: 'single' | 'composite'
+  group_ids?: number[]
   name?: string
   group_id?: number | null
   subscription_id?: number | null
@@ -798,6 +808,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  subscription_enabled?: boolean
   name: string
   description?: string | null
   platform?: GroupPlatform
@@ -864,6 +875,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  subscription_enabled?: boolean
   name?: string
   description?: string | null
   platform?: GroupPlatform
@@ -1702,6 +1714,9 @@ export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
 export interface UsageLog {
+  billing_source?: 'balance' | 'subscription'
+  subscription_name?: string
+  target_group_name?: string
   id: number
   user_id: number
   api_key_id: number
@@ -1776,6 +1791,14 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
+  route_billing_snapshot?: {
+    routing_source?: string
+    subscription_id?: number | null
+    target_group_id?: number | null
+    target_group_name?: string
+    effective_multiplier: number
+    attempts?: Array<{ group_id: number; reason: string }>
+  } | null
   upstream_model?: string | null
   upstream_reasoning_effort?: string | null
   upstream_response_model?: string | null
@@ -1825,6 +1848,7 @@ export interface UsageCleanupTask {
 }
 
 export interface RedeemCode {
+  plan_id?: number | null
   id: number
   code: string
   type: RedeemCodeType
@@ -1843,6 +1867,7 @@ export interface RedeemCode {
 }
 
 export interface GenerateRedeemCodesRequest {
+  plan_id?: number | null
   count: number
   type: RedeemCodeType
   value: number
@@ -2060,7 +2085,17 @@ export interface ChangePasswordRequest {
 
 // ==================== User Subscription Types ====================
 
+export interface SubscriptionQuotaPlan {
+  id: number
+  name: string
+  daily_limit_usd: number | null
+  weekly_limit_usd: number | null
+  monthly_limit_usd: number | null
+}
+
 export interface UserSubscription {
+  plan_id?: number | null
+  plan?: SubscriptionQuotaPlan
   id: number
   user_id: number
   group_id: number
@@ -2108,13 +2143,15 @@ export interface SubscriptionProgress {
 
 export interface AssignSubscriptionRequest {
   user_id: number
-  group_id: number
+  plan_id?: number
+  group_id?: number
   validity_days?: number
 }
 
 export interface BulkAssignSubscriptionRequest {
   user_ids: number[]
-  group_id: number
+  plan_id?: number
+  group_id?: number
   validity_days?: number
 }
 
@@ -2163,6 +2200,7 @@ export interface UserErrorListParams {
 }
 
 export interface UsageQueryParams {
+  subscription_id?: number | null
   page?: number
   page_size?: number
   api_key_id?: number

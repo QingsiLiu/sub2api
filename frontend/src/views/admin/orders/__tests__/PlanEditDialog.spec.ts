@@ -147,7 +147,7 @@ describe('PlanEditDialog', () => {
       },
     })
 
-    await wrapper.find('input[type="number"]').setValue('9.99')
+    await wrapper.find('[data-test="plan-price"]').setValue('9.99')
 
     expect(wrapper.text()).toContain('preview')
     expect(wrapper.text()).toContain('¥71.43')
@@ -163,13 +163,13 @@ describe('PlanEditDialog', () => {
       },
     })
 
-    await wrapper.find('input[type="number"]').setValue('9.99')
+    await wrapper.find('[data-test="plan-price"]').setValue('9.99')
 
     expect(wrapper.text()).not.toContain('preview')
     expect(wrapper.text()).not.toContain('¥71.43')
   })
 
-  it('allows composite subscription groups for payment plans', () => {
+  it('keeps plan quotas independent of all groups', () => {
     const wrapper = mountDialog({
       groups: [
         groupFixture({
@@ -190,7 +190,8 @@ describe('PlanEditDialog', () => {
 
     const options = wrapper.findAll('option').map(option => option.text())
 
-    expect(options).toContain('OpenAI + Claude + Gemini + Grok — composite (1.2x)')
+    expect(options).not.toContain('OpenAI + Claude + Gemini + Grok — composite (1.2x)')
+    expect(wrapper.text()).toContain('keys.planQuotaHint')
     expect(options).not.toContain('Standard OpenAI — openai (1x)')
   })
 })

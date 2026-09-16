@@ -16,7 +16,6 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
-	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -496,6 +495,12 @@ func (s *PaymentService) sendSubscriptionPurchaseSuccessNotification(ctx context
 			}
 		}
 	}
+	if o.SubscriptionGroupID == nil && o.PlanID != nil && s.subscriptionSvc != nil {
+		if sub, err := s.subscriptionSvc.FindByUserAndPlan(ctx, o.UserID, *o.PlanID); err == nil && sub != nil {
+			variables["subscription_group"] = sub.QuotaName()
+			variables["expiry_time"] = sub.ExpiresAt.Format("2006-01-02 15:04")
+		}
+	}
 	return s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
 		Event:          NotificationEmailEventSubscriptionPurchaseSuccess,
 		RecipientEmail: o.UserEmail,
@@ -521,7 +526,7 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusRecharging {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
 	}
-	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
+	if (o.PlanID == nil && o.SubscriptionGroupID == nil) || o.SubscriptionDays == nil {
 		return infraerrors.BadRequest("INVALID_STATUS", "missing subscription info")
 	}
 	lease, err := s.acquirePaymentFulfillmentLease(ctx, o)
@@ -539,11 +544,17 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 }
 
 func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease) error {
-	gid := *o.SubscriptionGroupID
+	gid := int64(0)
 	days := *o.SubscriptionDays
-	g, err := s.groupRepo.GetByID(ctx, gid)
-	if err != nil || g.Status != payment.EntityStatusActive {
-		return fmt.Errorf("group %d no longer exists or inactive", gid)
+	if o.SubscriptionGroupID != nil || o.PlanID == nil {
+		if o.SubscriptionGroupID == nil {
+			return fmt.Errorf("missing subscription target")
+		}
+		gid = *o.SubscriptionGroupID
+		g, err := s.groupRepo.GetByID(ctx, gid)
+		if err != nil || g.Status != payment.EntityStatusActive {
+			return fmt.Errorf("group %d no longer exists or inactive", gid)
+		}
 	}
 	if err := s.ensurePaymentSubscriptionAssigned(ctx, o, gid, days); err != nil {
 		return err
@@ -575,7 +586,13 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 	recoveredFromNote := false
 	if !alreadyAssigned {
 		orderNote := paymentSubscriptionOrderNote(o.ID)
-		existing, lookupErr := s.subscriptionSvc.userSubRepo.GetByUserIDAndGroupID(txCtx, o.UserID, groupID)
+		var existing *UserSubscription
+		var lookupErr error
+		if o.SubscriptionGroupID == nil && o.PlanID != nil {
+			existing, lookupErr = s.subscriptionSvc.FindByUserAndPlan(txCtx, o.UserID, *o.PlanID)
+		} else {
+			existing, lookupErr = s.subscriptionSvc.userSubRepo.GetByUserIDAndGroupID(txCtx, o.UserID, groupID)
+		}
 		switch {
 		case lookupErr == nil && existing != nil && hasPaymentSubscriptionOrderNote(existing.Notes, orderNote):
 			recoveredFromNote = true
@@ -583,29 +600,14 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 			return fmt.Errorf("check existing subscription assignment: %w", lookupErr)
 		default:
 			if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-				UserID:       o.UserID,
-				GroupID:      groupID,
+				UserID:  o.UserID,
+				GroupID: groupID,
+				PlanID:  paymentSettlementPlanID(o), AllowArchivedPlan: true,
 				ValidityDays: days,
 				AssignedBy:   0,
 				Notes:        orderNote,
 			}, true); err != nil {
 				return fmt.Errorf("assign subscription: %w", err)
-			}
-		}
-		// geili hook: link every group configured by the purchased plan to the
-		// same subscription row, preserving shared quota and expiry.
-		if o.PlanID != nil {
-			assigned, getErr := s.subscriptionSvc.userSubRepo.GetByUserIDAndGroupID(txCtx, o.UserID, groupID)
-			if getErr == nil && assigned != nil {
-				planGroups, queryErr := txClient.SubscriptionPlanGroup.Query().Where(subscriptionplangroup.SubscriptionPlanIDEQ(*o.PlanID)).All(txCtx)
-				if queryErr != nil {
-					return fmt.Errorf("load subscription plan groups: %w", queryErr)
-				}
-				for _, pg := range planGroups {
-					if _, saveErr := txClient.UserSubscriptionGroup.Create().SetUserSubscriptionID(assigned.ID).SetGroupID(pg.GroupID).Save(txCtx); saveErr != nil && !dbent.IsConstraintError(saveErr) {
-						return fmt.Errorf("assign bundled subscription group: %w", saveErr)
-					}
-				}
 			}
 		}
 
@@ -624,7 +626,7 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 				_ = tx.Rollback()
 				claimed, checkErr := hasPaymentSubscriptionAssignmentAudit(ctx, s.entClient, o.ID)
 				if checkErr == nil && claimed {
-					return s.subscriptionSvc.invalidateSubscriptionCaches(o.UserID, groupID)
+					return s.invalidatePaymentSubscriptionCache(ctx, o, groupID)
 				}
 			}
 			return fmt.Errorf("record subscription assignment audit: %w", err)
@@ -638,7 +640,7 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 	}
 	// Assignment cache invalidation is deferred while this transaction is open,
 	// then performed synchronously against the committed subscription.
-	if err := s.subscriptionSvc.invalidateSubscriptionCaches(o.UserID, groupID); err != nil {
+	if err := s.invalidatePaymentSubscriptionCache(ctx, o, groupID); err != nil {
 		return fmt.Errorf("invalidate subscription cache after fulfillment: %w", err)
 	}
 	return nil
@@ -901,4 +903,24 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 	}
 	s.writeAuditLog(ctx, oid, "RECHARGE_RETRY", "admin", map[string]any{"detail": "admin manual retry"})
 	return s.executeFulfillment(ctx, oid)
+}
+
+func (s *PaymentService) invalidatePaymentSubscriptionCache(ctx context.Context, order *dbent.PaymentOrder, legacyGroupID int64) error {
+	if order.SubscriptionGroupID == nil && order.PlanID != nil {
+		sub, err := s.subscriptionSvc.FindByUserAndPlan(ctx, order.UserID, *order.PlanID)
+		if err != nil {
+			return err
+		}
+		return s.subscriptionSvc.invalidateSubscriptionCaches(order.UserID, sub.GroupID, sub.ID)
+	}
+	return s.subscriptionSvc.invalidateSubscriptionCaches(order.UserID, legacyGroupID)
+}
+
+// Pre-migration orders retain their original group renewal identity even when
+// they also contain a catalog plan ID. New orders store only the plan target.
+func paymentSettlementPlanID(order *dbent.PaymentOrder) *int64 {
+	if order.SubscriptionGroupID != nil {
+		return nil
+	}
+	return order.PlanID
 }

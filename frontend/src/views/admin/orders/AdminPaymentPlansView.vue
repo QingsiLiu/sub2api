@@ -11,21 +11,15 @@
 
       <!-- Plans Table -->
       <DataTable :columns="planColumns" :data="plans" :loading="plansLoading">
-        <template #cell-name="{ value, row }">
-          <span class="text-sm font-medium" :class="getPlanNameClass(row.group_id)">{{ value }}</span>
+        <template #cell-name="{ value }">
+          <span class="text-sm font-medium text-gray-900 dark:text-white">{{ value }}</span>
         </template>
-        <template #cell-group_id="{ value }">
-          <span v-if="isGroupMissing(value)" class="text-sm">
-            <span class="text-gray-400">#{{ value }}</span>
-            <span class="ml-1 badge badge-danger">{{ t('payment.admin.groupMissing') }}</span>
-          </span>
-          <GroupBadge
-            v-else-if="getGroup(value)"
-            :name="getGroup(value)!.name"
-            :platform="getGroup(value)!.platform"
-            :rate-multiplier="getGroup(value)!.rate_multiplier"
-          />
-          <span v-else class="text-sm text-gray-400">-</span>
+        <template #cell-quotas="{ row }">
+          <div class="space-y-1 text-xs">
+            <div>{{ t('payment.admin.dailyLimit') }}: {{ row.daily_limit_usd ? '$' + row.daily_limit_usd : t('payment.admin.unlimited') }}</div>
+            <div>{{ t('payment.admin.weeklyLimit') }}: {{ row.weekly_limit_usd ? '$' + row.weekly_limit_usd : t('payment.admin.unlimited') }}</div>
+            <div>{{ t('payment.admin.monthlyLimit') }}: {{ row.monthly_limit_usd ? '$' + row.monthly_limit_usd : t('payment.admin.unlimited') }}</div>
+          </div>
         </template>
         <template #cell-price="{ value, row }">
           <div class="text-sm">
@@ -89,10 +83,8 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
-import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlanEditDialog from './PlanEditDialog.vue'
 import { currencySymbol } from '@/components/payment/currency'
-import { platformTextClass } from '@/utils/platformColors'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -119,20 +111,6 @@ async function loadPaymentConfig() {
   } catch { /* preview only */ }
 }
 
-function getGroup(id: number): AdminGroup | undefined {
-  return groups.value.find(g => g.id === id)
-}
-
-function isGroupMissing(id: number): boolean {
-  return id > 0 && !groups.value.find(g => g.id === id)
-}
-
-function getPlanNameClass(groupId: number): string {
-  const group = getGroup(groupId)
-  return group ? platformTextClass(group.platform) : 'text-gray-900 dark:text-white'
-}
-
-
 // ==================== Plans ====================
 
 const plansLoading = ref(false)
@@ -145,7 +123,7 @@ const deletingPlanId = ref<number | null>(null)
 const planColumns = computed((): Column[] => [
   { key: 'id', label: 'ID' },
   { key: 'name', label: t('payment.admin.planName') },
-  { key: 'group_id', label: t('payment.admin.group') },
+  { key: 'quotas', label: t('keys.subscriptionLabel') },
   { key: 'price', label: t('payment.admin.price') },
   { key: 'validity_days', label: t('payment.admin.validity') },
   { key: 'for_sale', label: t('payment.admin.forSale') },

@@ -29,6 +29,12 @@ const (
 	FieldName = "name"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldBillingSource holds the string denoting the billing_source field in the database.
+	FieldBillingSource = "billing_source"
+	// FieldRoutingMode holds the string denoting the routing_mode field in the database.
+	FieldRoutingMode = "routing_mode"
+	// FieldGroupIds holds the string denoting the group_ids field in the database.
+	FieldGroupIds = "group_ids"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
 	// FieldRoutePreferences holds the string denoting the route_preferences field in the database.
@@ -106,6 +112,9 @@ var Columns = []string{
 	FieldKey,
 	FieldName,
 	FieldGroupID,
+	FieldBillingSource,
+	FieldRoutingMode,
+	FieldGroupIds,
 	FieldSubscriptionID,
 	FieldRoutePreferences,
 	FieldStatus,
@@ -154,6 +163,14 @@ var (
 	KeyValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultBillingSource holds the default value on creation for the "billing_source" field.
+	DefaultBillingSource string
+	// BillingSourceValidator is a validator for the "billing_source" field. It is called by the builders before save.
+	BillingSourceValidator func(string) error
+	// DefaultRoutingMode holds the default value on creation for the "routing_mode" field.
+	DefaultRoutingMode string
+	// RoutingModeValidator is a validator for the "routing_mode" field. It is called by the builders before save.
+	RoutingModeValidator func(string) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -217,6 +234,16 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByBillingSource orders the results by the billing_source field.
+func ByBillingSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingSource, opts...).ToFunc()
+}
+
+// ByRoutingMode orders the results by the routing_mode field.
+func ByRoutingMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRoutingMode, opts...).ToFunc()
 }
 
 // BySubscriptionID orders the results by the subscription_id field.

@@ -31,7 +31,12 @@ func (SubscriptionPlan) Annotations() []schema.Annotation {
 
 func (SubscriptionPlan) Fields() []ent.Field {
 	return []ent.Field{
-		field.Int64("group_id"),
+		field.Int64("group_id").Optional().Nillable().Comment("Legacy primary group; new plans have no group"),
+		field.Bool("is_legacy_compat").Default(false),
+		field.Time("archived_at").Optional().Nillable(),
+		field.Float("daily_limit_usd").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("weekly_limit_usd").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("monthly_limit_usd").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
@@ -81,5 +86,5 @@ func (SubscriptionPlan) Indexes() []ent.Index {
 }
 
 func (SubscriptionPlan) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("group_entitlements", SubscriptionPlanGroup.Type)}
+	return []ent.Edge{edge.To("group_entitlements", SubscriptionPlanGroup.Type), edge.To("subscriptions", UserSubscription.Type)}
 }

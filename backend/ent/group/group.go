@@ -28,6 +28,8 @@ const (
 	FieldDescription = "description"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldSubscriptionEnabled holds the string denoting the subscription_enabled field in the database.
+	FieldSubscriptionEnabled = "subscription_enabled"
 	// FieldSubscriptionRateMultiplier holds the string denoting the subscription_rate_multiplier field in the database.
 	FieldSubscriptionRateMultiplier = "subscription_rate_multiplier"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
@@ -249,6 +251,7 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
+	FieldSubscriptionEnabled,
 	FieldSubscriptionRateMultiplier,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
@@ -349,6 +352,8 @@ var (
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultSubscriptionEnabled holds the default value on creation for the "subscription_enabled" field.
+	DefaultSubscriptionEnabled bool
 	// DefaultSubscriptionRateMultiplier holds the default value on creation for the "subscription_rate_multiplier" field.
 	DefaultSubscriptionRateMultiplier float64
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
@@ -495,6 +500,11 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// BySubscriptionEnabled orders the results by the subscription_enabled field.
+func BySubscriptionEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionEnabled, opts...).ToFunc()
 }
 
 // BySubscriptionRateMultiplier orders the results by the subscription_rate_multiplier field.

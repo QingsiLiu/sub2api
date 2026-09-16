@@ -946,6 +946,8 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	// Shared wall-clock budget across all selected-group attempts, including streams.
+	KeyGroupRequestTimeoutSeconds int `mapstructure:"key_group_request_timeout_seconds"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
@@ -2364,6 +2366,7 @@ func setDefaults() {
 	viper.SetDefault("idempotency.cleanup_batch_size", 500)
 
 	// Gateway
+	viper.SetDefault("gateway.key_group_request_timeout_seconds", 600)
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.openai_response_header_timeout", 0)
 	viper.SetDefault("gateway.grok_response_header_timeout", 120)

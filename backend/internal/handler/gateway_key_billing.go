@@ -62,7 +62,7 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 }
 
 func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey) (float64, bool) {
-	groupRate := apiKey.Group.RateMultiplier
+	groupRate := apiKey.Group.BillingRateMultiplier(apiKey.UsesSubscriptionBilling())
 	switch apiKey.Group.Platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
 		if h.openAIGatewayService == nil {
@@ -78,7 +78,7 @@ func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.A
 }
 
 func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.Time) keyBillingInfoResponse {
-	groupRate := apiKey.Group.RateMultiplier
+	groupRate := apiKey.Group.BillingRateMultiplier(apiKey.UsesSubscriptionBilling())
 	var userRate *float64
 	if resolvedRate != groupRate {
 		userRate = &resolvedRate

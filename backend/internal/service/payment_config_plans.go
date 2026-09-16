@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -45,7 +45,7 @@ func validatePlanRequired(name string, groupID int64, price float64, validityDay
 	if strings.TrimSpace(name) == "" {
 		return infraerrors.BadRequest("PLAN_NAME_REQUIRED", "plan name is required")
 	}
-	if groupID <= 0 {
+	if groupID < 0 {
 		return infraerrors.BadRequest("PLAN_GROUP_REQUIRED", "group is required")
 	}
 	if price <= 0 {
@@ -108,9 +108,9 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 	ids := make([]int64, 0, len(plans))
 	seen := make(map[int64]bool)
 	for _, p := range plans {
-		if !seen[p.GroupID] {
-			seen[p.GroupID] = true
-			ids = append(ids, p.GroupID)
+		if p.GroupID != nil && !seen[*p.GroupID] {
+			seen[*p.GroupID] = true
+			ids = append(ids, *p.GroupID)
 		}
 	}
 	if len(ids) == 0 {
@@ -140,11 +140,11 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 }
 
 func (s *PaymentConfigService) ListPlans(ctx context.Context) ([]*dbent.SubscriptionPlan, error) {
-	return s.entClient.SubscriptionPlan.Query().WithGroupEntitlements().Order(subscriptionplan.BySortOrder()).All(ctx)
+	return s.entClient.SubscriptionPlan.Query().Where(subscriptionplan.ArchivedAtIsNil()).WithGroupEntitlements().Order(subscriptionplan.BySortOrder()).All(ctx)
 }
 
 func (s *PaymentConfigService) ListPlansForSale(ctx context.Context) ([]*dbent.SubscriptionPlan, error) {
-	return s.entClient.SubscriptionPlan.Query().WithGroupEntitlements().Where(subscriptionplan.ForSaleEQ(true)).Order(subscriptionplan.BySortOrder()).All(ctx)
+	return s.entClient.SubscriptionPlan.Query().WithGroupEntitlements().Where(subscriptionplan.ForSaleEQ(true), subscriptionplan.ArchivedAtIsNil()).Order(subscriptionplan.BySortOrder()).All(ctx)
 }
 
 func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanRequest) (*dbent.SubscriptionPlan, error) {
@@ -156,10 +156,31 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 		return nil, err
 	}
 	b := s.entClient.SubscriptionPlan.Create().
-		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
+		SetName(req.Name).SetDescription(req.Description).
 		SetPrice(req.Price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
 		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
+
+	if err := validatePlanQuotas(req.DailyLimitUSD, req.WeeklyLimitUSD, req.MonthlyLimitUSD); err != nil {
+		return nil, err
+	}
+	if req.GroupID > 0 {
+		legacyGroup, err := s.entClient.Group.Get(ctx, req.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		b.SetGroupID(req.GroupID)
+		if req.DailyLimitUSD == nil {
+			req.DailyLimitUSD = legacyGroup.DailyLimitUsd
+		}
+		if req.WeeklyLimitUSD == nil {
+			req.WeeklyLimitUSD = legacyGroup.WeeklyLimitUsd
+		}
+		if req.MonthlyLimitUSD == nil {
+			req.MonthlyLimitUSD = legacyGroup.MonthlyLimitUsd
+		}
+	}
+	b.SetNillableDailyLimitUsd(req.DailyLimitUSD).SetNillableWeeklyLimitUsd(req.WeeklyLimitUSD).SetNillableMonthlyLimitUsd(req.MonthlyLimitUSD)
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
@@ -183,7 +204,33 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if err := validatePlanPatch(req); err != nil {
 		return nil, err
 	}
+
+	if err := validatePlanQuotas(req.DailyLimitUSD.Value, req.WeeklyLimitUSD.Value, req.MonthlyLimitUSD.Value); err != nil {
+		return nil, err
+	}
 	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
+	if req.DailyLimitUSD.Set {
+		if req.DailyLimitUSD.Value == nil {
+			u.ClearDailyLimitUsd()
+		} else {
+			u.SetDailyLimitUsd(*req.DailyLimitUSD.Value)
+		}
+	}
+	if req.WeeklyLimitUSD.Set {
+		if req.WeeklyLimitUSD.Value == nil {
+			u.ClearWeeklyLimitUsd()
+		} else {
+			u.SetWeeklyLimitUsd(*req.WeeklyLimitUSD.Value)
+		}
+	}
+	if req.MonthlyLimitUSD.Set {
+		if req.MonthlyLimitUSD.Value == nil {
+			u.ClearMonthlyLimitUsd()
+		} else {
+			u.SetMonthlyLimitUsd(*req.MonthlyLimitUSD.Value)
+		}
+	}
+
 	if req.GroupID != nil {
 		u.SetGroupID(*req.GroupID)
 	}
@@ -234,33 +281,31 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 		}
 		primary := plan.GroupID
 		if req.GroupID != nil {
-			primary = *req.GroupID
+			primary = req.GroupID
 		}
-		ids := append([]int64{primary}, (*req.GroupIDs)...)
-		facades, err := s.entClient.Group.Query().Where(group.NameEQ("全模型订阅"), group.PlatformEQ(PlatformComposite), group.SubscriptionTypeEQ(SubscriptionTypeSubscription)).IDs(ctx)
-		if err != nil {
-			return nil, err
+		ids := append([]int64{}, (*req.GroupIDs)...)
+		if primary != nil {
+			ids = append([]int64{*primary}, ids...)
 		}
-		ids = append(ids, facades...)
 		for _, gid := range uniquePlanGroupIDs(ids) {
 			if _, err := s.entClient.SubscriptionPlanGroup.Create().SetSubscriptionPlanID(id).SetGroupID(gid).Save(ctx); err != nil {
 				return nil, err
 			}
 		}
 	}
+	if s.subscriptions != nil && (req.DailyLimitUSD.Set || req.WeeklyLimitUSD.Set || req.MonthlyLimitUSD.Set) {
+		if err := s.subscriptions.InvalidatePlanSubscriptions(ctx, id); err != nil {
+			return nil, err
+		}
+	}
+
 	return plan, nil
 }
 
+// DeletePlan archives instead of deleting quota definitions referenced by users,
+// historical orders, and redeem codes. Existing subscriptions retain their limits.
 func (s *PaymentConfigService) DeletePlan(ctx context.Context, id int64) error {
-	count, err := s.countPendingOrdersByPlan(ctx, id)
-	if err != nil {
-		return fmt.Errorf("check pending orders: %w", err)
-	}
-	if count > 0 {
-		return infraerrors.Conflict("PENDING_ORDERS",
-			fmt.Sprintf("this plan has %d in-progress orders and cannot be deleted — wait for orders to complete first", count))
-	}
-	return s.entClient.SubscriptionPlan.DeleteOneID(id).Exec(ctx)
+	return s.entClient.SubscriptionPlan.UpdateOneID(id).SetForSale(false).SetArchivedAt(time.Now()).Exec(ctx)
 }
 
 // GetPlan returns a subscription plan by ID.

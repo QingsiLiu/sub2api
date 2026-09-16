@@ -182,6 +182,7 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
+	SubscriptionEnabled        bool                          `json:"subscription_enabled"`
 	Name                       string                        `json:"name" binding:"required"`
 	Description                string                        `json:"description"`
 	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
@@ -257,6 +258,7 @@ type CreateGroupRequest struct {
 
 // UpdateGroupRequest represents update group request
 type UpdateGroupRequest struct {
+	SubscriptionEnabled        *bool                          `json:"subscription_enabled"`
 	Name                       string                         `json:"name"`
 	Description                *string                        `json:"description"`
 	Platform                   string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
@@ -673,6 +675,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
 		SubscriptionRateMultiplier:      req.SubscriptionRateMultiplier,
+		SubscriptionEnabled:             req.SubscriptionEnabled,
 		IsExclusive:                     req.IsExclusive,
 		SubscriptionType:                req.SubscriptionType,
 		DailyLimitUSD:                   req.DailyLimitUSD.ToServiceInput(),
@@ -819,6 +822,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
 		SubscriptionRateMultiplier:      req.SubscriptionRateMultiplier,
+		SubscriptionEnabled:             req.SubscriptionEnabled,
 		IsExclusive:                     req.IsExclusive,
 		Status:                          req.Status,
 		SubscriptionType:                req.SubscriptionType,

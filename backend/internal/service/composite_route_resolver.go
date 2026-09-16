@@ -8,6 +8,7 @@ import (
 )
 
 type CompositeRouteResolver struct {
+	accountRepo            AccountRepository
 	groupRepo              GroupRepository
 	pricing                *ModelPricingResolver
 	repo                   CompositeModelRouteRepository

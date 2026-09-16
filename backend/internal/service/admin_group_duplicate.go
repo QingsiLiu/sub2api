@@ -100,6 +100,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		Platform:                        source.Platform,
 		RateMultiplier:                  source.RateMultiplier,
 		SubscriptionRateMultiplier:      cloneGroupValuePointer(source.SubscriptionRateMultiplier),
+		SubscriptionEnabled:             source.SubscriptionEnabled,
 		PeakRateEnabled:                 source.PeakRateEnabled,
 		PeakStart:                       source.PeakStart,
 		PeakEnd:                         source.PeakEnd,

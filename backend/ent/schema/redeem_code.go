@@ -67,6 +67,7 @@ func (RedeemCode) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Int64("plan_id").Optional().Nillable(),
 		field.Int64("group_id").
 			Optional().
 			Nillable(),

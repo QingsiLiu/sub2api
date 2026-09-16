@@ -7,6 +7,7 @@ import (
 )
 
 type RedeemCode struct {
+	PlanID    *int64
 	ID        int64
 	Code      string
 	Type      string

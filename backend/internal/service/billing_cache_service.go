@@ -741,8 +741,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
+	if apiKey != nil && apiKey.BillingSource == BillingSourceSubscription && subscription == nil {
+		return ErrSubscriptionNotFound
+	}
 	// 判断计费模式
-	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	isSubscriptionMode := subscription != nil && (apiKey == nil || apiKey.UsesSubscriptionBilling())
 
 	if isSubscriptionMode {
 		billingGroup := group
@@ -847,18 +850,22 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 
 	// ── 第二层：用户级全局硬上限（始终生效） ──
 	if user.RPMLimit > 0 {
-		count, err := s.userRPMCache.IncrementUserRPM(ctx, user.ID)
-		if err != nil {
-			logger.LegacyPrintf(
-				"service.billing_cache",
-				"Warning: rpm increment (user) failed for user=%d: %v",
-				user.ID, err,
-			)
-			return nil // fail-open
-		}
-		if count > user.RPMLimit {
-			return ErrUserRPMExceeded
-		}
+		return onceKeyRequestRPM(ctx, user.ID, func() error {
+			count, err := s.userRPMCache.IncrementUserRPM(ctx, user.ID)
+			if err != nil {
+				logger.LegacyPrintf(
+					"service.billing_cache",
+					"Warning: rpm increment (user) failed for user=%d: %v",
+					user.ID, err,
+				)
+				return nil // fail-open
+			}
+			if count > user.RPMLimit {
+				return ErrUserRPMExceeded
+			}
+
+			return nil
+		})
 	}
 
 	return nil
@@ -905,6 +912,7 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 	// 获取订阅缓存数据
 	var subData *subscriptionCacheData
 	var err error
+	daily, weekly, monthly := subscription.QuotaLimits(group)
 	if subscription != nil && subscription.ID > 0 && s.subRepo != nil {
 		// The subscription ID is the quota owner across every provider. Read
 		// current committed usage rather than a separate target-group cache.
@@ -914,7 +922,20 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 			err = ErrSubscriptionNotFound
 		}
 		if err == nil {
+			if fresh.StartsAt.After(time.Now()) || (fresh.PlanID != nil && fresh.Plan == nil) {
+				return ErrSubscriptionInvalid
+			}
+			daily, weekly, monthly = fresh.QuotaLimits(fresh.Group)
 			subData = &subscriptionCacheData{Status: fresh.Status, ExpiresAt: fresh.ExpiresAt, DailyUsage: fresh.DailyUsageUSD, WeeklyUsage: fresh.WeeklyUsageUSD, MonthlyUsage: fresh.MonthlyUsageUSD}
+			if fresh.PlanID != nil {
+				if cache, ok := s.cache.(SubscriptionIDCache); ok {
+					// Seed only on absence; never overwrite concurrent increments with a read.
+					if _, cachedErr := cache.GetSubscriptionCacheByID(ctx, fresh.ID); cachedErr != nil {
+						_ = cache.SeedSubscriptionCacheByID(ctx, fresh.ID, s.convertToPortsData(subData))
+					}
+				}
+			}
+
 			if fresh.Group != nil {
 				group = fresh.Group
 			}
@@ -926,7 +947,7 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
 		}
-		logger.LegacyPrintf("service.billing_cache", "ALERT: billing subscription check failed for user %d group %d: %v", userID, group.ID, err)
+		logger.LegacyPrintf("service.billing_cache", "ALERT: billing subscription check failed for user %d: %v", userID, err)
 		return ErrBillingServiceUnavailable.WithCause(err)
 	}
 	if s.circuitBreaker != nil {
@@ -944,15 +965,15 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 	}
 
 	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
+	if daily != nil && *daily > 0 && subData.DailyUsage >= *daily {
 		return ErrDailyLimitExceeded
 	}
 
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
+	if weekly != nil && *weekly > 0 && subData.WeeklyUsage >= *weekly {
 		return ErrWeeklyLimitExceeded
 	}
 
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
+	if monthly != nil && *monthly > 0 && subData.MonthlyUsage >= *monthly {
 		return ErrMonthlyLimitExceeded
 	}
 

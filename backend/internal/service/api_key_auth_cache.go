@@ -4,6 +4,9 @@ import "time"
 
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
+	BillingSource    string                   `json:"billing_source,omitempty"`
+	RoutingMode      string                   `json:"routing_mode"`
+	GroupIDs         []int64                  `json:"group_ids,omitempty"`
 	Version          int                      `json:"version"`
 	APIKeyID         int64                    `json:"api_key_id"`
 	UserID           int64                    `json:"user_id"`
@@ -59,6 +62,7 @@ type APIKeyAuthUserSnapshot struct {
 
 // APIKeyAuthGroupSnapshot 分组快照
 type APIKeyAuthGroupSnapshot struct {
+	SubscriptionEnabled             bool                          `json:"subscription_enabled"`
 	ID                              int64                         `json:"id"`
 	Name                            string                        `json:"name"`
 	Platform                        string                        `json:"platform"`

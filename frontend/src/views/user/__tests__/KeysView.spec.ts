@@ -13,6 +13,7 @@ const {
   getDashboardApiKeysUsage,
   getAvailableGroups,
   getUserGroupRates,
+  getActiveSubscriptions,
   showError,
   showSuccess,
   copyToClipboard,
@@ -25,6 +26,7 @@ const {
   getDashboardApiKeysUsage: vi.fn(),
   getAvailableGroups: vi.fn(),
   getUserGroupRates: vi.fn(),
+  getActiveSubscriptions: vi.fn().mockResolvedValue([]),
   showError: vi.fn(),
   showSuccess: vi.fn(),
   copyToClipboard: vi.fn(),
@@ -77,6 +79,8 @@ vi.mock('@/api', () => ({
     getUserGroupRates,
   },
 }))
+
+vi.mock('@/api/subscriptions', () => ({ default: { getActiveSubscriptions } }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
@@ -547,98 +551,81 @@ describe('user KeysView column settings', () => {
     )
   })
 
-  describe('create provider selection', () => {
-    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go']
-    const availableGroups = platforms.map((platform, index) => ({
-      id: index + 1,
-      // Deliberately ambiguous names: classification must follow the platform.
-      name: `Shared group ${index + 1}`,
-      platform,
-      rate_multiplier: 1,
-      subscription_type: 'standard',
-    }))
+  describe('explicit settlement and ordered groups', () => {
+    const availableGroups = [
+      { id: 1, name: 'GPT stable', platform: 'openai', rate_multiplier: 1, subscription_rate_multiplier: 1.2, subscription_type: 'standard' },
+      { id: 2, name: 'National custom', platform: 'openai', rate_multiplier: 0.5, subscription_rate_multiplier: 0.8, subscription_type: 'standard' },
+    ]
     const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
-    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('options').map((option: { value: number }) => option.value)
-    const chooseProvider = (wrapper: VueWrapper, value: string) => wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
     const openCreate = async () => {
       const wrapper = await mountView()
       await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+      await flushPromises()
       return wrapper
     }
-
     beforeEach(() => {
       getAvailableGroups.mockResolvedValue(availableGroups)
+      getActiveSubscriptions.mockResolvedValue([])
     })
-
-    it('classifies all configured platforms and retains the complete table filter', async () => {
+    it('defaults to balance and lists actual groups regardless of protocol', async () => {
       const wrapper = await openCreate()
-      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
-      expect(optionIds(wrapper)).toEqual([1])
-      await chooseProvider(wrapper, 'openai')
-      expect(optionIds(wrapper)).toEqual([2])
-      await chooseProvider(wrapper, 'domestic')
-      expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
-      await chooseProvider(wrapper, 'other')
-      expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11])
-      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(13)
+      expect(wrapper.get<HTMLSelectElement>('#key-billing-source').element.value).toBe('balance')
+      expect(groupSelect(wrapper).props('options').map((g: {value:number}) => g.value)).toEqual([1, 2])
+      expect(wrapper.find('#key-subscription').exists()).toBe(false)
+      expect(getAvailableGroups).toHaveBeenCalledWith('balance')
     })
-
-    it('clears the previous group on provider change and submits only the newly selected group', async () => {
+    it('requires a selected group and submits explicit balance settlement', async () => {
       const wrapper = await openCreate()
       await wrapper.get('[data-tour="key-form-name"]').setValue('My key')
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 1)
-      await chooseProvider(wrapper, 'domestic')
-      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
       await wrapper.get('#key-form').trigger('submit')
       expect(keysAPI.create).not.toHaveBeenCalled()
-      expect(showError).toHaveBeenCalledWith('keys.groupRequired')
-
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
-      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 5 })
+      groupSelect(wrapper).vm.$emit('update:modelValue', 2)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 2 })
       await wrapper.get('#key-form').trigger('submit')
       await flushPromises()
-      expect(keysAPI.create).toHaveBeenCalledOnce()
-      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['My key', 5])
+      const args = vi.mocked(keysAPI.create).mock.calls[0]
+      expect(args.slice(0, 2)).toEqual(['My key', 2])
+      expect(args.at(-1)).toEqual({ billing_source: 'balance', routing_mode: 'single', group_ids: undefined })
     })
-
-    it('defaults to a provider with available groups and disables empty categories', async () => {
-      getAvailableGroups.mockResolvedValue([availableGroups[5]])
+    it('automatically binds the only effective subscription', async () => {
+      getActiveSubscriptions.mockResolvedValue([{ id: 42, plan: { name: 'Monthly A', daily_limit_usd: 5 }, daily_usage_usd: 1, starts_at: '2020-01-01T00:00:00Z', expires_at: '2099-01-01T00:00:00Z', status:'active' }])
       const wrapper = await openCreate()
-      expect(wrapper.get<HTMLInputElement>('input[value="domestic"]').element.checked).toBe(true)
-      expect(wrapper.get<HTMLInputElement>('input[value="anthropic"]').element.disabled).toBe(true)
-      expect(optionIds(wrapper)).toEqual([6])
-    })
-
-    it('shows the empty state when no groups are available', async () => {
-      getAvailableGroups.mockResolvedValue([])
-      const wrapper = await openCreate()
-      expect(wrapper.get('[data-tour="key-form-provider"]').text()).toContain('common.noGroupsAvailable')
-      expect(optionIds(wrapper)).toEqual([])
-      expect(wrapper.findAll<HTMLInputElement>('input[name="key-provider"]').every((input) => input.element.disabled)).toBe(true)
-    })
-
-    it('selects an available provider when groups arrive after opening', async () => {
-      let resolveGroups!: (value: typeof availableGroups) => void
-      getAvailableGroups.mockReturnValue(new Promise((resolve) => { resolveGroups = resolve }))
-      const wrapper = await openCreate()
-      resolveGroups([availableGroups[1]])
+      await wrapper.get('#key-billing-source').setValue('subscription')
       await flushPromises()
-      expect(wrapper.get<HTMLInputElement>('input[value="openai"]').element.checked).toBe(true)
-      expect(optionIds(wrapper)).toEqual([2])
+      expect(wrapper.get<HTMLSelectElement>('#key-subscription').element.value).toBe('42')
+      expect(wrapper.get('#key-subscription').text()).toContain('Monthly A')
+      expect(getAvailableGroups).toHaveBeenCalledWith('subscription')
     })
-
-    it('resets provider and group when reopening create, and preserves edit options', async () => {
+    it('requires selection when several subscriptions are effective', async () => {
+      getActiveSubscriptions.mockResolvedValue([41,42].map(id => ({ id, plan: { name: `Plan ${id}` }, starts_at:'2020-01-01T00:00:00Z', expires_at:'2099-01-01T00:00:00Z',status:'active' })))
       const wrapper = await openCreate()
-      await chooseProvider(wrapper, 'domestic')
-      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
-      await wrapper.get('[data-test="close-dialog"]').trigger('click')
-      await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
-      expect(optionIds(wrapper)).toEqual([1])
-      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
-      await wrapper.get('[data-test="close-dialog"]').trigger('click')
+      await wrapper.get('#key-billing-source').setValue('subscription')
+      await flushPromises()
+      expect(wrapper.get<HTMLSelectElement>('#key-subscription').element.selectedIndex).toBe(0)
+    })
+    it('saves two OpenAI groups in the chosen priority order', async () => {
+      const wrapper = await openCreate()
+      await wrapper.get('[data-tour="key-form-name"]').setValue('Composite')
+      await wrapper.get('[data-test="composite-key-toggle"]').setValue(true)
+      const choices = wrapper.findAll('[data-test="key-group-choice"]')
+      await choices[0].setValue(true)
+      await choices[1].setValue(true)
+      await wrapper.findAll('button[aria-label="keys.moveUp"]')[1].trigger('click')
+      vi.mocked(keysAPI.create).mockResolvedValue(createApiKey())
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      const args = vi.mocked(keysAPI.create).mock.calls[0]
+      expect(args[1]).toBeNull()
+      expect(args.at(-1)).toEqual({ billing_source:'balance', routing_mode:'composite', group_ids:[2,1] })
+    })
+    it('keeps legacy settlement until explicitly changed', async () => {
+      const wrapper = await mountView()
       await getButtonByText(wrapper, 'common.edit').trigger('click')
-      expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
-      expect(optionIds(wrapper)).toHaveLength(11)
+      expect(wrapper.get<HTMLSelectElement>('#key-billing-source').element.value).toBe('')
+      expect(wrapper.text()).toContain('keys.legacySettlementHint')
+      await wrapper.get('#key-billing-source').setValue('balance')
+      await flushPromises()
+      expect(groupSelect(wrapper).props('options')).toHaveLength(2)
     })
   })
 })

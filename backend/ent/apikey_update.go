@@ -120,6 +120,52 @@ func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	return _u
 }
 
+// SetBillingSource sets the "billing_source" field.
+func (_u *APIKeyUpdate) SetBillingSource(v string) *APIKeyUpdate {
+	_u.mutation.SetBillingSource(v)
+	return _u
+}
+
+// SetNillableBillingSource sets the "billing_source" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableBillingSource(v *string) *APIKeyUpdate {
+	if v != nil {
+		_u.SetBillingSource(*v)
+	}
+	return _u
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (_u *APIKeyUpdate) SetRoutingMode(v string) *APIKeyUpdate {
+	_u.mutation.SetRoutingMode(v)
+	return _u
+}
+
+// SetNillableRoutingMode sets the "routing_mode" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableRoutingMode(v *string) *APIKeyUpdate {
+	if v != nil {
+		_u.SetRoutingMode(*v)
+	}
+	return _u
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (_u *APIKeyUpdate) SetGroupIds(v []int64) *APIKeyUpdate {
+	_u.mutation.SetGroupIds(v)
+	return _u
+}
+
+// AppendGroupIds appends value to the "group_ids" field.
+func (_u *APIKeyUpdate) AppendGroupIds(v []int64) *APIKeyUpdate {
+	_u.mutation.AppendGroupIds(v)
+	return _u
+}
+
+// ClearGroupIds clears the value of the "group_ids" field.
+func (_u *APIKeyUpdate) ClearGroupIds() *APIKeyUpdate {
+	_u.mutation.ClearGroupIds()
+	return _u
+}
+
 // SetSubscriptionID sets the "subscription_id" field.
 func (_u *APIKeyUpdate) SetSubscriptionID(v int64) *APIKeyUpdate {
 	_u.mutation.ResetSubscriptionID()
@@ -594,6 +640,16 @@ func (_u *APIKeyUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BillingSource(); ok {
+		if err := apikey.BillingSourceValidator(v); err != nil {
+			return &ValidationError{Name: "billing_source", err: fmt.Errorf(`ent: validator failed for field "APIKey.billing_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RoutingMode(); ok {
+		if err := apikey.RoutingModeValidator(v); err != nil {
+			return &ValidationError{Name: "routing_mode", err: fmt.Errorf(`ent: validator failed for field "APIKey.routing_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
@@ -631,6 +687,23 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BillingSource(); ok {
+		_spec.SetField(apikey.FieldBillingSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RoutingMode(); ok {
+		_spec.SetField(apikey.FieldRoutingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GroupIds(); ok {
+		_spec.SetField(apikey.FieldGroupIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedGroupIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, apikey.FieldGroupIds, value)
+		})
+	}
+	if _u.mutation.GroupIdsCleared() {
+		_spec.ClearField(apikey.FieldGroupIds, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)
@@ -958,6 +1031,52 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetBillingSource sets the "billing_source" field.
+func (_u *APIKeyUpdateOne) SetBillingSource(v string) *APIKeyUpdateOne {
+	_u.mutation.SetBillingSource(v)
+	return _u
+}
+
+// SetNillableBillingSource sets the "billing_source" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableBillingSource(v *string) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetBillingSource(*v)
+	}
+	return _u
+}
+
+// SetRoutingMode sets the "routing_mode" field.
+func (_u *APIKeyUpdateOne) SetRoutingMode(v string) *APIKeyUpdateOne {
+	_u.mutation.SetRoutingMode(v)
+	return _u
+}
+
+// SetNillableRoutingMode sets the "routing_mode" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableRoutingMode(v *string) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetRoutingMode(*v)
+	}
+	return _u
+}
+
+// SetGroupIds sets the "group_ids" field.
+func (_u *APIKeyUpdateOne) SetGroupIds(v []int64) *APIKeyUpdateOne {
+	_u.mutation.SetGroupIds(v)
+	return _u
+}
+
+// AppendGroupIds appends value to the "group_ids" field.
+func (_u *APIKeyUpdateOne) AppendGroupIds(v []int64) *APIKeyUpdateOne {
+	_u.mutation.AppendGroupIds(v)
+	return _u
+}
+
+// ClearGroupIds clears the value of the "group_ids" field.
+func (_u *APIKeyUpdateOne) ClearGroupIds() *APIKeyUpdateOne {
+	_u.mutation.ClearGroupIds()
 	return _u
 }
 
@@ -1448,6 +1567,16 @@ func (_u *APIKeyUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BillingSource(); ok {
+		if err := apikey.BillingSourceValidator(v); err != nil {
+			return &ValidationError{Name: "billing_source", err: fmt.Errorf(`ent: validator failed for field "APIKey.billing_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RoutingMode(); ok {
+		if err := apikey.RoutingModeValidator(v); err != nil {
+			return &ValidationError{Name: "routing_mode", err: fmt.Errorf(`ent: validator failed for field "APIKey.routing_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
@@ -1502,6 +1631,23 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BillingSource(); ok {
+		_spec.SetField(apikey.FieldBillingSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RoutingMode(); ok {
+		_spec.SetField(apikey.FieldRoutingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GroupIds(); ok {
+		_spec.SetField(apikey.FieldGroupIds, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedGroupIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, apikey.FieldGroupIds, value)
+		})
+	}
+	if _u.mutation.GroupIdsCleared() {
+		_spec.ClearField(apikey.FieldGroupIds, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.SubscriptionID(); ok {
 		_spec.SetField(apikey.FieldSubscriptionID, field.TypeInt64, value)

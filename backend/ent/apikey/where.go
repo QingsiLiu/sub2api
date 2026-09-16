@@ -90,6 +90,16 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
+// BillingSource applies equality check predicate on the "billing_source" field. It's identical to BillingSourceEQ.
+func BillingSource(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldBillingSource, v))
+}
+
+// RoutingMode applies equality check predicate on the "routing_mode" field. It's identical to RoutingModeEQ.
+func RoutingMode(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldRoutingMode, v))
+}
+
 // SubscriptionID applies equality check predicate on the "subscription_id" field. It's identical to SubscriptionIDEQ.
 func SubscriptionID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldSubscriptionID, v))
@@ -473,6 +483,146 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
+}
+
+// BillingSourceEQ applies the EQ predicate on the "billing_source" field.
+func BillingSourceEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldBillingSource, v))
+}
+
+// BillingSourceNEQ applies the NEQ predicate on the "billing_source" field.
+func BillingSourceNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldBillingSource, v))
+}
+
+// BillingSourceIn applies the In predicate on the "billing_source" field.
+func BillingSourceIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldBillingSource, vs...))
+}
+
+// BillingSourceNotIn applies the NotIn predicate on the "billing_source" field.
+func BillingSourceNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldBillingSource, vs...))
+}
+
+// BillingSourceGT applies the GT predicate on the "billing_source" field.
+func BillingSourceGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldBillingSource, v))
+}
+
+// BillingSourceGTE applies the GTE predicate on the "billing_source" field.
+func BillingSourceGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldBillingSource, v))
+}
+
+// BillingSourceLT applies the LT predicate on the "billing_source" field.
+func BillingSourceLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldBillingSource, v))
+}
+
+// BillingSourceLTE applies the LTE predicate on the "billing_source" field.
+func BillingSourceLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldBillingSource, v))
+}
+
+// BillingSourceContains applies the Contains predicate on the "billing_source" field.
+func BillingSourceContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldBillingSource, v))
+}
+
+// BillingSourceHasPrefix applies the HasPrefix predicate on the "billing_source" field.
+func BillingSourceHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldBillingSource, v))
+}
+
+// BillingSourceHasSuffix applies the HasSuffix predicate on the "billing_source" field.
+func BillingSourceHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldBillingSource, v))
+}
+
+// BillingSourceEqualFold applies the EqualFold predicate on the "billing_source" field.
+func BillingSourceEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldBillingSource, v))
+}
+
+// BillingSourceContainsFold applies the ContainsFold predicate on the "billing_source" field.
+func BillingSourceContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldBillingSource, v))
+}
+
+// RoutingModeEQ applies the EQ predicate on the "routing_mode" field.
+func RoutingModeEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldRoutingMode, v))
+}
+
+// RoutingModeNEQ applies the NEQ predicate on the "routing_mode" field.
+func RoutingModeNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldRoutingMode, v))
+}
+
+// RoutingModeIn applies the In predicate on the "routing_mode" field.
+func RoutingModeIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldRoutingMode, vs...))
+}
+
+// RoutingModeNotIn applies the NotIn predicate on the "routing_mode" field.
+func RoutingModeNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldRoutingMode, vs...))
+}
+
+// RoutingModeGT applies the GT predicate on the "routing_mode" field.
+func RoutingModeGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldRoutingMode, v))
+}
+
+// RoutingModeGTE applies the GTE predicate on the "routing_mode" field.
+func RoutingModeGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldRoutingMode, v))
+}
+
+// RoutingModeLT applies the LT predicate on the "routing_mode" field.
+func RoutingModeLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldRoutingMode, v))
+}
+
+// RoutingModeLTE applies the LTE predicate on the "routing_mode" field.
+func RoutingModeLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldRoutingMode, v))
+}
+
+// RoutingModeContains applies the Contains predicate on the "routing_mode" field.
+func RoutingModeContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldRoutingMode, v))
+}
+
+// RoutingModeHasPrefix applies the HasPrefix predicate on the "routing_mode" field.
+func RoutingModeHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldRoutingMode, v))
+}
+
+// RoutingModeHasSuffix applies the HasSuffix predicate on the "routing_mode" field.
+func RoutingModeHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldRoutingMode, v))
+}
+
+// RoutingModeEqualFold applies the EqualFold predicate on the "routing_mode" field.
+func RoutingModeEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldRoutingMode, v))
+}
+
+// RoutingModeContainsFold applies the ContainsFold predicate on the "routing_mode" field.
+func RoutingModeContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldRoutingMode, v))
+}
+
+// GroupIdsIsNil applies the IsNil predicate on the "group_ids" field.
+func GroupIdsIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldGroupIds))
+}
+
+// GroupIdsNotNil applies the NotNil predicate on the "group_ids" field.
+func GroupIdsNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldGroupIds))
 }
 
 // SubscriptionIDEQ applies the EQ predicate on the "subscription_id" field.

@@ -53,6 +53,7 @@ export interface TrendParams {
   model?: string
   account_id?: number
   group_id?: number
+  subscription_id?: number | null
   request_type?: UsageRequestType
   stream?: boolean
   native_compaction_v2?: boolean | null
@@ -86,6 +87,7 @@ export interface ModelStatsParams {
   model_source?: 'requested' | 'upstream' | 'mapping'
   account_id?: number
   group_id?: number
+  subscription_id?: number | null
   request_type?: UsageRequestType
   stream?: boolean
   native_compaction_v2?: boolean | null
@@ -116,6 +118,7 @@ export interface GroupStatsParams {
   api_key_id?: number
   account_id?: number
   group_id?: number
+  subscription_id?: number | null
   request_type?: UsageRequestType
   stream?: boolean
   native_compaction_v2?: boolean | null
@@ -168,6 +171,7 @@ export interface UserBreakdownParams {
   start_date?: string
   end_date?: string
   group_id?: number
+  subscription_id?: number | null
   model?: string
   model_source?: 'requested' | 'upstream' | 'mapping'
   endpoint?: string

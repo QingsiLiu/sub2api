@@ -257,9 +257,15 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, p *RefundPlan, force bool) *RefundResult {
 	if o.OrderType == payment.OrderTypeSubscription {
 		p.DeductionType = payment.DeductionTypeSubscription
-		if o.SubscriptionGroupID != nil && o.SubscriptionDays != nil {
+		if (o.PlanID != nil || o.SubscriptionGroupID != nil) && o.SubscriptionDays != nil {
 			p.SubDaysToDeduct = *o.SubscriptionDays
-			sub, err := s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID)
+			var sub *UserSubscription
+			var err error
+			if o.SubscriptionGroupID == nil && o.PlanID != nil {
+				sub, err = s.subscriptionSvc.FindByUserAndPlan(ctx, o.UserID, *o.PlanID)
+			} else {
+				sub, err = s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID)
+			}
 			if err == nil && sub != nil {
 				p.SubscriptionID = sub.ID
 			} else if !force {

@@ -619,12 +619,19 @@
             v-model.number="createForm.rate_multiplier"
             type="number"
             step="0.001"
-            min="0.001"
+            min="0"
             required
             class="input"
             data-tour="group-form-multiplier"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input v-model="createForm.subscription_enabled" type="checkbox" class="rounded border-gray-300 text-primary-600" />
+            {{ t('keys.subscriptionGroupEnabled') }}
+          </label>
+          <p class="input-hint">{{ t('keys.groupModelCatalogHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.subscriptionRateMultiplier") }}</label>
@@ -2263,11 +2270,18 @@
             v-model.number="editForm.rate_multiplier"
             type="number"
             step="0.001"
-            min="0.001"
+            min="0"
             required
             class="input"
             data-tour="group-form-multiplier"
           />
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input v-model="editForm.subscription_enabled" type="checkbox" class="rounded border-gray-300 text-primary-600" />
+            {{ t('keys.subscriptionGroupEnabled') }}
+          </label>
+          <p class="input-hint">{{ t('keys.groupModelCatalogHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.subscriptionRateMultiplier") }}</label>
@@ -4962,6 +4976,7 @@ const createForm = reactive({
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   subscription_rate_multiplier: 1.0,
+  subscription_enabled: false,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5327,6 +5342,7 @@ const editForm = reactive({
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   subscription_rate_multiplier: 1.0,
+  subscription_enabled: false,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5791,6 +5807,7 @@ const closeCreateModal = () => {
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.subscription_rate_multiplier = 1.0;
+  createForm.subscription_enabled = false;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -6061,6 +6078,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.subscription_rate_multiplier = group.subscription_rate_multiplier ?? group.rate_multiplier ?? 1.0;
+  editForm.subscription_enabled = group.subscription_enabled ?? false;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";

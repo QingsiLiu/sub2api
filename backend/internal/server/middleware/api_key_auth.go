@@ -191,16 +191,26 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// ── 5. 按端点需要加载订阅 ───────────────────────────────────
 
 		var subscription *service.UserSubscription
-		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		isSubscriptionType := apiKey.UsesSubscriptionBilling()
+		legacySubscriptionGroupID := int64(0)
+		if apiKey.BillingSource == "" && apiKey.Group != nil {
+			legacySubscriptionGroupID = apiKey.Group.ID
+		}
 
+		if apiKey.BillingSource == service.BillingSourceSubscription && subscriptionService == nil && !skipBilling {
+			AbortWithError(c, 503, "SUBSCRIPTION_UNAVAILABLE", "subscription service is unavailable")
+			return
+		}
 		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
 		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
 			var sub *service.UserSubscription
 			var subErr error
 			if apiKey.SubscriptionID != nil && *apiKey.SubscriptionID > 0 {
-				sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, apiKey.Group.ID)
-			} else {
+				sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, legacySubscriptionGroupID)
+			} else if apiKey.BillingSource == "" && apiKey.Group != nil {
 				sub, subErr = subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
+			} else {
+				subErr = service.ErrSubscriptionNotFound
 			}
 			if subErr != nil {
 				if !skipBilling {

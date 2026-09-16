@@ -120,6 +120,20 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (_u *GroupUpdate) SetSubscriptionEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetSubscriptionEnabled(v)
+	return _u
+}
+
+// SetNillableSubscriptionEnabled sets the "subscription_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableSubscriptionEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetSubscriptionEnabled(*v)
+	}
+	return _u
+}
+
 // SetSubscriptionRateMultiplier sets the "subscription_rate_multiplier" field.
 func (_u *GroupUpdate) SetSubscriptionRateMultiplier(v float64) *GroupUpdate {
 	_u.mutation.ResetSubscriptionRateMultiplier()
@@ -1682,6 +1696,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.SubscriptionEnabled(); ok {
+		_spec.SetField(group.FieldSubscriptionEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.SubscriptionRateMultiplier(); ok {
 		_spec.SetField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)
 	}
@@ -2500,6 +2517,20 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetSubscriptionEnabled sets the "subscription_enabled" field.
+func (_u *GroupUpdateOne) SetSubscriptionEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetSubscriptionEnabled(v)
+	return _u
+}
+
+// SetNillableSubscriptionEnabled sets the "subscription_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableSubscriptionEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionEnabled(*v)
+	}
 	return _u
 }
 
@@ -4094,6 +4125,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.SubscriptionEnabled(); ok {
+		_spec.SetField(group.FieldSubscriptionEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.SubscriptionRateMultiplier(); ok {
 		_spec.SetField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)

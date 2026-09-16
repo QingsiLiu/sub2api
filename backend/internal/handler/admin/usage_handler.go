@@ -72,6 +72,15 @@ func (h *UsageHandler) List(c *gin.Context) {
 	}
 
 	// Parse filters
+	var subscriptionID int64
+	if raw := c.Query("subscription_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid subscription_id")
+			return
+		}
+		subscriptionID = id
+	}
 	var userID, apiKeyID, accountID, groupID int64
 	if userIDStr := c.Query("user_id"); userIDStr != "" {
 		id, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -193,6 +202,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,
 		GroupID:               groupID,
+		SubscriptionID:        subscriptionID,
 		RequestID:             requestID,
 		Model:                 model,
 		ModelFilterSource:     usagestats.ModelSourceRequested,
@@ -224,6 +234,15 @@ func (h *UsageHandler) List(c *gin.Context) {
 // GET /api/v1/admin/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {
 	// Parse filters - same as List endpoint
+	var subscriptionID int64
+	if raw := c.Query("subscription_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid subscription_id")
+			return
+		}
+		subscriptionID = id
+	}
 	var userID, apiKeyID, accountID, groupID int64
 	if userIDStr := c.Query("user_id"); userIDStr != "" {
 		id, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -353,6 +372,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,
 		GroupID:               groupID,
+		SubscriptionID:        subscriptionID,
 		Model:                 model,
 		ModelFilterSource:     usagestats.ModelSourceRequested,
 		RequestType:           requestType,

@@ -372,7 +372,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.Subscription != nil && deps.billingCacheService != nil {
-			if err := deps.billingCacheService.UpdateSubscriptionUsage(ctx, p.User.ID, p.Subscription.GroupID, p.Cost.ActualCost); err != nil {
+			if err := deps.billingCacheService.UpdateSubscriptionQuotaCache(ctx, p.Subscription, p.Cost.ActualCost); err != nil {
 				slog.Warn("subscription cache update failed", "subscription_id", p.Subscription.ID, "error", err)
 			}
 		}
@@ -809,7 +809,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := subscription != nil && apiKey.UsesSubscriptionBilling()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -1202,6 +1202,9 @@ func (s *GatewayService) buildRecordUsageLog(
 	}
 
 	usageLog.CaptureRouteBilling(apiKey)
+	if subscription != nil && usageLog.RouteBillingSnapshot != nil {
+		usageLog.RouteBillingSnapshot.SubscriptionName = subscription.QuotaName()
+	}
 	return usageLog
 }
 

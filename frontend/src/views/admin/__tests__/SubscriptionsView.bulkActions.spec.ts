@@ -13,6 +13,8 @@ vi.mock('@/api/admin', () => ({
     users: { list: listUsers }
   }
 }))
+vi.mock('@/api/admin/payment', () => ({ adminPaymentAPI: { getPlans: vi.fn().mockResolvedValue({ data: [{ id: 3, name: 'Plan 3', validity_days: 30, validity_unit: 'days' }, { id: 7, name: 'Plan 7', validity_days: 30, validity_unit: 'days' }] }) } }))
+
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
@@ -128,7 +130,7 @@ describe('subscription bulk operations', () => {
     await form.trigger('submit')
     await form.trigger('submit')
     expect(bulkAssign).toHaveBeenCalledTimes(1)
-    expect(bulkAssign).toHaveBeenCalledWith({ user_ids: [11, 22], group_id: 7, validity_days: 30 })
+    expect(bulkAssign).toHaveBeenCalledWith({ user_ids: [11, 22], plan_id: 7, validity_days: 30 })
     resolveAssign({ success_count: 1, failed_count: 1, subscriptions: [{ user_id: 11 }], errors: ['User 22: conflict'] })
     await flushPromises()
     expect(form.get('[data-test="assign-users"]').text()).not.toContain('user11@example.com')
@@ -137,7 +139,7 @@ describe('subscription bulk operations', () => {
     bulkAssign.mockResolvedValueOnce({ success_count: 1, failed_count: 0, subscriptions: [{ user_id: 22 }], errors: [] })
     await form.trigger('submit')
     await flushPromises()
-    expect(bulkAssign).toHaveBeenLastCalledWith({ user_ids: [22], group_id: 7, validity_days: 30 })
+    expect(bulkAssign).toHaveBeenLastCalledWith({ user_ids: [22], plan_id: 7, validity_days: 30 })
     expect(form.find('[data-test="assign-users"]').exists()).toBe(false)
   })
 })

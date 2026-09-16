@@ -8,7 +8,17 @@ import (
 
 const subscriptionDayDuration = 24 * time.Hour
 
+type SubscriptionQuotaPlan struct {
+	ID              int64    `json:"id"`
+	Name            string   `json:"name"`
+	DailyLimitUSD   *float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD  *float64 `json:"weekly_limit_usd"`
+	MonthlyLimitUSD *float64 `json:"monthly_limit_usd"`
+}
+
 type UserSubscription struct {
+	PlanID           *int64
+	Plan             *SubscriptionQuotaPlan
 	ID               int64
 	UserID           int64
 	GroupID          int64
@@ -205,25 +215,37 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 	return &t
 }
 
+// QuotaLimits resolves plan-owned quotas; group limits exist only for old
+// subscriptions created before the decoupling migration or legacy test callers.
+func (s *UserSubscription) QuotaLimits(legacy *Group) (daily, weekly, monthly *float64) {
+	if s != nil && s.Plan != nil {
+		return s.Plan.DailyLimitUSD, s.Plan.WeeklyLimitUSD, s.Plan.MonthlyLimitUSD
+	}
+	if legacy != nil {
+		return legacy.DailyLimitUSD, legacy.WeeklyLimitUSD, legacy.MonthlyLimitUSD
+	}
+	return nil, nil, nil
+}
+func (s *UserSubscription) QuotaName() string {
+	if s != nil && s.Plan != nil {
+		return s.Plan.Name
+	}
+	if s.Group != nil {
+		return s.Group.Name
+	}
+	return ""
+}
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasDailyLimit() {
-		return true
-	}
-	return s.DailyUsageUSD+additionalCost <= *group.DailyLimitUSD
+	limit, _, _ := s.QuotaLimits(group)
+	return limit == nil || *limit <= 0 || s.DailyUsageUSD+additionalCost <= *limit
 }
-
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasWeeklyLimit() {
-		return true
-	}
-	return s.WeeklyUsageUSD+additionalCost <= *group.WeeklyLimitUSD
+	_, limit, _ := s.QuotaLimits(group)
+	return limit == nil || *limit <= 0 || s.WeeklyUsageUSD+additionalCost <= *limit
 }
-
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasMonthlyLimit() {
-		return true
-	}
-	return s.MonthlyUsageUSD+additionalCost <= *group.MonthlyLimitUSD
+	_, _, limit := s.QuotaLimits(group)
+	return limit == nil || *limit <= 0 || s.MonthlyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckAllLimits(group *Group, additionalCost float64) (daily, weekly, monthly bool) {

@@ -22,6 +22,8 @@ vi.mock('@/api/admin', () => ({
   }
 }))
 
+vi.mock('@/api/admin/payment', () => ({ adminPaymentAPI: { getPlans: vi.fn().mockResolvedValue({ data: [{ id: 3, name: 'Plan 3', validity_days: 30, validity_unit: 'days' }, { id: 7, name: 'Plan 7', validity_days: 30, validity_unit: 'days' }] }) } }))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError,
@@ -182,7 +184,7 @@ describe('admin subscription users', () => {
 
       expect(assignSubscription).toHaveBeenCalledTimes(1)
       expect(assignSubscription).toHaveBeenCalledWith({
-        user_id: 84, group_id: 3, validity_days: 30
+        user_id: 84, plan_id: 3, validity_days: 30
       })
     } finally {
       wrapper.unmount()

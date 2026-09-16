@@ -260,8 +260,25 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 	if code.Type == "" {
 		code.Type = RedeemTypeBalance
 	}
-	if code.Type != RedeemTypeInvitation && code.Value == 0 {
+	if code.Type != RedeemTypeInvitation && code.Type != RedeemTypeSubscription && code.Value == 0 {
 		return errors.New("value must not be zero")
+	}
+	if code.Type == RedeemTypeSubscription {
+		if (code.GroupID == nil) == (code.PlanID == nil) {
+			return infraerrors.BadRequest("SUBSCRIPTION_TARGET_AMBIGUOUS", "choose a plan or a legacy group")
+		}
+		if code.PlanID != nil {
+			if s.entClient == nil {
+				return infraerrors.ServiceUnavailable("PLAN_UNAVAILABLE", "plan repository is unavailable")
+			}
+			plan, err := s.entClient.SubscriptionPlan.Get(ctx, *code.PlanID)
+			if err != nil || plan.ArchivedAt != nil {
+				return infraerrors.BadRequest("PLAN_UNAVAILABLE", "subscription plan is unavailable")
+			}
+			if code.ValidityDays == 0 {
+				code.ValidityDays = psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
+			}
+		}
 	}
 	if code.Status == "" {
 		code.Status = StatusUnused
@@ -454,7 +471,7 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 	switch redeemCode.Type {
 	case RedeemTypeBalance, RedeemTypeConcurrency:
 	case RedeemTypeSubscription:
-		if redeemCode.GroupID == nil {
+		if redeemCode.GroupID == nil && redeemCode.PlanID == nil {
 			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
 		}
 	default:
@@ -515,23 +532,32 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}
 
 	case RedeemTypeSubscription:
+		legacyGroupID := int64(0)
+		if redeemCode.GroupID != nil {
+			legacyGroupID = *redeemCode.GroupID
+		}
+		planIDs := []int64{}
+		if redeemCode.PlanID != nil {
+			planIDs = append(planIDs, *redeemCode.PlanID)
+		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
 			// 负数天数：缩短订阅，减到 0 则取消订阅
-			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
+			if err := s.reduceOrCancelSubscription(txCtx, userID, legacyGroupID, -validityDays, redeemCode.Code, planIDs...); err != nil {
 				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
 			}
 		} else {
-			if validityDays == 0 {
+			if validityDays == 0 && redeemCode.PlanID == nil {
 				validityDays = 30
 			}
-			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-				UserID:       userID,
-				GroupID:      *redeemCode.GroupID,
+			_, _, err := s.subscriptionService.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+				UserID:  userID,
+				GroupID: legacyGroupID,
+				PlanID:  redeemCode.PlanID, AllowArchivedPlan: true,
 				ValidityDays: validityDays,
 				AssignedBy:   0, // 系统分配
 				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
-			})
+			}, true)
 			if err != nil {
 				return nil, fmt.Errorf("assign or extend subscription: %w", err)
 			}
@@ -586,6 +612,11 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 			return
 		}
 	case RedeemTypeSubscription:
+		if redeemCode.PlanID != nil && s.subscriptionService != nil && s.billingCacheService != nil {
+			if sub, err := s.subscriptionService.FindByUserAndPlan(ctx, userID, *redeemCode.PlanID); err == nil {
+				_ = s.billingCacheService.InvalidateSubscriptionByID(ctx, sub.ID)
+			}
+		}
 		if s.authCacheInvalidator != nil {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}
@@ -696,8 +727,14 @@ func (s *RedeemService) GetUserHistory(ctx context.Context, userID int64, limit 
 }
 
 // reduceOrCancelSubscription 缩短订阅天数，剩余天数 <= 0 时取消订阅
-func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, groupID int64, reduceDays int, code string) error {
-	sub, err := s.subscriptionService.userSubRepo.GetByUserIDAndGroupID(ctx, userID, groupID)
+func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, groupID int64, reduceDays int, code string, planIDs ...int64) error {
+	var sub *UserSubscription
+	var err error
+	if len(planIDs) > 0 {
+		sub, err = s.subscriptionService.FindByUserAndPlan(ctx, userID, planIDs[0])
+	} else {
+		sub, err = s.subscriptionService.userSubRepo.GetByUserIDAndGroupID(ctx, userID, groupID)
+	}
 	if err != nil {
 		return ErrSubscriptionNotFound
 	}

@@ -50,23 +50,25 @@ func TestSanitizeAdminPaymentOrderForResponseAddsCurrency(t *testing.T) {
 
 func TestAdminSubscriptionPlansForResponseIncludesCompositeGroupInfo(t *testing.T) {
 	weekly := 25.0
+	legacyGroupID := int64(7)
 	now := time.Now()
 	plans := []*dbent.SubscriptionPlan{
 		{
-			ID:           11,
-			GroupID:      7,
-			Name:         "All models",
-			Description:  "Composite access",
-			Price:        19.99,
-			Currency:     "CNY",
-			ValidityDays: 30,
-			ValidityUnit: "days",
-			Features:     "OpenAI\nClaude\nGemini\nGrok",
-			ProductName:  "Sub2API",
-			ForSale:      true,
-			SortOrder:    1,
-			CreatedAt:    now,
-			UpdatedAt:    now,
+			ID:             11,
+			GroupID:        &legacyGroupID,
+			WeeklyLimitUsd: &weekly,
+			Name:           "All models",
+			Description:    "Composite access",
+			Price:          19.99,
+			Currency:       "CNY",
+			ValidityDays:   30,
+			ValidityUnit:   "days",
+			Features:       "OpenAI\nClaude\nGemini\nGrok",
+			ProductName:    "Sub2API",
+			ForSale:        true,
+			SortOrder:      1,
+			CreatedAt:      now,
+			UpdatedAt:      now,
 		},
 	}
 	groupInfo := map[int64]service.PlanGroupInfo{

@@ -110,7 +110,9 @@ export interface PaymentOrder {
 
 export interface SubscriptionPlan {
   id: number
-  group_id: number
+  group_id: number | null
+  archived_at?: string | null
+  is_legacy_compat?: boolean
   /** Groups entitled by the plan; group_id remains the legacy primary group. */
   group_ids?: number[]
   group_platform?: string

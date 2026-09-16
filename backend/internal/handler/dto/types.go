@@ -54,6 +54,9 @@ type AdminUser struct {
 }
 
 type APIKey struct {
+	BillingSource    string            `json:"billing_source,omitempty"`
+	RoutingMode      string            `json:"routing_mode"`
+	GroupIDs         []int64           `json:"group_ids,omitempty"`
 	ID               int64             `json:"id"`
 	UserID           int64             `json:"user_id"`
 	Key              string            `json:"key"`
@@ -93,6 +96,7 @@ type APIKey struct {
 }
 
 type Group struct {
+	SubscriptionEnabled        bool    `json:"subscription_enabled"`
 	ID                         int64   `json:"id"`
 	Name                       string  `json:"name"`
 	Description                string  `json:"description"`
@@ -504,6 +508,7 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
+	PlanID    *int64     `json:"plan_id,omitempty"`
 	ID        int64      `json:"id"`
 	Code      string     `json:"code"`
 	Type      string     `json:"type"`
@@ -588,12 +593,15 @@ type BatchUpdateRedeemCodesRequest struct {
 
 // UsageLog 是普通用户接口使用的 usage log DTO（不包含管理员字段）。
 type UsageLog struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	APIKeyID  int64  `json:"api_key_id"`
-	AccountID int64  `json:"account_id"`
-	RequestID string `json:"request_id"`
-	Model     string `json:"model"`
+	BillingSource    string `json:"billing_source"`
+	SubscriptionName string `json:"subscription_name,omitempty"`
+	TargetGroupName  string `json:"target_group_name,omitempty"`
+	ID               int64  `json:"id"`
+	UserID           int64  `json:"user_id"`
+	APIKeyID         int64  `json:"api_key_id"`
+	AccountID        int64  `json:"account_id"`
+	RequestID        string `json:"request_id"`
+	Model            string `json:"model"`
 	// ServiceTier records the OpenAI service tier used for billing, e.g. "priority" / "flex".
 	ServiceTier *string `json:"service_tier,omitempty"`
 	// ReasoningEffort is the client-requested effort (mapping-hidden, like Model).
@@ -750,10 +758,12 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID               int64   `json:"id"`
-	UserID           int64   `json:"user_id"`
-	GroupID          int64   `json:"group_id"`
-	EntitledGroupIDs []int64 `json:"entitled_group_ids,omitempty"`
+	PlanID           *int64                         `json:"plan_id,omitempty"`
+	Plan             *service.SubscriptionQuotaPlan `json:"plan,omitempty"`
+	ID               int64                          `json:"id"`
+	UserID           int64                          `json:"user_id"`
+	GroupID          int64                          `json:"group_id"`
+	EntitledGroupIDs []int64                        `json:"entitled_group_ids,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

@@ -82,12 +82,13 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		return nil
 	}
 	out := &APIKey{
-		ID:                 k.ID,
-		UserID:             k.UserID,
-		Key:                k.Key,
-		Name:               k.Name,
-		GroupID:            k.GroupID,
-		SubscriptionID:     k.SubscriptionID,
+		ID:             k.ID,
+		UserID:         k.UserID,
+		Key:            k.Key,
+		Name:           k.Name,
+		GroupID:        k.GroupID,
+		SubscriptionID: k.SubscriptionID,
+		BillingSource:  k.BillingSource, RoutingMode: apiKeyRoutingMode(k), GroupIDs: k.GroupIDs,
 		RoutePreferences:   k.RoutePreferences,
 		Status:             k.Status,
 		IPWhitelist:        k.IPWhitelist,
@@ -187,6 +188,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		SubscriptionRateMultiplier:      g.BillingRateMultiplier(true),
+		SubscriptionEnabled:             g.SubscriptionEnabled,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		SubscriptionType:                g.SubscriptionType,
@@ -648,6 +650,7 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		CreatedAt:    rc.CreatedAt,
 		ExpiresAt:    rc.ExpiresAt,
 		GroupID:      rc.GroupID,
+		PlanID:       rc.PlanID,
 		ValidityDays: rc.ValidityDays,
 		User:         UserFromServiceShallow(rc.User),
 		Group:        GroupFromServiceShallow(rc.Group),
@@ -685,7 +688,27 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 	if requestedModel == "" {
 		requestedModel = l.Model
 	}
+	source := service.BillingSourceBalance
+	if l.BillingType == service.BillingTypeSubscription {
+		source = service.BillingSourceSubscription
+	}
+	subscriptionName, targetGroupName := "", ""
+	if l.Subscription != nil {
+		subscriptionName = l.Subscription.QuotaName()
+	}
+	if l.Group != nil {
+		targetGroupName = l.Group.Name
+	}
+	if l.RouteBillingSnapshot != nil {
+		if l.RouteBillingSnapshot.SubscriptionName != "" {
+			subscriptionName = l.RouteBillingSnapshot.SubscriptionName
+		}
+		if l.RouteBillingSnapshot.TargetGroupName != "" {
+			targetGroupName = l.RouteBillingSnapshot.TargetGroupName
+		}
+	}
 	return UsageLog{
+		BillingSource: source, SubscriptionName: subscriptionName, TargetGroupName: targetGroupName,
 		ID:                        l.ID,
 		UserID:                    l.UserID,
 		APIKeyID:                  l.APIKeyID,
@@ -886,10 +909,11 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
 	return UserSubscription{
-		ID:                 sub.ID,
-		UserID:             sub.UserID,
-		GroupID:            sub.GroupID,
-		EntitledGroupIDs:   append([]int64(nil), sub.EntitledGroupIDs...),
+		ID:               sub.ID,
+		UserID:           sub.UserID,
+		GroupID:          sub.GroupID,
+		EntitledGroupIDs: append([]int64(nil), sub.EntitledGroupIDs...),
+		PlanID:           sub.PlanID, Plan: sub.Plan,
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,
@@ -960,4 +984,11 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		UsedAt:      u.UsedAt,
 		User:        UserFromServiceShallow(u.User),
 	}
+}
+
+func apiKeyRoutingMode(key *service.APIKey) string {
+	if key.RoutingMode == "" {
+		return service.KeyRoutingSingle
+	}
+	return key.RoutingMode
 }

@@ -870,6 +870,7 @@ func NewGatewayService(
 	if compositeResolver != nil {
 		compositeResolver.SetModelOwnershipResolver(svc.resolveCompositeModelOwnership)
 		compositeResolver.SetRouteValidation(groupRepo, resolver)
+		compositeResolver.accountRepo = accountRepo
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

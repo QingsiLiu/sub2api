@@ -233,6 +233,7 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
+	SubscriptionEnabled        bool
 	Name                       string
 	Description                string
 	Platform                   string
@@ -314,6 +315,7 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
+	SubscriptionEnabled        *bool
 	Name                       string
 	Description                *string
 	Platform                   string
@@ -555,6 +557,7 @@ type UpdateProxyInput struct {
 }
 
 type GenerateRedeemCodesInput struct {
+	PlanID       *int64
 	Count        int
 	Type         string
 	Value        float64

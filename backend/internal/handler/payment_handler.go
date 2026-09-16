@@ -52,7 +52,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
 		ID                 int64    `json:"id"`
-		GroupID            int64    `json:"group_id"`
+		GroupID            *int64   `json:"group_id"`
 		GroupPlatform      string   `json:"group_platform"`
 		GroupName          string   `json:"group_name"`
 		RateMultiplier     float64  `json:"rate_multiplier"`
@@ -75,7 +75,11 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
 	for _, p := range plans {
-		gi := groupInfo[p.GroupID]
+		gi := service.PlanGroupInfo{}
+		if p.GroupID != nil {
+			gi = groupInfo[*p.GroupID]
+		}
+		gi.DailyLimitUSD, gi.WeeklyLimitUSD, gi.MonthlyLimitUSD = p.DailyLimitUsd, p.WeeklyLimitUsd, p.MonthlyLimitUsd
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: p.GroupID,
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
@@ -123,7 +127,11 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	groupInfo := h.configService.GetGroupInfoMap(ctx, plans)
 	planList := make([]checkoutPlan, 0, len(plans))
 	for _, p := range plans {
-		gi := groupInfo[p.GroupID]
+		gi := service.PlanGroupInfo{}
+		if p.GroupID != nil {
+			gi = groupInfo[*p.GroupID]
+		}
+		gi.DailyLimitUSD, gi.WeeklyLimitUSD, gi.MonthlyLimitUSD = p.DailyLimitUsd, p.WeeklyLimitUsd, p.MonthlyLimitUsd
 		planList = append(planList, checkoutPlan{
 			ID: int64(p.ID), GroupID: p.GroupID,
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
@@ -175,7 +183,7 @@ type checkoutInfoResponse struct {
 
 type checkoutPlan struct {
 	ID                 int64    `json:"id"`
-	GroupID            int64    `json:"group_id"`
+	GroupID            *int64   `json:"group_id"`
 	GroupPlatform      string   `json:"group_platform"`
 	GroupName          string   `json:"group_name"`
 	RateMultiplier     float64  `json:"rate_multiplier"`
