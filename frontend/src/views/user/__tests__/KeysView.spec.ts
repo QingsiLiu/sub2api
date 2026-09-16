@@ -195,9 +195,31 @@ const DataTableStub = {
 
 const SelectStub = {
   name: 'Select',
-  props: ['modelValue', 'options'],
+  props: ['modelValue', 'options', 'id', 'disabled'],
   emits: ['update:modelValue'],
-  template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"></select>',
+  methods: {
+    emitValue(raw: string) {
+      const match = (this.$props.options as Array<{ value: unknown }> | undefined)?.find(
+        (opt) => String(opt.value ?? '') === String(raw),
+      )
+      return match ? match.value : raw
+    },
+  },
+  template: `
+    <select
+      :id="id"
+      :disabled="disabled"
+      :value="modelValue === null || modelValue === undefined ? '' : modelValue"
+      @change="$emit('update:modelValue', emitValue($event.target.value))"
+    >
+      <option
+        v-for="opt in options || []"
+        :key="String(opt.value)"
+        :value="opt.value ?? ''"
+        :disabled="opt.disabled"
+      >{{ opt.label }}</option>
+    </select>
+  `,
 }
 
 const SearchInputStub = {
@@ -607,7 +629,7 @@ describe('user KeysView column settings', () => {
     it('saves GPT then national in the fixed panel order', async () => {
       const wrapper = await openCreate()
       await wrapper.get('[data-tour="key-form-name"]').setValue('Composite')
-      await wrapper.get('[data-test="composite-key-toggle"]').setValue(true)
+      await wrapper.get('[data-test="composite-key-toggle"]').trigger('click')
       const national = wrapper.get('[data-test="key-group-choice"][data-panel="national"]')
       const gpt = wrapper.get('[data-test="key-group-choice"][data-panel="gpt"]')
       await national.setValue(true)
@@ -622,7 +644,7 @@ describe('user KeysView column settings', () => {
     it('keeps intra-panel order when two GPT groups are selected', async () => {
       const wrapper = await openCreate()
       await wrapper.get('[data-tour="key-form-name"]').setValue('GPT pair')
-      await wrapper.get('[data-test="composite-key-toggle"]').setValue(true)
+      await wrapper.get('[data-test="composite-key-toggle"]').trigger('click')
       const gptChoices = wrapper.findAll('[data-test="key-group-choice"][data-panel="gpt"]')
       await gptChoices[0].setValue(true)
       await gptChoices[1].setValue(true)

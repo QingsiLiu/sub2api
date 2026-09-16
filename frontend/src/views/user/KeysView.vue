@@ -488,26 +488,50 @@
 
         <div>
           <label for="key-billing-source" class="input-label">{{ t('keys.billingSource') }}</label>
-          <select id="key-billing-source" v-model="formData.billing_source" class="input">
-            <option v-if="showEditModal && !selectedKey?.billing_source" value="" disabled>{{ t('keys.legacySettlement') }}</option>
-            <option value="balance">{{ t('keys.balanceOnly') }}</option>
-            <option value="subscription">{{ t('keys.specifiedSubscription') }}</option>
-          </select>
+          <Select
+            id="key-billing-source"
+            v-model="formData.billing_source"
+            :options="billingSourceOptions"
+            :aria-label="t('keys.billingSource')"
+            :searchable="false"
+          />
           <p v-if="showEditModal && !selectedKey?.billing_source" class="input-hint">{{ t('keys.legacySettlementHint') }}</p>
         </div>
         <div v-if="formData.billing_source === 'subscription'">
           <label for="key-subscription" class="input-label">{{ t('keys.subscriptionLabel') }}</label>
-          <select id="key-subscription" v-model.number="formData.subscription_id" class="input" :disabled="settlementOptionsLoading">
-            <option :value="null" disabled>{{ t('keys.subscriptionRequired') }}</option>
-            <option v-for="subscription in eligibleSubscriptions" :key="subscription.id" :value="subscription.id">{{ subscriptionOptionLabel(subscription) }}</option>
-          </select>
+          <Select
+            id="key-subscription"
+            v-model="formData.subscription_id"
+            :options="subscriptionOptions"
+            :aria-label="t('keys.subscriptionLabel')"
+            :disabled="settlementOptionsLoading"
+            :placeholder="t('keys.subscriptionRequired')"
+          />
           <p v-if="!settlementOptionsLoading && !eligibleSubscriptions.length" class="input-hint">{{ t('keys.noActiveSubscription') }}</p>
         </div>
-        <div v-if="formData.billing_source">
-          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input data-test="composite-key-toggle" v-model="formData.routing_mode" type="checkbox" true-value="composite" false-value="single" class="rounded border-gray-300 text-primary-600" />
-            {{ t('keys.compositeKey') }}
-          </label>
+        <div v-if="formData.billing_source" class="space-y-3">
+          <div class="flex items-center justify-between">
+            <label class="input-label mb-0" for="composite-key-toggle">{{ t('keys.compositeKey') }}</label>
+            <button
+              id="composite-key-toggle"
+              data-test="composite-key-toggle"
+              type="button"
+              role="switch"
+              :aria-checked="formData.routing_mode === 'composite'"
+              @click="formData.routing_mode = formData.routing_mode === 'composite' ? 'single' : 'composite'"
+              :class="[
+                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                formData.routing_mode === 'composite' ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  formData.routing_mode === 'composite' ? 'translate-x-4' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
         </div>
         <div v-if="formData.billing_source && formData.routing_mode === 'composite'" class="space-y-3">
           <p class="input-label">{{ t('keys.usagePanels') }}</p>
@@ -595,23 +619,24 @@
           <p v-if="routeOptionsLoading" class="input-hint">{{ t('common.loading') }}</p>
           <div v-for="provider in routeProviders" :key="provider">
             <label :for="`route-${provider}`" class="input-label">{{ provider }}</label>
-            <select :id="`route-${provider}`" v-model="formData.route_preferences[provider]" class="input">
-              <option value="">{{ t('keys.routeDefault') }}</option>
-              <option v-for="route in routeOptions.filter(item => item.provider === provider && item.profile_key)" :key="route.profile_key" :value="route.profile_key">
-                {{ route.name }} · ×{{ route.subscription_rate_multiplier }}
-              </option>
-            </select>
+            <Select
+              :id="`route-${provider}`"
+              v-model="formData.route_preferences[provider]"
+              :options="routePreferenceOptions(provider)"
+              :aria-label="provider"
+              :searchable="false"
+            />
           </div>
           <p class="input-hint">{{ t('keys.routePreferencesHint') }}</p>
         </div>
 
         <div v-if="!formData.billing_source && selectedFormGroup?.platform === 'composite' && eligibleSubscriptions.length">
           <label class="input-label">{{ t('keys.subscriptionLabel') }}</label>
-          <select v-model.number="formData.subscription_id" class="input">
-            <option v-for="subscription in eligibleSubscriptions" :key="subscription.id" :value="subscription.id">
-              #{{ subscription.id }} · {{ subscription.group?.name || `Group ${subscription.group_id}` }}
-            </option>
-          </select>
+          <Select
+            v-model="formData.subscription_id"
+            :options="legacySubscriptionOptions"
+            :aria-label="t('keys.subscriptionLabel')"
+          />
           <p class="input-hint">{{ t('keys.subscriptionHint') }}</p>
         </div>
 
@@ -1510,6 +1535,27 @@ const statusOptions = computed(() => [
   { value: 'inactive', label: t('common.inactive') }
 ])
 
+const billingSourceOptions = computed(() => {
+  const options = [
+    { value: 'balance', label: t('keys.balanceOnly') },
+    { value: 'subscription', label: t('keys.specifiedSubscription') },
+  ]
+  if (showEditModal.value && !selectedKey.value?.billing_source) {
+    return [{ value: '', label: t('keys.legacySettlement'), disabled: true }, ...options]
+  }
+  return options
+})
+
+const routePreferenceOptions = (provider: string) => [
+  { value: '', label: t('keys.routeDefault') },
+  ...routeOptions.value
+    .filter((item) => item.provider === provider && item.profile_key)
+    .map((item) => ({
+      value: item.profile_key,
+      label: `${item.name} · ×${item.subscription_rate_multiplier}`,
+    })),
+]
+
 const settlementGroups = ref<Group[]>([])
 const settlementOptionsLoading = ref(false)
 const formAvailableGroups = computed(() => formData.value.billing_source ? settlementGroups.value : groups.value)
@@ -1601,6 +1647,21 @@ const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
   const remaining = available.length ? '$' + Math.min(...available).toFixed(4) : t('payment.admin.unlimited')
   return `#${sub.id} · ${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
 }
+
+const subscriptionOptions = computed(() => [
+  { value: null, label: t('keys.subscriptionRequired'), disabled: true },
+  ...eligibleSubscriptions.value.map((subscription) => ({
+    value: subscription.id,
+    label: subscriptionOptionLabel(subscription),
+  })),
+])
+
+const legacySubscriptionOptions = computed(() =>
+  eligibleSubscriptions.value.map((subscription) => ({
+    value: subscription.id,
+    label: `#${subscription.id} · ${subscription.group?.name || `Group ${subscription.group_id}`}`,
+  })),
+)
 
 const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
   if (key.status === 'quota_exhausted' || key.status === 'expired') {
