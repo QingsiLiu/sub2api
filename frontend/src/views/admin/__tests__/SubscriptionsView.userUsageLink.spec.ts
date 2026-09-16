@@ -55,8 +55,8 @@ const DataTableStub = {
 
 const RouterLinkStub = defineComponent({
   name: 'RouterLink',
-  props: { to: { type: Object, required: true } },
-  template: '<a :href="`${to.path}?user_id=${to.query.user_id}`"><slot /></a>'
+  props: { to: { type: [String, Object], required: true } },
+  template: `<a :href="typeof to === 'string' ? to : to.path + '?user_id=' + to.query?.user_id"><slot /></a>`
 })
 
 describe('admin subscription users', () => {
@@ -222,7 +222,7 @@ describe('admin subscription users', () => {
 
     await flushPromises()
 
-    const link = wrapper.getComponent(RouterLinkStub)
+    const link = wrapper.findAllComponents(RouterLinkStub).find(link => typeof link.props('to') === 'object')!
     expect(link.text()).toBe('reader@example.com')
     expect(link.props('to')).toEqual({ path: '/admin/usage', query: { user_id: 42 } })
   })
@@ -254,7 +254,7 @@ describe('admin subscription users', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const link = wrapper.getComponent(RouterLinkStub)
+    const link = wrapper.findAllComponents(RouterLinkStub).find(link => typeof link.props('to') === 'object')!
     expect(link.text()).toBe('User #42')
     expect(link.props('to')).toEqual({ path: '/admin/usage', query: { user_id: 42 } })
   })
