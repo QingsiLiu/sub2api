@@ -66,6 +66,8 @@ export default {
 
   // API Keys
   keys: {
+    archivePlan: '归档套餐',
+    archivePlanHint: '归档后停止新购买和分配，已有订阅额度定义和未完成订单仍会保留。',
     allSubscriptions: '全部订阅',
     routeAttempts: '线路尝试记录',
     routeSelected: '最终选中',

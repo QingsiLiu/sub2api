@@ -66,6 +66,8 @@ export default {
 
   // API Keys
   keys: {
+    archivePlan: 'Archive plan',
+    archivePlanHint: 'Stop new purchases and assignments. Existing subscription quotas and unfinished orders are preserved.',
     allSubscriptions: 'All subscriptions',
     routeAttempts: 'Routing attempts',
     routeSelected: 'Selected',

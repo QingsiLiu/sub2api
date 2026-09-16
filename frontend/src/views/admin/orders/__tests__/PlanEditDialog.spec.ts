@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
+import { adminPaymentAPI } from '@/api/admin/payment'
 
 import PlanEditDialog from '../PlanEditDialog.vue'
 import type { AdminGroup } from '@/types'
@@ -194,4 +195,15 @@ describe('PlanEditDialog', () => {
     expect(wrapper.text()).toContain('keys.planQuotaHint')
     expect(options).not.toContain('Standard OpenAI — openai (1x)')
   })
+  it('creates a quota plan without any group field', async () => {
+    const wrapper = mountDialog()
+    await wrapper.find('input[type="text"]').setValue('Independent plan')
+    await wrapper.find('[data-test="plan-price"]').setValue('10')
+    await wrapper.findAll('input[type="number"]')[0].setValue('5')
+    await wrapper.get('#plan-form').trigger('submit')
+    await flushPromises()
+    expect(adminPaymentAPI.createPlan).toHaveBeenCalledWith(expect.objectContaining({ name:'Independent plan', price:10, daily_limit_usd:5, weekly_limit_usd:null, monthly_limit_usd:null }))
+    expect(vi.mocked(adminPaymentAPI.createPlan).mock.calls.at(-1)?.[0]).not.toHaveProperty('group_id')
+  })
+
 })

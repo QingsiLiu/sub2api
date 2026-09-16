@@ -8,6 +8,7 @@ type NavigationGuard = (
 
 const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
+  routes: [] as Array<{ path: string; meta?: Record<string, unknown> }>,
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -33,13 +34,15 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
-  createRouter: vi.fn(() => ({
+  createRouter: vi.fn((options) => {
+    routerHarness.routes = options.routes
+    return {
     beforeEach: vi.fn((guard: NavigationGuard) => {
       routerHarness.guard = guard
     }),
     afterEach: vi.fn(),
     onError: vi.fn(),
-  })),
+  }}),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -209,4 +212,15 @@ describe('subscription route guard (opt-out flag)', () => {
 
     expect(next).toHaveBeenCalledWith('/admin/dashboard')
   })
+  it('allows admins to manage independent subscription plans while payments are disabled', async () => {
+    authStore.isAdmin = true
+    appStore.publicSettingsLoaded = true
+    appStore.cachedPublicSettings = { payment_enabled: false }
+    const planRoute = routerHarness.routes.find(route => route.path === '/admin/orders/plans')!
+    expect(planRoute.meta?.requiresPayment).not.toBe(true)
+    const { navigation, next } = runGuard(planRoute.meta!, planRoute.path)
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
 })

@@ -159,6 +159,7 @@
             >
               <Icon name="questionCircle" size="md" />
             </button>
+            <RouterLink to="/admin/orders/plans" class="btn btn-secondary">{{ t('nav.paymentPlans') }}</RouterLink>
             <button @click="showAssignModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
