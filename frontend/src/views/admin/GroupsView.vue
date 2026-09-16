@@ -523,12 +523,12 @@
         </div>
         <div v-if="!authStore.isSimpleMode">
           <label class="input-label">{{ t("admin.groups.form.usagePanel") }}</label>
-          <select v-model="createForm.usage_panel" class="input" data-test="group-usage-panel">
-            <option value="">{{ t("admin.groups.usagePanelUnassigned") }}</option>
-            <option v-for="panel in usagePanelOrder" :key="panel" :value="panel">
-              {{ t(`admin.groups.usagePanels.${panel}`) }}
-            </option>
-          </select>
+          <Select
+            v-model="createForm.usage_panel"
+            :options="usagePanelOptions"
+            :aria-label="t('admin.groups.form.usagePanel')"
+            data-test="group-usage-panel"
+          />
           <p class="input-hint">{{ t("admin.groups.usagePanelHint") }}</p>
         </div>
         <!-- 从分组复制账号 -->
@@ -2182,12 +2182,12 @@
         </div>
         <div v-if="!authStore.isSimpleMode">
           <label class="input-label">{{ t("admin.groups.form.usagePanel") }}</label>
-          <select v-model="editForm.usage_panel" class="input" data-test="group-usage-panel-edit">
-            <option value="">{{ t("admin.groups.usagePanelUnassigned") }}</option>
-            <option v-for="panel in usagePanelOrder" :key="panel" :value="panel">
-              {{ t(`admin.groups.usagePanels.${panel}`) }}
-            </option>
-          </select>
+          <Select
+            v-model="editForm.usage_panel"
+            :options="usagePanelOptions"
+            :aria-label="t('admin.groups.form.usagePanel')"
+            data-test="group-usage-panel-edit"
+          />
           <p class="input-hint">{{ t("admin.groups.usagePanelHint") }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
@@ -4662,7 +4662,13 @@ const exclusiveOptions = computed(() => [
   { value: "false", label: t("admin.groups.nonExclusive") },
 ]);
 
-const usagePanelOrder = USAGE_PANEL_ORDER
+const usagePanelOptions = computed(() => [
+  { value: "", label: t("admin.groups.usagePanelUnassigned") },
+  ...USAGE_PANEL_ORDER.map((panel) => ({
+    value: panel,
+    label: t(`admin.groups.usagePanels.${panel}`),
+  })),
+]);
 const platformOptions = computed(() =>
   GROUP_PLATFORM_OPTIONS.filter(
     (option) => !authStore.isSimpleMode || option.value !== "composite",
