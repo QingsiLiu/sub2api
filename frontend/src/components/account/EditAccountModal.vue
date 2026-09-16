@@ -612,16 +612,14 @@
               {{ t('admin.accounts.grokMediaEligibility.hint') }}
             </p>
           </div>
-          <select
+          <Select
             v-model="grokMediaEligibilityMode"
-            class="input"
-            data-testid="grok-media-eligibility-mode"
+            :options="grokMediaEligibilityModeOptions"
+            :searchable="false"
             :disabled="grokMediaEligibilityLoading"
-          >
-            <option value="auto">{{ t('admin.accounts.grokMediaEligibility.auto') }}</option>
-            <option value="enabled">{{ t('admin.accounts.grokMediaEligibility.enabled') }}</option>
-            <option value="disabled">{{ t('admin.accounts.grokMediaEligibility.disabled') }}</option>
-          </select>
+            data-testid="grok-media-eligibility-mode"
+            :aria-label="t('admin.accounts.grokMediaEligibility.auto')"
+          />
           <p v-if="grokMediaEligibilityLoading" class="text-xs text-gray-500 dark:text-gray-400">
             {{ t('admin.accounts.grokMediaEligibility.loading') }}
           </p>
@@ -908,25 +906,12 @@
           </div>
           <div>
             <label class="input-label">Location</label>
-            <select
+            <Select
               v-model="editVertexLocation"
-              required
-              class="input font-mono"
-            >
-              <optgroup
-                v-for="group in VERTEX_LOCATION_OPTIONS"
-                :key="group.label"
-                :label="group.label"
-              >
-                <option
-                  v-for="option in group.options"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </optgroup>
-            </select>
+              :options="vertexLocationSelectOptions"
+              :searchable="true"
+              aria-label="Location"
+            />
             <p class="input-hint">{{ t('admin.accounts.vertexLocationHint') }}</p>
           </div>
         </div>
@@ -2033,10 +2018,13 @@
               {{ t('admin.accounts.anthropic.apiKeyAuthSchemeDesc') }}
             </p>
           </div>
-          <select v-model="anthropicAPIKeyAuthScheme" class="input w-52 text-sm">
-            <option value="x_api_key">{{ t('admin.accounts.anthropic.apiKeyAuthSchemeXApiKey') }}</option>
-            <option value="authorization_bearer">{{ t('admin.accounts.anthropic.apiKeyAuthSchemeBearer') }}</option>
-          </select>
+          <Select
+            v-model="anthropicAPIKeyAuthScheme"
+            class="w-52"
+            :options="anthropicAPIKeyAuthSchemeOptions"
+            :searchable="false"
+            :aria-label="t('admin.accounts.anthropic.apiKeyAuthScheme')"
+          />
         </div>
       </div>
 
@@ -2052,11 +2040,13 @@
               {{ t('admin.accounts.anthropic.webSearchEmulationDesc') }}
             </p>
           </div>
-          <select v-model="webSearchEmulationMode" class="input w-24 text-sm">
-            <option value="default">{{ t('admin.accounts.anthropic.webSearchDefault') }}</option>
-            <option value="enabled">{{ t('admin.accounts.anthropic.webSearchEnabled') }}</option>
-            <option value="disabled">{{ t('admin.accounts.anthropic.webSearchDisabled') }}</option>
-          </select>
+          <Select
+            v-model="webSearchEmulationMode"
+            class="w-40"
+            :options="webSearchEmulationOptions"
+            :searchable="false"
+            :aria-label="t('admin.accounts.anthropic.webSearchEmulation')"
+          />
         </div>
       </div>
 
@@ -2780,11 +2770,12 @@
           </div>
           <!-- Profile selector -->
           <div v-if="tlsFingerprintEnabled" class="mt-3">
-            <select v-model="tlsFingerprintProfileId" class="input">
-              <option :value="null">{{ t('admin.accounts.quotaControl.tlsFingerprint.defaultProfile') }}</option>
-              <option v-if="tlsFingerprintProfiles.length > 0" :value="-1">{{ t('admin.accounts.quotaControl.tlsFingerprint.randomProfile') }}</option>
-              <option v-for="p in tlsFingerprintProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
+            <Select
+              v-model="tlsFingerprintProfileId"
+              :options="tlsFingerprintSelectOptions"
+              :searchable="true"
+              :aria-label="t('admin.accounts.quotaControl.tlsFingerprint.defaultProfile')"
+            />
           </div>
         </div>
 
@@ -2842,13 +2833,13 @@
           </div>
           <div v-if="cacheTTLOverrideEnabled" class="mt-3">
             <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.cacheTTLOverride.target') }}</label>
-            <select
+            <Select
               v-model="cacheTTLOverrideTarget"
-              class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-700 dark:text-white"
-            >
-              <option value="5m">5m</option>
-              <option value="1h">1h</option>
-            </select>
+              class="mt-1"
+              :options="cacheTTLOverrideOptions"
+              :searchable="false"
+              :aria-label="t('admin.accounts.quotaControl.cacheTTLOverride.target')"
+            />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.quotaControl.cacheTTLOverride.targetHint') }}
             </p>
@@ -3095,6 +3086,7 @@ import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
 import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
+import { flattenGroupedSelectOptions } from '@/utils/selectOptions'
 import {
   OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
@@ -3535,6 +3527,32 @@ type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
 const anthropicPassthroughEnabled = ref(false)
 const anthropicAPIKeyAuthScheme = ref<AnthropicAPIKeyAuthScheme>('x_api_key')
 const webSearchEmulationMode = ref('default')
+const grokMediaEligibilityModeOptions = computed(() => [
+  { value: 'auto', label: t('admin.accounts.grokMediaEligibility.auto') },
+  { value: 'enabled', label: t('admin.accounts.grokMediaEligibility.enabled') },
+  { value: 'disabled', label: t('admin.accounts.grokMediaEligibility.disabled') },
+])
+const vertexLocationSelectOptions = flattenGroupedSelectOptions(VERTEX_LOCATION_OPTIONS)
+const tlsFingerprintSelectOptions = computed(() => [
+  { value: null, label: t('admin.accounts.quotaControl.tlsFingerprint.defaultProfile') },
+  ...(tlsFingerprintProfiles.value.length > 0
+    ? [{ value: -1, label: t('admin.accounts.quotaControl.tlsFingerprint.randomProfile') }]
+    : []),
+  ...tlsFingerprintProfiles.value.map((profile) => ({ value: profile.id, label: profile.name })),
+])
+const cacheTTLOverrideOptions = [
+  { value: '5m', label: '5m' },
+  { value: '1h', label: '1h' },
+]
+const anthropicAPIKeyAuthSchemeOptions = computed(() => [
+  { value: 'x_api_key', label: t('admin.accounts.anthropic.apiKeyAuthSchemeXApiKey') },
+  { value: 'authorization_bearer', label: t('admin.accounts.anthropic.apiKeyAuthSchemeBearer') },
+])
+const webSearchEmulationOptions = computed(() => [
+  { value: 'default', label: t('admin.accounts.anthropic.webSearchDefault') },
+  { value: 'enabled', label: t('admin.accounts.anthropic.webSearchEnabled') },
+  { value: 'disabled', label: t('admin.accounts.anthropic.webSearchDisabled') },
+])
 const webSearchGlobalEnabled = ref(false)
 const {
   globalEnabled: quotaNotifyGlobalEnabled,

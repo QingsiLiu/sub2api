@@ -588,36 +588,15 @@
               </button>
             </span>
           </div>
-          <!-- 分组选择下拉 -->
-          <select
-            class="input"
-            @change="
-              (e) => {
-                const val = Number((e.target as HTMLSelectElement).value);
-                if (
-                  val &&
-                  !createForm.copy_accounts_from_group_ids.includes(val)
-                ) {
-                  createForm.copy_accounts_from_group_ids.push(val);
-                }
-                (e.target as HTMLSelectElement).value = '';
-              }
-            "
-          >
-            <option value="">
-              {{ t("admin.groups.copyAccounts.selectPlaceholder") }}
-            </option>
-            <option
-              v-for="opt in copyAccountsGroupOptions"
-              :key="opt.value"
-              :value="opt.value"
-              :disabled="
-                createForm.copy_accounts_from_group_ids.includes(opt.value)
-              "
-            >
-              {{ opt.label }}
-            </option>
-          </select>
+          <Select
+            :model-value="null"
+            :options="createCopyAccountsSelectOptions"
+            :placeholder="t('admin.groups.copyAccounts.selectPlaceholder')"
+            :searchable="true"
+            :aria-label="t('admin.groups.copyAccounts.title')"
+            data-test="copy-accounts-from-group"
+            @update:model-value="(value) => pickCopyAccountsSource(createForm, value)"
+          />
           <p class="input-hint">{{ t("admin.groups.copyAccounts.hint") }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
@@ -2248,36 +2227,15 @@
               </button>
             </span>
           </div>
-          <!-- 分组选择下拉 -->
-          <select
-            class="input"
-            @change="
-              (e) => {
-                const val = Number((e.target as HTMLSelectElement).value);
-                if (
-                  val &&
-                  !editForm.copy_accounts_from_group_ids.includes(val)
-                ) {
-                  editForm.copy_accounts_from_group_ids.push(val);
-                }
-                (e.target as HTMLSelectElement).value = '';
-              }
-            "
-          >
-            <option value="">
-              {{ t("admin.groups.copyAccounts.selectPlaceholder") }}
-            </option>
-            <option
-              v-for="opt in copyAccountsGroupOptionsForEdit"
-              :key="opt.value"
-              :value="opt.value"
-              :disabled="
-                editForm.copy_accounts_from_group_ids.includes(opt.value)
-              "
-            >
-              {{ opt.label }}
-            </option>
-          </select>
+          <Select
+            :model-value="null"
+            :options="editCopyAccountsSelectOptions"
+            :placeholder="t('admin.groups.copyAccounts.selectPlaceholder')"
+            :searchable="true"
+            :aria-label="t('admin.groups.copyAccounts.title')"
+            data-test="copy-accounts-from-group-edit"
+            @update:model-value="(value) => pickCopyAccountsSource(editForm, value)"
+          />
           <p class="input-hint">
             {{ t("admin.groups.copyAccounts.hintEdit") }}
           </p>
@@ -4130,12 +4088,12 @@
               </div>
               <div>
                 <label class="input-label">{{ t("admin.groups.compositeRoutes.targetGroup") }}</label>
-                <select v-model.number="compositeRouteForm.target_group_id" class="input">
-                  <option :value="null">{{ t("admin.groups.compositeRoutes.targetGroupAuto") }}</option>
-                  <option v-for="group in groups.filter((item) => item.platform === compositeRouteForm.target_platform)" :key="group.id" :value="group.id">
-                    {{ group.name }} (#{{ group.id }})
-                  </option>
-                </select>
+                <Select
+                  v-model="compositeRouteForm.target_group_id"
+                  :options="compositeRouteGroupOptions"
+                  :searchable="true"
+                  :aria-label="t('admin.groups.compositeRoutes.targetGroup')"
+                />
               </div>
               <div>
                 <label class="input-label">{{
@@ -4835,6 +4793,39 @@ const copyAccountsGroupOptionsForEdit = computed(() => {
     label: copyAccountsGroupLabel(g),
   }));
 });
+
+const createCopyAccountsSelectOptions = computed(() =>
+  copyAccountsGroupOptions.value.map((opt) => ({
+    ...opt,
+    disabled: createForm.copy_accounts_from_group_ids.includes(opt.value),
+  })),
+);
+
+const editCopyAccountsSelectOptions = computed(() =>
+  copyAccountsGroupOptionsForEdit.value.map((opt) => ({
+    ...opt,
+    disabled: editForm.copy_accounts_from_group_ids.includes(opt.value),
+  })),
+);
+
+const pickCopyAccountsSource = (
+  target: { copy_accounts_from_group_ids: number[] },
+  value: unknown,
+) => {
+  const id = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(id) || id <= 0 || target.copy_accounts_from_group_ids.includes(id)) return;
+  target.copy_accounts_from_group_ids.push(id);
+};
+
+const compositeRouteGroupOptions = computed(() => [
+  { value: null, label: t("admin.groups.compositeRoutes.targetGroupAuto") },
+  ...groups.value
+    .filter((item) => item.platform === compositeRouteForm.target_platform)
+    .map((group) => ({
+      value: group.id,
+      label: `${group.name} (#${group.id})`,
+    })),
+]);
 
 const groups = ref<AdminGroup[]>([]);
 const loading = ref(false);

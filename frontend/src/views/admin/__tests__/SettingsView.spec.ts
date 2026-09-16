@@ -284,6 +284,7 @@ const ToggleStub = defineComponent({
 });
 
 const SelectStub = defineComponent({
+  inheritAttrs: false,
   props: {
     modelValue: {
       type: [String, Number, Boolean, null],
@@ -299,7 +300,7 @@ const SelectStub = defineComponent({
     },
   },
   emits: ["update:modelValue", "change"],
-  setup(props, { emit }) {
+  setup(props, { emit, attrs }) {
     const onChange = (event: Event) => {
       const target = event.target as HTMLSelectElement;
       emit("update:modelValue", target.value);
@@ -314,7 +315,8 @@ const SelectStub = defineComponent({
       h(
         "select",
         {
-          class: "select-stub",
+          ...attrs,
+          class: ["select-stub", attrs.class],
           value: props.modelValue ?? "",
           "data-placeholder": props.placeholder,
           onChange,

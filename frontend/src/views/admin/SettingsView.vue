@@ -461,22 +461,13 @@
                     >
                       {{ t("admin.settings.streamTimeout.action") }}
                     </label>
-                    <select
+                    <Select
                       v-model="streamTimeoutForm.action"
-                      class="input w-64"
-                    >
-                      <option value="temp_unsched">
-                        {{
-                          t("admin.settings.streamTimeout.actionTempUnsched")
-                        }}
-                      </option>
-                      <option value="error">
-                        {{ t("admin.settings.streamTimeout.actionError") }}
-                      </option>
-                      <option value="none">
-                        {{ t("admin.settings.streamTimeout.actionNone") }}
-                      </option>
-                    </select>
+                      class="w-64"
+                      :options="streamTimeoutActionOptions"
+                      :searchable="false"
+                      :aria-label="t('admin.settings.streamTimeout.action')"
+                    />
                     <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                       {{ t("admin.settings.streamTimeout.actionHint") }}
                     </p>
@@ -3678,18 +3669,12 @@
                     >
                       {{ t("admin.settings.oidc.tokenAuthMethod") }}
                     </label>
-                    <select
+                    <Select
                       v-model="form.oidc_connect_token_auth_method"
-                      class="input font-mono text-sm"
-                    >
-                      <option value="client_secret_post">
-                        client_secret_post
-                      </option>
-                      <option value="client_secret_basic">
-                        client_secret_basic
-                      </option>
-                      <option value="none">none</option>
-                    </select>
+                      :options="oidcTokenAuthMethodOptions"
+                      :searchable="false"
+                      :aria-label="t('admin.settings.oidc.tokenAuthMethod')"
+                    />
                   </div>
 
                   <div>
@@ -4562,11 +4547,12 @@
                     :key="`codex-fp-${i}`"
                     class="mb-2 flex items-center gap-2"
                   >
-                    <select v-model="row.type" class="input w-32 text-sm">
-                      <option value="header_exact">{{ t("admin.settings.gatewayForwarding.codexFpTypeHeaderExact") }}</option>
-                      <option value="header_prefix">{{ t("admin.settings.gatewayForwarding.codexFpTypeHeaderPrefix") }}</option>
-                      <option value="body_path">{{ t("admin.settings.gatewayForwarding.codexFpTypeBodyPath") }}</option>
-                    </select>
+                    <Select
+                      v-model="row.type"
+                      class="w-32"
+                      :options="codexFingerprintTypeOptions"
+                      :searchable="false"
+                    />
                     <input
                       v-model="row.match"
                       type="text"
@@ -5252,18 +5238,15 @@
                   >
                     {{ t("admin.settings.gatewayForwarding.grokDefaultBaseURLMode") }}
                   </label>
-                  <select
+                  <Select
                     id="grok-default-base-url-mode"
                     v-model="form.grok_default_base_url_mode"
-                    class="input mt-2 w-full"
+                    class="mt-2"
+                    :options="grokDefaultBaseUrlModeOptions"
+                    :searchable="false"
                     data-testid="grok-default-base-url-mode"
-                  >
-                    <option value="cli">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeCLI") }}</option>
-                    <option value="api">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeAPI") }}</option>
-                    <option value="us-east-1">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeUSEast1") }}</option>
-                    <option value="us-west-2">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeUSWest2") }}</option>
-                    <option value="eu-west-1">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeEUWest1") }}</option>
-                  </select>
+                    :aria-label="t('admin.settings.gatewayForwarding.grokDefaultBaseURLMode')"
+                  />
                   <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {{ t("admin.settings.gatewayForwarding.grokDefaultBaseURLModeHint") }}
                   </p>
@@ -5277,19 +5260,15 @@
                 >
                   {{ t("admin.settings.gatewayForwarding.openaiTTFTMode") }}
                 </label>
-                <select
+                <Select
                   id="openai-ttft-mode"
                   v-model="form.openai_ttft_mode"
-                  class="input mt-2 w-full"
+                  class="mt-2"
+                  :options="openaiTtftModeOptions"
+                  :searchable="false"
                   data-testid="openai-ttft-mode"
-                >
-                  <option value="semantic">
-                    {{ t("admin.settings.gatewayForwarding.openaiTTFTModeSemantic") }}
-                  </option>
-                  <option value="visible">
-                    {{ t("admin.settings.gatewayForwarding.openaiTTFTModeVisible") }}
-                  </option>
-                </select>
+                  :aria-label="t('admin.settings.gatewayForwarding.openaiTTFTMode')"
+                />
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.gatewayForwarding.openaiTTFTModeHint") }}
                 </p>
@@ -6737,14 +6716,12 @@
                     >
                       {{ t("admin.settings.customMenu.visibility") }}
                     </label>
-                    <select v-model="item.visibility" class="input text-sm">
-                      <option value="user">
-                        {{ t("admin.settings.customMenu.visibilityUser") }}
-                      </option>
-                      <option value="admin">
-                        {{ t("admin.settings.customMenu.visibilityAdmin") }}
-                      </option>
-                    </select>
+                    <Select
+                      v-model="item.visibility"
+                      :options="customMenuVisibilityOptions"
+                      :searchable="false"
+                      :aria-label="t('admin.settings.customMenu.visibility')"
+                    />
                   </div>
 
                   <!-- URL (full width) -->
@@ -8902,6 +8879,36 @@ import {
 } from "./codexFingerprintSignals";
 
 const { t, locale } = useI18n();
+const streamTimeoutActionOptions = computed<SelectOption[]>(() => [
+  { value: "temp_unsched", label: t("admin.settings.streamTimeout.actionTempUnsched") },
+  { value: "error", label: t("admin.settings.streamTimeout.actionError") },
+  { value: "none", label: t("admin.settings.streamTimeout.actionNone") },
+]);
+const oidcTokenAuthMethodOptions: SelectOption[] = [
+  { value: "client_secret_post", label: "client_secret_post" },
+  { value: "client_secret_basic", label: "client_secret_basic" },
+  { value: "none", label: "none" },
+];
+const codexFingerprintTypeOptions = computed<SelectOption[]>(() => [
+  { value: "header_exact", label: t("admin.settings.gatewayForwarding.codexFpTypeHeaderExact") },
+  { value: "header_prefix", label: t("admin.settings.gatewayForwarding.codexFpTypeHeaderPrefix") },
+  { value: "body_path", label: t("admin.settings.gatewayForwarding.codexFpTypeBodyPath") },
+]);
+const grokDefaultBaseUrlModeOptions = computed<SelectOption[]>(() => [
+  { value: "cli", label: t("admin.settings.gatewayForwarding.grokBaseURLModeCLI") },
+  { value: "api", label: t("admin.settings.gatewayForwarding.grokBaseURLModeAPI") },
+  { value: "us-east-1", label: t("admin.settings.gatewayForwarding.grokBaseURLModeUSEast1") },
+  { value: "us-west-2", label: t("admin.settings.gatewayForwarding.grokBaseURLModeUSWest2") },
+  { value: "eu-west-1", label: t("admin.settings.gatewayForwarding.grokBaseURLModeEUWest1") },
+]);
+const openaiTtftModeOptions = computed<SelectOption[]>(() => [
+  { value: "semantic", label: t("admin.settings.gatewayForwarding.openaiTTFTModeSemantic") },
+  { value: "visible", label: t("admin.settings.gatewayForwarding.openaiTTFTModeVisible") },
+]);
+const customMenuVisibilityOptions = computed<SelectOption[]>(() => [
+  { value: "user", label: t("admin.settings.customMenu.visibilityUser") },
+  { value: "admin", label: t("admin.settings.customMenu.visibilityAdmin") },
+]);
 const appStore = useAppStore();
 // 关闭 step-up 开关是敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 码重试
 const settingsStepUp = useStepUp();

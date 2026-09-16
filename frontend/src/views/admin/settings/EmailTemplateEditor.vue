@@ -56,39 +56,27 @@
             <label class="input-label" for="email-template-event">
               {{ t("admin.settings.emailTemplates.event") }}
             </label>
-            <select
+            <Select
               id="email-template-event"
               v-model="selectedEvent"
-              class="input"
+              :options="emailEventSelectOptions"
+              :searchable="true"
               :disabled="loadingTemplate || eventOptions.length === 0"
-            >
-              <option
-                v-for="option in eventOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ formatEventOptionLabel(option) }}
-              </option>
-            </select>
+              :aria-label="t('admin.settings.emailTemplates.event')"
+            />
           </div>
           <div>
             <label class="input-label" for="email-template-locale">
               {{ t("admin.settings.emailTemplates.locale") }}
             </label>
-            <select
+            <Select
               id="email-template-locale"
               v-model="selectedLocale"
-              class="input"
+              :options="emailLocaleSelectOptions"
+              :searchable="false"
               :disabled="loadingTemplate || localeOptions.length === 0"
-            >
-              <option
-                v-for="localeOption in localeOptions"
-                :key="localeOption"
-                :value="localeOption"
-              >
-                {{ formatLocale(localeOption) }}
-              </option>
-            </select>
+              :aria-label="t('admin.settings.emailTemplates.locale')"
+            />
           </div>
         </div>
 
@@ -238,6 +226,7 @@ import type {
   EmailTemplateOption,
 } from "@/api/admin/settings";
 import { useAppStore } from "@/stores";
+import Select from "@/components/common/Select.vue";
 import { extractApiErrorMessage } from "@/utils/apiError";
 
 const { t, locale } = useI18n();
@@ -496,6 +485,20 @@ function formatEventOptionLabel(option: EmailTemplateOption): string {
   if (!meta) return option.label || option.value;
   return meta.label;
 }
+
+const emailEventSelectOptions = computed(() =>
+  eventOptions.value.map((option) => ({
+    value: option.value,
+    label: formatEventOptionLabel(option),
+  })),
+);
+
+const emailLocaleSelectOptions = computed(() =>
+  localeOptions.value.map((localeOption) => ({
+    value: localeOption,
+    label: formatLocale(localeOption),
+  })),
+);
 
 function formatCategory(category: string): string {
   const normalized = category.trim().toLowerCase();
