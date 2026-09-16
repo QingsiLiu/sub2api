@@ -844,7 +844,7 @@ const loadApiKeys = async () => {
 const loadFilterOptions = async () => {
   const results = await Promise.allSettled([
     loadApiKeys().then(value => { apiKeys.value = value }),
-    userGroupsAPI.getAvailable().then(value => { groups.value = value }),
+    userGroupsAPI.getAvailable('balance').then(value => { groups.value = value }),
     subscriptionsAPI.getMySubscriptions().then(value => { filterSubscriptions.value = value }),
   ])
   results.forEach(result => { if (result.status === 'rejected') console.error('Failed to load usage filter options:', result.reason) })
