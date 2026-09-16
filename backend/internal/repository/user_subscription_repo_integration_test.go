@@ -9,6 +9,8 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/suite"
@@ -106,6 +108,32 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal(sub.UserID, got.UserID)
 	s.Require().Equal(sub.GroupID, got.GroupID)
+}
+
+func (s *UserSubscriptionRepoSuite) TestCreate_UnifiedFacadePrimaryEntitlementIsIdempotent() {
+	user := s.mustCreateUser("facade-create@test.com", service.RoleAdmin)
+	facade, err := s.client.Group.Query().
+		Where(group.NameEQ("全模型订阅"), group.PlatformEQ(service.PlatformComposite)).
+		Only(s.ctx)
+	s.Require().NoError(err, "unified facade must be present in migrated test schema")
+
+	sub := &service.UserSubscription{
+		UserID:    user.ID,
+		GroupID:   facade.ID,
+		Status:    service.SubscriptionStatusActive,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, sub), "facade assignment must tolerate trigger-created primary entitlement")
+	s.Require().NotZero(sub.ID)
+
+	links, err := s.client.UserSubscriptionGroup.Query().
+		Where(
+			usersubscriptiongroup.UserSubscriptionIDEQ(sub.ID),
+			usersubscriptiongroup.GroupIDEQ(facade.ID),
+		).
+		Count(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Equal(1, links, "primary entitlement must be stored exactly once")
 }
 
 func (s *UserSubscriptionRepoSuite) TestGetByID_WithPreloads() {

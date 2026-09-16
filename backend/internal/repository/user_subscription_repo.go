@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -84,7 +86,11 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 			SetUserSubscriptionID(created.ID).
 			SetGroupID(created.GroupID).
 			OnConflictColumns(usersubscriptiongroup.FieldUserSubscriptionID, usersubscriptiongroup.FieldGroupID).DoNothing().Exec(ctx)
-		if entitlementErr != nil {
+		// The unified-subscription trigger may have inserted this exact primary
+		// entitlement already. Ent's no-op upsert reports sql.ErrNoRows when the
+		// conflict path inserts nothing; that is a successful idempotent outcome,
+		// not a failed assignment.
+		if entitlementErr != nil && !errors.Is(entitlementErr, sql.ErrNoRows) {
 			return entitlementErr
 		}
 		applyUserSubscriptionEntityToService(sub, created)
