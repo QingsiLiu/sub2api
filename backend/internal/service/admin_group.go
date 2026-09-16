@@ -404,6 +404,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		normalizeCreateGroupInputForSimpleMode(input)
 	}
+	usagePanel, err := NormalizeUsagePanel(input.UsagePanel)
+	if err != nil {
+		return nil, err
+	}
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
 	}
@@ -585,6 +589,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Name:                            input.Name,
 		Description:                     input.Description,
 		Platform:                        platform,
+		UsagePanel:                      usagePanel,
 		RateMultiplier:                  input.RateMultiplier,
 		SubscriptionRateMultiplier:      input.SubscriptionRateMultiplier,
 		SubscriptionEnabled:             input.SubscriptionEnabled,
@@ -799,6 +804,13 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform
+	}
+	if input.UsagePanel != nil {
+		usagePanel, err := NormalizeUsagePanel(*input.UsagePanel)
+		if err != nil {
+			return nil, err
+		}
+		group.UsagePanel = usagePanel
 	}
 	if input.RateMultiplier != nil {
 		if *input.RateMultiplier <= 0 {

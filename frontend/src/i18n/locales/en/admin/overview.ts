@@ -855,6 +855,7 @@ export default {
         name: 'Name',
         description: 'Description',
         platform: 'Platform',
+        usagePanel: 'Usage panel',
         rateMultiplier: 'Rate Multiplier',
         subscriptionRateMultiplier: 'Subscription Rate Multiplier',
         status: 'Status',
@@ -917,6 +918,15 @@ export default {
       enterGroupName: 'Enter group name',
       optionalDescription: 'Optional description',
       platformHint: 'Select the platform this group is associated with',
+      usagePanelHint: 'The panel is for user selection and live routing. It is not the vendor protocol. An OpenAI-protocol group can belong to GPT or national models.',
+      usagePanelUnassigned: 'Unassigned',
+      usagePanels: {
+        gpt: 'GPT',
+        grok: 'Grok',
+        claude: 'Claude',
+        national: 'National',
+        gemini: 'Gemini'
+      },
       platformNotEditable: 'Platform cannot be changed after creation',
       saving: 'Saving...',
       noGroups: 'No groups yet',

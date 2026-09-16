@@ -52,6 +52,10 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0).
 			Comment("订阅请求倍率；余额请求使用 rate_multiplier"),
+		field.String("usage_panel").
+			MaxLen(20).
+			Default("").
+			Comment("用户选线板块，与 platform 协议独立；空表示未分配"),
 		// 高峰时段倍率（added by migration 158）
 		field.Bool("peak_rate_enabled").
 			Default(false).

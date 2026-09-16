@@ -32,6 +32,8 @@ const (
 	FieldSubscriptionEnabled = "subscription_enabled"
 	// FieldSubscriptionRateMultiplier holds the string denoting the subscription_rate_multiplier field in the database.
 	FieldSubscriptionRateMultiplier = "subscription_rate_multiplier"
+	// FieldUsagePanel holds the string denoting the usage_panel field in the database.
+	FieldUsagePanel = "usage_panel"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -253,6 +255,7 @@ var Columns = []string{
 	FieldRateMultiplier,
 	FieldSubscriptionEnabled,
 	FieldSubscriptionRateMultiplier,
+	FieldUsagePanel,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -356,6 +359,10 @@ var (
 	DefaultSubscriptionEnabled bool
 	// DefaultSubscriptionRateMultiplier holds the default value on creation for the "subscription_rate_multiplier" field.
 	DefaultSubscriptionRateMultiplier float64
+	// DefaultUsagePanel holds the default value on creation for the "usage_panel" field.
+	DefaultUsagePanel string
+	// UsagePanelValidator is a validator for the "usage_panel" field. It is called by the builders before save.
+	UsagePanelValidator func(string) error
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -510,6 +517,11 @@ func BySubscriptionEnabled(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionRateMultiplier orders the results by the subscription_rate_multiplier field.
 func BySubscriptionRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionRateMultiplier, opts...).ToFunc()
+}
+
+// ByUsagePanel orders the results by the usage_panel field.
+func ByUsagePanel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsagePanel, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

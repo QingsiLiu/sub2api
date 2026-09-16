@@ -98,6 +98,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
+		SetUsagePanel(groupIn.UsagePanel).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetSubscriptionRateMultiplier(groupIn.BillingRateMultiplier(true)).
 		SetSubscriptionEnabled(groupIn.SubscriptionEnabled).
@@ -288,6 +289,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetName(groupIn.Name).
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
+		SetUsagePanel(groupIn.UsagePanel).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetSubscriptionRateMultiplier(groupIn.BillingRateMultiplier(true)).
 		SetSubscriptionEnabled(groupIn.SubscriptionEnabled).

@@ -36,6 +36,8 @@ type Group struct {
 	SubscriptionEnabled bool `json:"subscription_enabled,omitempty"`
 	// 订阅请求倍率；余额请求使用 rate_multiplier
 	SubscriptionRateMultiplier float64 `json:"subscription_rate_multiplier,omitempty"`
+	// 用户选线板块，与 platform 协议独立；空表示未分配
+	UsagePanel string `json:"usage_panel,omitempty"`
 	// 是否启用高峰时段倍率
 	PeakRateEnabled bool `json:"peak_rate_enabled,omitempty"`
 	// 高峰开始时间 HH:MM（含），如 14:00；空表示未配置；不支持跨天
@@ -292,7 +294,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case group.FieldID, group.FieldDefaultValidityDays, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder, group.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
-		case group.FieldName, group.FieldDescription, group.FieldPeakStart, group.FieldPeakEnd, group.FieldStatus, group.FieldDuplicateOperationID, group.FieldPlatform, group.FieldSubscriptionType, group.FieldDefaultMappedModel, group.FieldMaxReasoningEffort, group.FieldMaxReasoningEffortOverLimit:
+		case group.FieldName, group.FieldDescription, group.FieldUsagePanel, group.FieldPeakStart, group.FieldPeakEnd, group.FieldStatus, group.FieldDuplicateOperationID, group.FieldPlatform, group.FieldSubscriptionType, group.FieldDefaultMappedModel, group.FieldMaxReasoningEffort, group.FieldMaxReasoningEffortOverLimit:
 			values[i] = new(sql.NullString)
 		case group.FieldCreatedAt, group.FieldUpdatedAt, group.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -366,6 +368,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field subscription_rate_multiplier", values[i])
 			} else if value.Valid {
 				_m.SubscriptionRateMultiplier = value.Float64
+			}
+		case group.FieldUsagePanel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_panel", values[i])
+			} else if value.Valid {
+				_m.UsagePanel = value.String
 			}
 		case group.FieldPeakRateEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -873,6 +881,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subscription_rate_multiplier=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionRateMultiplier))
+	builder.WriteString(", ")
+	builder.WriteString("usage_panel=")
+	builder.WriteString(_m.UsagePanel)
 	builder.WriteString(", ")
 	builder.WriteString("peak_rate_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PeakRateEnabled))

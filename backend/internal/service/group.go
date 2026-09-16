@@ -21,6 +21,7 @@ type Group struct {
 	Name                       string
 	Description                string
 	Platform                   string
+	UsagePanel                 string
 	RateMultiplier             float64
 	SubscriptionRateMultiplier *float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，

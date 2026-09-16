@@ -81,6 +81,16 @@ export default {
     legacySettlementHint: "修改结算方式后，此密钥将使用新的分组与订阅配置。",
     compositeKey: "复合 Key",
     orderedGroups: "分组与优先级",
+    usagePanels: "使用板块与优先级",
+    usagePanelHint: "板块用于选择和实时使用，与供应商协议无关。同一板块内可多选并调整顺序；请求按 GPT、Grok、Claude、国模、Gemini 的板块顺序尝试匹配模型的分组。",
+    usagePanelEmpty: "此板块还没有已分配的分组。请管理员在分组中配置使用板块。",
+    usagePanel: {
+      gpt: "GPT",
+      grok: "Grok",
+      claude: "Claude",
+      national: "国模",
+      gemini: "Gemini"
+    },
     groupFallbackHint: "按模型匹配已选分组，优先使用排在前面的分组；线路不可用时尝试后续分组，按最终线路倍率结算。订阅不可用时不会改扣余额。",
     moveUp: "提高优先级",
     moveDown: "降低优先级",

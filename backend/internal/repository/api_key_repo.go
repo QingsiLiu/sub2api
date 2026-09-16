@@ -993,6 +993,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Name:                            g.Name,
 		Description:                     derefString(g.Description),
 		Platform:                        g.Platform,
+		UsagePanel:                      g.UsagePanel,
 		RateMultiplier:                  g.RateMultiplier,
 		SubscriptionRateMultiplier:      &g.SubscriptionRateMultiplier,
 		SubscriptionEnabled:             g.SubscriptionEnabled,

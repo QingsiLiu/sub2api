@@ -186,6 +186,7 @@ type CreateGroupRequest struct {
 	Name                       string                        `json:"name" binding:"required"`
 	Description                string                        `json:"description"`
 	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
+	UsagePanel                 string                        `json:"usage_panel"`
 	RateMultiplier             float64                       `json:"rate_multiplier"`
 	SubscriptionRateMultiplier *float64                      `json:"subscription_rate_multiplier"`
 	IsExclusive                bool                          `json:"is_exclusive"`
@@ -262,6 +263,7 @@ type UpdateGroupRequest struct {
 	Name                       string                         `json:"name"`
 	Description                *string                        `json:"description"`
 	Platform                   string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
+	UsagePanel                 *string                        `json:"usage_panel"`
 	RateMultiplier             *float64                       `json:"rate_multiplier"`
 	SubscriptionRateMultiplier *float64                       `json:"subscription_rate_multiplier"`
 	IsExclusive                *bool                          `json:"is_exclusive"`
@@ -673,6 +675,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Name:                            req.Name,
 		Description:                     req.Description,
 		Platform:                        req.Platform,
+		UsagePanel:                      req.UsagePanel,
 		RateMultiplier:                  req.RateMultiplier,
 		SubscriptionRateMultiplier:      req.SubscriptionRateMultiplier,
 		SubscriptionEnabled:             req.SubscriptionEnabled,
@@ -820,6 +823,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Name:                            req.Name,
 		Description:                     req.Description,
 		Platform:                        req.Platform,
+		UsagePanel:                      req.UsagePanel,
 		RateMultiplier:                  req.RateMultiplier,
 		SubscriptionRateMultiplier:      req.SubscriptionRateMultiplier,
 		SubscriptionEnabled:             req.SubscriptionEnabled,

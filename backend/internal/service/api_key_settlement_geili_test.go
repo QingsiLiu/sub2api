@@ -46,6 +46,33 @@ func (r *explicitSubRepo) ListActiveByUserID(_ context.Context, id int64) ([]Use
 	return out, nil
 }
 
+type settlementUserRepo struct {
+	UserRepository
+	user *User
+}
+
+func (r *settlementUserRepo) GetByID(context.Context, int64) (*User, error) { return r.user, nil }
+
+type settlementGroupRepo struct {
+	GroupRepository
+	groups []Group
+}
+
+func (r *settlementGroupRepo) ListActive(context.Context) ([]Group, error) { return r.groups, nil }
+
+func TestGetSettlementGroupsExposeUsagePanel(t *testing.T) {
+	s := &APIKeyService{
+		userRepo: &settlementUserRepo{user: &User{ID: 7}},
+		groupRepo: &settlementGroupRepo{groups: []Group{
+			{ID: 1, Status: StatusActive, Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, SubscriptionEnabled: true},
+			{ID: 2, Status: StatusActive, Platform: PlatformOpenAI, UsagePanel: UsagePanelNational},
+		}},
+	}
+	groups, err := s.GetSettlementGroups(context.Background(), 7, BillingSourceBalance)
+	require.NoError(t, err)
+	require.Equal(t, []string{UsagePanelGPT, UsagePanelNational}, []string{groups[0].UsagePanel, groups[1].UsagePanel})
+}
+
 func TestExplicitSettlementSeparatesQuotaOwnerFromGroup(t *testing.T) {
 	ctx := context.Background()
 	gid := int64(1)

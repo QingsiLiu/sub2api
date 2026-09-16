@@ -162,7 +162,7 @@
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
-                <span v-if="row.billing_source && row.routing_mode === 'composite'" class="text-sm text-primary-600 dark:text-primary-400">{{ t('keys.compositeKey') }} · {{ t('keys.selectedGroupsCount', { count: row.group_ids?.length || 0 }) }}</span>
+                <span v-if="row.billing_source && row.routing_mode === 'composite'" class="text-sm text-primary-600 dark:text-primary-400">{{ t('keys.compositeKey') }} · {{ compositeKeySummary(row) }}</span>
                 <GroupBadge
                   v-else-if="row.group"
                   :name="row.group.name"
@@ -510,22 +510,36 @@
           </label>
         </div>
         <div v-if="formData.billing_source && formData.routing_mode === 'composite'" class="space-y-3">
-          <p class="input-label">{{ t('keys.orderedGroups') }}</p>
-          <div class="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-            <label v-for="group in settlementGroups" :key="group.id" class="flex items-center gap-2 text-sm">
-              <input data-test="key-group-choice" v-model="formData.group_ids" type="checkbox" :value="group.id" class="rounded border-gray-300 text-primary-600" />
+          <p class="input-label">{{ t('keys.usagePanels') }}</p>
+          <div v-for="panel in usagePanelOrder" :key="panel" class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+            <div class="flex items-center justify-between text-sm font-medium text-gray-800 dark:text-gray-100">
+              <span>{{ t(`keys.usagePanel.${panel}`) }}</span>
+              <span class="text-xs font-normal text-gray-500">{{ t('keys.selectedGroupsCount', { count: panelSelectedIds(panel).length }) }}</span>
+            </div>
+            <p v-if="!groupsForPanel(panel).length" class="input-hint">{{ t('keys.usagePanelEmpty') }}</p>
+            <label v-for="group in groupsForPanel(panel)" :key="group.id" class="flex items-center gap-2 text-sm">
+              <input
+                data-test="key-group-choice"
+                :data-panel="panel"
+                type="checkbox"
+                :value="group.id"
+                :checked="formData.group_ids.includes(group.id)"
+                class="rounded border-gray-300 text-primary-600"
+                @change="togglePanelGroup(panel, group.id, ($event.target as HTMLInputElement).checked)"
+              />
               <span>{{ group.name }} · ×{{ displayedGroupRate(group) }}</span>
             </label>
+            <ol v-if="panelSelectedIds(panel).length" class="space-y-2">
+              <li v-for="(id, index) in panelSelectedIds(panel)" :key="id" class="flex items-center justify-between gap-2 text-sm">
+                <span>{{ index + 1 }}. {{ settlementGroups.find(group => group.id === id)?.name || `#${id}` }}</span>
+                <div class="flex gap-1">
+                  <button type="button" class="btn btn-secondary btn-sm" :disabled="index===0" :aria-label="t('keys.moveUp')" :data-panel="panel" @click="movePanelGroup(panel, index, -1)">↑</button>
+                  <button type="button" class="btn btn-secondary btn-sm" :disabled="index===panelSelectedIds(panel).length-1" :aria-label="t('keys.moveDown')" :data-panel="panel" @click="movePanelGroup(panel, index, 1)">↓</button>
+                </div>
+              </li>
+            </ol>
           </div>
-          <ol class="space-y-2">
-            <li v-for="(id,index) in formData.group_ids" :key="id" class="flex items-center justify-between gap-2 text-sm">
-              <span>{{ index + 1 }}. {{ settlementGroups.find(group => group.id === id)?.name || `#${id}` }}</span>
-              <div class="flex gap-1">
-                <button type="button" class="btn btn-secondary btn-sm" :disabled="index===0" :aria-label="t('keys.moveUp')" @click="moveSelectedGroup(index,-1)">↑</button>
-                <button type="button" class="btn btn-secondary btn-sm" :disabled="index===formData.group_ids.length-1" :aria-label="t('keys.moveDown')" @click="moveSelectedGroup(index,1)">↓</button>
-              </div>
-            </li>
-          </ol>
+          <p class="input-hint">{{ t('keys.usagePanelHint') }}</p>
           <p class="input-hint">{{ t('keys.groupFallbackHint') }}</p>
         </div>
 
@@ -1250,6 +1264,7 @@ import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
 import { KEY_GROUP_PROVIDERS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
+import { USAGE_PANEL_ORDER, flattenPanelGroupIds, normalizeCompositeGroupIds, selectedUsagePanels, splitGroupIdsByPanel, type UsagePanel } from '@/utils/usagePanels'
 import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
@@ -1540,7 +1555,10 @@ watch([() => formData.value.billing_source, showCreateModal, showEditModal], asy
     settlementGroups.value = available
     activeSubscriptions.value = subscriptions
     if (formData.value.group_id && !available.some(group => group.id === formData.value.group_id)) formData.value.group_id = null
-    formData.value.group_ids = formData.value.group_ids.filter(id => available.some(group => group.id === id))
+    formData.value.group_ids = normalizeCompositeGroupIds(
+      formData.value.group_ids.filter(id => available.some(group => group.id === id)),
+      available
+    )
     if (source === 'balance') formData.value.subscription_id = null
     else if (subscriptions.length === 1 && !formData.value.subscription_id) formData.value.subscription_id = subscriptions[0].id
   } catch { appStore.showError(t('keys.failedToLoadRoutes')) }
@@ -1553,12 +1571,26 @@ watch(() => formData.value.routing_mode, mode => {
 })
 const displayedGroupRate = (group: Group) => userGroupRates.value[group.id] ??
   (formData.value.billing_source === 'subscription' ? (group.subscription_rate_multiplier ?? group.rate_multiplier) : group.rate_multiplier)
-const moveSelectedGroup = (index: number, delta: number) => {
-  const items = [...formData.value.group_ids]
+const usagePanelOrder = USAGE_PANEL_ORDER
+const groupsForPanel = (panel: UsagePanel) => settlementGroups.value.filter(group => group.usage_panel === panel)
+const panelSelectedIds = (panel: UsagePanel) => splitGroupIdsByPanel(formData.value.group_ids, settlementGroups.value).panels[panel]
+const togglePanelGroup = (_panel: UsagePanel, id: number, checked: boolean) => {
+  const next = checked ? [...formData.value.group_ids, id] : formData.value.group_ids.filter(groupId => groupId !== id)
+  formData.value.group_ids = normalizeCompositeGroupIds(next, settlementGroups.value)
+}
+const movePanelGroup = (panel: UsagePanel, index: number, delta: number) => {
+  const split = splitGroupIdsByPanel(formData.value.group_ids, settlementGroups.value)
+  const items = [...split.panels[panel]]
   const target = index + delta
   if (target < 0 || target >= items.length) return
   ;[items[index], items[target]] = [items[target], items[index]]
-  formData.value.group_ids = items
+  split.panels[panel] = items
+  formData.value.group_ids = flattenPanelGroupIds(split.panels, split.leftover)
+}
+const compositeKeySummary = (key: ApiKey) => {
+  const panels = selectedUsagePanels(key.group_ids ?? [], [...settlementGroups.value, ...groups.value])
+  if (panels.length) return panels.map(panel => t(`keys.usagePanel.${panel}`)).join(' · ')
+  return t('keys.selectedGroupsCount', { count: key.group_ids?.length || 0 })
 }
 const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
   const quota = sub.plan ?? sub.group

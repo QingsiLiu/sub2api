@@ -155,6 +155,20 @@ func (_u *GroupUpdate) AddSubscriptionRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetUsagePanel sets the "usage_panel" field.
+func (_u *GroupUpdate) SetUsagePanel(v string) *GroupUpdate {
+	_u.mutation.SetUsagePanel(v)
+	return _u
+}
+
+// SetNillableUsagePanel sets the "usage_panel" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableUsagePanel(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetUsagePanel(*v)
+	}
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1597,6 +1611,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UsagePanel(); ok {
+		if err := group.UsagePanelValidator(v); err != nil {
+			return &ValidationError{Name: "usage_panel", err: fmt.Errorf(`ent: validator failed for field "Group.usage_panel": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -1704,6 +1723,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedSubscriptionRateMultiplier(); ok {
 		_spec.AddField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsagePanel(); ok {
+		_spec.SetField(group.FieldUsagePanel, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -2552,6 +2574,20 @@ func (_u *GroupUpdateOne) SetNillableSubscriptionRateMultiplier(v *float64) *Gro
 // AddSubscriptionRateMultiplier adds value to the "subscription_rate_multiplier" field.
 func (_u *GroupUpdateOne) AddSubscriptionRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddSubscriptionRateMultiplier(v)
+	return _u
+}
+
+// SetUsagePanel sets the "usage_panel" field.
+func (_u *GroupUpdateOne) SetUsagePanel(v string) *GroupUpdateOne {
+	_u.mutation.SetUsagePanel(v)
+	return _u
+}
+
+// SetNillableUsagePanel sets the "usage_panel" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableUsagePanel(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetUsagePanel(*v)
+	}
 	return _u
 }
 
@@ -4010,6 +4046,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UsagePanel(); ok {
+		if err := group.UsagePanelValidator(v); err != nil {
+			return &ValidationError{Name: "usage_panel", err: fmt.Errorf(`ent: validator failed for field "Group.usage_panel": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PeakStart(); ok {
 		if err := group.PeakStartValidator(v); err != nil {
 			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
@@ -4134,6 +4175,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedSubscriptionRateMultiplier(); ok {
 		_spec.AddField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsagePanel(); ok {
+		_spec.SetField(group.FieldUsagePanel, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

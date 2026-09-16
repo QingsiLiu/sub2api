@@ -837,6 +837,7 @@ export default {
         name: '名称',
         description: '描述',
         platform: '平台',
+        usagePanel: '使用板块',
         rateMultiplier: '费率倍数',
         subscriptionRateMultiplier: '订阅费率倍数',
         status: '状态',
@@ -951,6 +952,15 @@ export default {
       enterGroupName: '请输入分组名称',
       optionalDescription: '可选描述',
       platformHint: '选择此分组关联的平台',
+      usagePanelHint: '板块用于用户选择和实时使用，与上方平台协议无关。OpenAI 协议的分组既可以是 GPT，也可以是国模。',
+      usagePanelUnassigned: '未分配',
+      usagePanels: {
+        gpt: 'GPT',
+        grok: 'Grok',
+        claude: 'Claude',
+        national: '国模',
+        gemini: 'Gemini'
+      },
       platformNotEditable: '创建后不可更改平台',
       noGroupsYet: '暂无分组',
       createFirstGroup: '创建您的第一个分组来组织 API 密钥。',

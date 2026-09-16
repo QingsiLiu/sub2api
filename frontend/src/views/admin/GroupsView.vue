@@ -521,6 +521,16 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
+        <div v-if="!authStore.isSimpleMode">
+          <label class="input-label">{{ t("admin.groups.form.usagePanel") }}</label>
+          <select v-model="createForm.usage_panel" class="input" data-test="group-usage-panel">
+            <option value="">{{ t("admin.groups.usagePanelUnassigned") }}</option>
+            <option v-for="panel in usagePanelOrder" :key="panel" :value="panel">
+              {{ t(`admin.groups.usagePanels.${panel}`) }}
+            </option>
+          </select>
+          <p class="input-hint">{{ t("admin.groups.usagePanelHint") }}</p>
+        </div>
         <!-- 从分组复制账号 -->
         <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2169,6 +2179,16 @@
             data-tour="group-form-platform"
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
+        </div>
+        <div v-if="!authStore.isSimpleMode">
+          <label class="input-label">{{ t("admin.groups.form.usagePanel") }}</label>
+          <select v-model="editForm.usage_panel" class="input" data-test="group-usage-panel-edit">
+            <option value="">{{ t("admin.groups.usagePanelUnassigned") }}</option>
+            <option v-for="panel in usagePanelOrder" :key="panel" :value="panel">
+              {{ t(`admin.groups.usagePanels.${panel}`) }}
+            </option>
+          </select>
+          <p class="input-hint">{{ t("admin.groups.usagePanelHint") }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
         <!-- 从分组复制账号（编辑时） -->
@@ -4319,11 +4339,13 @@ import type {
   CompositeRouteMatchType,
   GroupPlatform,
   SubscriptionType,
+  UsagePanel,
 } from "@/types";
 import {
   CONCRETE_PLATFORM_OPTIONS,
   GROUP_PLATFORM_OPTIONS,
 } from "@/constants/platforms";
+import { USAGE_PANEL_ORDER } from "@/utils/usagePanels";
 import type { Column } from "@/components/common/types";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
@@ -4640,6 +4662,7 @@ const exclusiveOptions = computed(() => [
   { value: "false", label: t("admin.groups.nonExclusive") },
 ]);
 
+const usagePanelOrder = USAGE_PANEL_ORDER
 const platformOptions = computed(() =>
   GROUP_PLATFORM_OPTIONS.filter(
     (option) => !authStore.isSimpleMode || option.value !== "composite",
@@ -4974,6 +4997,7 @@ const createForm = reactive({
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
+  usage_panel: "" as UsagePanel | "",
   rate_multiplier: 1.0,
   subscription_rate_multiplier: 1.0,
   subscription_enabled: false,
@@ -5340,6 +5364,7 @@ const editForm = reactive({
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
+  usage_panel: "" as UsagePanel | "",
   rate_multiplier: 1.0,
   subscription_rate_multiplier: 1.0,
   subscription_enabled: false,
@@ -5805,6 +5830,7 @@ const closeCreateModal = () => {
   createForm.name = "";
   createForm.description = "";
   createForm.platform = "anthropic";
+  createForm.usage_panel = "";
   createForm.rate_multiplier = 1.0;
   createForm.subscription_rate_multiplier = 1.0;
   createForm.subscription_enabled = false;
@@ -6076,6 +6102,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.name = group.name;
   editForm.description = group.description || "";
   editForm.platform = group.platform;
+  editForm.usage_panel = group.usage_panel || "";
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.subscription_rate_multiplier = group.subscription_rate_multiplier ?? group.rate_multiplier ?? 1.0;
   editForm.subscription_enabled = group.subscription_enabled ?? false;

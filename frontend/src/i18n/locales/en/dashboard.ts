@@ -81,6 +81,16 @@ export default {
     legacySettlementHint: "Changing settlement opts this key into the new group and subscription settings.",
     compositeKey: "Composite key",
     orderedGroups: "Groups and priority",
+    usagePanels: "Usage panels and priority",
+    usagePanelHint: "Panels are for selection and live routing, not the vendor protocol. Choose multiple groups inside a panel and order them. Requests try matching groups in GPT, Grok, Claude, national, then Gemini order.",
+    usagePanelEmpty: "No groups are assigned to this panel yet. Admins set the usage panel on each group.",
+    usagePanel: {
+      gpt: "GPT",
+      grok: "Grok",
+      claude: "Claude",
+      national: "National",
+      gemini: "Gemini"
+    },
     groupFallbackHint: "Models use the first matching selected group. An unavailable route can fall back to later groups, using the final route multiplier. An unavailable subscription never falls back to balance.",
     moveUp: "Move up",
     moveDown: "Move down",

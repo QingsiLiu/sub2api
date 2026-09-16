@@ -237,6 +237,7 @@ type CreateGroupInput struct {
 	Name                       string
 	Description                string
 	Platform                   string
+	UsagePanel                 string
 	RateMultiplier             float64
 	SubscriptionRateMultiplier *float64
 	IsExclusive                bool
@@ -319,6 +320,7 @@ type UpdateGroupInput struct {
 	Name                       string
 	Description                *string
 	Platform                   string
+	UsagePanel                 *string
 	RateMultiplier             *float64 // 使用指针以支持设置为0
 	SubscriptionRateMultiplier *float64
 	IsExclusive                *bool

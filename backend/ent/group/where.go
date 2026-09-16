@@ -95,6 +95,11 @@ func SubscriptionRateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSubscriptionRateMultiplier, v))
 }
 
+// UsagePanel applies equality check predicate on the "usage_panel" field. It's identical to UsagePanelEQ.
+func UsagePanel(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUsagePanel, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -713,6 +718,71 @@ func SubscriptionRateMultiplierLT(v float64) predicate.Group {
 // SubscriptionRateMultiplierLTE applies the LTE predicate on the "subscription_rate_multiplier" field.
 func SubscriptionRateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldSubscriptionRateMultiplier, v))
+}
+
+// UsagePanelEQ applies the EQ predicate on the "usage_panel" field.
+func UsagePanelEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUsagePanel, v))
+}
+
+// UsagePanelNEQ applies the NEQ predicate on the "usage_panel" field.
+func UsagePanelNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldUsagePanel, v))
+}
+
+// UsagePanelIn applies the In predicate on the "usage_panel" field.
+func UsagePanelIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldUsagePanel, vs...))
+}
+
+// UsagePanelNotIn applies the NotIn predicate on the "usage_panel" field.
+func UsagePanelNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldUsagePanel, vs...))
+}
+
+// UsagePanelGT applies the GT predicate on the "usage_panel" field.
+func UsagePanelGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldUsagePanel, v))
+}
+
+// UsagePanelGTE applies the GTE predicate on the "usage_panel" field.
+func UsagePanelGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldUsagePanel, v))
+}
+
+// UsagePanelLT applies the LT predicate on the "usage_panel" field.
+func UsagePanelLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldUsagePanel, v))
+}
+
+// UsagePanelLTE applies the LTE predicate on the "usage_panel" field.
+func UsagePanelLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldUsagePanel, v))
+}
+
+// UsagePanelContains applies the Contains predicate on the "usage_panel" field.
+func UsagePanelContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldUsagePanel, v))
+}
+
+// UsagePanelHasPrefix applies the HasPrefix predicate on the "usage_panel" field.
+func UsagePanelHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldUsagePanel, v))
+}
+
+// UsagePanelHasSuffix applies the HasSuffix predicate on the "usage_panel" field.
+func UsagePanelHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldUsagePanel, v))
+}
+
+// UsagePanelEqualFold applies the EqualFold predicate on the "usage_panel" field.
+func UsagePanelEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldUsagePanel, v))
+}
+
+// UsagePanelContainsFold applies the ContainsFold predicate on the "usage_panel" field.
+func UsagePanelContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldUsagePanel, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

@@ -136,6 +136,20 @@ func (_c *GroupCreate) SetNillableSubscriptionRateMultiplier(v *float64) *GroupC
 	return _c
 }
 
+// SetUsagePanel sets the "usage_panel" field.
+func (_c *GroupCreate) SetUsagePanel(v string) *GroupCreate {
+	_c.mutation.SetUsagePanel(v)
+	return _c
+}
+
+// SetNillableUsagePanel sets the "usage_panel" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableUsagePanel(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetUsagePanel(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -1119,6 +1133,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultSubscriptionRateMultiplier
 		_c.mutation.SetSubscriptionRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.UsagePanel(); !ok {
+		v := group.DefaultUsagePanel
+		_c.mutation.SetUsagePanel(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1306,6 +1324,14 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.SubscriptionRateMultiplier(); !ok {
 		return &ValidationError{Name: "subscription_rate_multiplier", err: errors.New(`ent: missing required field "Group.subscription_rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.UsagePanel(); !ok {
+		return &ValidationError{Name: "usage_panel", err: errors.New(`ent: missing required field "Group.usage_panel"`)}
+	}
+	if v, ok := _c.mutation.UsagePanel(); ok {
+		if err := group.UsagePanelValidator(v); err != nil {
+			return &ValidationError{Name: "usage_panel", err: fmt.Errorf(`ent: validator failed for field "Group.usage_panel": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1550,6 +1576,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubscriptionRateMultiplier(); ok {
 		_spec.SetField(group.FieldSubscriptionRateMultiplier, field.TypeFloat64, value)
 		_node.SubscriptionRateMultiplier = value
+	}
+	if value, ok := _c.mutation.UsagePanel(); ok {
+		_spec.SetField(group.FieldUsagePanel, field.TypeString, value)
+		_node.UsagePanel = value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -2084,6 +2114,18 @@ func (u *GroupUpsert) UpdateSubscriptionRateMultiplier() *GroupUpsert {
 // AddSubscriptionRateMultiplier adds v to the "subscription_rate_multiplier" field.
 func (u *GroupUpsert) AddSubscriptionRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldSubscriptionRateMultiplier, v)
+	return u
+}
+
+// SetUsagePanel sets the "usage_panel" field.
+func (u *GroupUpsert) SetUsagePanel(v string) *GroupUpsert {
+	u.Set(group.FieldUsagePanel, v)
+	return u
+}
+
+// UpdateUsagePanel sets the "usage_panel" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateUsagePanel() *GroupUpsert {
+	u.SetExcluded(group.FieldUsagePanel)
 	return u
 }
 
@@ -3236,6 +3278,20 @@ func (u *GroupUpsertOne) AddSubscriptionRateMultiplier(v float64) *GroupUpsertOn
 func (u *GroupUpsertOne) UpdateSubscriptionRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionRateMultiplier()
+	})
+}
+
+// SetUsagePanel sets the "usage_panel" field.
+func (u *GroupUpsertOne) SetUsagePanel(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUsagePanel(v)
+	})
+}
+
+// UpdateUsagePanel sets the "usage_panel" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateUsagePanel() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUsagePanel()
 	})
 }
 
@@ -4717,6 +4773,20 @@ func (u *GroupUpsertBulk) AddSubscriptionRateMultiplier(v float64) *GroupUpsertB
 func (u *GroupUpsertBulk) UpdateSubscriptionRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSubscriptionRateMultiplier()
+	})
+}
+
+// SetUsagePanel sets the "usage_panel" field.
+func (u *GroupUpsertBulk) SetUsagePanel(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUsagePanel(v)
+	})
+}
+
+// UpdateUsagePanel sets the "usage_panel" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateUsagePanel() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUsagePanel()
 	})
 }
 

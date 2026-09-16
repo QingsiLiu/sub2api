@@ -22634,6 +22634,7 @@ type GroupMutation struct {
 	subscription_enabled                    *bool
 	subscription_rate_multiplier            *float64
 	addsubscription_rate_multiplier         *float64
+	usage_panel                             *string
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -23203,6 +23204,42 @@ func (m *GroupMutation) AddedSubscriptionRateMultiplier() (r float64, exists boo
 func (m *GroupMutation) ResetSubscriptionRateMultiplier() {
 	m.subscription_rate_multiplier = nil
 	m.addsubscription_rate_multiplier = nil
+}
+
+// SetUsagePanel sets the "usage_panel" field.
+func (m *GroupMutation) SetUsagePanel(s string) {
+	m.usage_panel = &s
+}
+
+// UsagePanel returns the value of the "usage_panel" field in the mutation.
+func (m *GroupMutation) UsagePanel() (r string, exists bool) {
+	v := m.usage_panel
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsagePanel returns the old "usage_panel" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldUsagePanel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsagePanel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsagePanel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsagePanel: %w", err)
+	}
+	return oldValue.UsagePanel, nil
+}
+
+// ResetUsagePanel resets all changes to the "usage_panel" field.
+func (m *GroupMutation) ResetUsagePanel() {
+	m.usage_panel = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -26673,7 +26710,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 68)
+	fields := make([]string, 0, 69)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26697,6 +26734,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.subscription_rate_multiplier != nil {
 		fields = append(fields, group.FieldSubscriptionRateMultiplier)
+	}
+	if m.usage_panel != nil {
+		fields = append(fields, group.FieldUsagePanel)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -26902,6 +26942,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionEnabled()
 	case group.FieldSubscriptionRateMultiplier:
 		return m.SubscriptionRateMultiplier()
+	case group.FieldUsagePanel:
+		return m.UsagePanel()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -27047,6 +27089,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldSubscriptionEnabled(ctx)
 	case group.FieldSubscriptionRateMultiplier:
 		return m.OldSubscriptionRateMultiplier(ctx)
+	case group.FieldUsagePanel:
+		return m.OldUsagePanel(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -27231,6 +27275,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSubscriptionRateMultiplier(v)
+		return nil
+	case group.FieldUsagePanel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsagePanel(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -28198,6 +28249,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldSubscriptionRateMultiplier:
 		m.ResetSubscriptionRateMultiplier()
+		return nil
+	case group.FieldUsagePanel:
+		m.ResetUsagePanel()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

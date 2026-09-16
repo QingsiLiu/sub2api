@@ -540,6 +540,8 @@ export interface PaginationConfig {
 
 export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'composite'
 
+export type UsagePanel = 'gpt' | 'grok' | 'claude' | 'national' | 'gemini'
+
 export type VideoModelPrices = Record<string, Record<string, number>>
 
 export type SubscriptionType = 'standard' | 'subscription'
@@ -566,6 +568,7 @@ export interface Group {
   name: string
   description: string | null
   platform: GroupPlatform
+  usage_panel?: UsagePanel | ''
   rate_multiplier: number
   subscription_rate_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
@@ -812,6 +815,7 @@ export interface CreateGroupRequest {
   name: string
   description?: string | null
   platform?: GroupPlatform
+  usage_panel?: UsagePanel | ''
   rate_multiplier?: number
   subscription_rate_multiplier?: number
   is_exclusive?: boolean
@@ -879,6 +883,7 @@ export interface UpdateGroupRequest {
   name?: string
   description?: string | null
   platform?: GroupPlatform
+  usage_panel?: UsagePanel | ''
   rate_multiplier?: number
   subscription_rate_multiplier?: number
   is_exclusive?: boolean

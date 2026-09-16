@@ -553,8 +553,9 @@ describe('user KeysView column settings', () => {
 
   describe('explicit settlement and ordered groups', () => {
     const availableGroups = [
-      { id: 1, name: 'GPT stable', platform: 'openai', rate_multiplier: 1, subscription_rate_multiplier: 1.2, subscription_type: 'standard' },
-      { id: 2, name: 'National custom', platform: 'openai', rate_multiplier: 0.5, subscription_rate_multiplier: 0.8, subscription_type: 'standard' },
+      { id: 1, name: 'GPT stable', platform: 'openai', usage_panel: 'gpt', rate_multiplier: 1, subscription_rate_multiplier: 1.2, subscription_type: 'standard' },
+      { id: 2, name: 'National custom', platform: 'openai', usage_panel: 'national', rate_multiplier: 0.5, subscription_rate_multiplier: 0.8, subscription_type: 'standard' },
+      { id: 3, name: 'GPT pro', platform: 'openai', usage_panel: 'gpt', rate_multiplier: 0.25, subscription_rate_multiplier: 0.3, subscription_type: 'standard' },
     ]
     const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
     const openCreate = async () => {
@@ -570,7 +571,7 @@ describe('user KeysView column settings', () => {
     it('defaults to balance and lists actual groups regardless of protocol', async () => {
       const wrapper = await openCreate()
       expect(wrapper.get<HTMLSelectElement>('#key-billing-source').element.value).toBe('balance')
-      expect(groupSelect(wrapper).props('options').map((g: {value:number}) => g.value)).toEqual([1, 2])
+      expect(groupSelect(wrapper).props('options').map((g: {value:number}) => g.value)).toEqual([1, 2, 3])
       expect(wrapper.find('#key-subscription').exists()).toBe(false)
       expect(getAvailableGroups).toHaveBeenCalledWith('balance')
     })
@@ -603,20 +604,38 @@ describe('user KeysView column settings', () => {
       await flushPromises()
       expect(wrapper.get<HTMLSelectElement>('#key-subscription').element.selectedIndex).toBe(0)
     })
-    it('saves two OpenAI groups in the chosen priority order', async () => {
+    it('saves GPT then national in the fixed panel order', async () => {
       const wrapper = await openCreate()
       await wrapper.get('[data-tour="key-form-name"]').setValue('Composite')
       await wrapper.get('[data-test="composite-key-toggle"]').setValue(true)
-      const choices = wrapper.findAll('[data-test="key-group-choice"]')
-      await choices[0].setValue(true)
-      await choices[1].setValue(true)
-      await wrapper.findAll('button[aria-label="keys.moveUp"]')[1].trigger('click')
+      const national = wrapper.get('[data-test="key-group-choice"][data-panel="national"]')
+      const gpt = wrapper.get('[data-test="key-group-choice"][data-panel="gpt"]')
+      await national.setValue(true)
+      await gpt.setValue(true)
       vi.mocked(keysAPI.create).mockResolvedValue(createApiKey())
       await wrapper.get('#key-form').trigger('submit')
       await flushPromises()
       const args = vi.mocked(keysAPI.create).mock.calls[0]
       expect(args[1]).toBeNull()
-      expect(args.at(-1)).toEqual({ billing_source:'balance', routing_mode:'composite', group_ids:[2,1] })
+      expect(args.at(-1)).toEqual({ billing_source:'balance', routing_mode:'composite', group_ids:[1, 2] })
+    })
+    it('keeps intra-panel order when two GPT groups are selected', async () => {
+      const wrapper = await openCreate()
+      await wrapper.get('[data-tour="key-form-name"]').setValue('GPT pair')
+      await wrapper.get('[data-test="composite-key-toggle"]').setValue(true)
+      const gptChoices = wrapper.findAll('[data-test="key-group-choice"][data-panel="gpt"]')
+      await gptChoices[0].setValue(true)
+      await gptChoices[1].setValue(true)
+      const gptMoveUp = wrapper.findAll('[data-panel="gpt"][aria-label="keys.moveUp"]')
+      await gptMoveUp[1].trigger('click')
+      vi.mocked(keysAPI.create).mockResolvedValue(createApiKey())
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(vi.mocked(keysAPI.create).mock.calls[0].at(-1)).toEqual({
+        billing_source: 'balance',
+        routing_mode: 'composite',
+        group_ids: [3, 1]
+      })
     })
     it('keeps legacy settlement until explicitly changed', async () => {
       const wrapper = await mountView()
@@ -625,7 +644,7 @@ describe('user KeysView column settings', () => {
       expect(wrapper.text()).toContain('keys.legacySettlementHint')
       await wrapper.get('#key-billing-source').setValue('balance')
       await flushPromises()
-      expect(groupSelect(wrapper).props('options')).toHaveLength(2)
+      expect(groupSelect(wrapper).props('options')).toHaveLength(3)
     })
   })
 })
