@@ -82,7 +82,7 @@ export default {
     compositeKey: "Composite key",
     orderedGroups: "Groups and priority",
     usagePanels: "Usage panels and priority",
-    usagePanelHint: "Panels are for selection and live routing, not the vendor protocol. Choose multiple groups inside a panel and order them. Requests try matching groups in GPT, Grok, Claude, national, then Gemini order.",
+    usagePanelHint: "Selected groups are tried in numbered order. Requests match panels in GPT, Grok, Claude, national, then Gemini order.",
     usagePanelEmpty: "No groups are assigned to this panel yet. Admins set the usage panel on each group.",
     usagePanel: {
       gpt: "GPT",
@@ -94,6 +94,7 @@ export default {
     groupFallbackHint: "Models use the first matching selected group. An unavailable route can fall back to later groups, using the final route multiplier. An unavailable subscription never falls back to balance.",
     moveUp: "Move up",
     moveDown: "Move down",
+    priorityRank: "Priority {rank}",
     remainingQuota: "Remaining quota",
     noActiveSubscription: "No active subscription. Purchase a subscription or choose balance settlement.",
     subscriptionGroupEnabled: "Allow subscription settlement",
