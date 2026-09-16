@@ -936,9 +936,6 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 				}
 			}
 
-			if fresh.Group != nil {
-				group = fresh.Group
-			}
 		}
 	} else {
 		subData, err = s.GetSubscriptionStatus(ctx, userID, group.ID)
