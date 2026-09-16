@@ -183,10 +183,11 @@ func (userSubRepoNoop) BatchUpdateExpiredStatus(context.Context) (int64, error) 
 type subscriptionUserSubRepoStub struct {
 	userSubRepoNoop
 
-	nextID      int64
-	byID        map[int64]*UserSubscription
-	byUserGroup map[string]*UserSubscription
-	createCalls int
+	nextID              int64
+	byID                map[int64]*UserSubscription
+	byUserGroup         map[string]*UserSubscription
+	createCalls         int
+	postCreateGetErrors int
 }
 
 func newSubscriptionUserSubRepoStub() *subscriptionUserSubRepoStub {
@@ -245,6 +246,10 @@ func (s *subscriptionUserSubRepoStub) Create(_ context.Context, sub *UserSubscri
 }
 
 func (s *subscriptionUserSubRepoStub) GetByID(_ context.Context, id int64) (*UserSubscription, error) {
+	if s.postCreateGetErrors > 0 {
+		s.postCreateGetErrors--
+		return nil, ErrSubscriptionNotFound
+	}
 	sub := s.byID[id]
 	if sub == nil {
 		return nil, ErrSubscriptionNotFound
@@ -303,6 +308,28 @@ func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 	require.Equal(t, 0, subRepo.createCalls, "reuse should not create new subscription")
 	require.Equal(t, start, sub.StartsAt)
 	require.Equal(t, start.AddDate(0, 0, 30), sub.ExpiresAt)
+}
+
+func TestAssignSubscriptionReturnsCommittedRecordAfterTransientDetailReload(t *testing.T) {
+	groupRepo := &subscriptionGroupRepoStub{
+		group: &Group{ID: 1, SubscriptionType: SubscriptionTypeSubscription},
+	}
+	subRepo := newSubscriptionUserSubRepoStub()
+	// Simulate a short read-after-write gap in the detail/preload query. The
+	// Create operation itself has already committed the subscription row.
+	subRepo.postCreateGetErrors = 2
+	svc := &SubscriptionService{groupRepo: groupRepo, userSubRepo: subRepo}
+
+	sub, err := svc.AssignSubscription(context.Background(), &AssignSubscriptionInput{
+		UserID:  42,
+		GroupID: 1,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, sub)
+	require.Equal(t, int64(1), sub.ID)
+	require.Equal(t, int64(42), sub.UserID)
+	require.Equal(t, int64(1), sub.GroupID)
 }
 
 func TestAssignSubscriptionDoesNotReactivateFutureSuspendedSubscription(t *testing.T) {

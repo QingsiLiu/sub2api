@@ -443,8 +443,29 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 		return nil, err
 	}
 
-	// 重新获取完整订阅信息（包含关联）
-	return s.userSubRepo.GetByID(ctx, sub.ID)
+	// 重新获取完整订阅信息（包含关联）。创建已经成功提交时，某些数据库/读路径
+	// 可能在极短窗口内暂时读不到刚写入的行；不能把这种回读异常报告为“分配失败”，
+	// 否则会出现前端报错但订阅实际已创建的情况。短暂重试后返回已提交的记录，
+	// 下一次列表刷新会补齐关联字段。
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		loaded, loadErr := s.userSubRepo.GetByID(ctx, sub.ID)
+		if loadErr == nil {
+			return loaded, nil
+		}
+		lastErr = loadErr
+		if attempt < 2 {
+			timer := time.NewTimer(time.Duration(attempt+1) * 25 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	log.Printf("subscription created but detail reload failed; returning committed record: subscription_id=%d user_id=%d group_id=%d err=%v", sub.ID, sub.UserID, sub.GroupID, lastErr)
+	return sub, nil
 }
 
 // BulkAssignSubscriptionInput 批量分配订阅输入
