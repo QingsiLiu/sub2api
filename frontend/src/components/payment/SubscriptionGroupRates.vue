@@ -6,18 +6,16 @@
     </div>
     <div class="space-y-3">
       <section v-for="section in sections" :key="section.panel || 'other'">
-        <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-          {{ section.label }}
-        </p>
-        <div class="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 dark:divide-dark-700 dark:border-dark-700">
-          <div
+        <p class="mb-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ section.label }}</p>
+        <div class="flex flex-wrap gap-1.5">
+          <GroupBadge
             v-for="row in section.rows"
             :key="row.id"
-            class="flex items-center justify-between gap-3 bg-white px-3 py-2 dark:bg-dark-800"
-          >
-            <span class="min-w-0 truncate text-sm text-gray-700 dark:text-gray-200">{{ row.name }}</span>
-            <span class="shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">×{{ formatRate(row.subscription_rate_multiplier) }}</span>
-          </div>
+            :name="row.name"
+            :platform="row.platform"
+            :rate-multiplier="row.subscription_rate_multiplier"
+            always-show-rate
+          />
         </div>
       </section>
     </div>
@@ -27,6 +25,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import GroupBadge from '@/components/common/GroupBadge.vue'
 import type { CheckoutGroupRate } from '@/types/payment'
 
 const PANEL_ORDER = ['gpt', 'grok', 'claude', 'national', 'gemini'] as const
@@ -49,9 +48,4 @@ const sections = computed(() => {
     rows: buckets.get(panel) ?? [],
   }))
 })
-
-function formatRate(value: number) {
-  if (!Number.isFinite(value)) return '1'
-  return Number(value.toFixed(2)).toString()
-}
 </script>

@@ -200,16 +200,19 @@
                 <div class="space-y-2">
                   <div v-for="sub in activeSubscriptions" :key="sub.id"
                     class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-800">
-                    <div :class="['h-6 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
+                    <div :class="['h-6 w-1 shrink-0 rounded-full', sub.plan ? 'bg-primary-500' : platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5">
                         <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel') }}</span>
-                        <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
+                        <span v-if="!sub.plan && sub.group" :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group.platform || '')]">{{ platformLabel(sub.group.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
-                        <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.subscription_rate_multiplier ?? sub.group?.rate_multiplier ?? 1 }}</span>
-                        <span v-if="subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
-                        <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
+                        <span v-if="!sub.plan && sub.group">{{ t('payment.planCard.rate') }}: ×{{ sub.group.subscription_rate_multiplier ?? sub.group.rate_multiplier ?? 1 }}</span>
+                        <span v-if="!sub.plan && subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
+                        <span v-if="subscriptionQuota(sub).daily != null">{{ t('payment.planCard.dailyLimit') }} ${{ subscriptionQuota(sub).daily }}</span>
+                        <span v-if="subscriptionQuota(sub).weekly != null">{{ t('payment.planCard.weeklyLimit') }} ${{ subscriptionQuota(sub).weekly }}</span>
+                        <span v-if="subscriptionQuota(sub).monthly != null">{{ t('payment.planCard.monthlyLimit') }} ${{ subscriptionQuota(sub).monthly }}</span>
+                        <span v-if="!subscriptionQuota(sub).daily && !subscriptionQuota(sub).weekly && !subscriptionQuota(sub).monthly">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
@@ -318,6 +321,15 @@ const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+}
+
+function subscriptionQuota(sub: { plan?: { daily_limit_usd?: number | null; weekly_limit_usd?: number | null; monthly_limit_usd?: number | null } | null; group?: { daily_limit_usd?: number | null; weekly_limit_usd?: number | null; monthly_limit_usd?: number | null } | null }) {
+  const source = sub.plan ?? sub.group
+  return {
+    daily: source?.daily_limit_usd ?? null,
+    weekly: source?.weekly_limit_usd ?? null,
+    monthly: source?.monthly_limit_usd ?? null,
+  }
 }
 
 function subscriptionHasPeakRate(sub: { group?: PeakRateFields | null }): boolean {

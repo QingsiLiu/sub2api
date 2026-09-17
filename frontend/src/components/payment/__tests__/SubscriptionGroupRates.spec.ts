@@ -40,16 +40,24 @@ describe('SubscriptionGroupRates', () => {
           rate({ id: 4, name: 'GPT 稳定', subscription_rate_multiplier: 1 }),
         ],
       },
-      global: { plugins: [i18n] },
+      global: {
+        plugins: [i18n],
+        stubs: {
+          GroupBadge: {
+            props: ['name', 'rateMultiplier'],
+            template: '<span>{{ name }} {{ rateMultiplier }}x</span>',
+          },
+        },
+      },
     })
 
     const text = wrapper.text()
     expect(text).toContain('GPT 稳定')
     expect(text).toContain('GPT 给力 Pro')
     expect(text).toContain('CC-满血 Max')
-    expect(text).toContain('×1')
-    expect(text).toContain('×1.3')
-    expect(text).toContain('×8')
+    expect(text).toContain('1x')
+    expect(text).toContain('1.3x')
+    expect(text).toContain('8x')
     expect(text).not.toContain('#4')
     expect(text).not.toContain('#27')
   })

@@ -408,7 +408,7 @@ export default {
     rechargeAccount: '充值账户',
     groupRates: {
       title: '分组订阅倍率',
-      hint: '以分组管理里的订阅倍率为准，保存后刷新或回到本页即更新。',
+      hint: '实际消耗按各分组当前订阅倍率计算，后台改完回到本页即更新。',
       other: '其他',
     },
     activeSubscription: '当前订阅',

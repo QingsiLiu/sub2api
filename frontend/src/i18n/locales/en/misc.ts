@@ -384,7 +384,7 @@ export default {
     rechargeAccount: 'Recharge Account',
     groupRates: {
       title: 'Group subscription rates',
-      hint: 'These come from group settings. Refresh or return to this page after an admin save.',
+      hint: 'Usage is billed at each group’s current subscription rate. Return to this page after an admin save.',
       other: 'Other',
     },
     activeSubscription: 'Active Subscription',
