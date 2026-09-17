@@ -1603,7 +1603,7 @@ const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
   if (quota?.weekly_limit_usd && quota.weekly_limit_usd > 0) available.push(Math.max(0, quota.weekly_limit_usd - sub.weekly_usage_usd))
   if (quota?.monthly_limit_usd && quota.monthly_limit_usd > 0) available.push(Math.max(0, quota.monthly_limit_usd - sub.monthly_usage_usd))
   const remaining = available.length ? '$' + Math.min(...available).toFixed(4) : t('payment.admin.unlimited')
-  return `#${sub.id} · ${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
+  return `${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
 }
 
 const subscriptionOptions = computed(() => [
@@ -1617,7 +1617,7 @@ const subscriptionOptions = computed(() => [
 const legacySubscriptionOptions = computed(() =>
   eligibleSubscriptions.value.map((subscription) => ({
     value: subscription.id,
-    label: `#${subscription.id} · ${subscription.group?.name || `Group ${subscription.group_id}`}`,
+    label: subscriptionOptionLabel(subscription),
   })),
 )
 

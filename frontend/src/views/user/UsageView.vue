@@ -433,7 +433,7 @@ const modelOptions = computed<SelectOption[]>(() => [
 const filterSubscriptions = ref<import('@/types').UserSubscription[]>([])
 const subscriptionOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('keys.allSubscriptions') },
-  ...filterSubscriptions.value.map(sub => ({ value: sub.id, label: `#${sub.id} · ${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')}` }))
+  ...filterSubscriptions.value.map(sub => ({ value: sub.id, label: sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel') }))
 ])
 
 const normalizedFilters = computed<UsageQueryParams>(() => {
