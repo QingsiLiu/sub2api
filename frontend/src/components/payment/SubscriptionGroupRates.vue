@@ -12,7 +12,7 @@
             v-for="row in section.rows"
             :key="row.id"
             :name="row.name"
-            :platform="row.platform"
+            :platform="groupPlatform(row.platform)"
             :rate-multiplier="row.subscription_rate_multiplier"
             always-show-rate
           />
@@ -27,6 +27,15 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import type { CheckoutGroupRate } from '@/types/payment'
+import type { GroupPlatform } from '@/types'
+
+const GROUP_PLATFORMS: readonly GroupPlatform[] = [
+  'anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'composite',
+]
+
+function groupPlatform(value: string): GroupPlatform | undefined {
+  return GROUP_PLATFORMS.includes(value as GroupPlatform) ? value as GroupPlatform : undefined
+}
 
 const PANEL_ORDER = ['gpt', 'grok', 'claude', 'national', 'gemini'] as const
 
