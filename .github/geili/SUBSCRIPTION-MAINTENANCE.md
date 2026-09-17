@@ -9,5 +9,6 @@
 - 每次上游同步必须运行 `.github/geili/verify.sh`、双分组订阅测试、迁移重复执行检查和 staging 冒烟。
 - 发布版本使用 `<upstream-version>-geili.<n>`，并记录上游基线、冲突处理、测试结果和镜像摘要。
 
-同步流程使用 `.github/geili/sync-upstream.sh`，不要直接在 `upstream/main` 开发；建议启用
+同步流程使用 `.github/geili/sync-upstream.sh`，不要直接在 `upstream/main` 开发。日常开发在 `geili/main`。
+同步时不得用上游树覆盖现网 0.2.5 线；冲突按保留 Geili 计费/订阅行为处理。建议启用
 `git config rerere.enabled true` 记录重复冲突的解决方案。

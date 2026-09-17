@@ -163,3 +163,9 @@ output/
 /sub2api
 
 __pycache__/
+
+# Geili：Agent 入口必须入库，覆盖上游对 AGENTS.md / CLAUDE.md 的忽略
+!AGENTS.md
+!CLAUDE.md
+!.cursor/rules/
+!.cursor/rules/**
