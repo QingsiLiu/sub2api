@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -125,7 +126,7 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 		m[int64(g.ID)] = PlanGroupInfo{
 			Platform:           g.Platform,
 			Name:               g.Name,
-			RateMultiplier:     g.RateMultiplier,
+			RateMultiplier:     g.SubscriptionRateMultiplier,
 			PeakRateEnabled:    g.PeakRateEnabled,
 			PeakStart:          g.PeakStart,
 			PeakEnd:            g.PeakEnd,
@@ -137,6 +138,102 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 		}
 	}
 	return m
+}
+
+// CheckoutGroupRate is the live subscription multiplier shown on the purchase page.
+type CheckoutGroupRate struct {
+	ID                         int64   `json:"id"`
+	Name                       string  `json:"name"`
+	Platform                   string  `json:"platform"`
+	UsagePanel                 string  `json:"usage_panel"`
+	SubscriptionRateMultiplier float64 `json:"subscription_rate_multiplier"`
+}
+
+type checkoutGroupInput struct {
+	ID                         int64
+	Name                       string
+	Platform                   string
+	UsagePanel                 string
+	SubscriptionType           string
+	IsExclusive                bool
+	SubscriptionRateMultiplier float64
+	SortOrder                  int
+}
+
+func checkoutPanelRank(panel string) int {
+	switch panel {
+	case "gpt":
+		return 0
+	case "grok":
+		return 1
+	case "claude":
+		return 2
+	case "national":
+		return 3
+	case "gemini":
+		return 4
+	default:
+		return 5
+	}
+}
+
+func selectCheckoutGroupRates(rows []checkoutGroupInput) []CheckoutGroupRate {
+	out := make([]CheckoutGroupRate, 0, len(rows))
+	for _, row := range rows {
+		if row.IsExclusive || row.SubscriptionType == SubscriptionTypeSubscription || row.Platform == PlatformComposite {
+			continue
+		}
+		out = append(out, CheckoutGroupRate{
+			ID:                         row.ID,
+			Name:                       row.Name,
+			Platform:                   row.Platform,
+			UsagePanel:                 row.UsagePanel,
+			SubscriptionRateMultiplier: row.SubscriptionRateMultiplier,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		pi, pj := checkoutPanelRank(out[i].UsagePanel), checkoutPanelRank(out[j].UsagePanel)
+		if pi != pj {
+			return pi < pj
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// ListCheckoutGroupRates returns active standard groups and their current
+// subscription_rate_multiplier. Leftover 周卡/月卡 and exclusive groups stay off
+// the public board; admin edits show up on the next checkout-info read.
+func (s *PaymentConfigService) ListCheckoutGroupRates(ctx context.Context) ([]CheckoutGroupRate, error) {
+	if s == nil || s.entClient == nil {
+		return []CheckoutGroupRate{}, nil
+	}
+	groups, err := s.entClient.Group.Query().
+		Where(
+			group.StatusEQ(StatusActive),
+			group.IsExclusiveEQ(false),
+			group.SubscriptionTypeNEQ(SubscriptionTypeSubscription),
+			group.PlatformNEQ(PlatformComposite),
+		).
+		Order(dbent.Asc(group.FieldSortOrder), dbent.Asc(group.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]checkoutGroupInput, 0, len(groups))
+	for _, g := range groups {
+		rows = append(rows, checkoutGroupInput{
+			ID:                         int64(g.ID),
+			Name:                       g.Name,
+			Platform:                   g.Platform,
+			UsagePanel:                 g.UsagePanel,
+			SubscriptionType:           g.SubscriptionType,
+			IsExclusive:                g.IsExclusive,
+			SubscriptionRateMultiplier: g.SubscriptionRateMultiplier,
+			SortOrder:                  g.SortOrder,
+		})
+	}
+	return selectCheckoutGroupRates(rows), nil
 }
 
 func (s *PaymentConfigService) ListPlans(ctx context.Context) ([]*dbent.SubscriptionPlan, error) {

@@ -406,6 +406,11 @@ export default {
     currentBalance: '当前余额',
     groupFallback: '分组 #{id}',
     rechargeAccount: '充值账户',
+    groupRates: {
+      title: '分组订阅倍率',
+      hint: '以分组管理里的订阅倍率为准，保存后刷新或回到本页即更新。',
+      other: '其他',
+    },
     activeSubscription: '当前订阅',
     noActiveSubscription: '暂无有效订阅',
     tabTopUp: '充值',

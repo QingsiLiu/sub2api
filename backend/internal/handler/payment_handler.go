@@ -147,12 +147,17 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			ProductName: p.ProductName,
 		})
 	}
+	groupRates, _ := h.configService.ListCheckoutGroupRates(ctx)
+	if groupRates == nil {
+		groupRates = []service.CheckoutGroupRate{}
+	}
 
 	response.Success(c, checkoutInfoResponse{
 		Methods:                       limitsResp.Methods,
 		GlobalMin:                     limitsResp.GlobalMin,
 		GlobalMax:                     limitsResp.GlobalMax,
 		Plans:                         planList,
+		GroupRates:                    groupRates,
 		BalanceDisabled:               cfg.BalanceDisabled,
 		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
 		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
@@ -170,6 +175,7 @@ type checkoutInfoResponse struct {
 	GlobalMin                     float64                         `json:"global_min"`
 	GlobalMax                     float64                         `json:"global_max"`
 	Plans                         []checkoutPlan                  `json:"plans"`
+	GroupRates                    []service.CheckoutGroupRate     `json:"group_rates"`
 	BalanceDisabled               bool                            `json:"balance_disabled"`
 	BalanceRechargeMultiplier     float64                         `json:"balance_recharge_multiplier"`
 	SubscriptionUSDToCNYRate      float64                         `json:"subscription_usd_to_cny_rate"`

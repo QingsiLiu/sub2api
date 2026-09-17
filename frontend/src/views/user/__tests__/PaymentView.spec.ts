@@ -5,6 +5,7 @@ import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
+import SubscriptionGroupRates from '@/components/payment/SubscriptionGroupRates.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
@@ -356,6 +357,31 @@ describe('PaymentView help text', () => {
     const wrapper = await mountHelp('', 'https://example.com/help.png')
     expect(wrapper.find('.markdown-body').exists()).toBe(false)
     expect(wrapper.get('img').attributes('src')).toBe('https://example.com/help.png')
+  })
+})
+
+describe('PaymentView group subscription rates', () => {
+  it('passes live checkout group rates to the purchase board', async () => {
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      group_rates: [
+        { id: 4, name: 'GPT 稳定', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1 },
+        { id: 27, name: 'GPT 给力 Pro', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1.3 },
+      ],
+    }))
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.findComponent(SubscriptionGroupRates).props('rates')).toEqual([
+      { id: 4, name: 'GPT 稳定', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1 },
+      { id: 27, name: 'GPT 给力 Pro', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1.3 },
+    ])
   })
 })
 

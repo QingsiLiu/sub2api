@@ -382,6 +382,11 @@ export default {
     currentBalance: 'Current Balance',
     groupFallback: 'Group #{id}',
     rechargeAccount: 'Recharge Account',
+    groupRates: {
+      title: 'Group subscription rates',
+      hint: 'These come from group settings. Refresh or return to this page after an admin save.',
+      other: 'Other',
+    },
     activeSubscription: 'Active Subscription',
     noActiveSubscription: 'No active subscription',
     tabTopUp: 'Top Up',

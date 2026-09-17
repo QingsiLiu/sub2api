@@ -60,12 +60,22 @@ export interface MethodLimitsResponse {
   global_max: number  // widest max across all methods; 0 = no maximum
 }
 
+/** Live group subscription multipliers from checkout-info */
+export interface CheckoutGroupRate {
+  id: number
+  name: string
+  platform: string
+  usage_panel: string
+  subscription_rate_multiplier: number
+}
+
 /** Response from /payment/checkout-info API — single call for the payment page */
 export interface CheckoutInfoResponse {
   methods: Record<string, MethodLimit>
   global_min: number
   global_max: number
   plans: SubscriptionPlan[]
+  group_rates?: CheckoutGroupRate[]
   balance_disabled: boolean
   balance_recharge_multiplier: number
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
