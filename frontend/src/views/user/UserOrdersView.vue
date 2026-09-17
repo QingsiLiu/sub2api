@@ -175,7 +175,7 @@ const receiptModel = computed(() => {
     order: receiptOrder.value,
     payer: authStore.user,
     siteName: appStore.siteName,
-    siteUrl: window.location.origin,
+    siteUrl: appStore.apiBaseUrl || window.location.origin,
     contactInfo: appStore.contactInfo,
     locale: locale.value,
     copy: receiptCopy.value,

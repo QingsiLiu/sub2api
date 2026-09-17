@@ -189,6 +189,25 @@ export function amountInWords(amount: number, currency?: string | null): string 
   return `${code} ${Math.abs(Number.isFinite(amount) ? amount : 0).toFixed(2)}`
 }
 
+const SOFTWARE_SITE_NAME = /^sub2api$/i
+
+export function resolveReceiptSiteUrl(siteUrl?: string | null): string {
+  return (siteUrl ?? '').trim().replace(/\/+$/, '')
+}
+
+export function resolveReceiptMerchant(siteName?: string | null, siteUrl?: string | null): string {
+  const name = (siteName ?? '').trim()
+  if (name && !SOFTWARE_SITE_NAME.test(name)) return name
+  const url = resolveReceiptSiteUrl(siteUrl)
+  if (!url) return name
+  try {
+    const parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`)
+    return parsed.hostname.replace(/^www\./i, '')
+  } catch {
+    return url
+  }
+}
+
 export function buildReceiptNo(order: Pick<PaymentOrder, 'id' | 'created_at' | 'paid_at' | 'completed_at'>): string {
   const stamp = order.paid_at || order.completed_at || order.created_at
   const date = stamp && !Number.isNaN(new Date(stamp).getTime()) ? new Date(stamp) : new Date()
@@ -232,8 +251,8 @@ export function buildReceiptModel(input: {
     payerName: input.payer?.username?.trim() || input.payer?.email?.trim() || '—',
     paymentMethod: input.paymentMethodLabel,
     tradeNo: order.out_trade_no || `ORD-${order.id}`,
-    merchant: input.siteName.trim() || 'Sub2API',
-    siteUrl: input.siteUrl.replace(/\/$/, ''),
+    merchant: resolveReceiptMerchant(input.siteName, input.siteUrl),
+    siteUrl: resolveReceiptSiteUrl(input.siteUrl),
     contactInfo: input.contactInfo?.trim() || '',
     itemName,
     itemDesc,

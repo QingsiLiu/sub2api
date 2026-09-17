@@ -6,6 +6,7 @@ import {
   buildReceiptModel,
   buildReceiptNo,
   canViewReceipt,
+  resolveReceiptMerchant,
 } from '../receipt'
 
 const copy = {
@@ -111,6 +112,20 @@ describe('receipt helpers', () => {
     expect(model.siteUrl).toBe('https://sub.geiliapi.com')
     expect(model.tradeNo).toBe('sub2_20260806abc')
     expect(model.paymentMethod).toBe('支付宝')
+  })
+
+  it('uses the public website when the software default name is still configured', () => {
+    expect(resolveReceiptMerchant('Sub2API', 'https://sub.geiliapi.com/')).toBe('sub.geiliapi.com')
+    const model = buildReceiptModel({
+      order: order(),
+      payer: { email: 'user@example.com' },
+      siteName: 'Sub2API',
+      siteUrl: 'https://sub.geiliapi.com/',
+      copy,
+      paymentMethodLabel: '支付宝',
+    })
+    expect(model.merchant).toBe('sub.geiliapi.com')
+    expect(model.siteUrl).toBe('https://sub.geiliapi.com')
   })
 
   it('marks refunded subscription receipts', () => {

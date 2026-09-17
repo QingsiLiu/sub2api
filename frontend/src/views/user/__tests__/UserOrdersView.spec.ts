@@ -15,6 +15,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/stores', () => ({
   useAppStore: () => ({
     siteName: '给力 API',
+    apiBaseUrl: 'https://sub.geiliapi.com/',
     contactInfo: 'support@example.com',
     showError,
     showSuccess: vi.fn(),
@@ -109,6 +110,9 @@ describe('UserOrdersView receipt', () => {
     expect(wrapper.text()).toContain('payment.receipt.title')
     expect(wrapper.text()).toContain('payment.receipt.itemBalance')
     expect(wrapper.text()).toContain('人民币贰万伍仟元整')
+    expect(wrapper.text()).toContain('给力 API')
+    expect(wrapper.text()).toContain('https://sub.geiliapi.com')
+    expect(wrapper.text()).not.toContain('Sub2API')
     expect(wrapper.text()).toContain('payment.receipt.noteNotInvoice')
 
     const download = wrapper.findAll('button').find(button => button.text().includes('payment.orders.downloadReceipt'))
