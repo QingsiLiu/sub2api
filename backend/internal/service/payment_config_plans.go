@@ -156,6 +156,7 @@ type checkoutGroupInput struct {
 	UsagePanel                 string
 	SubscriptionType           string
 	IsExclusive                bool
+	SubscriptionEnabled        bool
 	SubscriptionRateMultiplier float64
 	SortOrder                  int
 }
@@ -180,7 +181,7 @@ func checkoutPanelRank(panel string) int {
 func selectCheckoutGroupRates(rows []checkoutGroupInput) []CheckoutGroupRate {
 	out := make([]CheckoutGroupRate, 0, len(rows))
 	for _, row := range rows {
-		if row.IsExclusive || row.SubscriptionType == SubscriptionTypeSubscription || row.Platform == PlatformComposite {
+		if !row.SubscriptionEnabled || row.IsExclusive || row.SubscriptionType == SubscriptionTypeSubscription || row.Platform == PlatformComposite {
 			continue
 		}
 		out = append(out, CheckoutGroupRate{
@@ -202,8 +203,9 @@ func selectCheckoutGroupRates(rows []checkoutGroupInput) []CheckoutGroupRate {
 }
 
 // ListCheckoutGroupRates returns active standard groups and their current
-// subscription_rate_multiplier. Leftover 周卡/月卡 and exclusive groups stay off
-// the public board; admin edits show up on the next checkout-info read.
+// subscription_rate_multiplier. Leftover 周卡/月卡, exclusive groups, and
+// groups with subscription settlement turned off stay off the public board;
+// admin edits show up on the next checkout-info read.
 func (s *PaymentConfigService) ListCheckoutGroupRates(ctx context.Context) ([]CheckoutGroupRate, error) {
 	if s == nil || s.entClient == nil {
 		return []CheckoutGroupRate{}, nil
@@ -211,6 +213,7 @@ func (s *PaymentConfigService) ListCheckoutGroupRates(ctx context.Context) ([]Ch
 	groups, err := s.entClient.Group.Query().
 		Where(
 			group.StatusEQ(StatusActive),
+			group.SubscriptionEnabledEQ(true),
 			group.IsExclusiveEQ(false),
 			group.SubscriptionTypeNEQ(SubscriptionTypeSubscription),
 			group.PlatformNEQ(PlatformComposite),
@@ -229,6 +232,7 @@ func (s *PaymentConfigService) ListCheckoutGroupRates(ctx context.Context) ([]Ch
 			UsagePanel:                 g.UsagePanel,
 			SubscriptionType:           g.SubscriptionType,
 			IsExclusive:                g.IsExclusive,
+			SubscriptionEnabled:        g.SubscriptionEnabled,
 			SubscriptionRateMultiplier: g.SubscriptionRateMultiplier,
 			SortOrder:                  g.SortOrder,
 		})

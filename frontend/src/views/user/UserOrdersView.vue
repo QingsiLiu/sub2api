@@ -22,6 +22,10 @@
               <Icon name="x" size="sm" />
               <span>{{ t('payment.orders.cancel') }}</span>
             </button>
+            <button v-if="canViewReceipt(row)" @click="openReceipt(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-900/20">
+              <Icon name="document" size="sm" />
+              <span>{{ t('payment.orders.viewReceipt') }}</span>
+            </button>
             <button v-if="canRequestRefund(row)" @click="openRefundDialog(row)" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20">
               <Icon name="dollar" size="sm" />
               <span>{{ t('payment.orders.requestRefund') }}</span>
@@ -77,6 +81,19 @@
         </div>
       </template>
     </BaseDialog>
+
+    <BaseDialog :show="!!receiptOrder" :title="t('payment.receipt.title')" width="wide" @close="receiptOrder = null">
+      <PaymentReceipt v-if="receiptModel" :model="receiptModel" :copy="receiptCopy" />
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button class="btn btn-secondary" @click="receiptOrder = null">{{ t('common.close') }}</button>
+          <button class="btn btn-primary inline-flex items-center gap-2" :disabled="receiptDownloading" @click="downloadCurrentReceipt">
+            <Icon name="download" size="sm" />
+            <span>{{ receiptDownloading ? t('common.processing') : t('payment.orders.downloadReceipt') }}</span>
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -84,7 +101,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { useAppStore } from '@/stores'
+import { useAuthStore, useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import type { PaymentOrder } from '@/types/payment'
@@ -94,10 +111,14 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import OrderTable from '@/components/payment/OrderTable.vue'
+import PaymentReceipt from '@/components/payment/PaymentReceipt.vue'
+import { buildReceiptModel, canViewReceipt, type ReceiptCopy } from '@/components/payment/receipt'
+import { downloadReceiptPdf } from '@/components/payment/receiptPdf'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const actionLoading = ref(false)
@@ -107,7 +128,60 @@ const currentFilter = ref('')
 const cancelTargetId = ref<number | null>(null)
 const refundTarget = ref<PaymentOrder | null>(null)
 const refundReason = ref('')
+const receiptOrder = ref<PaymentOrder | null>(null)
+const receiptDownloading = ref(false)
 const pagination = reactive({ page: 1, page_size: 20, total: 0 })
+
+const receiptCopy = computed((): ReceiptCopy => ({
+  title: t('payment.receipt.title'),
+  paid: t('payment.receipt.paid'),
+  refunded: t('payment.receipt.refunded'),
+  receiptNo: t('payment.receipt.receiptNo'),
+  issuedAt: t('payment.receipt.issuedAt'),
+  received: t('payment.receipt.received'),
+  amountWords: t('payment.receipt.amountWords'),
+  payer: t('payment.receipt.payer'),
+  payerName: t('payment.receipt.payerName'),
+  sectionTrade: t('payment.receipt.sectionTrade'),
+  paidAt: t('payment.receipt.paidAt'),
+  method: t('payment.receipt.method'),
+  tradeNo: t('payment.receipt.tradeNo'),
+  settled: t('payment.receipt.settled'),
+  settledYes: t('payment.receipt.settledYes'),
+  settledRefunded: t('payment.receipt.settledRefunded'),
+  merchant: t('payment.receipt.merchant'),
+  currency: t('payment.receipt.currency'),
+  sectionItems: t('payment.receipt.sectionItems'),
+  itemName: t('payment.receipt.itemName'),
+  itemDesc: t('payment.receipt.itemDesc'),
+  qty: t('payment.receipt.qty'),
+  unitPrice: t('payment.receipt.unitPrice'),
+  lineAmount: t('payment.receipt.lineAmount'),
+  total: t('payment.receipt.total'),
+  notesTitle: t('payment.receipt.notesTitle'),
+  noteProof: t('payment.receipt.noteProof'),
+  noteNotInvoice: t('payment.receipt.noteNotInvoice'),
+  noteRefund: t('payment.receipt.noteRefund'),
+  issuerTitle: t('payment.receipt.issuerTitle'),
+  itemBalance: t('payment.receipt.itemBalance'),
+  itemBalanceDesc: t('payment.receipt.itemBalanceDesc'),
+  itemSubscription: t('payment.receipt.itemSubscription'),
+  itemSubscriptionDesc: t('payment.receipt.itemSubscriptionDesc'),
+}))
+
+const receiptModel = computed(() => {
+  if (!receiptOrder.value) return null
+  return buildReceiptModel({
+    order: receiptOrder.value,
+    payer: authStore.user,
+    siteName: appStore.siteName,
+    siteUrl: window.location.origin,
+    contactInfo: appStore.contactInfo,
+    locale: locale.value,
+    copy: receiptCopy.value,
+    paymentMethodLabel: t('payment.methods.' + receiptOrder.value.payment_type, receiptOrder.value.payment_type),
+  })
+})
 
 const statusFilters = computed(() => [
   { value: '', label: t('common.all') },
@@ -183,6 +257,22 @@ async function loadRefundEligibility() {
     const res = await paymentAPI.getRefundEligibleProviders()
     refundEligibleProviders.value = new Set(res.data.provider_instance_ids || [])
   } catch { /* ignore — default to hiding refund button */ }
+}
+
+function openReceipt(order: PaymentOrder) {
+  receiptOrder.value = order
+}
+
+function downloadCurrentReceipt() {
+  if (!receiptModel.value) return
+  receiptDownloading.value = true
+  try {
+    downloadReceiptPdf(receiptModel.value, receiptCopy.value)
+  } catch {
+    appStore.showError(t('payment.receipt.downloadFailed'))
+  } finally {
+    receiptDownloading.value = false
+  }
 }
 
 onMounted(() => { fetchOrders(); loadRefundEligibility() })

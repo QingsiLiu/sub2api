@@ -8,12 +8,13 @@ import (
 
 func TestSelectCheckoutGroupRates_FiltersAndOrdersByPanel(t *testing.T) {
 	got := selectCheckoutGroupRates([]checkoutGroupInput{
-		{ID: 46, Name: "CC-满血 Max", UsagePanel: "claude", SubscriptionRateMultiplier: 8, SubscriptionType: SubscriptionTypeStandard},
-		{ID: 11, Name: "周卡", SubscriptionType: SubscriptionTypeSubscription, SubscriptionRateMultiplier: 1},
-		{ID: 60, Name: "好兄弟专用", IsExclusive: true, SubscriptionRateMultiplier: 0.9, SubscriptionType: SubscriptionTypeStandard},
-		{ID: 4, Name: "GPT 稳定", UsagePanel: "gpt", SubscriptionRateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard},
-		{ID: 99, Name: "门面", Platform: PlatformComposite, SubscriptionRateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard},
-		{ID: 27, Name: "GPT 给力 Pro", UsagePanel: "gpt", SubscriptionRateMultiplier: 1.3, SubscriptionType: SubscriptionTypeStandard},
+		{ID: 46, Name: "CC-满血 Max", UsagePanel: "claude", SubscriptionRateMultiplier: 8, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true},
+		{ID: 11, Name: "周卡", SubscriptionType: SubscriptionTypeSubscription, SubscriptionRateMultiplier: 1, SubscriptionEnabled: true},
+		{ID: 60, Name: "好兄弟专用", IsExclusive: true, SubscriptionRateMultiplier: 0.9, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true},
+		{ID: 4, Name: "GPT 稳定", UsagePanel: "gpt", SubscriptionRateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true},
+		{ID: 99, Name: "门面", Platform: PlatformComposite, SubscriptionRateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true},
+		{ID: 27, Name: "GPT 给力 Pro", UsagePanel: "gpt", SubscriptionRateMultiplier: 1.3, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true},
+		{ID: 88, Name: "Grok Heavy", UsagePanel: "grok", SubscriptionRateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: false},
 	})
 
 	require.Equal(t, []string{"GPT 稳定", "GPT 给力 Pro", "CC-满血 Max"}, checkoutRateNames(got))
@@ -22,6 +23,14 @@ func TestSelectCheckoutGroupRates_FiltersAndOrdersByPanel(t *testing.T) {
 
 func TestSelectCheckoutGroupRates_Empty(t *testing.T) {
 	require.Empty(t, selectCheckoutGroupRates(nil))
+}
+
+func TestSelectCheckoutGroupRates_HidesSubscriptionDisabledGroups(t *testing.T) {
+	got := selectCheckoutGroupRates([]checkoutGroupInput{
+		{ID: 4, Name: "GPT 稳定", UsagePanel: "gpt", SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: true, SubscriptionRateMultiplier: 1},
+		{ID: 88, Name: "Grok Heavy", UsagePanel: "grok", SubscriptionType: SubscriptionTypeStandard, SubscriptionEnabled: false, SubscriptionRateMultiplier: 1},
+	})
+	require.Equal(t, []string{"GPT 稳定"}, checkoutRateNames(got))
 }
 
 func checkoutRateNames(rows []CheckoutGroupRate) []string {
