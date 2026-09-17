@@ -75,7 +75,7 @@ func (r *CompositeRouteResolver) ResolveForPreferences(ctx context.Context, grou
 				}
 				if r.pricing != nil {
 					price := r.pricing.Resolve(ctx, PricingInput{Model: billable, GroupID: &target.ID, Group: target})
-					if price == nil || (price.Mode == BillingModeToken && price.BasePricing == nil) {
+					if !explicitRoutePriceConfigured(target, billable, price) {
 						return decision, ErrCompositeModelUnpriced
 					}
 				}

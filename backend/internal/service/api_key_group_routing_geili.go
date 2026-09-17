@@ -9,6 +9,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
 // KeyRouteAttempt contains non-secret evidence of cross-group failover.
@@ -133,7 +134,7 @@ func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKe
 			continue
 		}
 		price := resolver.pricing.Resolve(ctx, PricingInput{Model: model, GroupID: &group.ID, Group: group})
-		if price == nil || (price.Mode == BillingModeToken && price.BasePricing == nil) {
+		if !explicitRoutePriceConfigured(group, model, price) {
 			return nil, ErrCompositeModelUnpriced
 		}
 		snapshot := *group
@@ -175,7 +176,7 @@ func (s *APIKeyService) ExplicitKeyModels(ctx context.Context, key *APIKey, reso
 		}
 		for _, model := range models {
 			price := resolver.pricing.Resolve(ctx, PricingInput{Model: model, GroupID: &g.ID, Group: g})
-			if price != nil && (price.Mode != BillingModeToken || price.BasePricing != nil) {
+			if explicitRoutePriceConfigured(g, model, price) {
 				seen[model] = true
 			}
 		}
@@ -186,4 +187,57 @@ func (s *APIKeyService) ExplicitKeyModels(ctx context.Context, key *APIKey, reso
 	}
 	sort.Strings(models)
 	return models, nil
+}
+
+// explicitRoutePriceConfigured is the new-settlement price gate.
+// Token / per-request / image / video catalog cards still count. Grok Imagine
+// and GPT image models are billed from group image_price_* / video_price_*,
+// not LiteLLM token rates, so those group unit prices also count.
+func explicitRoutePriceConfigured(group *Group, model string, price *ResolvedPricing) bool {
+	if price != nil && (price.Mode != BillingModeToken || price.BasePricing != nil) {
+		return true
+	}
+	return groupHasConfiguredMediaUnitPrice(group, model)
+}
+
+func groupHasConfiguredMediaUnitPrice(group *Group, model string) bool {
+	if group == nil {
+		return false
+	}
+	if isExplicitRouteVideoModel(model) {
+		return groupHasConfiguredVideoUnitPrice(group, model)
+	}
+	if xai.IsGrokImagineModel(model) || isOpenAIImageModel(model) {
+		return groupHasConfiguredImageUnitPrice(group)
+	}
+	return false
+}
+
+func isExplicitRouteVideoModel(model string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	return isGrokVideoBillingModel(normalized) || strings.HasPrefix(normalized, "grok-video")
+}
+
+func groupHasConfiguredImageUnitPrice(group *Group) bool {
+	if group == nil {
+		return false
+	}
+	for _, size := range []string{"1K", "2K", "4K"} {
+		if group.GetImagePrice(size) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func groupHasConfiguredVideoUnitPrice(group *Group, model string) bool {
+	if group == nil {
+		return false
+	}
+	for _, resolution := range []string{"480p", "720p", "1080p"} {
+		if group.GetVideoPriceForModel(model, resolution) != nil {
+			return true
+		}
+	}
+	return false
 }
