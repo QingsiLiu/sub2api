@@ -3,6 +3,7 @@
 ## 当前基线
 
 - 官方基线为 `v0.2.5`，功能分支为 `codex/subscription-multi-group-0.2.5`。
+- 对外版本号以 `backend/cmd/server/VERSION` 为准，当前 `0.2.5-geili.1`；控制台左上角显示 `v0.2.5-geili.1`。候选构建必须注入该文件，不要再写 `*.acceptance`。下次热修递增为 `0.2.5-geili.2`。
 - 2026-09-15 用户决定恢复官方视觉；`frontend/src/geili/`、覆盖插件、Geist 字体及主题 token 已删除。
 - 前端功能扩展使用现有官方组件与样式；以后统一设计须另行提出。
 - 后端保留在线更新禁用守卫，避免官方自更新覆盖二开计费功能。
