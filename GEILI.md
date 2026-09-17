@@ -2,8 +2,9 @@
 
 ## 当前基线
 
-- 官方基线为 `v0.2.5`，功能分支为 `codex/subscription-multi-group-0.2.5`。
-- 对外版本号以 `backend/cmd/server/VERSION` 为准，当前 `0.2.5-geili.1`；控制台左上角显示 `v0.2.5-geili.1`。候选构建必须注入该文件，不要再写 `*.acceptance`。下次热修递增为 `0.2.5-geili.2`。
+- GitHub 默认主干是 `geili/main`。现网跑的就是这条 0.2.5 线；以后只维护这一条主干。
+- 日常从最新 `geili/main` 拉 `codex/<主题>`，验收后合回并删除短命分支。不要把功能分支留过夜当第二主干。
+- 官方基线为 `v0.2.5`。对外版本号以 `backend/cmd/server/VERSION` 为准，当前 `0.2.5-geili.1`；控制台左上角显示 `v0.2.5-geili.1`。候选构建必须注入该文件，不要再写 `*.acceptance`。下次热修递增为 `0.2.5-geili.2`。
 - 2026-09-15 用户决定恢复官方视觉；`frontend/src/geili/`、覆盖插件、Geist 字体及主题 token 已删除。
 - 前端功能扩展使用现有官方组件与样式；以后统一设计须另行提出。
 - 后端保留在线更新禁用守卫，避免官方自更新覆盖二开计费功能。
@@ -19,9 +20,8 @@
 
 ## 候选构建与部署
 
-- `.github/workflows/geili-candidate.yml` 仅发布 `acceptance-<commit>` 镜像及固定摘要，不修改默认分支或 `latest`。
-- 镜像须先经本机验证，再进入 OVH 的独立 `geili-subscription-lab`。
-- 部署与回滚记录在运维仓 `~/code/geili/sub2api`；当前生产运行配置由该仓管理。
+- `.github/workflows/geili-candidate.yml` 在 `geili/main` 和 `codex/**` 上发布 `acceptance-<commit>` 镜像及固定摘要，不修改 `latest`。
+- 上线固定顺序：候选 CI → 先钉测试环境 → 合入 `geili/main` → 当次授权后用同一 digest 热修生产。运维入口是 `~/code/geili/subscription-lab-ops` 的 `bin/release-geili-sub2api.sh`，细则见该仓 `docs/runbooks/geili-sub2api-release.md`。
 - 测试连接正式 API 时只用专用、限额、有期限的下游 Key，绝不复制供应商主凭据或生产数据库。
 - 任何生产核心切换均需另行明确授权。
 
