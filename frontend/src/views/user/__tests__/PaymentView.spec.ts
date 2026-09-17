@@ -361,13 +361,15 @@ describe('PaymentView help text', () => {
 })
 
 describe('PaymentView group subscription rates', () => {
-  it('passes live checkout group rates to the purchase board', async () => {
-    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
-      group_rates: [
-        { id: 4, name: 'GPT 稳定', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1 },
-        { id: 27, name: 'GPT 给力 Pro', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1.3 },
-      ],
-    }))
+  const groupRates = [
+    { id: 4, name: 'GPT 稳定', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1 },
+    { id: 27, name: 'GPT 给力 Pro', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1.3 },
+  ]
+
+  async function mountPayment(query: Record<string, unknown> = {}) {
+    routeState.path = '/purchase'
+    routeState.query = query
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({ group_rates: groupRates }))
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
@@ -378,10 +380,24 @@ describe('PaymentView group subscription rates', () => {
       },
     })
     await flushPromises()
-    expect(wrapper.findComponent(SubscriptionGroupRates).props('rates')).toEqual([
-      { id: 4, name: 'GPT 稳定', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1 },
-      { id: 27, name: 'GPT 给力 Pro', platform: 'openai', usage_panel: 'gpt', subscription_rate_multiplier: 1.3 },
-    ])
+    return wrapper
+  }
+
+  it('shows live group rates only on the subscribe tab', async () => {
+    const wrapper = await mountPayment()
+    expect(wrapper.findComponent(SubscriptionGroupRates).exists()).toBe(false)
+
+    const subscribeTab = wrapper.findAll('button').find(button => button.text() === 'payment.tabSubscribe')
+    expect(subscribeTab).toBeTruthy()
+    await subscribeTab!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findComponent(SubscriptionGroupRates).props('rates')).toEqual(groupRates)
+  })
+
+  it('keeps the rate board when opened from ?tab=subscription', async () => {
+    const wrapper = await mountPayment({ tab: 'subscription' })
+    expect(wrapper.findComponent(SubscriptionGroupRates).props('rates')).toEqual(groupRates)
   })
 })
 

@@ -219,12 +219,9 @@
                 </div>
               </div>
             </template>
+            <SubscriptionGroupRates v-if="groupRates.length" :rates="groupRates" />
           </template>
         </template>
-        <SubscriptionGroupRates
-          v-if="paymentPhase === 'select' && groupRates.length"
-          :rates="groupRates"
-        />
         <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
           <div class="flex flex-col items-center gap-3">
             <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
