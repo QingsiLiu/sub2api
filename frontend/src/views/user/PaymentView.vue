@@ -114,7 +114,7 @@
                   <span v-if="selectedPlan.original_price" class="text-sm text-gray-400 line-through dark:text-gray-500">
                     {{ formatSelectedSubscriptionPaymentAmount(selectedPlan.original_price) }}
                   </span>
-                  <span :class="['text-3xl font-bold', planTextClass]">{{ formatSelectedSubscriptionPaymentAmount(selectedPlan.price) }}</span>
+                  <span :class="['text-3xl font-bold', planTextClass]">{{ formatSelectedSubscriptionPaymentAmount(subscriptionQuote ? subscriptionQuote.order_amount / subscriptionQuantity : selectedPlan.price) }}</span>
                   <span class="text-sm text-gray-500 dark:text-gray-400">/ {{ planValiditySuffix }}</span>
                 </div>
                 <!-- Description -->
@@ -122,19 +122,26 @@
                   {{ selectedPlan.description }}
                 </p>
                 <div class="mt-4 rounded-lg bg-gray-50 p-3 dark:bg-dark-700/50">
-                  <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">订阅操作</div>
+                  <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.operation') }}</div>
                   <div class="flex gap-2">
-                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'renew' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'renew'">续期</button>
-                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'stack' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'stack'">叠加额度</button>
+                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'renew' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'renew'">{{ t('subscriptionRights.renew') }}</button>
+                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'stack' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'stack'">{{ t('subscriptionRights.stack') }}</button>
                   </div>
                   <label class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
-                    <span>{{ subscriptionMode === 'renew' ? '续期份数' : '购买份数' }}</span>
-                    <select v-model.number="subscriptionQuantity" class="input w-24 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ n }} 份</option></select>
+                    <span>{{ t('subscriptionRights.quantity') }}</span>
+                    <select v-model.number="subscriptionQuantity" class="input w-24 py-1 text-sm"><option v-for="n in maxSubscriptionQuantity" :key="n" :value="n">{{ t('subscriptionRights.units', { count: n }) }}</option></select>
                   </label>
-                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ subscriptionMode === 'stack' ? '新权益从支付成功时开始，额度与当前权益叠加。' : '优先延长最早到期的权益。' }}</p>
-                  <p v-if="subscriptionQuote?.projected" class="mt-2 text-xs text-primary-600 dark:text-primary-300">
-                    预计权益 {{ subscriptionQuote.projected.active_lot_count || 0 }} 份，最晚到期 {{ subscriptionQuote.projected.expires_at ? formatDateTimeToMinute(subscriptionQuote.projected.expires_at) : '—' }}
-                  </p>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(subscriptionMode === 'stack' ? 'subscriptionRights.stackHint' : 'subscriptionRights.renewHint') }}</p>
+                  <p v-if="quoteLoading" role="status" class="mt-2 text-xs">{{ t('subscriptionRights.loading') }}</p>
+                  <div v-if="quoteError" role="alert" class="mt-2 text-xs text-red-600">
+                    {{ quoteError }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button>
+                  </div>
+                  <div v-if="subscriptionQuote?.projected" aria-live="polite" class="mt-2 space-y-1 text-xs text-primary-600 dark:text-primary-300">
+                    <p>{{ t('subscriptionRights.preview', { count: subscriptionQuote.projected.active_lot_count }) }}</p>
+                    <p v-for="period in (['daily', 'weekly', 'monthly'] as const)" :key="period">{{ t(`subscriptionRights.${period}`) }}: {{ subscriptionQuote.projected[`${period}_limit_usd`] == null || subscriptionQuote.projected[`${period}_limit_usd`] === 0 ? t('subscriptionRights.unlimited') : '$' + subscriptionQuote.projected[`${period}_limit_usd`] }}</p>
+                    <p>{{ t('subscriptionRights.expiry', { time: subscriptionQuote.projected.expires_at ? formatDateTimeToMinute(subscriptionQuote.projected.expires_at) : '—' }) }}</p>
+                    <p v-if="subscriptionQuote.projected.next_expiry_at">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscriptionQuote.projected.next_expiry_at) }) }}</p>
+                  </div>
                 </div>
                 <!-- Rate + Limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
@@ -294,7 +301,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
-import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionQuoteResponse, SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -365,7 +372,29 @@ const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const subscriptionMode = ref<'renew' | 'stack'>('renew')
 const subscriptionQuantity = ref(1)
-const subscriptionQuote = ref<{ order_amount: number; projected?: { active_lot_count?: number; daily_limit_usd?: number | null; expires_at?: string | null } } | null>(null)
+const subscriptionQuote = ref<SubscriptionQuoteResponse | null>(null)
+const quoteLoading = ref(false)
+const quoteError = ref('')
+let quoteRevision = 0
+const maxSubscriptionQuantity = computed(() => subscriptionMode.value === 'renew' && (subscriptionQuote.value?.can_renew_lots ?? 0) > 0 ? Math.min(10, subscriptionQuote.value!.can_renew_lots) : 10)
+async function refreshSubscriptionQuote() {
+  const revision = ++quoteRevision
+  subscriptionQuote.value = null
+  quoteError.value = ''
+  if (!selectedPlan.value) { quoteLoading.value = false; return }
+  quoteLoading.value = true
+  const request = { plan_id: selectedPlan.value.id, subscription_mode: subscriptionMode.value, subscription_quantity: subscriptionQuantity.value }
+  try {
+    const response = await paymentAPI.quoteSubscription(request)
+    if (revision === quoteRevision) subscriptionQuote.value = response.data
+  } catch (error) {
+    if (revision === quoteRevision) quoteError.value = extractApiErrorMessage(error) || t('subscriptionRights.previewFailed')
+  } finally {
+    if (revision === quoteRevision) quoteLoading.value = false
+  }
+}
+watch([() => selectedPlan.value?.id, subscriptionMode, subscriptionQuantity], refreshSubscriptionQuote)
+
 const previewImage = ref('')
 
 const paymentPhase = ref<'select' | 'paying'>('select')
@@ -713,7 +742,7 @@ const canSubmit = computed(() =>
 
 const subPaymentAmount = computed(() => {
   const price = selectedPlan.value?.price ?? 0
-  return subscriptionPaymentAmountForCurrency(price * subscriptionQuantity.value, selectedCurrency.value)
+  return subscriptionPaymentAmountForCurrency(subscriptionQuote.value?.order_amount ?? price * subscriptionQuantity.value, selectedCurrency.value)
 })
 
 const subFeeAmount = computed(() => {
@@ -735,7 +764,7 @@ function subscriptionTotalAmountForCurrency(value: number, currency: string): nu
 
 // Subscription-specific: method options based on gateway pay amount
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
-  const price = (selectedPlan.value?.price ?? 0) * subscriptionQuantity.value
+  const price = subscriptionQuote.value?.order_amount ?? (selectedPlan.value?.price ?? 0) * subscriptionQuantity.value
   return enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     const currency = normalizePaymentCurrency(ml?.currency)
@@ -750,6 +779,7 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
 
 const canSubmitSubscription = computed(() =>
   selectedPlan.value !== null
+    && subscriptionQuote.value !== null && !quoteLoading.value && !quoteError.value
     && amountFitsMethod(subTotalAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
@@ -829,14 +859,8 @@ async function handleSubmitRecharge() {
 }
 
 async function confirmSubscribe() {
-  if (!selectedPlan.value || submitting.value) return
-  try {
-    const quote = await paymentAPI.quoteSubscription({ plan_id: selectedPlan.value.id, subscription_mode: subscriptionMode.value, subscription_quantity: subscriptionQuantity.value })
-    subscriptionQuote.value = quote.data
-  } catch {
-    subscriptionQuote.value = null
-  }
-  await createOrder(selectedPlan.value.price * subscriptionQuantity.value, 'subscription', selectedPlan.value.id)
+  if (!selectedPlan.value || submitting.value || !canSubmitSubscription.value || !subscriptionQuote.value) return
+  await createOrder(subscriptionQuote.value.order_amount, 'subscription', selectedPlan.value.id)
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
@@ -846,6 +870,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
   const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod.value) || options.paymentType || selectedMethod.value
   try {
     const payload = buildCreateOrderPayload({
+ expectedPlanRevision:subscriptionQuote.value?.plan_revision,
       amount: orderAmount,
       paymentType: requestType,
       orderType,
@@ -974,6 +999,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           await redirectToPaymentResult(resultState)
         }
       } catch (err: unknown) {
+ if (orderType === 'subscription') void refreshSubscriptionQuote()
         resetPayment()
         const fallbackApplied = await attemptMobileQrFallback(err, {
           orderAmount,
@@ -1086,6 +1112,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
   try {
     const visibleMethod = normalizeVisibleMethod(context.paymentType) || context.paymentType
     const payload = buildCreateOrderPayload({
+ expectedPlanRevision:subscriptionQuote.value?.plan_revision,
       amount: context.orderAmount,
       paymentType: visibleMethod,
       orderType: context.orderType,
@@ -1260,6 +1287,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+ quoteRevision++
   document.removeEventListener('visibilitychange', refreshCheckoutWhenVisible)
 })
 </script>

@@ -77,6 +77,7 @@ export interface PaymentLaunchDecision {
 }
 
 export interface BuildCreateOrderPayloadInput {
+ expectedPlanRevision?: string
   amount: number
   paymentType: string
   orderType: OrderType
@@ -142,6 +143,7 @@ export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): Cr
 		payload.plan_id = input.planId
 	}
 	if (input.orderType === 'subscription') {
+    if (input.expectedPlanRevision) payload.expected_plan_revision = input.expectedPlanRevision
 		if (input.subscriptionMode || input.subscriptionQuantity !== undefined) {
 			payload.subscription_mode = input.subscriptionMode || 'renew'
 			payload.subscription_quantity = Math.min(10, Math.max(1, input.subscriptionQuantity || 1))

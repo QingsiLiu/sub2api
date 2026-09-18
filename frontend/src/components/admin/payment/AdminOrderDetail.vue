@@ -43,6 +43,7 @@
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.orderType') }}</p>
           <p class="text-sm text-gray-700 dark:text-gray-300">
             {{ t('payment.admin.' + order.order_type + 'Order', order.order_type) }}
+          <span v-if="order.order_type === 'subscription'"> · {{ t(order.subscription_mode === 'stack' ? 'subscriptionRights.stack' : 'subscriptionRights.renew') }} × {{ order.subscription_quantity || 1 }}</span>
           </p>
         </div>
         <div>

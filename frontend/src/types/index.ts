@@ -2099,6 +2099,7 @@ export interface SubscriptionQuotaPlan {
 }
 
 export interface UserSubscription {
+ entitlement_operations?: Array<{ id:number; entitlement_id:number; operation:string; source_type:string; source_reference?:string; created_at:string; before_expires_at?:string; after_expires_at?:string }>
   plan_id?: number | null
   plan?: SubscriptionQuotaPlan
   id: number
@@ -2133,6 +2134,9 @@ export interface UserSubscription {
 	}
 	entitlements?: Array<{
 		id: number
+    created_at: string
+    status: string
+    source_type?: string
 		source_order_id?: number
 		starts_at: string
 		expires_at: string
@@ -2182,6 +2186,7 @@ export interface BulkAssignSubscriptionRequest {
 }
 
 export interface ExtendSubscriptionRequest {
+  entitlement_ids?: number[]
   days: number
 }
 

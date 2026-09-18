@@ -6,7 +6,10 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 
+import subscriptionRights from './subscriptionRights'
+
 export default {
+  ...subscriptionRights,
   ...landing,
   ...common,
   ...dashboard,

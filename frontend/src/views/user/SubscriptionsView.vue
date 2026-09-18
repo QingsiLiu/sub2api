@@ -33,11 +33,11 @@
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
+            class="flex flex-col items-stretch gap-3 border-b border-gray-100 p-4 dark:border-dark-700"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex min-w-0 items-start gap-3">
               <div :class="['h-1.5 w-1.5 shrink-0 rounded-full', platformAccentDotClass(subscription.group?.platform || '')]" />
-              <div>
+              <div class="min-w-0 flex-1 break-words">
                 <div class="flex items-center gap-2">
                   <h3 class="font-semibold text-gray-900 dark:text-white">
                     {{ subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
@@ -59,13 +59,26 @@
                   </span>
                 </div>
                 <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
-                  <span>有效份额 {{ subscription.quota_summary.active_lot_count }} 份</span>
-                  <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">下一次额度变化：{{ formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }}</span>
-                  <span v-if="subscription.entitlements?.length" class="ml-3">可展开查看 {{ subscription.entitlements.length }} 次购买</span>
+                  <span>{{ t('subscriptionRights.active', { count: subscription.quota_summary.active_lot_count }) }}</span>
+                  <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }) }}</span>
+                  <details v-if="subscription.entitlements?.length" class="mt-2">
+                    <summary class="cursor-pointer font-medium">{{ t('subscriptionRights.details', { count: subscription.entitlements.length }) }}</summary>
+                    <ul class="mt-2 space-y-2">
+                      <li v-for="lot in subscription.entitlements" :key="lot.id" class="rounded border border-gray-200 p-2 dark:border-dark-600">
+                        <p>#{{ lot.id }} · {{ t('subscriptionRights.status') }}: {{ t(`subscriptionRights.status_${lot.status}`) }}</p>
+                        <p>{{ t('subscriptionRights.created') }}: {{ formatDateTimeToMinute(lot.created_at) }}</p>
+                        <p>{{ formatDateTimeToMinute(lot.starts_at) }} → {{ formatDateTimeToMinute(lot.expires_at) }}</p>
+                        <p v-if="lot.source_order_id">{{ t('subscriptionRights.sourceOrder') }} #{{ lot.source_order_id }}</p>
+                        <p v-for="period in (['daily', 'weekly', 'monthly'] as const)" :key="period">{{ t(`subscriptionRights.${period}`) }}: {{ lot[`${period}_limit_usd`] == null || lot[`${period}_limit_usd`] === 0 ? t('subscriptionRights.unlimited') : '$' + lot[`${period}_limit_usd`] }}</p>
+                      </li>
+                    </ul>
+                    <h4 v-if="subscription.entitlement_operations?.length" class="mt-3 font-medium">{{ t('subscriptionRights.history') }}</h4>
+                    <ul class="mt-1 space-y-1"><li v-for="op in subscription.entitlement_operations" :key="op.id">{{ formatDateTimeToMinute(op.created_at) }} · #{{ op.entitlement_id }} · {{ t(`subscriptionRights.operation_${op.operation}`) }} <span v-if="op.source_type === 'payment' && op.source_reference">· {{ t('subscriptionRights.sourceOrder') }} #{{ op.source_reference }}</span> <span v-if="op.after_expires_at">→ {{ formatDateTimeToMinute(op.after_expires_at) }}</span></li></ul>
+                  </details>
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex shrink-0 items-center justify-end gap-2 whitespace-nowrap">
               <span
                 :class="[
                   'rounded-full px-2 py-0.5 text-xs font-medium',

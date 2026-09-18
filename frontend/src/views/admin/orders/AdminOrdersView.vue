@@ -120,7 +120,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
-import { extractI18nErrorMessage } from '@/utils/apiError'
+import { extractI18nErrorMessage, extractApiErrorCode } from '@/utils/apiError'
 import { formatOrderDateTime } from '@/components/payment/orderUtils'
 import type { PaymentOrder } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -280,7 +280,7 @@ async function handleRefund(data: { amount: number; reason: string; deduct_balan
       return
     }
     appStore.showError(res.data.warning || t('common.error'))
-  } catch (err: unknown) { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) }
+  } catch (err: unknown) { if (extractApiErrorCode(err) === 'SUBSCRIPTION_REFUND_MANUAL_REVIEW') { refundRequireForce.value = false; refundWarning.value = t('subscriptionRights.manualRefund'); appStore.showError(refundWarning.value) } else { appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error'))) } }
   finally { refundSubmitting.value = false }
 }
 

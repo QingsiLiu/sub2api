@@ -670,6 +670,14 @@
           </p>
         </div>
         <div>
+          <fieldset v-if="extendingSubscription.entitlements?.length" class="mb-4 space-y-2">
+            <legend class="input-label">{{ t('subscriptionRights.selectLots') }}</legend>
+            <button type="button" class="btn btn-secondary text-xs" @click="extendForm.entitlement_ids = extendingSubscription.entitlements.filter(e => e.status === 'active' || e.status === 'expired').map(e => e.id)">{{ t('subscriptionRights.selectAll') }}</button>
+            <label v-for="lot in extendingSubscription.entitlements" :key="lot.id" class="flex items-center gap-2 text-sm">
+              <input v-model="extendForm.entitlement_ids" type="checkbox" :value="lot.id" :disabled="lot.status !== 'active' && lot.status !== 'expired'" />
+              #{{ lot.id }} · {{ formatDateTimeToMinute(lot.expires_at) }} · {{ lot.status }}
+            </label>
+          </fieldset>
           <label class="input-label">{{ t('admin.subscriptions.form.adjustDays') }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -1068,6 +1076,7 @@ const assignForm = reactive({
 })
 
 const extendForm = reactive({
+  entitlement_ids: [] as number[],
   days: 30
 })
 
@@ -1357,6 +1366,7 @@ const handleAssignSubscription = async () => {
 const handleExtend = (subscription: UserSubscription) => {
   extendingSubscription.value = subscription
   extendForm.days = 30
+  extendForm.entitlement_ids = (subscription.entitlements?.length === 1 ? [subscription.entitlements[0].id] : [])
   showExtendModal.value = true
 }
 
@@ -1368,20 +1378,15 @@ const closeExtendModal = () => {
 const handleExtendSubscription = async () => {
   if (!extendingSubscription.value) return
 
-  // 前端验证：调整后的过期时间必须在未来
-  if (extendingSubscription.value.expires_at) {
-    const expiresAt = new Date(extendingSubscription.value.expires_at)
-    const newExpiresAt = new Date(expiresAt.getTime() + extendForm.days * 24 * 60 * 60 * 1000)
-    if (newExpiresAt <= new Date()) {
-      appStore.showError(t('admin.subscriptions.adjustWouldExpire'))
-      return
-    }
+  if ((extendingSubscription.value.entitlements?.length ?? 0) > 1 && extendForm.entitlement_ids.length === 0) {
+    appStore.showError(t('subscriptionRights.selectionRequired')); return
   }
 
   submitting.value = true
   try {
     await adminAPI.subscriptions.extend(extendingSubscription.value.id, {
-      days: extendForm.days
+      days: extendForm.days,
+      entitlement_ids: extendForm.entitlement_ids.length ? extendForm.entitlement_ids : undefined
     })
     appStore.showSuccess(t('admin.subscriptions.subscriptionAdjusted'))
     closeExtendModal()

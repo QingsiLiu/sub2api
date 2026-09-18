@@ -75,10 +75,11 @@
         </span>
       </template>
 
-      <template #cell-order_type="{ value }">
+      <template #cell-order_type="{ value, row }">
         <span class="text-sm text-gray-700 dark:text-gray-300">
           {{ t('payment.admin.' + value + 'Order', value) }}
         </span>
+      <div v-if="row.order_type === 'subscription'" class="text-xs text-gray-500">{{ t(row.subscription_mode === 'stack' ? 'subscriptionRights.stack' : 'subscriptionRights.renew') }} × {{ row.subscription_quantity || 1 }}</div>
       </template>
 
       <template #cell-created_at="{ value }">

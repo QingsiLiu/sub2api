@@ -25,7 +25,11 @@ const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
-const quoteSubscription = vi.hoisted(() => vi.fn())
+const quoteSubscription = vi.hoisted(() => vi.fn(async (request: { plan_id: number; subscription_quantity: number }) => {
+  const checkout = await getCheckoutInfo.mock.results.at(-1)?.value
+  const plan = checkout?.data.plans.find((p: { id: number }) => p.id === request.plan_id)
+  return { data: { order_amount: (plan?.price ?? 128) * request.subscription_quantity, can_renew_lots: 0, projected: { active_lot_count: request.subscription_quantity, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } }
+}))
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
 // Public settings live in a reactive holder so tests can flip feature flags after mount
@@ -809,7 +813,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(locationState.href).toContain('/api/v1/auth/oauth/wechat/payment/start?')
     expect(new URL(locationState.href, 'http://localhost').searchParams.get('redirect')).toBe(
-      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
+      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7&subscription_mode=renew&subscription_quantity=1',
     )
 
     Object.defineProperty(window, 'location', {
@@ -932,8 +936,8 @@ describe('PaymentView subscription feature flag', () => {
   })
 })
 
-// Opt-in acceptance assertion: this remains red until the preview flow is fixed.
-describe.skipIf(process.env.GEILI_SUBSCRIPTION_AUDIT !== '1')('Subscription audit purchase preview', () => {
+// Regression: the user must see a quote before creating a payment order.
+describe('Subscription audit purchase preview', () => {
   it('loads the projected benefits before the user commits to payment', async () => {
     quoteSubscription.mockReset().mockResolvedValue({ data: {
       order_amount: 128,
@@ -947,4 +951,20 @@ describe.skipIf(process.env.GEILI_SUBSCRIPTION_AUDIT !== '1')('Subscription audi
       wrapper.unmount()
     }
   })
+  it('uses the accepted quote price in the payment confirmation', async () => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: { order_amount: 20, can_renew_lots: 0, projected: { active_lot_count: 1, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } })
+    const wrapper = await mountSubscriptionConfirm({ plan: { price: 10 }, method: { currency: 'USD' } })
+    expect(wrapper.findAll('button').some(button => button.text().includes(formatPaymentAmount(20, 'USD')))).toBe(true)
+    wrapper.unmount()
+  })
+  it('disables payment while the quote fails', async () => {
+    quoteSubscription.mockReset().mockRejectedValue(new Error('quote unavailable'))
+    const wrapper = await mountSubscriptionConfirm()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    const pay = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))
+    expect(pay?.attributes('disabled')).toBeDefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
 })

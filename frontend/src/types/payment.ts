@@ -185,6 +185,7 @@ export interface ProviderInstance {
 // ==================== Request / Response ====================
 
 export interface CreateOrderRequest {
+ expected_plan_revision?: string
   amount: number
   payment_type: string
   order_type: string
@@ -199,14 +200,15 @@ export interface CreateOrderRequest {
 }
 
 export interface SubscriptionQuoteResponse {
+ plan_revision?: string
 	plan_id: number
 	subscription_mode: 'renew' | 'stack'
 	subscription_quantity: number
 	order_amount: number
 	validity_days: number
 	can_renew_lots: number
-	current?: Record<string, unknown>
-	projected: Record<string, unknown>
+	current?: import('@/types').UserSubscription['quota_summary']
+	projected: NonNullable<import('@/types').UserSubscription['quota_summary']>
 }
 
 export type CreateOrderResultType = 'order_created' | 'oauth_required' | 'jsapi_ready'
