@@ -909,6 +909,9 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 // checkSubscriptionEligibility 检查订阅模式资格
 func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
+	if subscription != nil && subscription.MediaLookupAdmission && subscription.UserID == userID && subscription.AdmissionKey != "" {
+		return nil
+	}
 	// 获取订阅缓存数据
 	var subData *subscriptionCacheData
 	var err error

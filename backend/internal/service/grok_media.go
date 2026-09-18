@@ -754,8 +754,16 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			grokMediaContentProxyURL(c, requestID),
 		)
 	}
-	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
 	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
+	if (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions) && usage.ResponseID != "" {
+		bindCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		err := BindSubscriptionMediaTask(bindCtx, usage.ResponseID, nil)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("persist subscription media identity: %w", err)
+		}
+	}
+	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
 	resultModel := requestModel
 	resultBillingModel := requestModel
 	if endpoint == GrokMediaEndpointVideoStatus {

@@ -206,7 +206,14 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
 			var sub *service.UserSubscription
 			var subErr error
-			if apiKey.SubscriptionID != nil && *apiKey.SubscriptionID > 0 {
+			if c.Request.Method == http.MethodGet && c.Param("request_id") != "" && strings.Contains(c.FullPath(), "/videos/") {
+				sub, subErr = subscriptionService.ResumeMediaConsumption(c.Request.Context(), c.Param("request_id"), apiKey.User.ID, apiKey.ID)
+				if errors.Is(subErr, service.ErrSubscriptionNotFound) && apiKey.SubscriptionID != nil {
+					sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, legacySubscriptionGroupID)
+				} else if errors.Is(subErr, service.ErrSubscriptionNotFound) && apiKey.BillingSource == "" && apiKey.Group != nil {
+					sub, subErr = subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
+				}
+			} else if apiKey.SubscriptionID != nil && *apiKey.SubscriptionID > 0 {
 				sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, legacySubscriptionGroupID)
 			} else if apiKey.BillingSource == "" && apiKey.Group != nil {
 				sub, subErr = subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
@@ -248,7 +255,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			}
 
 			// 订阅模式：验证订阅限额
-			if subscription != nil {
+			if subscription != nil && !subscription.MediaLookupAdmission {
 				limitGroup := apiKey.Group
 				if subscription.Group != nil {
 					limitGroup = subscription.Group
@@ -275,7 +282,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					AbortWithError(c, status, code, validateErr.Error())
 					return
 				}
-			} else {
+			} else if subscription == nil {
 				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
@@ -307,6 +314,12 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				}(admitted)
 			}
 			c.Request = c.Request.WithContext(service.WithSubscriptionAdmissionCancellation(c.Request.Context(), subscriptionService.CancelUnsentConsumption))
+			c.Request = c.Request.WithContext(service.WithSubscriptionMediaBinder(c.Request.Context(), func(ctx context.Context, task string, sub *service.UserSubscription) error {
+				if sub == nil {
+					sub = subscription
+				}
+				return subscriptionService.BindMediaConsumption(ctx, task, sub, apiKey.ID)
+			}))
 			baseSub := *subscription
 			c.Request = c.Request.WithContext(service.WithSubscriptionAdmissionFactory(c.Request.Context(), func(ctx context.Context) (*service.UserSubscription, error) {
 				return subscriptionService.AdmitConsumption(ctx, &baseSub, apiKey.ID)

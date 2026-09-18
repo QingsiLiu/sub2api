@@ -49,6 +49,7 @@ type UserSubscription struct {
 	DeletedAt *time.Time
 
 	EntitlementOperations []SubscriptionEntitlementOperation
+	MediaLookupAdmission  bool
 	AdmissionKey          string // server-generated request identity; never serialized as a user field
 	Entitlements          []SubscriptionEntitlement
 	QuotaSummary          *geilisub.Summary

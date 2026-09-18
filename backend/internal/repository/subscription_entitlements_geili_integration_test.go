@@ -48,6 +48,7 @@ func newEntitlementFixture(t *testing.T) entitlementFixture {
 	t.Cleanup(func() {
 		for _, query := range []string{
 			`DELETE FROM subscription_usage_allocations WHERE request_key IN (SELECT request_key FROM subscription_requests WHERE subscription_id=$1)`,
+			`DELETE FROM subscription_media_tasks WHERE subscription_id=$1`,
 			`DELETE FROM subscription_requests WHERE subscription_id=$1`,
 			`DELETE FROM subscription_refunds WHERE subscription_id=$1`,
 			`DELETE FROM subscription_operations WHERE subscription_id=$1`,
@@ -316,4 +317,54 @@ func TestEntitlementCacheOutboxVersionPreservesConcurrentUpdates(t *testing.T) {
 	var newer int64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT version FROM subscription_cache_outbox WHERE subscription_id=$1", f.sub.ID).Scan(&newer))
 	require.Greater(t, newer, version)
+}
+
+func TestEntitlementAsyncMediaKeepsOriginalAdmissionAfterExpiry(t *testing.T) {
+	f := newEntitlementFixture(t)
+	ctx := context.Background()
+	admitted, err := f.svc.AdmitConsumption(ctx, f.sub, f.key.ID)
+	require.NoError(t, err)
+	task := "synthetic-video-" + uuid.NewString()
+	require.NoError(t, f.svc.BindMediaConsumption(ctx, task, admitted, f.key.ID))
+	require.NoError(t, f.svc.BindMediaConsumption(ctx, task, admitted, f.key.ID))
+	lots, err := geilisub.ReadLots(ctx, f.c, f.sub.ID)
+	require.NoError(t, err)
+	require.NoError(t, f.c.UserSubscriptionEntitlement.UpdateOneID(lots[0].ID).SetExpiresAt(time.Now().Add(-time.Second)).Exec(ctx))
+	require.NoError(t, f.c.UserSubscription.UpdateOneID(f.sub.ID).SetStatus("expired").SetExpiresAt(time.Now().Add(-time.Second)).Exec(ctx))
+	resumed, err := f.svc.ResumeMediaConsumption(ctx, task, f.user.ID, f.key.ID)
+	require.NoError(t, err)
+	require.True(t, resumed.MediaLookupAdmission)
+	require.Equal(t, admitted.AdmissionKey, resumed.AdmissionKey)
+	_, err = f.svc.ResumeMediaConsumption(ctx, task, f.user.ID+1, f.key.ID)
+	require.ErrorIs(t, err, service.ErrSubscriptionNotFound)
+	_, err = f.svc.ResumeMediaConsumption(ctx, task, f.user.ID, f.key.ID+1)
+	require.ErrorIs(t, err, service.ErrSubscriptionNotFound)
+	repo := NewUsageBillingRepository(f.c, integrationDB)
+	cmd := &service.UsageBillingCommand{RequestID: uuid.NewString(), APIKeyID: f.key.ID, UserID: f.user.ID, AccountID: f.account.ID, AccountType: "apikey", SubscriptionID: &f.sub.ID, SubscriptionAdmissionKey: resumed.AdmissionKey, SubscriptionCost: 2, MediaType: "video"}
+	result, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	result, err = repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.False(t, result.Applied)
+	row, err := f.c.UserSubscriptionEntitlement.Get(ctx, lots[0].ID)
+	require.NoError(t, err)
+	require.Equal(t, 2.0, row.LifetimeUsageUsd)
+}
+
+func TestEntitlementPurchaseNormalizesPostgresMicroseconds(t *testing.T) {
+	f := newEntitlementFixture(t)
+	ctx := context.Background()
+	o := f.order(t, "stack", 1)
+	// Round-up nanoseconds must not make the newly persisted lot start "after now".
+	now := time.Now().Truncate(time.Microsecond).Add(999 * time.Nanosecond)
+	require.NoError(t, f.purchase(o, now))
+	parent, err := f.c.UserSubscription.Get(ctx, f.sub.ID)
+	require.NoError(t, err)
+	require.Equal(t, "active", parent.Status)
+	lots, err := geilisub.ReadLots(ctx, f.c, f.sub.ID)
+	require.NoError(t, err)
+	created := lots[len(lots)-1]
+	require.False(t, created.StartsAt.After(now))
+	require.Equal(t, 2, geilisub.Aggregate(lots, now).ActiveLotCount)
 }

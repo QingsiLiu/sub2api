@@ -175,6 +175,8 @@ func PreviewPurchase(lots []Lot, mode string, quantity, days int, daily, weekly,
 
 // Purchase runs inside the caller's transaction. Every paid operation has one durable line per lot.
 func Purchase(ctx context.Context, c *dbent.Client, id int64, planID *int64, orderID int64, days, quantity int, mode string, daily, weekly, monthly *float64, source, reference string, actor int64, now time.Time) error {
+	// PostgreSQL stores microseconds; normalize before persisting and comparing starts_at.
+	now = now.Truncate(time.Microsecond)
 	parent, err := LockParent(ctx, c, id)
 	if err != nil {
 		return err
