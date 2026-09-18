@@ -37,7 +37,7 @@ func (r *userSubscriptionRepository) withLotTx(ctx context.Context, id int64, fn
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	if _, err := geilisub.LockParent(tc, tx.Client(), id); err != nil {
 		return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)

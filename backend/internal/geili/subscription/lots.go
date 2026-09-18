@@ -255,7 +255,7 @@ func LoadLots(ctx context.Context, q SQL, id int64, lock bool) ([]Lot, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var result []Lot
 	for rows.Next() {
 		var e Lot
@@ -271,7 +271,7 @@ func LockSubscription(ctx context.Context, q SQL, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if rows.Err() != nil {
 			return rows.Err()

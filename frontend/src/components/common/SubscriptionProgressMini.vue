@@ -72,7 +72,7 @@
 
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
-                <div v-if="(subscription.plan ?? subscription.group)?.daily_limit_usd" class="flex items-center gap-2">
+                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.daily')
                   }}</span>
@@ -82,25 +82,25 @@
                       :class="
                         getProgressBarClass(
                           subscription.daily_usage_usd,
-                          (subscription.plan ?? subscription.group)?.daily_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd
                         )
                       "
                       :style="{
                         width: getProgressWidth(
                           subscription.daily_usage_usd,
-                          (subscription.plan ?? subscription.group)?.daily_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd
                         )
                       }"
                     ></div>
                   </div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{
-                      formatUsage(subscription.daily_usage_usd, (subscription.plan ?? subscription.group)?.daily_limit_usd)
+                      formatUsage(subscription.daily_usage_usd, (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd)
                     }}
                   </span>
                 </div>
 
-                <div v-if="(subscription.plan ?? subscription.group)?.weekly_limit_usd" class="flex items-center gap-2">
+                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.weekly')
                   }}</span>
@@ -110,25 +110,25 @@
                       :class="
                         getProgressBarClass(
                           subscription.weekly_usage_usd,
-                          (subscription.plan ?? subscription.group)?.weekly_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd
                         )
                       "
                       :style="{
                         width: getProgressWidth(
                           subscription.weekly_usage_usd,
-                          (subscription.plan ?? subscription.group)?.weekly_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd
                         )
                       }"
                     ></div>
                   </div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{
-                      formatUsage(subscription.weekly_usage_usd, (subscription.plan ?? subscription.group)?.weekly_limit_usd)
+                      formatUsage(subscription.weekly_usage_usd, (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd)
                     }}
                   </span>
                 </div>
 
-                <div v-if="(subscription.plan ?? subscription.group)?.monthly_limit_usd" class="flex items-center gap-2">
+                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.monthly')
                   }}</span>
@@ -138,13 +138,13 @@
                       :class="
                         getProgressBarClass(
                           subscription.monthly_usage_usd,
-                          (subscription.plan ?? subscription.group)?.monthly_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
                         )
                       "
                       :style="{
                         width: getProgressWidth(
                           subscription.monthly_usage_usd,
-                          (subscription.plan ?? subscription.group)?.monthly_limit_usd
+                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
                         )
                       }"
                     ></div>
@@ -153,7 +153,7 @@
                     {{
                       formatUsage(
                         subscription.monthly_usage_usd,
-                        (subscription.plan ?? subscription.group)?.monthly_limit_usd
+                        (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
                       )
                     }}
                   </span>
@@ -209,23 +209,23 @@ const displaySubscriptions = computed(() => {
 
 function getMaxUsagePercentage(sub: UserSubscription): number {
   const percentages: number[] = []
-  if ((sub.plan ?? sub.group)?.daily_limit_usd) {
-    percentages.push(((sub.daily_usage_usd || 0) / (sub.plan ?? sub.group)!.daily_limit_usd!) * 100)
+  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.daily_limit_usd) {
+    percentages.push(((sub.daily_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.daily_limit_usd!) * 100)
   }
-  if ((sub.plan ?? sub.group)?.weekly_limit_usd) {
-    percentages.push(((sub.weekly_usage_usd || 0) / (sub.plan ?? sub.group)!.weekly_limit_usd!) * 100)
+  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.weekly_limit_usd) {
+    percentages.push(((sub.weekly_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.weekly_limit_usd!) * 100)
   }
-  if ((sub.plan ?? sub.group)?.monthly_limit_usd) {
-    percentages.push(((sub.monthly_usage_usd || 0) / (sub.plan ?? sub.group)!.monthly_limit_usd!) * 100)
+  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.monthly_limit_usd) {
+    percentages.push(((sub.monthly_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.monthly_limit_usd!) * 100)
   }
   return percentages.length > 0 ? Math.max(...percentages) : 0
 }
 
 function isUnlimited(sub: UserSubscription): boolean {
   return (
-    !(sub.plan ?? sub.group)?.daily_limit_usd &&
-    !(sub.plan ?? sub.group)?.weekly_limit_usd &&
-    !(sub.plan ?? sub.group)?.monthly_limit_usd
+    !(sub.quota_summary ?? sub.plan ?? sub.group)?.daily_limit_usd &&
+    !(sub.quota_summary ?? sub.plan ?? sub.group)?.weekly_limit_usd &&
+    !(sub.quota_summary ?? sub.plan ?? sub.group)?.monthly_limit_usd
   )
 }
 

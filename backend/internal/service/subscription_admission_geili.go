@@ -25,7 +25,7 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	c := tx.Client()
 	tc := dbent.NewTxContext(ctx, tx)
 	now := time.Now()
@@ -68,11 +68,11 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 			return nil, err
 		}
 		if !rows.Next() {
-			rows.Close()
+			_ = rows.Close()
 			return nil, fmt.Errorf("missing allocation watermark")
 		}
 		err = rows.Scan(&eligible[i].AllocationWatermark)
-		rows.Close()
+		_ = rows.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +111,7 @@ func (s *SubscriptionService) CancelUnsentConsumption(ctx context.Context, sub *
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	c := tx.Client()
 	if _, err := geilisub.LockParent(tc, c, sub.ID); err != nil {

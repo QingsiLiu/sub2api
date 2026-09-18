@@ -40,13 +40,13 @@ func (s *SubscriptionService) drainSubscriptionCacheOutbox(ctx context.Context) 
 	for rows.Next() {
 		var e entry
 		if err := rows.Scan(&e.id, &e.user, &e.group, &e.version); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		entries = append(entries, e)
 	}
 	err = rows.Err()
-	rows.Close()
+	_ = rows.Close()
 	if err != nil {
 		return err
 	}

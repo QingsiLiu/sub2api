@@ -345,8 +345,8 @@ function getDaysRemaining(expiresAt: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-function subscriptionQuota(sub: { plan?: { daily_limit_usd?: number | null; weekly_limit_usd?: number | null; monthly_limit_usd?: number | null } | null; group?: { daily_limit_usd?: number | null; weekly_limit_usd?: number | null; monthly_limit_usd?: number | null } | null }) {
-  const source = sub.plan ?? sub.group
+function subscriptionQuota(sub: Pick<import('@/types').UserSubscription, 'quota_summary' | 'plan' | 'group'>) {
+  const source = sub.quota_summary ?? sub.plan ?? sub.group
   return {
     daily: source?.daily_limit_usd ?? null,
     weekly: source?.weekly_limit_usd ?? null,

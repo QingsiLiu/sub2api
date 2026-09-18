@@ -47,7 +47,7 @@ const DataTableStub = {
   template: `
     <div>
       <div v-for="row in data" :key="row.id">
-        <slot name="cell-user" :row="row" />
+        <slot name="cell-user" :row="row" /><slot name="cell-usage" :row="row" />
       </div>
     </div>
   `
@@ -117,6 +117,15 @@ describe('admin subscription users', () => {
         Teleport: true
       }
     }
+  })
+
+  it('displays purchased aggregate quota instead of the edited sale plan', async () => {
+    listSubscriptions.mockResolvedValue({ items: [{ id: 9, user_id: 42, status: 'active', plan: { id: 3, name: 'Edited plan', daily_limit_usd: 90 }, quota_summary: { active_lot_count: 1, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, daily_usage_usd: 2 }, daily_usage_usd: 2, weekly_usage_usd: 2, monthly_usage_usd: 2 }], total: 1, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('45.00')
+    expect(wrapper.text()).not.toContain('90.00')
+    wrapper.unmount()
   })
 
   it('searches current users when assigning a subscription', async () => {

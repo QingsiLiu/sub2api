@@ -77,7 +77,7 @@ func (s *PaymentService) freezeLotRefund(ctx context.Context, p *RefundPlan) err
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	c := tx.Client()
 	parent, err := geilisub.LockParent(tc, c, p.SubscriptionID)
@@ -153,7 +153,7 @@ func (s *PaymentService) markLotRefundPending(ctx context.Context, p *RefundPlan
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	c := tx.Client()
 	journal, err := c.SubscriptionRefund.Query().Where(subscriptionrefund.OrderIDEQ(p.OrderID)).Only(tc)
@@ -198,7 +198,7 @@ func (s *PaymentService) finalizeLotRefund(ctx context.Context, p *RefundPlan, s
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	c := tx.Client()
 	journal, err := c.SubscriptionRefund.Query().Where(subscriptionrefund.OrderIDEQ(p.OrderID)).Only(tc)

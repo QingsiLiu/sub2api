@@ -519,7 +519,7 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	if journalErr != nil {
 		return nil, journalErr
 	}
-	if o.Status != OrderStatusRefundPending && !(hasJournal && o.Status == OrderStatusRefunding) {
+	if o.Status != OrderStatusRefundPending && (!hasJournal || o.Status != OrderStatusRefunding) {
 		return nil, infraerrors.BadRequest("INVALID_STATUS", "only pending or recoverable refunds can be finalized")
 	}
 
@@ -713,7 +713,7 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		tc := dbent.NewTxContext(ctx, tx)
 		result, err := s.markRefundOkTx(tc, tx.Client(), p)
 		if err != nil {
@@ -756,7 +756,7 @@ func applySubscriptionLotRefundWithClient(ctx context.Context, client *dbent.Cli
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	if err := applyLotAdjustments(tc, tx.Client(), p); err != nil {
 		return err
