@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func ptrFloat(v float64) *float64 { return &v }
+func ptrFloatRoute(v float64) *float64 { return &v }
 
 func TestExplicitRoutePriceConfiguredUsesGroupMediaPrices(t *testing.T) {
 	unpriced := &ResolvedPricing{Mode: BillingModeToken}
 	pricedToken := &ResolvedPricing{Mode: BillingModeToken, BasePricing: &ModelPricing{InputPricePerToken: 1e-6}}
-	imageGroup := &Group{ImagePrice1K: ptrFloat(0.05), ImagePrice2K: ptrFloat(0.08), ImagePrice4K: ptrFloat(0.10)}
-	videoGroup := &Group{VideoPrice480P: ptrFloat(0.07), VideoPrice720P: ptrFloat(0.09), VideoPrice1080P: ptrFloat(0.12)}
+	imageGroup := &Group{ImagePrice1K: ptrFloatRoute(0.05), ImagePrice2K: ptrFloatRoute(0.08), ImagePrice4K: ptrFloatRoute(0.10)}
+	videoGroup := &Group{VideoPrice480P: ptrFloatRoute(0.07), VideoPrice720P: ptrFloatRoute(0.09), VideoPrice1080P: ptrFloatRoute(0.12)}
 
 	require.True(t, explicitRoutePriceConfigured(nil, "grok-4.6", pricedToken))
 	require.False(t, explicitRoutePriceConfigured(nil, "grok-imagine", unpriced))
@@ -63,7 +63,7 @@ func TestResolveExplicitKeyRoutesAcceptsGrokImagineGroupPrices(t *testing.T) {
 		Status:         StatusActive,
 		Platform:       PlatformGrok,
 		ImagePrice1K:   &price1k,
-		VideoPrice480P: ptrFloat(0.07),
+		VideoPrice480P: ptrFloatRoute(0.07),
 	}
 	key := &APIKey{
 		UserID:        3982,
