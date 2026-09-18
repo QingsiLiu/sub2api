@@ -1,0 +1,122 @@
+{
+  "date": "2026-09-18T15:27:50+08:00",
+  "source_revision": "6a764397e",
+  "stage": {
+    "revision": "c3a089c1ce6b1829038bdb1c194d1014972e191b",
+    "image": "ghcr.io/qingsiliu/sub2api@sha256:ef04211adb4959f87baa2995c4e492582e292c465fa51936be430e2ea5682bfb",
+    "provider_count": 0,
+    "read_only": true,
+    "synthetic_subscription_ids": [
+      9,
+      10
+    ],
+    "migration_replay_predicate_matches": [
+      9,
+      10
+    ]
+  },
+  "results": {
+    "baseline_backend": {
+      "sha256": "26602b8c25ff3a70f7a17ca6303dae6ce24fb80f7c0b8715310ccd1f05ab8058",
+      "failed_go_tests": [
+        "TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate"
+      ],
+      "go_packages": [
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/geili/subscription\t0.748s",
+        "FAIL\tgithub.com/Wei-Shaw/sub2api/internal/service\t180.714s",
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/repository\t9.428s",
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/handler/dto\t1.102s",
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/handler/admin\t3.511s",
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/handler\t50.235s"
+      ],
+      "vitest_summary": [],
+      "typecheck_passed": false
+    },
+    "baseline_frontend": {
+      "sha256": "263feb14eed9ada1c0f428e3eba43e5fe35b36139d1588ba52be03fdf7ffe874",
+      "failed_go_tests": [],
+      "go_packages": [],
+      "vitest_summary": [
+        "FAIL  src/views/user/__tests__/PaymentView.spec.ts > PaymentView WeChat JSAPI flow > keeps subscription resume context for token-only WeChat callbacks",
+        "Test Files  1 failed | 290 passed (291)",
+        "Tests  1 failed | 2194 passed (2195)"
+      ],
+      "typecheck_passed": false
+    },
+    "lot_functions": {
+      "sha256": "744a08e7f5f4365068e1d77020c9533656a1d4cde2d17238abd0fed3dfc97d3c",
+      "failed_go_tests": [],
+      "go_packages": [
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/geili/subscription\t0.735s"
+      ],
+      "vitest_summary": [],
+      "typecheck_passed": false
+    },
+    "lot_functions_race": {
+      "sha256": "353e99bf768b208ce4e8ea06557f0d8597a60a49048aa7aca34490abab150706",
+      "failed_go_tests": [],
+      "go_packages": [
+        "ok  \tgithub.com/Wei-Shaw/sub2api/internal/geili/subscription\t1.890s"
+      ],
+      "vitest_summary": [],
+      "typecheck_passed": false
+    },
+    "known_defects_go": {
+      "sha256": "92f0da2ddc6e550c7cb8d0e61e5422bed9d15f14bed35b9eaf33de1e71bbd3e9",
+      "failed_go_tests": [
+        "TestSubscriptionAuditRenewRefundPreservesOriginalPurchase",
+        "TestSubscriptionAuditQuoteHasNextExpiry",
+        "TestSubscriptionAuditQuoteRejectsNegativeQuantity",
+        "TestSubscriptionAuditExpiryDoesNotBlockRemainingUnusedLot",
+        "TestSubscriptionAuditExhaustedLotsCannotPoolIncompatibleDimensions",
+        "TestSubscriptionAuditRefundedLotsAreNotUnlimited",
+        "TestSubscriptionAuditLegacyGroupRenewalActuallyExtends",
+        "TestSubscriptionAuditRefundPendingFreezesAffectedLot",
+        "TestSubscriptionAuditRefundFailureIsAtomicAcrossLots",
+        "TestSubscriptionAuditMappingPreservesPurchaseDate",
+        "TestSubscriptionAuditPurePlanHasNoFictitiousGroup",
+        "TestSubscriptionAuditAdminResetReachesLots",
+        "TestSubscriptionAuditSingleLotExpiryAdjustmentReachesLot",
+        "TestSubscriptionAuditLegacyBillingFallback",
+        "TestSubscriptionAuditAdminOrderIncludesModeAndQuantity"
+      ],
+      "go_packages": [
+        "FAIL\tgithub.com/Wei-Shaw/sub2api/internal/service\t1.477s",
+        "FAIL\tgithub.com/Wei-Shaw/sub2api/internal/repository\t1.158s",
+        "FAIL\tgithub.com/Wei-Shaw/sub2api/internal/handler/admin\t2.246s"
+      ],
+      "vitest_summary": [],
+      "typecheck_passed": false,
+      "assertion_details": "2026/09/18 07:22:47 Timezone initialized: UTC (UTC offset: +00:00)\n--- FAIL: TestSubscriptionAuditRenewRefundPreservesOriginalPurchase (0.01s)\n    subscription_audit_geili_test.go:38: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:38\n        \tError:      \tNot equal: \n        \t            \texpected: \"active\"\n        \t            \tactual  : \"refunded\"\n        \t            \t\n        \t            \tDiff:\n        \t            \t--- Expected\n        \t            \t+++ Actual\n        \t            \t@@ -1 +1 @@\n        \t            \t-active\n        \t            \t+refunded\n        \tTest:       \tTestSubscriptionAuditRenewRefundPreservesOriginalPurchase\n        \tMessages:   \trefunding the extension must keep the original purchase active\n--- FAIL: TestSubscriptionAuditQuoteHasNextExpiry (0.01s)\n    subscription_audit_geili_test.go:49: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:49\n        \tError:      \tExpected value not to be nil.\n        \tTest:       \tTestSubscriptionAuditQuoteHasNextExpiry\n        \tMessages:   \tfirst purchase also has a next quota change\n--- FAIL: TestSubscriptionAuditQuoteRejectsNegativeQuantity (0.01s)\n    subscription_audit_geili_test.go:58: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:58\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestSubscriptionAuditQuoteRejectsNegativeQuantity\n        \tMessages:   \tnegative quantity must not silently become one\n--- FAIL: TestSubscriptionAuditExpiryDoesNotBlockRemainingUnusedLot (0.00s)\n    subscription_audit_geili_test.go:77: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:77\n        \tError:      \tReceived unexpected error:\n        \t            \terror: code=429 reason=\"DAILY_LIMIT_EXCEEDED\" message=\"daily usage limit exceeded\" metadata=map[]\n        \tTest:       \tTestSubscriptionAuditExpiryDoesNotBlockRemainingUnusedLot\n        \tMessages:   \texpired usage must not block the remaining unused quota\n--- FAIL: TestSubscriptionAuditExhaustedLotsCannotPoolIncompatibleDimensions (0.00s)\n    subscription_audit_geili_test.go:88: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:88\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestSubscriptionAuditExhaustedLotsCannotPoolIncompatibleDimensions\n        \tMessages:   \tno individual lot has spendable quota; request must be refused\n--- FAIL: TestSubscriptionAuditRefundedLotsAreNotUnlimited (0.00s)\n    subscription_audit_geili_test.go:96: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:96\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestSubscriptionAuditRefundedLotsAreNotUnlimited\n        \tMessages:   \tstale active aggregate must not authorize a subscription with no active lots\n--- FAIL: TestSubscriptionAuditLegacyGroupRenewalActuallyExtends (0.01s)\n    subscription_audit_geili_test.go:114: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:114\n        \tError:      \tMax difference between 2026-10-21 07:22:47.264489 +0000 UTC and 2026-09-21 07:22:47.264489 +0000 UTC allowed is 1ms, but difference was 720h0m0s\n        \tTest:       \tTestSubscriptionAuditLegacyGroupRenewalActuallyExtends\n        \tMessages:   \tcompleted legacy renewal must deliver the purchased days\n--- FAIL: TestSubscriptionAuditRefundPendingFreezesAffectedLot (0.01s)\n    subscription_audit_geili_test.go:130: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:123\n        \t            \t\t\t\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:130\n        \tError:      \tReceived unexpected error:\n        \t            \tent: missing required field \"PaymentOrder.client_ip\"\n        \tTest:       \tTestSubscriptionAuditRefundPendingFreezesAffectedLot\n--- FAIL: TestSubscriptionAuditRefundFailureIsAtomicAcrossLots (0.01s)\n    subscription_audit_geili_test.go:144: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:123\n        \t            \t\t\t\t/Users/tedliu/code/sub2api/backend/internal/service/subscription_audit_geili_test.go:144\n        \tError:      \tReceived unexpected error:\n        \t            \tent: missing required field \"PaymentOrder.client_ip\"\n        \tTest:       \tTestSubscriptionAuditRefundFailureIsAtomicAcrossLots\nFAIL\nFAIL\tgithub.com/Wei-Shaw/sub2api/internal/service\t1.477s\n--- FAIL: TestSubscriptionAuditMappingPreservesPurchaseDate (0.01s)\n    subscription_audit_geili_test.go:47: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/repository/subscription_audit_geili_test.go:47\n        \tError:      \tShould be false\n        \tTest:       \tTestSubscriptionAuditMappingPreservesPurchaseDate\n        \tMessages:   \tpurchase time is persisted and must be returned\n--- FAIL: TestSubscriptionAuditPurePlanHasNoFictitiousGroup (0.01s)\n    subscription_audit_geili_test.go:54: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/repository/subscription_audit_geili_test.go:54\n        \tError:      \t[]int64{0} should not contain 0\n        \tTest:       \tTestSubscriptionAuditPurePlanHasNoFictitiousGroup\n--- FAIL: TestSubscriptionAuditAdminResetReachesLots (0.01s)\n    subscription_audit_geili_test.go:65: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/repository/subscription_audit_geili_test.go:65\n        \tError:      \tShould be zero, but was 5\n        \tTest:       \tTestSubscriptionAuditAdminResetReachesLots\n        \tMessages:   \treset must reach the authoritative quota owner\n--- FAIL: TestSubscriptionAuditSingleLotExpiryAdjustmentReachesLot (0.01s)\n    subscription_audit_geili_test.go:76: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/repository/subscription_audit_geili_test.go:76\n        \tError:      \tMax difference between 2026-10-25 15:22:48.540828 +0800 CST and 2026-10-18 15:22:48.540828 +0800 CST allowed is 1ms, but difference was 168h0m0s\n        \tTest:       \tTestSubscriptionAuditSingleLotExpiryAdjustmentReachesLot\n        \tMessages:   \tone-lot admin extension must change effective expiry\n--- FAIL: TestSubscriptionAuditLegacyBillingFallback (0.00s)\n    subscription_audit_geili_test.go:91: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/repository/subscription_audit_geili_test.go:91\n        \tError:      \tReceived unexpected error:\n        \t            \terror: code=404 reason=\"SUBSCRIPTION_NOT_FOUND\" message=\"subscription not found\" metadata=map[]\n        \tTest:       \tTestSubscriptionAuditLegacyBillingFallback\n        \tMessages:   \texisting aggregate without lots must still record completed usage\nFAIL\nFAIL\tgithub.com/Wei-Shaw/sub2api/internal/repository\t1.158s\n--- FAIL: TestSubscriptionAuditAdminOrderIncludesModeAndQuantity (0.00s)\n    subscription_audit_geili_test.go:19: \n        \tError Trace:\t/Users/tedliu/code/sub2api/backend/internal/handler/admin/subscription_audit_geili_test.go:19\n        \tError:      \tNot equal: \n        \t            \texpected: string(\"stack\")\n        \t            \tactual  : <nil>(<nil>)\n        \tTest:       \tTestSubscriptionAuditAdminOrderIncludesModeAndQuantity\nFAIL\nFAIL\tgithub.com/Wei-Shaw/sub2api/internal/handler/admin\t2.246s\nFAIL\n"
+    },
+    "known_defect_frontend": {
+      "sha256": "f2955af5939644416748d8e2c89d589a5f025a2b3a9b7caa0b25b0e5fb57871b",
+      "failed_go_tests": [],
+      "go_packages": [],
+      "vitest_summary": [
+        "FAIL  src/views/user/__tests__/PaymentView.spec.ts > Subscription audit purchase preview > loads the projected benefits before the user commits to payment",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 25 skipped (26)"
+      ],
+      "typecheck_passed": false
+    },
+    "payment_view_after_test_addition": {
+      "sha256": "e31538127f0050a726c47ce41cb821085b3c52449bdf607255619ea349771449",
+      "failed_go_tests": [],
+      "go_packages": [],
+      "vitest_summary": [
+        "FAIL  src/views/user/__tests__/PaymentView.spec.ts > PaymentView WeChat JSAPI flow > keeps subscription resume context for token-only WeChat callbacks",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 24 passed | 1 skipped (26)"
+      ],
+      "typecheck_passed": false
+    },
+    "frontend_typecheck": {
+      "sha256": "4922f63cb895a612df6877aee000bdce330630c3435d38a05fe70957876f221c",
+      "failed_go_tests": [],
+      "go_packages": [],
+      "vitest_summary": [],
+      "typecheck_passed": true
+    }
+  }
+}

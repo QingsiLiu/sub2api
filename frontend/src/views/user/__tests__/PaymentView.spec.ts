@@ -25,6 +25,7 @@ const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
+const quoteSubscription = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
 // Public settings live in a reactive holder so tests can flip feature flags after mount
@@ -100,6 +101,7 @@ vi.mock('@/stores', async () => {
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
     getCheckoutInfo,
+    quoteSubscription,
   },
 }))
 
@@ -927,5 +929,22 @@ describe('PaymentView subscription feature flag', () => {
     expect(wrapper.text()).not.toContain('payment.rechargeAccount')
     expect(wrapper.findAllComponents(SubscriptionPlanCard).length).toBeGreaterThan(0)
     wrapper.unmount()
+  })
+})
+
+// Opt-in acceptance assertion: this remains red until the preview flow is fixed.
+describe.skipIf(process.env.GEILI_SUBSCRIPTION_AUDIT !== '1')('Subscription audit purchase preview', () => {
+  it('loads the projected benefits before the user commits to payment', async () => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: {
+      order_amount: 128,
+      projected: { active_lot_count: 1, daily_limit_usd: 45, expires_at: '2099-02-01T00:00:00Z' },
+    } })
+    const wrapper = await mountSubscriptionConfirm({ plan: { daily_limit_usd: 45 } })
+    try {
+      expect(createOrder).not.toHaveBeenCalled()
+      expect(quoteSubscription).toHaveBeenCalledWith(expect.objectContaining({ plan_id: 7 }))
+    } finally {
+      wrapper.unmount()
+    }
   })
 })
