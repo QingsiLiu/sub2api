@@ -48,7 +48,20 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if err != nil {
 		return nil, err
 	}
+
 	if !applied {
+		if cmd.SubscriptionAdmissionKey != "" && cmd.SubscriptionID != nil {
+			if err := geilisub.LockSubscription(ctx, tx, *cmd.SubscriptionID); err != nil {
+				return nil, err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE subscription_requests SET status='deduplicated',settled_at=$2,billing_request_id=$3 WHERE request_key=$1 AND subscription_id=$4 AND api_key_id=$5 AND status='admitted'`, cmd.SubscriptionAdmissionKey, time.Now(), cmd.RequestID, *cmd.SubscriptionID, cmd.APIKeyID); err != nil {
+				return nil, err
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+			tx = nil
+		}
 		return &service.UsageBillingApplyResult{Applied: false}, nil
 	}
 
@@ -174,7 +187,11 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
-	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
+	if cmd.SubscriptionAdmissionKey != "" && cmd.SubscriptionID != nil {
+		if err := geilisub.SettleAdmission(ctx, tx, cmd.SubscriptionAdmissionKey, cmd.RequestID, *cmd.SubscriptionID, cmd.APIKeyID, cmd.SubscriptionCost, time.Now()); err != nil {
+			return err
+		}
+	} else if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
 		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
 			return err
 		}
@@ -215,13 +232,10 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
-	if applied, err := geilisub.Debit(ctx, tx, subscriptionID, costUSD, time.Now()); err == nil {
-		if !applied {
-			return service.ErrSubscriptionNotFound
-		}
-		return nil
-	} else {
+	if applied, err := geilisub.Debit(ctx, tx, subscriptionID, costUSD, time.Now()); err != nil {
 		return err
+	} else if applied {
+		return nil
 	}
 	const updateSQL = `
 		UPDATE user_subscriptions us

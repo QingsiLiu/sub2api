@@ -26,6 +26,8 @@ func (UserSubscriptionEntitlement) Fields() []ent.Field {
 		field.Int64("plan_id").Optional().Nillable(),
 		field.Int64("source_order_id").Optional().Nillable(),
 		field.Int("lot_index").Default(0),
+		field.String("source_type").Default("legacy"),
+		field.String("source_reference").Default(""),
 		field.String("purchase_mode").MaxLen(20).Default("renew"),
 		field.String("status").MaxLen(20).Default("active"),
 		field.Time("starts_at").SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),

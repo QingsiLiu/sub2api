@@ -759,12 +759,13 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	PlanID           *int64                         `json:"plan_id,omitempty"`
-	Plan             *service.SubscriptionQuotaPlan `json:"plan,omitempty"`
-	ID               int64                          `json:"id"`
-	UserID           int64                          `json:"user_id"`
-	GroupID          int64                          `json:"group_id"`
-	EntitledGroupIDs []int64                        `json:"entitled_group_ids,omitempty"`
+	EntitlementOperations []service.SubscriptionEntitlementOperation `json:"entitlement_operations,omitempty"`
+	PlanID                *int64                                     `json:"plan_id,omitempty"`
+	Plan                  *service.SubscriptionQuotaPlan             `json:"plan,omitempty"`
+	ID                    int64                                      `json:"id"`
+	UserID                int64                                      `json:"user_id"`
+	GroupID               int64                                      `json:"group_id"`
+	EntitledGroupIDs      []int64                                    `json:"entitled_group_ids,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`

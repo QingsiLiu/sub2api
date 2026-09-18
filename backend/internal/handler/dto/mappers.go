@@ -909,12 +909,26 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
+	copy := *sub
+	if a := sub.AggregateQuotaSummary(); a != nil {
+		copy.DailyUsageUSD = a.DailyUsageUSD
+		copy.WeeklyUsageUSD = a.WeeklyUsageUSD
+		copy.MonthlyUsageUSD = a.MonthlyUsageUSD
+		if a.ExpiresAt != nil {
+			copy.ExpiresAt = *a.ExpiresAt
+		}
+		if copy.Status == "active" && a.ActiveLotCount == 0 {
+			copy.Status = "expired"
+		}
+	}
+	sub = &copy
 	return UserSubscription{
-		ID:               sub.ID,
-		UserID:           sub.UserID,
-		GroupID:          sub.GroupID,
-		EntitledGroupIDs: append([]int64(nil), sub.EntitledGroupIDs...),
-		PlanID:           sub.PlanID, Plan: sub.Plan,
+		EntitlementOperations: sub.EntitlementOperations,
+		ID:                    sub.ID,
+		UserID:                sub.UserID,
+		GroupID:               sub.GroupID,
+		EntitledGroupIDs:      append([]int64(nil), sub.EntitledGroupIDs...),
+		PlanID:                sub.PlanID, Plan: sub.Plan,
 		StartsAt:           sub.StartsAt,
 		ExpiresAt:          sub.ExpiresAt,
 		Status:             sub.Status,

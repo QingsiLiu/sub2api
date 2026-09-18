@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionoperation"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -254,6 +255,21 @@ func (_c *UserSubscriptionCreate) SetNillableNotes(v *string) *UserSubscriptionC
 		_c.SetNotes(*v)
 	}
 	return _c
+}
+
+// AddEntitlementOperationIDs adds the "entitlement_operations" edge to the SubscriptionOperation entity by IDs.
+func (_c *UserSubscriptionCreate) AddEntitlementOperationIDs(ids ...int64) *UserSubscriptionCreate {
+	_c.mutation.AddEntitlementOperationIDs(ids...)
+	return _c
+}
+
+// AddEntitlementOperations adds the "entitlement_operations" edges to the SubscriptionOperation entity.
+func (_c *UserSubscriptionCreate) AddEntitlementOperations(v ...*SubscriptionOperation) *UserSubscriptionCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddEntitlementOperationIDs(ids...)
 }
 
 // SetUser sets the "user" edge to the User entity.
@@ -534,6 +550,22 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(usersubscription.FieldNotes, field.TypeString, value)
 		_node.Notes = &value
+	}
+	if nodes := _c.mutation.EntitlementOperationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   usersubscription.EntitlementOperationsTable,
+			Columns: []string{usersubscription.EntitlementOperationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionoperation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

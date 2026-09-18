@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -286,6 +287,30 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// ── 7. 设置上下文 → Next ─────────────────────────────────────
 
 		if subscription != nil {
+			// geili hook: keep a durable admission across async billing and expiry.
+			if c.Request.Method == "POST" && !strings.Contains(c.Request.URL.Path, "count_tokens") && !strings.Contains(c.Request.URL.Path, "countTokens") {
+				admitted, admitErr := subscriptionService.AdmitConsumption(c.Request.Context(), subscription, apiKey.ID)
+				if admitErr != nil {
+					AbortWithError(c, 403, "SUBSCRIPTION_ADMISSION_FAILED", admitErr.Error())
+					return
+				}
+				subscription = admitted
+				tracked, dispatch := ctxkey.WithUpstreamDispatch(c.Request.Context())
+				c.Request = c.Request.WithContext(tracked)
+				defer func(admission *service.UserSubscription) {
+					// An accepted asynchronous job owns its future dispatch; retain its claim.
+					if !dispatch.Started() && c.Writer.Status() != 202 {
+						cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer cancel()
+						_ = subscriptionService.CancelUnsentConsumption(cleanup, admission)
+					}
+				}(admitted)
+			}
+			c.Request = c.Request.WithContext(service.WithSubscriptionAdmissionCancellation(c.Request.Context(), subscriptionService.CancelUnsentConsumption))
+			baseSub := *subscription
+			c.Request = c.Request.WithContext(service.WithSubscriptionAdmissionFactory(c.Request.Context(), func(ctx context.Context) (*service.UserSubscription, error) {
+				return subscriptionService.AdmitConsumption(ctx, &baseSub, apiKey.ID)
+			}))
 			c.Set(string(ContextKeySubscription), subscription)
 			apiKey = service.SubscriptionBillingKey(apiKey)
 		}

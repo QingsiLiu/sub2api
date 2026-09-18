@@ -42,8 +42,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionentitlementorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionoperation"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionrefund"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionrequest"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -145,8 +148,11 @@ func checkColumn(t, c string) error {
 			securitysecret.Table:                securitysecret.ValidColumn,
 			setting.Table:                       setting.ValidColumn,
 			subscriptionentitlementorder.Table:  subscriptionentitlementorder.ValidColumn,
+			subscriptionoperation.Table:         subscriptionoperation.ValidColumn,
 			subscriptionplan.Table:              subscriptionplan.ValidColumn,
 			subscriptionplangroup.Table:         subscriptionplangroup.ValidColumn,
+			subscriptionrefund.Table:            subscriptionrefund.ValidColumn,
+			subscriptionrequest.Table:           subscriptionrequest.ValidColumn,
 			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
 			usagecleanuptask.Table:              usagecleanuptask.ValidColumn,
 			usagelog.Table:                      usagelog.ValidColumn,

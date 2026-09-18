@@ -70,6 +70,48 @@ func (_c *SubscriptionEntitlementOrderCreate) SetNillableDaysAdded(v *int) *Subs
 	return _c
 }
 
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (_c *SubscriptionEntitlementOrderCreate) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderCreate {
+	_c.mutation.SetBeforeExpiresAt(v)
+	return _c
+}
+
+// SetNillableBeforeExpiresAt sets the "before_expires_at" field if the given value is not nil.
+func (_c *SubscriptionEntitlementOrderCreate) SetNillableBeforeExpiresAt(v *time.Time) *SubscriptionEntitlementOrderCreate {
+	if v != nil {
+		_c.SetBeforeExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (_c *SubscriptionEntitlementOrderCreate) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderCreate {
+	_c.mutation.SetAfterExpiresAt(v)
+	return _c
+}
+
+// SetNillableAfterExpiresAt sets the "after_expires_at" field if the given value is not nil.
+func (_c *SubscriptionEntitlementOrderCreate) SetNillableAfterExpiresAt(v *time.Time) *SubscriptionEntitlementOrderCreate {
+	if v != nil {
+		_c.SetAfterExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (_c *SubscriptionEntitlementOrderCreate) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderCreate {
+	_c.mutation.SetReversedAt(v)
+	return _c
+}
+
+// SetNillableReversedAt sets the "reversed_at" field if the given value is not nil.
+func (_c *SubscriptionEntitlementOrderCreate) SetNillableReversedAt(v *time.Time) *SubscriptionEntitlementOrderCreate {
+	if v != nil {
+		_c.SetReversedAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *SubscriptionEntitlementOrderCreate) SetCreatedAt(v time.Time) *SubscriptionEntitlementOrderCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -212,6 +254,18 @@ func (_c *SubscriptionEntitlementOrderCreate) createSpec() (*SubscriptionEntitle
 	if value, ok := _c.mutation.DaysAdded(); ok {
 		_spec.SetField(subscriptionentitlementorder.FieldDaysAdded, field.TypeInt, value)
 		_node.DaysAdded = value
+	}
+	if value, ok := _c.mutation.BeforeExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldBeforeExpiresAt, field.TypeTime, value)
+		_node.BeforeExpiresAt = &value
+	}
+	if value, ok := _c.mutation.AfterExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldAfterExpiresAt, field.TypeTime, value)
+		_node.AfterExpiresAt = &value
+	}
+	if value, ok := _c.mutation.ReversedAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldReversedAt, field.TypeTime, value)
+		_node.ReversedAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionentitlementorder.FieldCreatedAt, field.TypeTime, value)
@@ -375,6 +429,60 @@ func (u *SubscriptionEntitlementOrderUpsert) AddDaysAdded(v int) *SubscriptionEn
 	return u
 }
 
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsert {
+	u.Set(subscriptionentitlementorder.FieldBeforeExpiresAt, v)
+	return u
+}
+
+// UpdateBeforeExpiresAt sets the "before_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsert) UpdateBeforeExpiresAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetExcluded(subscriptionentitlementorder.FieldBeforeExpiresAt)
+	return u
+}
+
+// ClearBeforeExpiresAt clears the value of the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) ClearBeforeExpiresAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetNull(subscriptionentitlementorder.FieldBeforeExpiresAt)
+	return u
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsert {
+	u.Set(subscriptionentitlementorder.FieldAfterExpiresAt, v)
+	return u
+}
+
+// UpdateAfterExpiresAt sets the "after_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsert) UpdateAfterExpiresAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetExcluded(subscriptionentitlementorder.FieldAfterExpiresAt)
+	return u
+}
+
+// ClearAfterExpiresAt clears the value of the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) ClearAfterExpiresAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetNull(subscriptionentitlementorder.FieldAfterExpiresAt)
+	return u
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderUpsert {
+	u.Set(subscriptionentitlementorder.FieldReversedAt, v)
+	return u
+}
+
+// UpdateReversedAt sets the "reversed_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsert) UpdateReversedAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetExcluded(subscriptionentitlementorder.FieldReversedAt)
+	return u
+}
+
+// ClearReversedAt clears the value of the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsert) ClearReversedAt() *SubscriptionEntitlementOrderUpsert {
+	u.SetNull(subscriptionentitlementorder.FieldReversedAt)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -501,6 +609,69 @@ func (u *SubscriptionEntitlementOrderUpsertOne) AddDaysAdded(v int) *Subscriptio
 func (u *SubscriptionEntitlementOrderUpsertOne) UpdateDaysAdded() *SubscriptionEntitlementOrderUpsertOne {
 	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
 		s.UpdateDaysAdded()
+	})
+}
+
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetBeforeExpiresAt(v)
+	})
+}
+
+// UpdateBeforeExpiresAt sets the "before_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertOne) UpdateBeforeExpiresAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateBeforeExpiresAt()
+	})
+}
+
+// ClearBeforeExpiresAt clears the value of the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) ClearBeforeExpiresAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearBeforeExpiresAt()
+	})
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetAfterExpiresAt(v)
+	})
+}
+
+// UpdateAfterExpiresAt sets the "after_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertOne) UpdateAfterExpiresAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateAfterExpiresAt()
+	})
+}
+
+// ClearAfterExpiresAt clears the value of the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) ClearAfterExpiresAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearAfterExpiresAt()
+	})
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetReversedAt(v)
+	})
+}
+
+// UpdateReversedAt sets the "reversed_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertOne) UpdateReversedAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateReversedAt()
+	})
+}
+
+// ClearReversedAt clears the value of the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsertOne) ClearReversedAt() *SubscriptionEntitlementOrderUpsertOne {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearReversedAt()
 	})
 }
 
@@ -796,6 +967,69 @@ func (u *SubscriptionEntitlementOrderUpsertBulk) AddDaysAdded(v int) *Subscripti
 func (u *SubscriptionEntitlementOrderUpsertBulk) UpdateDaysAdded() *SubscriptionEntitlementOrderUpsertBulk {
 	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
 		s.UpdateDaysAdded()
+	})
+}
+
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetBeforeExpiresAt(v)
+	})
+}
+
+// UpdateBeforeExpiresAt sets the "before_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertBulk) UpdateBeforeExpiresAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateBeforeExpiresAt()
+	})
+}
+
+// ClearBeforeExpiresAt clears the value of the "before_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) ClearBeforeExpiresAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearBeforeExpiresAt()
+	})
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetAfterExpiresAt(v)
+	})
+}
+
+// UpdateAfterExpiresAt sets the "after_expires_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertBulk) UpdateAfterExpiresAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateAfterExpiresAt()
+	})
+}
+
+// ClearAfterExpiresAt clears the value of the "after_expires_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) ClearAfterExpiresAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearAfterExpiresAt()
+	})
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.SetReversedAt(v)
+	})
+}
+
+// UpdateReversedAt sets the "reversed_at" field to the value that was provided on create.
+func (u *SubscriptionEntitlementOrderUpsertBulk) UpdateReversedAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.UpdateReversedAt()
+	})
+}
+
+// ClearReversedAt clears the value of the "reversed_at" field.
+func (u *SubscriptionEntitlementOrderUpsertBulk) ClearReversedAt() *SubscriptionEntitlementOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionEntitlementOrderUpsert) {
+		s.ClearReversedAt()
 	})
 }
 

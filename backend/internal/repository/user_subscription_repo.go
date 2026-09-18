@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
-	"github.com/Wei-Shaw/sub2api/ent/usersubscriptionentitlement"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -30,7 +30,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx con
 	link, err := client.UserSubscriptionGroup.Query().
 		Where(usersubscriptiongroup.GroupIDEQ(groupID), usersubscriptiongroup.HasSubscriptionWith(usersubscription.UserIDEQ(userID), usersubscription.StatusEQ(service.SubscriptionStatusActive), usersubscription.ExpiresAtGT(time.Now()), usersubscription.StartsAtLTE(time.Now()))).
 		WithSubscription(func(q *dbent.UserSubscriptionQuery) {
-			q.WithGroup().WithPlan()
+			q.WithGroup().WithPlan().WithEntitlements()
 		}).
 		Order(usersubscriptiongroup.ByUserSubscriptionID()).
 		First(ctx)
@@ -139,7 +139,7 @@ func (r *userSubscriptionRepository) GetByIDIncludeDeleted(ctx context.Context, 
 		WithUser().
 		WithGroup().WithPlan().
 		WithGroupEntitlements().
-		WithEntitlements().
+		WithEntitlements().WithEntitlementOperations().
 		WithAssignedByUser().
 		Only(queryCtx)
 	if err != nil {
@@ -153,7 +153,7 @@ func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, 
 	m, err := client.UserSubscription.Query().
 		Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(groupID)).
 		WithGroup().WithPlan().
-		WithEntitlements().
+		WithEntitlements().WithEntitlementOperations().
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -171,7 +171,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Con
 			usersubscription.ExpiresAtGT(time.Now()),
 		).
 		WithGroup().WithPlan().
-		WithEntitlements().
+		WithEntitlements().WithEntitlementOperations().
 		Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -211,9 +211,16 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 }
 
 func (r *userSubscriptionRepository) Delete(ctx context.Context, id int64) error {
-	// Match GORM semantics: deleting a missing row is not an error.
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.Delete().Where(usersubscription.IDEQ(id)).Exec(ctx)
+	err := r.withLotTx(ctx, id, func(tc context.Context, c *dbent.Client, lots []geilisub.Lot) error {
+		if err := geilisub.CheckMutable(lots); err != nil {
+			return err
+		}
+		_, err := c.UserSubscription.Delete().Where(usersubscription.IDEQ(id)).Exec(tc)
+		return err
+	})
+	if errors.Is(err, service.ErrSubscriptionNotFound) || dbent.IsNotFound(err) {
+		return nil
+	}
 	return err
 }
 
@@ -237,7 +244,7 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 		Where(usersubscription.UserIDEQ(userID)).
 		WithGroup().WithPlan().
 		WithGroupEntitlements().
-		WithEntitlements().
+		WithEntitlements().WithEntitlementOperations().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {
@@ -277,7 +284,7 @@ func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID 
 		WithUser().
 		WithGroup().WithPlan().
 		WithGroupEntitlements().
-		WithEntitlements().
+		WithEntitlements().WithEntitlementOperations().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		Offset(params.Offset()).
 		Limit(params.Limit()).
@@ -348,7 +355,7 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 	}
 
 	if !includeSoftDeleted {
-		q = q.WithUser().WithGroup().WithPlan().WithAssignedByUser().WithEntitlements()
+		q = q.WithUser().WithGroup().WithPlan().WithAssignedByUser().WithEntitlements().WithEntitlementOperations()
 	}
 
 	// Determine sort field
@@ -399,19 +406,34 @@ func (r *userSubscriptionRepository) ExistsActiveByUserIDAndGroupID(ctx context.
 }
 
 func (r *userSubscriptionRepository) ExtendExpiry(ctx context.Context, subscriptionID int64, newExpiresAt time.Time) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
-		SetExpiresAt(newExpiresAt).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	return r.withLotTx(ctx, subscriptionID, func(tc context.Context, c *dbent.Client, lots []geilisub.Lot) error {
+		if len(lots) > 0 {
+			selected, err := geilisub.ValidateSelection(lots, nil, time.Now())
+			if err != nil {
+				return err
+			}
+			selected[0].ExpiresAt = newExpiresAt
+			if selected[0].Status == "expired" && newExpiresAt.After(time.Now()) {
+				selected[0].Status = "active"
+			}
+			if err := geilisub.PersistLots(tc, c, selected); err != nil {
+				return err
+			}
+		}
+		if err := c.UserSubscription.UpdateOneID(subscriptionID).SetExpiresAt(newExpiresAt).Exec(tc); err != nil {
+			return err
+		}
+		return geilisub.RefreshParent(tc, c, subscriptionID, time.Now())
+	})
 }
 
 func (r *userSubscriptionRepository) UpdateStatus(ctx context.Context, subscriptionID int64, status string) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(subscriptionID).
-		SetStatus(status).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	return r.withLotTx(ctx, subscriptionID, func(tc context.Context, c *dbent.Client, lots []geilisub.Lot) error {
+		if err := geilisub.CheckMutable(lots); err != nil {
+			return err
+		}
+		return c.UserSubscription.UpdateOneID(subscriptionID).SetStatus(status).Exec(tc)
+	})
 }
 
 func (r *userSubscriptionRepository) UpdateNotes(ctx context.Context, subscriptionID int64, notes string) error {
@@ -439,19 +461,7 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 }
 
 func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, dailyStart, periodicStart time.Time) error {
-	client := clientFromContext(ctx, r.client)
-	update := client.UserSubscription.UpdateOneID(id)
-	if resetDaily {
-		update.SetDailyUsageUsd(0).SetDailyWindowStart(dailyStart)
-	}
-	if resetWeekly {
-		update.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(periodicStart)
-	}
-	if resetMonthly {
-		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
-	}
-	_, err := update.Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
+	return r.resetLotWindows(ctx, id, resetDaily, resetWeekly, resetMonthly, dailyStart, periodicStart)
 }
 
 func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, expectedWindowStart *time.Time, newWindowStart time.Time) error {
@@ -523,60 +533,7 @@ func (r *userSubscriptionRepository) translateConditionalWindowReset(ctx context
 // 限额检查已在请求前由 BillingCacheService.CheckBillingEligibility 完成，
 // 此处仅负责记录实际消费，确保消费数据的完整性。
 func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
-	client := clientFromContext(ctx, r.client)
-	if rows, err := client.UserSubscriptionEntitlement.Query().Where(usersubscriptionentitlement.UserSubscriptionIDEQ(id)).ForUpdate().All(ctx); err == nil && len(rows) > 0 {
-		// The entitlement table is authoritative once it has been backfilled.
-		// Keep the historical aggregate UPDATE below for pre-migration databases.
-		lots := make([]geilisub.Lot, 0, len(rows))
-		for _, row := range rows {
-			lots = append(lots, geilisub.Lot{ID: row.ID, UserSubscriptionID: row.UserSubscriptionID, PlanID: row.PlanID, SourceOrderID: row.SourceOrderID, LotIndex: row.LotIndex, PurchaseMode: row.PurchaseMode, Status: row.Status, StartsAt: row.StartsAt, ExpiresAt: row.ExpiresAt, DailyLimitUSD: row.DailyLimitUsd, WeeklyLimitUSD: row.WeeklyLimitUsd, MonthlyLimitUSD: row.MonthlyLimitUsd, DailyWindowStart: row.DailyWindowStart, WeeklyWindowStart: row.WeeklyWindowStart, MonthlyWindowStart: row.MonthlyWindowStart, DailyUsageUSD: row.DailyUsageUsd, WeeklyUsageUSD: row.WeeklyUsageUsd, MonthlyUsageUSD: row.MonthlyUsageUsd, LifetimeUsageUSD: row.LifetimeUsageUsd, RefundedAt: row.RefundedAt, CreatedAt: row.CreatedAt})
-		}
-		updated, allocErr := geilisub.Allocate(lots, costUSD, time.Now())
-		if allocErr != nil {
-			return allocErr
-		}
-		for _, lot := range updated {
-			if _, err := client.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetNillableDailyWindowStart(lot.DailyWindowStart).SetNillableWeeklyWindowStart(lot.WeeklyWindowStart).SetNillableMonthlyWindowStart(lot.MonthlyWindowStart).SetDailyUsageUsd(lot.DailyUsageUSD).SetWeeklyUsageUsd(lot.WeeklyUsageUSD).SetMonthlyUsageUsd(lot.MonthlyUsageUSD).SetLifetimeUsageUsd(lot.LifetimeUsageUSD).Save(ctx); err != nil {
-				return err
-			}
-		}
-		summary := geilisub.Aggregate(updated, time.Now())
-		upd := client.UserSubscription.UpdateOneID(id).SetDailyUsageUsd(summary.DailyUsageUSD).SetWeeklyUsageUsd(summary.WeeklyUsageUSD).SetMonthlyUsageUsd(summary.MonthlyUsageUSD)
-		if err := upd.Exec(ctx); err != nil {
-			return err
-		}
-		return nil
-	}
-	const updateSQL = `
-		UPDATE user_subscriptions us
-		SET
-			daily_usage_usd = us.daily_usage_usd + $1,
-			weekly_usage_usd = us.weekly_usage_usd + $1,
-			monthly_usage_usd = us.monthly_usage_usd + $1,
-			updated_at = NOW()
-		FROM groups g
-		WHERE us.id = $2
-			AND us.deleted_at IS NULL
-			AND us.group_id = g.id
-			AND g.deleted_at IS NULL
-	`
-
-	result, err := client.ExecContext(ctx, updateSQL, costUSD, id)
-	if err != nil {
-		return err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if affected > 0 {
-		return nil
-	}
-
-	// affected == 0：订阅不存在或已删除
-	return service.ErrSubscriptionNotFound
+	return r.incrementLots(ctx, id, costUSD)
 }
 
 func (r *userSubscriptionRepository) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
@@ -757,7 +714,16 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 	for _, entitlement := range m.Edges.Entitlements {
 		out.Entitlements = append(out.Entitlements, subscriptionEntitlementEntityToService(entitlement))
 	}
-	if len(out.EntitledGroupIDs) == 0 {
+
+	for _, operation := range m.Edges.EntitlementOperations {
+		op := service.SubscriptionEntitlementOperation{ID: operation.ID, EntitlementID: operation.EntitlementID, Operation: operation.Operation, SourceType: operation.SourceType, SourceReference: operation.SourceReference, CreatedAt: operation.CreatedAt}
+		raw, err := json.Marshal(operation.Detail)
+		if err == nil {
+			_ = json.Unmarshal(raw, &op)
+		}
+		out.EntitlementOperations = append(out.EntitlementOperations, op)
+	}
+	if len(out.EntitledGroupIDs) == 0 && out.GroupID > 0 {
 		out.EntitledGroupIDs = []int64{out.GroupID}
 	}
 	return out
@@ -767,15 +733,7 @@ func subscriptionEntitlementEntityToService(e *dbent.UserSubscriptionEntitlement
 	if e == nil {
 		return service.SubscriptionEntitlement{}
 	}
-	return service.SubscriptionEntitlement{
-		ID: e.ID, UserSubscriptionID: e.UserSubscriptionID, PlanID: e.PlanID,
-		SourceOrderID: e.SourceOrderID, LotIndex: e.LotIndex, PurchaseMode: e.PurchaseMode,
-		Status: e.Status, StartsAt: e.StartsAt, ExpiresAt: e.ExpiresAt,
-		DailyLimitUSD: e.DailyLimitUsd, WeeklyLimitUSD: e.WeeklyLimitUsd, MonthlyLimitUSD: e.MonthlyLimitUsd,
-		DailyWindowStart: e.DailyWindowStart, WeeklyWindowStart: e.WeeklyWindowStart, MonthlyWindowStart: e.MonthlyWindowStart,
-		DailyUsageUSD: e.DailyUsageUsd, WeeklyUsageUSD: e.WeeklyUsageUsd, MonthlyUsageUSD: e.MonthlyUsageUsd,
-		LifetimeUsageUSD: e.LifetimeUsageUsd, RefundedAt: e.RefundedAt,
-	}
+	return geilisub.FromEntity(e)
 }
 
 func userSubscriptionEntitiesToService(models []*dbent.UserSubscription) []service.UserSubscription {

@@ -600,11 +600,12 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 		case lookupErr != nil && !errors.Is(lookupErr, ErrSubscriptionNotFound):
 			return fmt.Errorf("check existing subscription assignment: %w", lookupErr)
 		default:
-			if existing == nil {
+			if existing == nil || o.SubscriptionGroupID != nil || o.PlanID == nil {
 				if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-					UserID:  o.UserID,
-					GroupID: groupID,
-					PlanID:  paymentSettlementPlanID(o), AllowArchivedPlan: true,
+					SkipEntitlement: o.SubscriptionGroupID == nil && o.PlanID != nil,
+					UserID:          o.UserID,
+					GroupID:         groupID,
+					PlanID:          paymentSettlementPlanID(o), AllowArchivedPlan: true,
 					ValidityDays: days,
 					AssignedBy:   0,
 					Notes:        orderNote,
@@ -613,7 +614,7 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 				}
 			}
 		}
-		if o.PlanID != nil && !recoveredFromNote {
+		if o.PlanID != nil && o.SubscriptionGroupID == nil && !recoveredFromNote {
 			parent, parentErr := s.subscriptionSvc.FindByUserAndPlan(txCtx, o.UserID, *o.PlanID)
 			if parentErr != nil || parent == nil {
 				return fmt.Errorf("resolve aggregate subscription: %w", parentErr)
@@ -631,7 +632,23 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 			if mode == "" {
 				mode = "renew"
 			}
-			if err := geilisub.ApplyPurchase(txCtx, txClient, parent.ID, planID, o.ID, planDays, o.SubscriptionQuantity, mode, daily, weekly, monthly, time.Now()); err != nil {
+			if o.SubscriptionSnapshot != nil {
+				snap, err := readSubscriptionSnapshot(o.SubscriptionSnapshot)
+				if err != nil {
+					return err
+				}
+				daily, weekly, monthly = snap.Daily, snap.Weekly, snap.Monthly
+				planDays = snap.Days
+			}
+			if existing != nil && len(parent.Entitlements) == 0 {
+				if _, err := geilisub.LockParent(txCtx, txClient, parent.ID); err != nil {
+					return err
+				}
+				if _, err := geilisub.EnsureLegacyLot(txCtx, txClient, parent.ID); err != nil {
+					return err
+				}
+			}
+			if err := geilisub.Purchase(txCtx, txClient, parent.ID, &planID, o.ID, planDays, o.SubscriptionQuantity, mode, daily, weekly, monthly, "payment", geilisub.PurchaseReference(o.ID), 0, time.Now()); err != nil {
 				return fmt.Errorf("apply subscription entitlement purchase: %w", err)
 			}
 		}

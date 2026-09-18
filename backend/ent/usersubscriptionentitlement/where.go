@@ -75,6 +75,16 @@ func LotIndex(v int) predicate.UserSubscriptionEntitlement {
 	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldLotIndex, v))
 }
 
+// SourceType applies equality check predicate on the "source_type" field. It's identical to SourceTypeEQ.
+func SourceType(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldSourceType, v))
+}
+
+// SourceReference applies equality check predicate on the "source_reference" field. It's identical to SourceReferenceEQ.
+func SourceReference(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldSourceReference, v))
+}
+
 // PurchaseMode applies equality check predicate on the "purchase_mode" field. It's identical to PurchaseModeEQ.
 func PurchaseMode(v string) predicate.UserSubscriptionEntitlement {
 	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldPurchaseMode, v))
@@ -278,6 +288,136 @@ func LotIndexLT(v int) predicate.UserSubscriptionEntitlement {
 // LotIndexLTE applies the LTE predicate on the "lot_index" field.
 func LotIndexLTE(v int) predicate.UserSubscriptionEntitlement {
 	return predicate.UserSubscriptionEntitlement(sql.FieldLTE(FieldLotIndex, v))
+}
+
+// SourceTypeEQ applies the EQ predicate on the "source_type" field.
+func SourceTypeEQ(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldSourceType, v))
+}
+
+// SourceTypeNEQ applies the NEQ predicate on the "source_type" field.
+func SourceTypeNEQ(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldNEQ(FieldSourceType, v))
+}
+
+// SourceTypeIn applies the In predicate on the "source_type" field.
+func SourceTypeIn(vs ...string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldIn(FieldSourceType, vs...))
+}
+
+// SourceTypeNotIn applies the NotIn predicate on the "source_type" field.
+func SourceTypeNotIn(vs ...string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldNotIn(FieldSourceType, vs...))
+}
+
+// SourceTypeGT applies the GT predicate on the "source_type" field.
+func SourceTypeGT(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldGT(FieldSourceType, v))
+}
+
+// SourceTypeGTE applies the GTE predicate on the "source_type" field.
+func SourceTypeGTE(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldGTE(FieldSourceType, v))
+}
+
+// SourceTypeLT applies the LT predicate on the "source_type" field.
+func SourceTypeLT(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldLT(FieldSourceType, v))
+}
+
+// SourceTypeLTE applies the LTE predicate on the "source_type" field.
+func SourceTypeLTE(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldLTE(FieldSourceType, v))
+}
+
+// SourceTypeContains applies the Contains predicate on the "source_type" field.
+func SourceTypeContains(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldContains(FieldSourceType, v))
+}
+
+// SourceTypeHasPrefix applies the HasPrefix predicate on the "source_type" field.
+func SourceTypeHasPrefix(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldHasPrefix(FieldSourceType, v))
+}
+
+// SourceTypeHasSuffix applies the HasSuffix predicate on the "source_type" field.
+func SourceTypeHasSuffix(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldHasSuffix(FieldSourceType, v))
+}
+
+// SourceTypeEqualFold applies the EqualFold predicate on the "source_type" field.
+func SourceTypeEqualFold(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEqualFold(FieldSourceType, v))
+}
+
+// SourceTypeContainsFold applies the ContainsFold predicate on the "source_type" field.
+func SourceTypeContainsFold(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldContainsFold(FieldSourceType, v))
+}
+
+// SourceReferenceEQ applies the EQ predicate on the "source_reference" field.
+func SourceReferenceEQ(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEQ(FieldSourceReference, v))
+}
+
+// SourceReferenceNEQ applies the NEQ predicate on the "source_reference" field.
+func SourceReferenceNEQ(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldNEQ(FieldSourceReference, v))
+}
+
+// SourceReferenceIn applies the In predicate on the "source_reference" field.
+func SourceReferenceIn(vs ...string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldIn(FieldSourceReference, vs...))
+}
+
+// SourceReferenceNotIn applies the NotIn predicate on the "source_reference" field.
+func SourceReferenceNotIn(vs ...string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldNotIn(FieldSourceReference, vs...))
+}
+
+// SourceReferenceGT applies the GT predicate on the "source_reference" field.
+func SourceReferenceGT(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldGT(FieldSourceReference, v))
+}
+
+// SourceReferenceGTE applies the GTE predicate on the "source_reference" field.
+func SourceReferenceGTE(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldGTE(FieldSourceReference, v))
+}
+
+// SourceReferenceLT applies the LT predicate on the "source_reference" field.
+func SourceReferenceLT(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldLT(FieldSourceReference, v))
+}
+
+// SourceReferenceLTE applies the LTE predicate on the "source_reference" field.
+func SourceReferenceLTE(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldLTE(FieldSourceReference, v))
+}
+
+// SourceReferenceContains applies the Contains predicate on the "source_reference" field.
+func SourceReferenceContains(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldContains(FieldSourceReference, v))
+}
+
+// SourceReferenceHasPrefix applies the HasPrefix predicate on the "source_reference" field.
+func SourceReferenceHasPrefix(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldHasPrefix(FieldSourceReference, v))
+}
+
+// SourceReferenceHasSuffix applies the HasSuffix predicate on the "source_reference" field.
+func SourceReferenceHasSuffix(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldHasSuffix(FieldSourceReference, v))
+}
+
+// SourceReferenceEqualFold applies the EqualFold predicate on the "source_reference" field.
+func SourceReferenceEqualFold(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldEqualFold(FieldSourceReference, v))
+}
+
+// SourceReferenceContainsFold applies the ContainsFold predicate on the "source_reference" field.
+func SourceReferenceContainsFold(v string) predicate.UserSubscriptionEntitlement {
+	return predicate.UserSubscriptionEntitlement(sql.FieldContainsFold(FieldSourceReference, v))
 }
 
 // PurchaseModeEQ applies the EQ predicate on the "purchase_mode" field.

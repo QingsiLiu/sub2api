@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"net/http"
 	"net/url"
 	"strings"
@@ -246,6 +247,7 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 				errCh <- fmt.Errorf("invalid realtime event: %w", unmarshalErr)
 				return
 			}
+			ctxkey.MarkUpstreamDispatched(ctx)
 			if writeErr := conn.WriteJSON(ctx, raw); writeErr != nil {
 				errCh <- writeErr
 				return

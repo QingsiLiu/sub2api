@@ -88,7 +88,7 @@ func (s *SubscriptionService) BulkSubscriptionAction(ctx context.Context, input 
 				var mutationErr error
 				switch input.Action {
 				case "extend":
-					changed, mutationErr = s.ExtendSubscription(txCtx, id, input.Days)
+					changed, mutationErr = s.ExtendSelectedEntitlements(txCtx, id, input.Days, nil, 0)
 				case "reset_quota":
 					changed, mutationErr = s.AdminResetQuota(txCtx, id, input.Daily, input.Weekly, input.Monthly)
 				case "revoke":

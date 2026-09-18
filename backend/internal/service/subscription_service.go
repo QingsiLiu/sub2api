@@ -10,7 +10,9 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -55,8 +57,9 @@ type SubscriptionService struct {
 	subCacheTTL    time.Duration
 	subCacheJitter int // 抖动百分比
 
-	maintenanceQueue *SubscriptionMaintenanceQueue
-	now              func() time.Time
+	maintenanceQueue  *SubscriptionMaintenanceQueue
+	now               func() time.Time
+	cacheOutboxCancel context.CancelFunc
 }
 
 // NewSubscriptionService 创建订阅服务
@@ -71,6 +74,9 @@ func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscript
 	svc.initSubCache(cfg)
 	svc.initMaintenanceQueue(cfg)
 	svc.StartSubCacheInvalidationSubscriber(context.Background())
+	if entClient != nil && cfg != nil {
+		svc.startSubscriptionCacheOutbox()
+	}
 	return svc
 }
 
@@ -89,6 +95,9 @@ func (s *SubscriptionService) initMaintenanceQueue(cfg *config.Config) {
 func (s *SubscriptionService) Stop() {
 	if s == nil {
 		return
+	}
+	if s.cacheOutboxCancel != nil {
+		s.cacheOutboxCancel()
 	}
 	if s.maintenanceQueue != nil {
 		s.maintenanceQueue.Stop()
@@ -212,6 +221,9 @@ func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64
 type AssignSubscriptionInput struct {
 	PlanID            *int64
 	AllowArchivedPlan bool
+	SkipEntitlement   bool // payment owns the initial purchase; do not create a free grant
+	SourceType        string
+	SourceReference   string
 	UserID            int64
 	GroupID           int64
 	ValidityDays      int
@@ -245,6 +257,9 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 	if input.PlanID != nil {
 		return s.assignPlanSubscription(ctx, input, true, deferCacheInvalidation)
 	}
+	if s.entClient != nil {
+		return s.assignLegacyEntitled(ctx, input, true, deferCacheInvalidation)
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -257,7 +272,9 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 	// 查询是否已有订阅
 	existingSub, err := s.userSubRepo.GetByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
 	if err != nil {
-		// 不存在记录是正常情况，其他错误需要返回
+		if !subscriptionMissing(err) {
+			return nil, false, err
+		}
 		existingSub = nil
 	}
 
@@ -559,6 +576,9 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 	if input.PlanID != nil {
 		return s.assignPlanSubscription(ctx, input, false, false)
 	}
+	if s.entClient != nil {
+		return s.assignLegacyEntitled(ctx, input, false, false)
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -680,7 +700,12 @@ func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscript
 		return nil, ErrSubscriptionNotRevoked
 	}
 
-	exists, err := s.userSubRepo.ExistsActiveByUserIDAndGroupID(ctx, sub.UserID, sub.GroupID)
+	var exists bool
+	if sub.PlanID != nil && s.entClient != nil {
+		exists, err = s.entClient.UserSubscription.Query().Where(usersubscription.UserIDEQ(sub.UserID), usersubscription.PlanIDEQ(*sub.PlanID), usersubscription.IDNEQ(sub.ID)).Exist(ctx)
+	} else {
+		exists, err = s.userSubRepo.ExistsActiveByUserIDAndGroupID(ctx, sub.UserID, sub.GroupID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -794,7 +819,12 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 
 // GetByID 根据ID获取订阅
 func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubscription, error) {
-	return s.userSubRepo.GetByID(ctx, id)
+	sub, err := s.userSubRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	effectiveSubscriptionSummary(sub, time.Now())
+	return sub, nil
 }
 
 // GetActiveSubscriptionByIDForUser validates an explicitly pinned subscription
@@ -1122,6 +1152,17 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 		return false, ErrSubscriptionExpired
 	}
 
+	// geili hook: quota comes from independently normalized lots.
+	if len(sub.Entitlements) > 0 {
+		a := geilisub.Aggregate(sub.Entitlements, now)
+		if a.ActiveLotCount == 0 {
+			return false, ErrSubscriptionExpired
+		}
+		if a.AvailableUSD <= 0 {
+			return false, ErrDailyLimitExceeded
+		}
+		return false, nil
+	}
 	// 2. 内存中修正过期窗口的用量，确保预检查不会误拒绝用户。
 	//    调用方随后同步推进 DB 窗口，并用回读快照重新校验。
 	if sub.canAutomaticallyResetDailyAt(now) {
@@ -1243,6 +1284,9 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 
 // calculateProgress 根据已加载的订阅和分组数据计算使用进度（纯内存计算，无 DB 查询）
 func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
+	copy := *sub
+	sub = &copy
+	effectiveSubscriptionSummary(sub, time.Now())
 	daily, weekly, monthly := sub.QuotaLimits(group)
 	name := sub.QuotaName()
 	if name == "" && group != nil {

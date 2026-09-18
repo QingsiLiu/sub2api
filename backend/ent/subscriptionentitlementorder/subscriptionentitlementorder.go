@@ -24,6 +24,12 @@ const (
 	FieldOperation = "operation"
 	// FieldDaysAdded holds the string denoting the days_added field in the database.
 	FieldDaysAdded = "days_added"
+	// FieldBeforeExpiresAt holds the string denoting the before_expires_at field in the database.
+	FieldBeforeExpiresAt = "before_expires_at"
+	// FieldAfterExpiresAt holds the string denoting the after_expires_at field in the database.
+	FieldAfterExpiresAt = "after_expires_at"
+	// FieldReversedAt holds the string denoting the reversed_at field in the database.
+	FieldReversedAt = "reversed_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// EdgeEntitlement holds the string denoting the entitlement edge name in mutations.
@@ -56,6 +62,9 @@ var Columns = []string{
 	FieldLotIndex,
 	FieldOperation,
 	FieldDaysAdded,
+	FieldBeforeExpiresAt,
+	FieldAfterExpiresAt,
+	FieldReversedAt,
 	FieldCreatedAt,
 }
 
@@ -111,6 +120,21 @@ func ByOperation(opts ...sql.OrderTermOption) OrderOption {
 // ByDaysAdded orders the results by the days_added field.
 func ByDaysAdded(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDaysAdded, opts...).ToFunc()
+}
+
+// ByBeforeExpiresAt orders the results by the before_expires_at field.
+func ByBeforeExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBeforeExpiresAt, opts...).ToFunc()
+}
+
+// ByAfterExpiresAt orders the results by the after_expires_at field.
+func ByAfterExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfterExpiresAt, opts...).ToFunc()
+}
+
+// ByReversedAt orders the results by the reversed_at field.
+func ByReversedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReversedAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

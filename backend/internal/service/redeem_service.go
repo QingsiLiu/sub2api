@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -557,6 +558,7 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 				ValidityDays: validityDays,
 				AssignedBy:   0, // 系统分配
 				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
+				SourceType:   "redeem", SourceReference: strconv.FormatInt(redeemCode.ID, 10),
 			}, true)
 			if err != nil {
 				return nil, fmt.Errorf("assign or extend subscription: %w", err)
@@ -745,6 +747,9 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		remaining = 0
 	}
 
+	if len(sub.Entitlements) > 1 {
+		return ErrSubscriptionAssignConflict.WithMetadata(map[string]string{"conflict_reason": "select entitlements for negative redemption"})
+	}
 	notes := fmt.Sprintf("通过兑换码 %s 退款扣减 %d 天", code, reduceDays)
 
 	if remaining <= reduceDays {

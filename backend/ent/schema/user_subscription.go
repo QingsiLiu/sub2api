@@ -85,6 +85,7 @@ func (UserSubscription) Fields() []ent.Field {
 
 func (UserSubscription) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.To("entitlement_operations", SubscriptionOperation.Type),
 		edge.From("user", User.Type).
 			Ref("subscriptions").
 			Field("user_id").

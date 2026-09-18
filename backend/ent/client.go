@@ -45,8 +45,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionentitlementorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionoperation"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionrefund"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionrequest"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -127,10 +130,16 @@ type Client struct {
 	Setting *SettingClient
 	// SubscriptionEntitlementOrder is the client for interacting with the SubscriptionEntitlementOrder builders.
 	SubscriptionEntitlementOrder *SubscriptionEntitlementOrderClient
+	// SubscriptionOperation is the client for interacting with the SubscriptionOperation builders.
+	SubscriptionOperation *SubscriptionOperationClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// SubscriptionPlanGroup is the client for interacting with the SubscriptionPlanGroup builders.
 	SubscriptionPlanGroup *SubscriptionPlanGroupClient
+	// SubscriptionRefund is the client for interacting with the SubscriptionRefund builders.
+	SubscriptionRefund *SubscriptionRefundClient
+	// SubscriptionRequest is the client for interacting with the SubscriptionRequest builders.
+	SubscriptionRequest *SubscriptionRequestClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -194,8 +203,11 @@ func (c *Client) init() {
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.SubscriptionEntitlementOrder = NewSubscriptionEntitlementOrderClient(c.config)
+	c.SubscriptionOperation = NewSubscriptionOperationClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.SubscriptionPlanGroup = NewSubscriptionPlanGroupClient(c.config)
+	c.SubscriptionRefund = NewSubscriptionRefundClient(c.config)
+	c.SubscriptionRequest = NewSubscriptionRequestClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
@@ -329,8 +341,11 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionEntitlementOrder:  NewSubscriptionEntitlementOrderClient(cfg),
+		SubscriptionOperation:         NewSubscriptionOperationClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SubscriptionPlanGroup:         NewSubscriptionPlanGroupClient(cfg),
+		SubscriptionRefund:            NewSubscriptionRefundClient(cfg),
+		SubscriptionRequest:           NewSubscriptionRequestClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -391,8 +406,11 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionEntitlementOrder:  NewSubscriptionEntitlementOrderClient(cfg),
+		SubscriptionOperation:         NewSubscriptionOperationClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		SubscriptionPlanGroup:         NewSubscriptionPlanGroupClient(cfg),
+		SubscriptionRefund:            NewSubscriptionRefundClient(cfg),
+		SubscriptionRequest:           NewSubscriptionRequestClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -441,7 +459,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionEntitlementOrder, c.SubscriptionPlan, c.SubscriptionPlanGroup,
+		c.SubscriptionEntitlementOrder, c.SubscriptionOperation, c.SubscriptionPlan,
+		c.SubscriptionPlanGroup, c.SubscriptionRefund, c.SubscriptionRequest,
 		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserPlatformQuota, c.UserSubscription, c.UserSubscriptionEntitlement,
@@ -463,7 +482,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionEntitlementOrder, c.SubscriptionPlan, c.SubscriptionPlanGroup,
+		c.SubscriptionEntitlementOrder, c.SubscriptionOperation, c.SubscriptionPlan,
+		c.SubscriptionPlanGroup, c.SubscriptionRefund, c.SubscriptionRequest,
 		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserPlatformQuota, c.UserSubscription, c.UserSubscriptionEntitlement,
@@ -536,10 +556,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Setting.mutate(ctx, m)
 	case *SubscriptionEntitlementOrderMutation:
 		return c.SubscriptionEntitlementOrder.mutate(ctx, m)
+	case *SubscriptionOperationMutation:
+		return c.SubscriptionOperation.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *SubscriptionPlanGroupMutation:
 		return c.SubscriptionPlanGroup.mutate(ctx, m)
+	case *SubscriptionRefundMutation:
+		return c.SubscriptionRefund.mutate(ctx, m)
+	case *SubscriptionRequestMutation:
+		return c.SubscriptionRequest.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
@@ -5350,6 +5376,155 @@ func (c *SubscriptionEntitlementOrderClient) mutate(ctx context.Context, m *Subs
 	}
 }
 
+// SubscriptionOperationClient is a client for the SubscriptionOperation schema.
+type SubscriptionOperationClient struct {
+	config
+}
+
+// NewSubscriptionOperationClient returns a client for the SubscriptionOperation from the given config.
+func NewSubscriptionOperationClient(c config) *SubscriptionOperationClient {
+	return &SubscriptionOperationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionoperation.Hooks(f(g(h())))`.
+func (c *SubscriptionOperationClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionOperation = append(c.hooks.SubscriptionOperation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionoperation.Intercept(f(g(h())))`.
+func (c *SubscriptionOperationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionOperation = append(c.inters.SubscriptionOperation, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionOperation entity.
+func (c *SubscriptionOperationClient) Create() *SubscriptionOperationCreate {
+	mutation := newSubscriptionOperationMutation(c.config, OpCreate)
+	return &SubscriptionOperationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionOperation entities.
+func (c *SubscriptionOperationClient) CreateBulk(builders ...*SubscriptionOperationCreate) *SubscriptionOperationCreateBulk {
+	return &SubscriptionOperationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionOperationClient) MapCreateBulk(slice any, setFunc func(*SubscriptionOperationCreate, int)) *SubscriptionOperationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionOperationCreateBulk{err: fmt.Errorf("calling to SubscriptionOperationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionOperationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionOperationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionOperation.
+func (c *SubscriptionOperationClient) Update() *SubscriptionOperationUpdate {
+	mutation := newSubscriptionOperationMutation(c.config, OpUpdate)
+	return &SubscriptionOperationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionOperationClient) UpdateOne(_m *SubscriptionOperation) *SubscriptionOperationUpdateOne {
+	mutation := newSubscriptionOperationMutation(c.config, OpUpdateOne, withSubscriptionOperation(_m))
+	return &SubscriptionOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionOperationClient) UpdateOneID(id int64) *SubscriptionOperationUpdateOne {
+	mutation := newSubscriptionOperationMutation(c.config, OpUpdateOne, withSubscriptionOperationID(id))
+	return &SubscriptionOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionOperation.
+func (c *SubscriptionOperationClient) Delete() *SubscriptionOperationDelete {
+	mutation := newSubscriptionOperationMutation(c.config, OpDelete)
+	return &SubscriptionOperationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionOperationClient) DeleteOne(_m *SubscriptionOperation) *SubscriptionOperationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionOperationClient) DeleteOneID(id int64) *SubscriptionOperationDeleteOne {
+	builder := c.Delete().Where(subscriptionoperation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionOperationDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionOperation.
+func (c *SubscriptionOperationClient) Query() *SubscriptionOperationQuery {
+	return &SubscriptionOperationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionOperation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionOperation entity by its id.
+func (c *SubscriptionOperationClient) Get(ctx context.Context, id int64) (*SubscriptionOperation, error) {
+	return c.Query().Where(subscriptionoperation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionOperationClient) GetX(ctx context.Context, id int64) *SubscriptionOperation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySubscription queries the subscription edge of a SubscriptionOperation.
+func (c *SubscriptionOperationClient) QuerySubscription(_m *SubscriptionOperation) *UserSubscriptionQuery {
+	query := (&UserSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionoperation.Table, subscriptionoperation.FieldID, id),
+			sqlgraph.To(usersubscription.Table, usersubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionoperation.SubscriptionTable, subscriptionoperation.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionOperationClient) Hooks() []Hook {
+	return c.hooks.SubscriptionOperation
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionOperationClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionOperation
+}
+
+func (c *SubscriptionOperationClient) mutate(ctx context.Context, m *SubscriptionOperationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionOperationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionOperationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionOperationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionOperationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionOperation mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -5693,6 +5868,272 @@ func (c *SubscriptionPlanGroupClient) mutate(ctx context.Context, m *Subscriptio
 		return (&SubscriptionPlanGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown SubscriptionPlanGroup mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionRefundClient is a client for the SubscriptionRefund schema.
+type SubscriptionRefundClient struct {
+	config
+}
+
+// NewSubscriptionRefundClient returns a client for the SubscriptionRefund from the given config.
+func NewSubscriptionRefundClient(c config) *SubscriptionRefundClient {
+	return &SubscriptionRefundClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionrefund.Hooks(f(g(h())))`.
+func (c *SubscriptionRefundClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionRefund = append(c.hooks.SubscriptionRefund, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionrefund.Intercept(f(g(h())))`.
+func (c *SubscriptionRefundClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionRefund = append(c.inters.SubscriptionRefund, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionRefund entity.
+func (c *SubscriptionRefundClient) Create() *SubscriptionRefundCreate {
+	mutation := newSubscriptionRefundMutation(c.config, OpCreate)
+	return &SubscriptionRefundCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionRefund entities.
+func (c *SubscriptionRefundClient) CreateBulk(builders ...*SubscriptionRefundCreate) *SubscriptionRefundCreateBulk {
+	return &SubscriptionRefundCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionRefundClient) MapCreateBulk(slice any, setFunc func(*SubscriptionRefundCreate, int)) *SubscriptionRefundCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionRefundCreateBulk{err: fmt.Errorf("calling to SubscriptionRefundClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionRefundCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionRefundCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionRefund.
+func (c *SubscriptionRefundClient) Update() *SubscriptionRefundUpdate {
+	mutation := newSubscriptionRefundMutation(c.config, OpUpdate)
+	return &SubscriptionRefundUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionRefundClient) UpdateOne(_m *SubscriptionRefund) *SubscriptionRefundUpdateOne {
+	mutation := newSubscriptionRefundMutation(c.config, OpUpdateOne, withSubscriptionRefund(_m))
+	return &SubscriptionRefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionRefundClient) UpdateOneID(id int64) *SubscriptionRefundUpdateOne {
+	mutation := newSubscriptionRefundMutation(c.config, OpUpdateOne, withSubscriptionRefundID(id))
+	return &SubscriptionRefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionRefund.
+func (c *SubscriptionRefundClient) Delete() *SubscriptionRefundDelete {
+	mutation := newSubscriptionRefundMutation(c.config, OpDelete)
+	return &SubscriptionRefundDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionRefundClient) DeleteOne(_m *SubscriptionRefund) *SubscriptionRefundDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionRefundClient) DeleteOneID(id int64) *SubscriptionRefundDeleteOne {
+	builder := c.Delete().Where(subscriptionrefund.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionRefundDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionRefund.
+func (c *SubscriptionRefundClient) Query() *SubscriptionRefundQuery {
+	return &SubscriptionRefundQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionRefund},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionRefund entity by its id.
+func (c *SubscriptionRefundClient) Get(ctx context.Context, id int64) (*SubscriptionRefund, error) {
+	return c.Query().Where(subscriptionrefund.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionRefundClient) GetX(ctx context.Context, id int64) *SubscriptionRefund {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionRefundClient) Hooks() []Hook {
+	return c.hooks.SubscriptionRefund
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionRefundClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionRefund
+}
+
+func (c *SubscriptionRefundClient) mutate(ctx context.Context, m *SubscriptionRefundMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionRefundCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionRefundUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionRefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionRefundDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionRefund mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionRequestClient is a client for the SubscriptionRequest schema.
+type SubscriptionRequestClient struct {
+	config
+}
+
+// NewSubscriptionRequestClient returns a client for the SubscriptionRequest from the given config.
+func NewSubscriptionRequestClient(c config) *SubscriptionRequestClient {
+	return &SubscriptionRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionrequest.Hooks(f(g(h())))`.
+func (c *SubscriptionRequestClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionRequest = append(c.hooks.SubscriptionRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionrequest.Intercept(f(g(h())))`.
+func (c *SubscriptionRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionRequest = append(c.inters.SubscriptionRequest, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionRequest entity.
+func (c *SubscriptionRequestClient) Create() *SubscriptionRequestCreate {
+	mutation := newSubscriptionRequestMutation(c.config, OpCreate)
+	return &SubscriptionRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionRequest entities.
+func (c *SubscriptionRequestClient) CreateBulk(builders ...*SubscriptionRequestCreate) *SubscriptionRequestCreateBulk {
+	return &SubscriptionRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionRequestClient) MapCreateBulk(slice any, setFunc func(*SubscriptionRequestCreate, int)) *SubscriptionRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionRequestCreateBulk{err: fmt.Errorf("calling to SubscriptionRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionRequest.
+func (c *SubscriptionRequestClient) Update() *SubscriptionRequestUpdate {
+	mutation := newSubscriptionRequestMutation(c.config, OpUpdate)
+	return &SubscriptionRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionRequestClient) UpdateOne(_m *SubscriptionRequest) *SubscriptionRequestUpdateOne {
+	mutation := newSubscriptionRequestMutation(c.config, OpUpdateOne, withSubscriptionRequest(_m))
+	return &SubscriptionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionRequestClient) UpdateOneID(id int64) *SubscriptionRequestUpdateOne {
+	mutation := newSubscriptionRequestMutation(c.config, OpUpdateOne, withSubscriptionRequestID(id))
+	return &SubscriptionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionRequest.
+func (c *SubscriptionRequestClient) Delete() *SubscriptionRequestDelete {
+	mutation := newSubscriptionRequestMutation(c.config, OpDelete)
+	return &SubscriptionRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionRequestClient) DeleteOne(_m *SubscriptionRequest) *SubscriptionRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionRequestClient) DeleteOneID(id int64) *SubscriptionRequestDeleteOne {
+	builder := c.Delete().Where(subscriptionrequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionRequest.
+func (c *SubscriptionRequestClient) Query() *SubscriptionRequestQuery {
+	return &SubscriptionRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionRequest entity by its id.
+func (c *SubscriptionRequestClient) Get(ctx context.Context, id int64) (*SubscriptionRequest, error) {
+	return c.Query().Where(subscriptionrequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionRequestClient) GetX(ctx context.Context, id int64) *SubscriptionRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionRequestClient) Hooks() []Hook {
+	return c.hooks.SubscriptionRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionRequestClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionRequest
+}
+
+func (c *SubscriptionRequestClient) mutate(ctx context.Context, m *SubscriptionRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionRequest mutation op: %q", m.Op())
 	}
 }
 
@@ -7225,6 +7666,22 @@ func (c *UserSubscriptionClient) GetX(ctx context.Context, id int64) *UserSubscr
 	return obj
 }
 
+// QueryEntitlementOperations queries the entitlement_operations edge of a UserSubscription.
+func (c *UserSubscriptionClient) QueryEntitlementOperations(_m *UserSubscription) *SubscriptionOperationQuery {
+	query := (&SubscriptionOperationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, id),
+			sqlgraph.To(subscriptionoperation.Table, subscriptionoperation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.EntitlementOperationsTable, usersubscription.EntitlementOperationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUser queries the user edge of a UserSubscription.
 func (c *UserSubscriptionClient) QueryUser(_m *UserSubscription) *UserQuery {
 	query := (&UserClient{config: c.config}).Query()
@@ -7736,7 +8193,8 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionEntitlementOrder, SubscriptionPlan, SubscriptionPlanGroup,
+		SubscriptionEntitlementOrder, SubscriptionOperation, SubscriptionPlan,
+		SubscriptionPlanGroup, SubscriptionRefund, SubscriptionRequest,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
 		UserSubscription, UserSubscriptionEntitlement, UserSubscriptionGroup []ent.Hook
@@ -7749,7 +8207,8 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionEntitlementOrder, SubscriptionPlan, SubscriptionPlanGroup,
+		SubscriptionEntitlementOrder, SubscriptionOperation, SubscriptionPlan,
+		SubscriptionPlanGroup, SubscriptionRefund, SubscriptionRequest,
 		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
 		UserSubscription, UserSubscriptionEntitlement,

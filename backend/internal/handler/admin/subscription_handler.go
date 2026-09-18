@@ -59,7 +59,8 @@ type BulkAssignSubscriptionRequest struct {
 
 // AdjustSubscriptionRequest represents adjust subscription request (extend or shorten)
 type AdjustSubscriptionRequest struct {
-	Days int `json:"days" binding:"required,min=-36500,max=36500"` // negative to shorten, positive to extend
+	EntitlementIDs []int64 `json:"entitlement_ids" binding:"omitempty,min=1,dive,gt=0"`
+	Days           int     `json:"days" binding:"required,min=-36500,max=36500"` // negative to shorten, positive to extend
 }
 
 // List handles listing all subscriptions with pagination and filters
@@ -231,7 +232,7 @@ func (h *SubscriptionHandler) Extend(c *gin.Context) {
 		Body:           req,
 	}
 	executeAdminIdempotentJSON(c, "admin.subscriptions.extend", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		subscription, execErr := h.subscriptionService.ExtendSubscription(ctx, subscriptionID, req.Days)
+		subscription, execErr := h.subscriptionService.ExtendSelectedEntitlements(ctx, subscriptionID, req.Days, req.EntitlementIDs, getAdminIDFromContext(c))
 		if execErr != nil {
 			return nil, execErr
 		}

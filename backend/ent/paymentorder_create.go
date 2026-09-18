@@ -157,6 +157,12 @@ func (_c *PaymentOrderCreate) SetNillableQrCodeImg(v *string) *PaymentOrderCreat
 	return _c
 }
 
+// SetSubscriptionSnapshot sets the "subscription_snapshot" field.
+func (_c *PaymentOrderCreate) SetSubscriptionSnapshot(v map[string]interface{}) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionSnapshot(v)
+	return _c
+}
+
 // SetOrderType sets the "order_type" field.
 func (_c *PaymentOrderCreate) SetOrderType(v string) *PaymentOrderCreate {
 	_c.mutation.SetOrderType(v)
@@ -832,6 +838,10 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 		_spec.SetField(paymentorder.FieldQrCodeImg, field.TypeString, value)
 		_node.QrCodeImg = &value
 	}
+	if value, ok := _c.mutation.SubscriptionSnapshot(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionSnapshot, field.TypeJSON, value)
+		_node.SubscriptionSnapshot = value
+	}
 	if value, ok := _c.mutation.OrderType(); ok {
 		_spec.SetField(paymentorder.FieldOrderType, field.TypeString, value)
 		_node.OrderType = value
@@ -1248,6 +1258,24 @@ func (u *PaymentOrderUpsert) UpdateQrCodeImg() *PaymentOrderUpsert {
 // ClearQrCodeImg clears the value of the "qr_code_img" field.
 func (u *PaymentOrderUpsert) ClearQrCodeImg() *PaymentOrderUpsert {
 	u.SetNull(paymentorder.FieldQrCodeImg)
+	return u
+}
+
+// SetSubscriptionSnapshot sets the "subscription_snapshot" field.
+func (u *PaymentOrderUpsert) SetSubscriptionSnapshot(v map[string]interface{}) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionSnapshot, v)
+	return u
+}
+
+// UpdateSubscriptionSnapshot sets the "subscription_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionSnapshot() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionSnapshot)
+	return u
+}
+
+// ClearSubscriptionSnapshot clears the value of the "subscription_snapshot" field.
+func (u *PaymentOrderUpsert) ClearSubscriptionSnapshot() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldSubscriptionSnapshot)
 	return u
 }
 
@@ -1976,6 +2004,27 @@ func (u *PaymentOrderUpsertOne) UpdateQrCodeImg() *PaymentOrderUpsertOne {
 func (u *PaymentOrderUpsertOne) ClearQrCodeImg() *PaymentOrderUpsertOne {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearQrCodeImg()
+	})
+}
+
+// SetSubscriptionSnapshot sets the "subscription_snapshot" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionSnapshot(v map[string]interface{}) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionSnapshot(v)
+	})
+}
+
+// UpdateSubscriptionSnapshot sets the "subscription_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionSnapshot() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionSnapshot()
+	})
+}
+
+// ClearSubscriptionSnapshot clears the value of the "subscription_snapshot" field.
+func (u *PaymentOrderUpsertOne) ClearSubscriptionSnapshot() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionSnapshot()
 	})
 }
 
@@ -2943,6 +2992,27 @@ func (u *PaymentOrderUpsertBulk) UpdateQrCodeImg() *PaymentOrderUpsertBulk {
 func (u *PaymentOrderUpsertBulk) ClearQrCodeImg() *PaymentOrderUpsertBulk {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearQrCodeImg()
+	})
+}
+
+// SetSubscriptionSnapshot sets the "subscription_snapshot" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionSnapshot(v map[string]interface{}) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionSnapshot(v)
+	})
+}
+
+// UpdateSubscriptionSnapshot sets the "subscription_snapshot" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionSnapshot() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionSnapshot()
+	})
+}
+
+// ClearSubscriptionSnapshot clears the value of the "subscription_snapshot" field.
+func (u *PaymentOrderUpsertBulk) ClearSubscriptionSnapshot() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearSubscriptionSnapshot()
 	})
 }
 

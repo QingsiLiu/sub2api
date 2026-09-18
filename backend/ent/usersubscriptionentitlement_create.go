@@ -74,6 +74,34 @@ func (_c *UserSubscriptionEntitlementCreate) SetNillableLotIndex(v *int) *UserSu
 	return _c
 }
 
+// SetSourceType sets the "source_type" field.
+func (_c *UserSubscriptionEntitlementCreate) SetSourceType(v string) *UserSubscriptionEntitlementCreate {
+	_c.mutation.SetSourceType(v)
+	return _c
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_c *UserSubscriptionEntitlementCreate) SetNillableSourceType(v *string) *UserSubscriptionEntitlementCreate {
+	if v != nil {
+		_c.SetSourceType(*v)
+	}
+	return _c
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (_c *UserSubscriptionEntitlementCreate) SetSourceReference(v string) *UserSubscriptionEntitlementCreate {
+	_c.mutation.SetSourceReference(v)
+	return _c
+}
+
+// SetNillableSourceReference sets the "source_reference" field if the given value is not nil.
+func (_c *UserSubscriptionEntitlementCreate) SetNillableSourceReference(v *string) *UserSubscriptionEntitlementCreate {
+	if v != nil {
+		_c.SetSourceReference(*v)
+	}
+	return _c
+}
+
 // SetPurchaseMode sets the "purchase_mode" field.
 func (_c *UserSubscriptionEntitlementCreate) SetPurchaseMode(v string) *UserSubscriptionEntitlementCreate {
 	_c.mutation.SetPurchaseMode(v)
@@ -371,6 +399,14 @@ func (_c *UserSubscriptionEntitlementCreate) defaults() {
 		v := usersubscriptionentitlement.DefaultLotIndex
 		_c.mutation.SetLotIndex(v)
 	}
+	if _, ok := _c.mutation.SourceType(); !ok {
+		v := usersubscriptionentitlement.DefaultSourceType
+		_c.mutation.SetSourceType(v)
+	}
+	if _, ok := _c.mutation.SourceReference(); !ok {
+		v := usersubscriptionentitlement.DefaultSourceReference
+		_c.mutation.SetSourceReference(v)
+	}
 	if _, ok := _c.mutation.PurchaseMode(); !ok {
 		v := usersubscriptionentitlement.DefaultPurchaseMode
 		_c.mutation.SetPurchaseMode(v)
@@ -412,6 +448,12 @@ func (_c *UserSubscriptionEntitlementCreate) check() error {
 	}
 	if _, ok := _c.mutation.LotIndex(); !ok {
 		return &ValidationError{Name: "lot_index", err: errors.New(`ent: missing required field "UserSubscriptionEntitlement.lot_index"`)}
+	}
+	if _, ok := _c.mutation.SourceType(); !ok {
+		return &ValidationError{Name: "source_type", err: errors.New(`ent: missing required field "UserSubscriptionEntitlement.source_type"`)}
+	}
+	if _, ok := _c.mutation.SourceReference(); !ok {
+		return &ValidationError{Name: "source_reference", err: errors.New(`ent: missing required field "UserSubscriptionEntitlement.source_reference"`)}
 	}
 	if _, ok := _c.mutation.PurchaseMode(); !ok {
 		return &ValidationError{Name: "purchase_mode", err: errors.New(`ent: missing required field "UserSubscriptionEntitlement.purchase_mode"`)}
@@ -486,6 +528,14 @@ func (_c *UserSubscriptionEntitlementCreate) createSpec() (*UserSubscriptionEnti
 	if value, ok := _c.mutation.LotIndex(); ok {
 		_spec.SetField(usersubscriptionentitlement.FieldLotIndex, field.TypeInt, value)
 		_node.LotIndex = value
+	}
+	if value, ok := _c.mutation.SourceType(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceType, field.TypeString, value)
+		_node.SourceType = value
+	}
+	if value, ok := _c.mutation.SourceReference(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceReference, field.TypeString, value)
+		_node.SourceReference = value
 	}
 	if value, ok := _c.mutation.PurchaseMode(); ok {
 		_spec.SetField(usersubscriptionentitlement.FieldPurchaseMode, field.TypeString, value)
@@ -737,6 +787,30 @@ func (u *UserSubscriptionEntitlementUpsert) UpdateLotIndex() *UserSubscriptionEn
 // AddLotIndex adds v to the "lot_index" field.
 func (u *UserSubscriptionEntitlementUpsert) AddLotIndex(v int) *UserSubscriptionEntitlementUpsert {
 	u.Add(usersubscriptionentitlement.FieldLotIndex, v)
+	return u
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *UserSubscriptionEntitlementUpsert) SetSourceType(v string) *UserSubscriptionEntitlementUpsert {
+	u.Set(usersubscriptionentitlement.FieldSourceType, v)
+	return u
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsert) UpdateSourceType() *UserSubscriptionEntitlementUpsert {
+	u.SetExcluded(usersubscriptionentitlement.FieldSourceType)
+	return u
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (u *UserSubscriptionEntitlementUpsert) SetSourceReference(v string) *UserSubscriptionEntitlementUpsert {
+	u.Set(usersubscriptionentitlement.FieldSourceReference, v)
+	return u
+}
+
+// UpdateSourceReference sets the "source_reference" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsert) UpdateSourceReference() *UserSubscriptionEntitlementUpsert {
+	u.SetExcluded(usersubscriptionentitlement.FieldSourceReference)
 	return u
 }
 
@@ -1135,6 +1209,34 @@ func (u *UserSubscriptionEntitlementUpsertOne) AddLotIndex(v int) *UserSubscript
 func (u *UserSubscriptionEntitlementUpsertOne) UpdateLotIndex() *UserSubscriptionEntitlementUpsertOne {
 	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
 		s.UpdateLotIndex()
+	})
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *UserSubscriptionEntitlementUpsertOne) SetSourceType(v string) *UserSubscriptionEntitlementUpsertOne {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.SetSourceType(v)
+	})
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsertOne) UpdateSourceType() *UserSubscriptionEntitlementUpsertOne {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.UpdateSourceType()
+	})
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (u *UserSubscriptionEntitlementUpsertOne) SetSourceReference(v string) *UserSubscriptionEntitlementUpsertOne {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.SetSourceReference(v)
+	})
+}
+
+// UpdateSourceReference sets the "source_reference" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsertOne) UpdateSourceReference() *UserSubscriptionEntitlementUpsertOne {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.UpdateSourceReference()
 	})
 }
 
@@ -1745,6 +1847,34 @@ func (u *UserSubscriptionEntitlementUpsertBulk) AddLotIndex(v int) *UserSubscrip
 func (u *UserSubscriptionEntitlementUpsertBulk) UpdateLotIndex() *UserSubscriptionEntitlementUpsertBulk {
 	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
 		s.UpdateLotIndex()
+	})
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *UserSubscriptionEntitlementUpsertBulk) SetSourceType(v string) *UserSubscriptionEntitlementUpsertBulk {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.SetSourceType(v)
+	})
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsertBulk) UpdateSourceType() *UserSubscriptionEntitlementUpsertBulk {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.UpdateSourceType()
+	})
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (u *UserSubscriptionEntitlementUpsertBulk) SetSourceReference(v string) *UserSubscriptionEntitlementUpsertBulk {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.SetSourceReference(v)
+	})
+}
+
+// UpdateSourceReference sets the "source_reference" field to the value that was provided on create.
+func (u *UserSubscriptionEntitlementUpsertBulk) UpdateSourceReference() *UserSubscriptionEntitlementUpsertBulk {
+	return u.Update(func(s *UserSubscriptionEntitlementUpsert) {
+		s.UpdateSourceReference()
 	})
 }
 

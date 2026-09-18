@@ -915,6 +915,29 @@ func NotesContainsFold(v string) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldContainsFold(FieldNotes, v))
 }
 
+// HasEntitlementOperations applies the HasEdge predicate on the "entitlement_operations" edge.
+func HasEntitlementOperations() predicate.UserSubscription {
+	return predicate.UserSubscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, EntitlementOperationsTable, EntitlementOperationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasEntitlementOperationsWith applies the HasEdge predicate on the "entitlement_operations" edge with a given conditions (other predicates).
+func HasEntitlementOperationsWith(preds ...predicate.SubscriptionOperation) predicate.UserSubscription {
+	return predicate.UserSubscription(func(s *sql.Selector) {
+		step := newEntitlementOperationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUser applies the HasEdge predicate on the "user" edge.
 func HasUser() predicate.UserSubscription {
 	return predicate.UserSubscription(func(s *sql.Selector) {

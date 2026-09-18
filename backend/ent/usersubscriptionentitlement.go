@@ -28,6 +28,10 @@ type UserSubscriptionEntitlement struct {
 	SourceOrderID *int64 `json:"source_order_id,omitempty"`
 	// LotIndex holds the value of the "lot_index" field.
 	LotIndex int `json:"lot_index,omitempty"`
+	// SourceType holds the value of the "source_type" field.
+	SourceType string `json:"source_type,omitempty"`
+	// SourceReference holds the value of the "source_reference" field.
+	SourceReference string `json:"source_reference,omitempty"`
 	// PurchaseMode holds the value of the "purchase_mode" field.
 	PurchaseMode string `json:"purchase_mode,omitempty"`
 	// Status holds the value of the "status" field.
@@ -134,7 +138,7 @@ func (*UserSubscriptionEntitlement) scanValues(columns []string) ([]any, error) 
 			values[i] = new(sql.NullFloat64)
 		case usersubscriptionentitlement.FieldID, usersubscriptionentitlement.FieldUserSubscriptionID, usersubscriptionentitlement.FieldPlanID, usersubscriptionentitlement.FieldSourceOrderID, usersubscriptionentitlement.FieldLotIndex:
 			values[i] = new(sql.NullInt64)
-		case usersubscriptionentitlement.FieldPurchaseMode, usersubscriptionentitlement.FieldStatus:
+		case usersubscriptionentitlement.FieldSourceType, usersubscriptionentitlement.FieldSourceReference, usersubscriptionentitlement.FieldPurchaseMode, usersubscriptionentitlement.FieldStatus:
 			values[i] = new(sql.NullString)
 		case usersubscriptionentitlement.FieldStartsAt, usersubscriptionentitlement.FieldExpiresAt, usersubscriptionentitlement.FieldDailyWindowStart, usersubscriptionentitlement.FieldWeeklyWindowStart, usersubscriptionentitlement.FieldMonthlyWindowStart, usersubscriptionentitlement.FieldRefundedAt, usersubscriptionentitlement.FieldCreatedAt, usersubscriptionentitlement.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -184,6 +188,18 @@ func (_m *UserSubscriptionEntitlement) assignValues(columns []string, values []a
 				return fmt.Errorf("unexpected type %T for field lot_index", values[i])
 			} else if value.Valid {
 				_m.LotIndex = int(value.Int64)
+			}
+		case usersubscriptionentitlement.FieldSourceType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_type", values[i])
+			} else if value.Valid {
+				_m.SourceType = value.String
+			}
+		case usersubscriptionentitlement.FieldSourceReference:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source_reference", values[i])
+			} else if value.Valid {
+				_m.SourceReference = value.String
 			}
 		case usersubscriptionentitlement.FieldPurchaseMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -365,6 +381,12 @@ func (_m *UserSubscriptionEntitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("lot_index=")
 	builder.WriteString(fmt.Sprintf("%v", _m.LotIndex))
+	builder.WriteString(", ")
+	builder.WriteString("source_type=")
+	builder.WriteString(_m.SourceType)
+	builder.WriteString(", ")
+	builder.WriteString("source_reference=")
+	builder.WriteString(_m.SourceReference)
 	builder.WriteString(", ")
 	builder.WriteString("purchase_mode=")
 	builder.WriteString(_m.PurchaseMode)

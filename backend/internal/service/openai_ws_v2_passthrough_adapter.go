@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"net/http"
 	"net/url"
 	"strings"
@@ -462,6 +463,7 @@ func (c *openAIWSPassthroughFirstOutputFrameConn) WriteFrame(ctx context.Context
 	}
 	generation := uint64(0)
 	if msgType == coderws.MessageText && strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
+		ctxkey.MarkUpstreamDispatched(ctx)
 		generation = c.armDeadline(payload)
 	}
 	if err := c.inner.WriteFrame(ctx, msgType, payload); err != nil {

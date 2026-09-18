@@ -287,6 +287,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		AccountType:        p.Account.Type,
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
 	}
+	if p.IsSubscriptionBill && p.Subscription != nil {
+		cmd.SubscriptionAdmissionKey = p.Subscription.AdmissionKey
+		cmd.SubscriptionID = &p.Subscription.ID
+	}
 	if usageLog != nil {
 		cmd.Model = usageLog.Model
 		cmd.BillingType = usageLog.BillingType

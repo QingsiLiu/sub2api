@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"io"
 	"net/http"
 	"strconv"
@@ -129,6 +130,16 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	}
 	defer func() { _ = conn.CloseNow() }()
 
+	tracked, _ := ctxkey.WithUpstreamDispatch(c.Request.Context())
+	c.Request = c.Request.WithContext(tracked)
+	rights := service.NewSubscriptionTurnAdmission(tracked, subscription)
+	defer rights.CloseUnsent()
+	if err := rights.Begin(); err != nil {
+		_ = conn.Close(coderws.StatusPolicyViolation, "subscription admission failed")
+		return
+	}
+	subscription = rights.Current()
+
 	started := time.Now()
 	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(c.Request.Context(), c, conn, upstream)
 	elapsed := time.Since(started)
@@ -141,6 +152,7 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	}
 	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
 		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result)
+		rights.End(true, false)
 	}
 }
 

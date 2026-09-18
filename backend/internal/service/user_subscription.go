@@ -48,8 +48,10 @@ type UserSubscription struct {
 	UpdatedAt time.Time
 	DeletedAt *time.Time
 
-	Entitlements []SubscriptionEntitlement
-	QuotaSummary *geilisub.Summary
+	EntitlementOperations []SubscriptionEntitlementOperation
+	AdmissionKey          string // server-generated request identity; never serialized as a user field
+	Entitlements          []SubscriptionEntitlement
+	QuotaSummary          *geilisub.Summary
 
 	User           *User
 	Group          *Group
@@ -241,11 +243,8 @@ func (s *UserSubscription) AggregateQuotaSummary() *geilisub.Summary {
 	if s == nil || len(s.Entitlements) == 0 {
 		return nil
 	}
-	if s.QuotaSummary == nil {
-		summary := geilisub.Aggregate(s.Entitlements, time.Now())
-		s.QuotaSummary = &summary
-	}
-	return s.QuotaSummary
+	summary := geilisub.Aggregate(s.Entitlements, time.Now())
+	return &summary
 }
 
 func aggregateEntitlementLimits(entitlements []SubscriptionEntitlement) (daily, weekly, monthly *float64) {
@@ -268,14 +267,26 @@ func (s *UserSubscription) QuotaName() string {
 	return ""
 }
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
+	if len(s.Entitlements) > 0 {
+		a := geilisub.Aggregate(s.Entitlements, time.Now())
+		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
+	}
 	limit, _, _ := s.QuotaLimits(group)
 	return limit == nil || *limit <= 0 || s.DailyUsageUSD+additionalCost <= *limit
 }
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
+	if len(s.Entitlements) > 0 {
+		a := geilisub.Aggregate(s.Entitlements, time.Now())
+		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
+	}
 	_, limit, _ := s.QuotaLimits(group)
 	return limit == nil || *limit <= 0 || s.WeeklyUsageUSD+additionalCost <= *limit
 }
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
+	if len(s.Entitlements) > 0 {
+		a := geilisub.Aggregate(s.Entitlements, time.Now())
+		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
+	}
 	_, _, limit := s.QuotaLimits(group)
 	return limit == nil || *limit <= 0 || s.MonthlyUsageUSD+additionalCost <= *limit
 }
@@ -285,4 +296,15 @@ func (s *UserSubscription) CheckAllLimits(group *Group, additionalCost float64) 
 	weekly = s.CheckWeeklyLimit(group, additionalCost)
 	monthly = s.CheckMonthlyLimit(group, additionalCost)
 	return
+}
+
+type SubscriptionEntitlementOperation struct {
+	ID              int64      `json:"id"`
+	EntitlementID   int64      `json:"entitlement_id"`
+	Operation       string     `json:"operation"`
+	SourceType      string     `json:"source_type"`
+	SourceReference string     `json:"source_reference,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	BeforeExpiresAt *time.Time `json:"before_expires_at,omitempty"`
+	AfterExpiresAt  *time.Time `json:"after_expires_at,omitempty"`
 }

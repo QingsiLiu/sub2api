@@ -247,11 +247,38 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		rr = fmt.Sprintf("refund order:%d", o.ID)
 	}
 	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: amt, GatewayAmount: ga, Reason: rr, Force: force, DeductBalance: deduct, DeductionType: payment.DeductionTypeNone}
+
+	if o.OrderType == payment.OrderTypeSubscription {
+		hasLines, err := s.entClient.SubscriptionEntitlementOrder.Query().Where(subscriptionentitlementorder.OrderIDEQ(o.ID)).Exist(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		hasLots, err := s.entClient.UserSubscriptionEntitlement.Query().Where(usersubscriptionentitlement.SourceOrderIDEQ(o.ID)).Exist(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if hasLines || hasLots || o.SubscriptionSnapshot != nil {
+			if !deduct {
+				return nil, nil, errLotRefundManual
+			}
+			snap, err := validateLotRefund(ctx, s.entClient, o, amt, time.Now())
+			if err != nil {
+				return nil, nil, err
+			}
+			p.DeductionType = payment.DeductionTypeSubscription
+			for _, r := range snap {
+				p.SubscriptionID = r.Lot.UserSubscriptionID
+				p.SubscriptionLots = append(p.SubscriptionLots, SubscriptionLotAdjustment{ID: r.Lot.ID, Days: r.Days, Operation: r.Operation})
+			}
+			return p, nil, nil
+		}
+	}
 	if deduct {
 		if er := s.prepDeduct(ctx, o, p, force); er != nil {
 			return nil, er, nil
 		}
 	}
+
 	return p, nil, nil
 }
 
@@ -271,6 +298,9 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 				p.SubscriptionID = sub.ID
 				if o.PlanID != nil {
 					lots, lotErr := s.entClient.UserSubscriptionEntitlement.Query().Where(usersubscriptionentitlement.UserSubscriptionIDEQ(sub.ID)).All(ctx)
+					if lotErr != nil {
+						return &RefundResult{Success: false, Warning: "cannot load subscription entitlements; manual review required", RequireForce: false}
+					}
 					if lotErr == nil {
 						for _, lot := range lots {
 							if lot.SourceOrderID != nil && *lot.SourceOrderID == o.ID {
@@ -279,6 +309,9 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 						}
 					}
 					lines, lineErr := s.entClient.SubscriptionEntitlementOrder.Query().Where(subscriptionentitlementorder.OrderIDEQ(o.ID)).All(ctx)
+					if lineErr != nil {
+						return &RefundResult{Success: false, Warning: "cannot load subscription operations; manual review required", RequireForce: false}
+					}
 					if lineErr == nil {
 						for _, line := range lines {
 							p.SubscriptionLots = append(p.SubscriptionLots, SubscriptionLotAdjustment{ID: line.EntitlementID, Days: line.DaysAdded, Operation: line.Operation})
@@ -333,6 +366,9 @@ func (s *PaymentService) deductAvailableBalance(ctx context.Context, userID int6
 }
 
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if len(p.SubscriptionLots) > 0 {
+		return s.executeLotRefund(ctx, p)
+	}
 	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("lock: %w", err)
@@ -355,7 +391,7 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 			p.BalanceToDeduct = 0
 		}
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
+	if len(p.SubscriptionLots) == 0 && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
 			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
 			if err != nil {
@@ -416,6 +452,9 @@ func (s *PaymentService) gwRefund(ctx context.Context, p *RefundPlan) (*payment.
 		}
 		return nil, err
 	}
+	if resp != nil && resp.Status == payment.ProviderStatusFailed {
+		return resp, nil
+	}
 	if err := validateRefundProviderResponse(resp); err != nil {
 		return nil, err
 	}
@@ -442,6 +481,22 @@ func validateRefundProviderResponse(resp *payment.RefundResponse) error {
 }
 
 func (s *PaymentService) finishRefund(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse) (*RefundResult, error) {
+	if has, err := s.hasLotRefund(ctx, p.OrderID); err != nil {
+		return nil, err
+	} else if has {
+		if resp == nil {
+			return s.markLotRefundPending(ctx, p, resp, fmt.Errorf("missing refund response"))
+		}
+		switch strings.TrimSpace(resp.Status) {
+		case payment.ProviderStatusSuccess, payment.ProviderStatusRefunded:
+			return s.finalizeLotRefund(ctx, p, true)
+		case payment.ProviderStatusFailed:
+			return s.finalizeLotRefund(ctx, p, false)
+		default:
+			return s.markLotRefundPending(ctx, p, resp, nil)
+		}
+	}
+
 	if err := validateRefundProviderResponse(resp); err != nil {
 		return s.handleGwFail(ctx, p, err)
 	}
@@ -460,8 +515,12 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
-	if o.Status != OrderStatusRefundPending {
-		return nil, infraerrors.BadRequest("INVALID_STATUS", "only refund pending orders can be finalized")
+	hasJournal, journalErr := s.hasLotRefund(ctx, oid)
+	if journalErr != nil {
+		return nil, journalErr
+	}
+	if o.Status != OrderStatusRefundPending && !(hasJournal && o.Status == OrderStatusRefunding) {
+		return nil, infraerrors.BadRequest("INVALID_STATUS", "only pending or recoverable refunds can be finalized")
 	}
 
 	prov, err := s.getRefundProvider(ctx, o)
@@ -485,6 +544,12 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	if err != nil {
 		return nil, fmt.Errorf("query refund: %w", err)
 	}
+	if has, err := s.hasLotRefund(ctx, oid); err != nil {
+		return nil, err
+	} else if has {
+		return s.finishRefund(ctx, s.refundFinalizePlan(o), resp)
+	}
+
 	if err := validateRefundProviderResponse(resp); err != nil {
 		return s.finalizeRefundFailed(ctx, o, err)
 	}
@@ -577,7 +642,7 @@ func (s *PaymentService) applyRefundFinalDeduction(ctx context.Context, p *Refun
 		}
 		p.BalanceToDeduct = deducted
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
+	if len(p.SubscriptionLots) == 0 && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct); err != nil {
 			if errors.Is(err, ErrAdjustWouldExpire) {
 				if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
@@ -643,6 +708,23 @@ func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr e
 }
 
 func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if len(p.SubscriptionLots) > 0 {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+		tc := dbent.NewTxContext(ctx, tx)
+		result, err := s.markRefundOkTx(tc, tx.Client(), p)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+
 	if err := s.applySubscriptionLotRefund(ctx, p); err != nil {
 		return nil, err
 	}
@@ -667,18 +749,20 @@ func applySubscriptionLotRefundWithClient(ctx context.Context, client *dbent.Cli
 	if p == nil || len(p.SubscriptionLots) == 0 {
 		return nil
 	}
-	for _, adj := range p.SubscriptionLots {
-		if adj.Operation == "renew" && adj.Days > 0 {
-			if _, err := client.UserSubscriptionEntitlement.UpdateOneID(adj.ID).SetExpiresAt(time.Now()).SetStatus("refunded").SetRefundedAt(time.Now()).Save(ctx); err != nil {
-				return err
-			}
-		} else {
-			if _, err := client.UserSubscriptionEntitlement.UpdateOneID(adj.ID).SetStatus("refunded").SetRefundedAt(time.Now()).Save(ctx); err != nil {
-				return err
-			}
-		}
+	if dbent.TxFromContext(ctx) != nil {
+		return applyLotAdjustments(ctx, client, p)
 	}
-	return nil
+	tx, err := client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	tc := dbent.NewTxContext(ctx, tx)
+	if err := applyLotAdjustments(tc, tx.Client(), p); err != nil {
+		return err
+	}
+	return tx.Commit()
+
 }
 
 func (s *PaymentService) markRefundOkTx(ctx context.Context, client *dbent.Client, p *RefundPlan) (*RefundResult, error) {
@@ -766,7 +850,7 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 			return false
 		}
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
+	if len(p.SubscriptionLots) == 0 && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
 			slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
 			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})

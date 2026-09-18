@@ -28,6 +28,9 @@ func (SubscriptionEntitlementOrder) Fields() []ent.Field {
 		field.Int("lot_index").Default(0),
 		field.String("operation").MaxLen(20),
 		field.Int("days_added").Default(0),
+		field.Time("before_expires_at").Optional().Nillable(),
+		field.Time("after_expires_at").Optional().Nillable(),
+		field.Time("reversed_at").Optional().Nillable(),
 		field.Time("created_at").Immutable().Default(time.Now).SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 	}
 }

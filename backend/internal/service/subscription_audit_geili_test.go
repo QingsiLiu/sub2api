@@ -1,4 +1,4 @@
-//go:build unit && subscriptionaudit
+//go:build unit
 
 package service
 
@@ -13,8 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Opt-in acceptance assertions for the 2026-09-18 audit. Failures describe
-// unresolved defects; do not run this tag as a green release gate yet.
+// Regression assertions for the 2026-09-18 entitlement audit.
 func auditLotFixture(t *testing.T) (*dbent.Client, *dbent.UserSubscriptionEntitlement, time.Time) {
 	t.Helper()
 	ctx := context.Background()
@@ -104,7 +103,7 @@ func TestSubscriptionAuditLegacyGroupRenewalActuallyExtends(t *testing.T) {
 	order, err := c.PaymentOrder.UpdateOneID(order.ID).ClearPlanID().Save(ctx)
 	require.NoError(t, err)
 	expiry := time.Now().AddDate(0, 0, 3)
-	repo := newSubscriptionUserSubRepoStub()
+	repo := &auditLegacySubscriptionRepo{subscriptionUserSubRepoStub: newSubscriptionUserSubRepoStub()}
 	repo.seed(&UserSubscription{ID: 99, UserID: order.UserID, GroupID: *order.SubscriptionGroupID, StartsAt: time.Now().Add(-time.Hour), ExpiresAt: expiry, Status: SubscriptionStatusActive})
 	groups := &subscriptionGroupRepoStub{group: &Group{ID: *order.SubscriptionGroupID, Status: "active", SubscriptionType: SubscriptionTypeSubscription}}
 	svc := &PaymentService{entClient: c, groupRepo: groups, subscriptionSvc: NewSubscriptionService(groups, repo, nil, nil, nil)}
@@ -119,7 +118,7 @@ func auditRefundOrder(t *testing.T, c *dbent.Client, lot *dbent.UserSubscription
 	ctx := context.Background()
 	sub, err := c.UserSubscription.Get(ctx, lot.UserSubscriptionID)
 	require.NoError(t, err)
-	o, err := c.PaymentOrder.Create().SetUserID(sub.UserID).SetUserEmail("audit@example.invalid").SetUserName("audit").SetAmount(10).SetPayAmount(10).SetRechargeCode("audit-refund").SetPaymentType("test").SetPaymentTradeNo("").SetOrderType("subscription").SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).Save(ctx)
+	o, err := c.PaymentOrder.Create().SetUserID(sub.UserID).SetUserEmail("audit@example.invalid").SetUserName("audit").SetAmount(10).SetPayAmount(10).SetRechargeCode("audit-refund").SetPaymentType("test").SetPaymentTradeNo("").SetClientIP("127.0.0.1").SetSrcHost("audit.invalid").SetOrderType("subscription").SetStatus(OrderStatusRefunding).SetExpiresAt(time.Now().Add(time.Hour)).Save(ctx)
 	require.NoError(t, err)
 	return o
 }
@@ -130,6 +129,14 @@ func TestSubscriptionAuditRefundPendingFreezesAffectedLot(t *testing.T) {
 	order := auditRefundOrder(t, c, lot)
 	svc := &PaymentService{entClient: c}
 	p := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: 10, DeductionType: payment.DeductionTypeSubscription, SubscriptionLots: []SubscriptionLotAdjustment{{ID: lot.ID, Operation: "revoke"}}}
+	_, err := c.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusCompleted).Save(ctx)
+	require.NoError(t, err)
+	_, err = c.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetSourceType("payment").SetSourceOrderID(order.ID).Save(ctx)
+	require.NoError(t, err)
+	err = c.SubscriptionEntitlementOrder.Create().SetEntitlementID(lot.ID).SetOrderID(order.ID).SetOperation("create").SetAfterExpiresAt(lot.ExpiresAt).SetDaysAdded(30).Exec(ctx)
+	require.NoError(t, err)
+	p.SubscriptionID = lot.UserSubscriptionID
+	require.NoError(t, svc.freezeLotRefund(ctx, p))
 	result, err := svc.finishRefund(ctx, p, &payment.RefundResponse{Status: payment.ProviderStatusPending})
 	require.NoError(t, err)
 	require.False(t, result.Success)
@@ -148,4 +155,19 @@ func TestSubscriptionAuditRefundFailureIsAtomicAcrossLots(t *testing.T) {
 	got, err := c.UserSubscriptionEntitlement.Get(ctx, lot.ID)
 	require.NoError(t, err)
 	require.Equal(t, "active", got.Status, "first lot must roll back when a later lot update fails")
+}
+
+type auditLegacySubscriptionRepo struct{ *subscriptionUserSubRepoStub }
+
+func (r *auditLegacySubscriptionRepo) ExtendExpiry(_ context.Context, id int64, expiry time.Time) error {
+	r.byID[id].ExpiresAt = expiry
+	return nil
+}
+func (r *auditLegacySubscriptionRepo) UpdateNotes(_ context.Context, id int64, notes string) error {
+	r.byID[id].Notes = notes
+	return nil
+}
+func (r *auditLegacySubscriptionRepo) UpdateStatus(_ context.Context, id int64, status string) error {
+	r.byID[id].Status = status
+	return nil
 }

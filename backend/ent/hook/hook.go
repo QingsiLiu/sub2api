@@ -369,6 +369,18 @@ func (f SubscriptionEntitlementOrderFunc) Mutate(ctx context.Context, m ent.Muta
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionEntitlementOrderMutation", m)
 }
 
+// The SubscriptionOperationFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionOperation mutator.
+type SubscriptionOperationFunc func(context.Context, *ent.SubscriptionOperationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionOperationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionOperationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionOperationMutation", m)
+}
+
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary
 // function as SubscriptionPlan mutator.
 type SubscriptionPlanFunc func(context.Context, *ent.SubscriptionPlanMutation) (ent.Value, error)
@@ -391,6 +403,30 @@ func (f SubscriptionPlanGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionPlanGroupMutation", m)
+}
+
+// The SubscriptionRefundFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionRefund mutator.
+type SubscriptionRefundFunc func(context.Context, *ent.SubscriptionRefundMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionRefundFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionRefundMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionRefundMutation", m)
+}
+
+// The SubscriptionRequestFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionRequest mutator.
+type SubscriptionRequestFunc func(context.Context, *ent.SubscriptionRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionRequestMutation", m)
 }
 
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary

@@ -22,6 +22,10 @@ const (
 	FieldSourceOrderID = "source_order_id"
 	// FieldLotIndex holds the string denoting the lot_index field in the database.
 	FieldLotIndex = "lot_index"
+	// FieldSourceType holds the string denoting the source_type field in the database.
+	FieldSourceType = "source_type"
+	// FieldSourceReference holds the string denoting the source_reference field in the database.
+	FieldSourceReference = "source_reference"
 	// FieldPurchaseMode holds the string denoting the purchase_mode field in the database.
 	FieldPurchaseMode = "purchase_mode"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -103,6 +107,8 @@ var Columns = []string{
 	FieldPlanID,
 	FieldSourceOrderID,
 	FieldLotIndex,
+	FieldSourceType,
+	FieldSourceReference,
 	FieldPurchaseMode,
 	FieldStatus,
 	FieldStartsAt,
@@ -135,6 +141,10 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultLotIndex holds the default value on creation for the "lot_index" field.
 	DefaultLotIndex int
+	// DefaultSourceType holds the default value on creation for the "source_type" field.
+	DefaultSourceType string
+	// DefaultSourceReference holds the default value on creation for the "source_reference" field.
+	DefaultSourceReference string
 	// DefaultPurchaseMode holds the default value on creation for the "purchase_mode" field.
 	DefaultPurchaseMode string
 	// PurchaseModeValidator is a validator for the "purchase_mode" field. It is called by the builders before save.
@@ -185,6 +195,16 @@ func BySourceOrderID(opts ...sql.OrderTermOption) OrderOption {
 // ByLotIndex orders the results by the lot_index field.
 func ByLotIndex(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLotIndex, opts...).ToFunc()
+}
+
+// BySourceType orders the results by the source_type field.
+func BySourceType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceType, opts...).ToFunc()
+}
+
+// BySourceReference orders the results by the source_reference field.
+func BySourceReference(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceReference, opts...).ToFunc()
 }
 
 // ByPurchaseMode orders the results by the purchase_mode field.

@@ -107,6 +107,34 @@ func (_u *UserSubscriptionEntitlementUpdate) AddLotIndex(v int) *UserSubscriptio
 	return _u
 }
 
+// SetSourceType sets the "source_type" field.
+func (_u *UserSubscriptionEntitlementUpdate) SetSourceType(v string) *UserSubscriptionEntitlementUpdate {
+	_u.mutation.SetSourceType(v)
+	return _u
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_u *UserSubscriptionEntitlementUpdate) SetNillableSourceType(v *string) *UserSubscriptionEntitlementUpdate {
+	if v != nil {
+		_u.SetSourceType(*v)
+	}
+	return _u
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (_u *UserSubscriptionEntitlementUpdate) SetSourceReference(v string) *UserSubscriptionEntitlementUpdate {
+	_u.mutation.SetSourceReference(v)
+	return _u
+}
+
+// SetNillableSourceReference sets the "source_reference" field if the given value is not nil.
+func (_u *UserSubscriptionEntitlementUpdate) SetNillableSourceReference(v *string) *UserSubscriptionEntitlementUpdate {
+	if v != nil {
+		_u.SetSourceReference(*v)
+	}
+	return _u
+}
+
 // SetPurchaseMode sets the "purchase_mode" field.
 func (_u *UserSubscriptionEntitlementUpdate) SetPurchaseMode(v string) *UserSubscriptionEntitlementUpdate {
 	_u.mutation.SetPurchaseMode(v)
@@ -566,6 +594,12 @@ func (_u *UserSubscriptionEntitlementUpdate) sqlSave(ctx context.Context) (_node
 	if value, ok := _u.mutation.AddedLotIndex(); ok {
 		_spec.AddField(usersubscriptionentitlement.FieldLotIndex, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.SourceType(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SourceReference(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceReference, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.PurchaseMode(); ok {
 		_spec.SetField(usersubscriptionentitlement.FieldPurchaseMode, field.TypeString, value)
 	}
@@ -880,6 +914,34 @@ func (_u *UserSubscriptionEntitlementUpdateOne) SetNillableLotIndex(v *int) *Use
 // AddLotIndex adds value to the "lot_index" field.
 func (_u *UserSubscriptionEntitlementUpdateOne) AddLotIndex(v int) *UserSubscriptionEntitlementUpdateOne {
 	_u.mutation.AddLotIndex(v)
+	return _u
+}
+
+// SetSourceType sets the "source_type" field.
+func (_u *UserSubscriptionEntitlementUpdateOne) SetSourceType(v string) *UserSubscriptionEntitlementUpdateOne {
+	_u.mutation.SetSourceType(v)
+	return _u
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_u *UserSubscriptionEntitlementUpdateOne) SetNillableSourceType(v *string) *UserSubscriptionEntitlementUpdateOne {
+	if v != nil {
+		_u.SetSourceType(*v)
+	}
+	return _u
+}
+
+// SetSourceReference sets the "source_reference" field.
+func (_u *UserSubscriptionEntitlementUpdateOne) SetSourceReference(v string) *UserSubscriptionEntitlementUpdateOne {
+	_u.mutation.SetSourceReference(v)
+	return _u
+}
+
+// SetNillableSourceReference sets the "source_reference" field if the given value is not nil.
+func (_u *UserSubscriptionEntitlementUpdateOne) SetNillableSourceReference(v *string) *UserSubscriptionEntitlementUpdateOne {
+	if v != nil {
+		_u.SetSourceReference(*v)
+	}
 	return _u
 }
 
@@ -1371,6 +1433,12 @@ func (_u *UserSubscriptionEntitlementUpdateOne) sqlSave(ctx context.Context) (_n
 	}
 	if value, ok := _u.mutation.AddedLotIndex(); ok {
 		_spec.AddField(usersubscriptionentitlement.FieldLotIndex, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.SourceType(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SourceReference(); ok {
+		_spec.SetField(usersubscriptionentitlement.FieldSourceReference, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.PurchaseMode(); ok {
 		_spec.SetField(usersubscriptionentitlement.FieldPurchaseMode, field.TypeString, value)

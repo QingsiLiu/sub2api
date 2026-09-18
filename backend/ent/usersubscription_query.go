@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionoperation"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -26,18 +27,19 @@ import (
 // UserSubscriptionQuery is the builder for querying UserSubscription entities.
 type UserSubscriptionQuery struct {
 	config
-	ctx                   *QueryContext
-	order                 []usersubscription.OrderOption
-	inters                []Interceptor
-	predicates            []predicate.UserSubscription
-	withUser              *UserQuery
-	withGroup             *GroupQuery
-	withPlan              *SubscriptionPlanQuery
-	withAssignedByUser    *UserQuery
-	withUsageLogs         *UsageLogQuery
-	withGroupEntitlements *UserSubscriptionGroupQuery
-	withEntitlements      *UserSubscriptionEntitlementQuery
-	modifiers             []func(*sql.Selector)
+	ctx                       *QueryContext
+	order                     []usersubscription.OrderOption
+	inters                    []Interceptor
+	predicates                []predicate.UserSubscription
+	withEntitlementOperations *SubscriptionOperationQuery
+	withUser                  *UserQuery
+	withGroup                 *GroupQuery
+	withPlan                  *SubscriptionPlanQuery
+	withAssignedByUser        *UserQuery
+	withUsageLogs             *UsageLogQuery
+	withGroupEntitlements     *UserSubscriptionGroupQuery
+	withEntitlements          *UserSubscriptionEntitlementQuery
+	modifiers                 []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -72,6 +74,28 @@ func (_q *UserSubscriptionQuery) Unique(unique bool) *UserSubscriptionQuery {
 func (_q *UserSubscriptionQuery) Order(o ...usersubscription.OrderOption) *UserSubscriptionQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryEntitlementOperations chains the current query on the "entitlement_operations" edge.
+func (_q *UserSubscriptionQuery) QueryEntitlementOperations() *SubscriptionOperationQuery {
+	query := (&SubscriptionOperationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(usersubscription.Table, usersubscription.FieldID, selector),
+			sqlgraph.To(subscriptionoperation.Table, subscriptionoperation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, usersubscription.EntitlementOperationsTable, usersubscription.EntitlementOperationsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // QueryUser chains the current query on the "user" edge.
@@ -415,22 +439,34 @@ func (_q *UserSubscriptionQuery) Clone() *UserSubscriptionQuery {
 		return nil
 	}
 	return &UserSubscriptionQuery{
-		config:                _q.config,
-		ctx:                   _q.ctx.Clone(),
-		order:                 append([]usersubscription.OrderOption{}, _q.order...),
-		inters:                append([]Interceptor{}, _q.inters...),
-		predicates:            append([]predicate.UserSubscription{}, _q.predicates...),
-		withUser:              _q.withUser.Clone(),
-		withGroup:             _q.withGroup.Clone(),
-		withPlan:              _q.withPlan.Clone(),
-		withAssignedByUser:    _q.withAssignedByUser.Clone(),
-		withUsageLogs:         _q.withUsageLogs.Clone(),
-		withGroupEntitlements: _q.withGroupEntitlements.Clone(),
-		withEntitlements:      _q.withEntitlements.Clone(),
+		config:                    _q.config,
+		ctx:                       _q.ctx.Clone(),
+		order:                     append([]usersubscription.OrderOption{}, _q.order...),
+		inters:                    append([]Interceptor{}, _q.inters...),
+		predicates:                append([]predicate.UserSubscription{}, _q.predicates...),
+		withEntitlementOperations: _q.withEntitlementOperations.Clone(),
+		withUser:                  _q.withUser.Clone(),
+		withGroup:                 _q.withGroup.Clone(),
+		withPlan:                  _q.withPlan.Clone(),
+		withAssignedByUser:        _q.withAssignedByUser.Clone(),
+		withUsageLogs:             _q.withUsageLogs.Clone(),
+		withGroupEntitlements:     _q.withGroupEntitlements.Clone(),
+		withEntitlements:          _q.withEntitlements.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithEntitlementOperations tells the query-builder to eager-load the nodes that are connected to
+// the "entitlement_operations" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserSubscriptionQuery) WithEntitlementOperations(opts ...func(*SubscriptionOperationQuery)) *UserSubscriptionQuery {
+	query := (&SubscriptionOperationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withEntitlementOperations = query
+	return _q
 }
 
 // WithUser tells the query-builder to eager-load the nodes that are connected to
@@ -588,7 +624,8 @@ func (_q *UserSubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	var (
 		nodes       = []*UserSubscription{}
 		_spec       = _q.querySpec()
-		loadedTypes = [7]bool{
+		loadedTypes = [8]bool{
+			_q.withEntitlementOperations != nil,
 			_q.withUser != nil,
 			_q.withGroup != nil,
 			_q.withPlan != nil,
@@ -618,6 +655,15 @@ func (_q *UserSubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
+	}
+	if query := _q.withEntitlementOperations; query != nil {
+		if err := _q.loadEntitlementOperations(ctx, query, nodes,
+			func(n *UserSubscription) { n.Edges.EntitlementOperations = []*SubscriptionOperation{} },
+			func(n *UserSubscription, e *SubscriptionOperation) {
+				n.Edges.EntitlementOperations = append(n.Edges.EntitlementOperations, e)
+			}); err != nil {
+			return nil, err
+		}
 	}
 	if query := _q.withUser; query != nil {
 		if err := _q.loadUser(ctx, query, nodes, nil,
@@ -671,6 +717,36 @@ func (_q *UserSubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	return nodes, nil
 }
 
+func (_q *UserSubscriptionQuery) loadEntitlementOperations(ctx context.Context, query *SubscriptionOperationQuery, nodes []*UserSubscription, init func(*UserSubscription), assign func(*UserSubscription, *SubscriptionOperation)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*UserSubscription)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptionoperation.FieldSubscriptionID)
+	}
+	query.Where(predicate.SubscriptionOperation(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(usersubscription.EntitlementOperationsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SubscriptionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 func (_q *UserSubscriptionQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*UserSubscription, init func(*UserSubscription), assign func(*UserSubscription, *User)) error {
 	ids := make([]int64, 0, len(nodes))
 	nodeids := make(map[int64][]*UserSubscription)

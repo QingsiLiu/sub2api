@@ -74,6 +74,9 @@ func (PaymentOrder) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 
+		// geili hook: immutable purchase promise; legacy orders remain nil.
+		field.JSON("subscription_snapshot", map[string]any{}).Optional().SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
+
 		// 订单类型 & 订阅关联
 		field.String("order_type").
 			MaxLen(20).

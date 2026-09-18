@@ -925,6 +925,16 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 			if fresh.StartsAt.After(time.Now()) || (fresh.PlanID != nil && fresh.Plan == nil) {
 				return ErrSubscriptionInvalid
 			}
+			if len(fresh.Entitlements) > 0 {
+				a := fresh.AggregateQuotaSummary()
+				if fresh.Status != SubscriptionStatusActive || a.ActiveLotCount == 0 {
+					return ErrSubscriptionInvalid
+				}
+				if a.AvailableUSD <= 0 {
+					return ErrDailyLimitExceeded
+				}
+				return nil
+			}
 			daily, weekly, monthly = fresh.QuotaLimits(fresh.Group)
 			subData = &subscriptionCacheData{Status: fresh.Status, ExpiresAt: fresh.ExpiresAt, DailyUsage: fresh.DailyUsageUSD, WeeklyUsage: fresh.WeeklyUsageUSD, MonthlyUsage: fresh.MonthlyUsageUSD}
 			if fresh.PlanID != nil {

@@ -96,11 +96,20 @@ type Setting func(*sql.Selector)
 // SubscriptionEntitlementOrder is the predicate function for subscriptionentitlementorder builders.
 type SubscriptionEntitlementOrder func(*sql.Selector)
 
+// SubscriptionOperation is the predicate function for subscriptionoperation builders.
+type SubscriptionOperation func(*sql.Selector)
+
 // SubscriptionPlan is the predicate function for subscriptionplan builders.
 type SubscriptionPlan func(*sql.Selector)
 
 // SubscriptionPlanGroup is the predicate function for subscriptionplangroup builders.
 type SubscriptionPlanGroup func(*sql.Selector)
+
+// SubscriptionRefund is the predicate function for subscriptionrefund builders.
+type SubscriptionRefund func(*sql.Selector)
+
+// SubscriptionRequest is the predicate function for subscriptionrequest builders.
+type SubscriptionRequest func(*sql.Selector)
 
 // TLSFingerprintProfile is the predicate function for tlsfingerprintprofile builders.
 type TLSFingerprintProfile func(*sql.Selector)

@@ -51,6 +51,8 @@ const (
 	FieldAssignedAt = "assigned_at"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// EdgeEntitlementOperations holds the string denoting the entitlement_operations edge name in mutations.
+	EdgeEntitlementOperations = "entitlement_operations"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -67,6 +69,13 @@ const (
 	EdgeEntitlements = "entitlements"
 	// Table holds the table name of the usersubscription in the database.
 	Table = "user_subscriptions"
+	// EntitlementOperationsTable is the table that holds the entitlement_operations relation/edge.
+	EntitlementOperationsTable = "subscription_operations"
+	// EntitlementOperationsInverseTable is the table name for the SubscriptionOperation entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionoperation" package.
+	EntitlementOperationsInverseTable = "subscription_operations"
+	// EntitlementOperationsColumn is the table column denoting the entitlement_operations relation/edge.
+	EntitlementOperationsColumn = "subscription_id"
 	// UserTable is the table that holds the user relation/edge.
 	UserTable = "user_subscriptions"
 	// UserInverseTable is the table name for the User entity.
@@ -277,6 +286,20 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
 }
 
+// ByEntitlementOperationsCount orders the results by entitlement_operations count.
+func ByEntitlementOperationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEntitlementOperationsStep(), opts...)
+	}
+}
+
+// ByEntitlementOperations orders the results by entitlement_operations terms.
+func ByEntitlementOperations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEntitlementOperationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserField orders the results by user field.
 func ByUserField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -345,6 +368,13 @@ func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newEntitlementOperationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EntitlementOperationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, EntitlementOperationsTable, EntitlementOperationsColumn),
+	)
 }
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

@@ -29,6 +29,12 @@ type SubscriptionEntitlementOrder struct {
 	Operation string `json:"operation,omitempty"`
 	// DaysAdded holds the value of the "days_added" field.
 	DaysAdded int `json:"days_added,omitempty"`
+	// BeforeExpiresAt holds the value of the "before_expires_at" field.
+	BeforeExpiresAt *time.Time `json:"before_expires_at,omitempty"`
+	// AfterExpiresAt holds the value of the "after_expires_at" field.
+	AfterExpiresAt *time.Time `json:"after_expires_at,omitempty"`
+	// ReversedAt holds the value of the "reversed_at" field.
+	ReversedAt *time.Time `json:"reversed_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -79,7 +85,7 @@ func (*SubscriptionEntitlementOrder) scanValues(columns []string) ([]any, error)
 			values[i] = new(sql.NullInt64)
 		case subscriptionentitlementorder.FieldOperation:
 			values[i] = new(sql.NullString)
-		case subscriptionentitlementorder.FieldCreatedAt:
+		case subscriptionentitlementorder.FieldBeforeExpiresAt, subscriptionentitlementorder.FieldAfterExpiresAt, subscriptionentitlementorder.FieldReversedAt, subscriptionentitlementorder.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -131,6 +137,27 @@ func (_m *SubscriptionEntitlementOrder) assignValues(columns []string, values []
 				return fmt.Errorf("unexpected type %T for field days_added", values[i])
 			} else if value.Valid {
 				_m.DaysAdded = int(value.Int64)
+			}
+		case subscriptionentitlementorder.FieldBeforeExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field before_expires_at", values[i])
+			} else if value.Valid {
+				_m.BeforeExpiresAt = new(time.Time)
+				*_m.BeforeExpiresAt = value.Time
+			}
+		case subscriptionentitlementorder.FieldAfterExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field after_expires_at", values[i])
+			} else if value.Valid {
+				_m.AfterExpiresAt = new(time.Time)
+				*_m.AfterExpiresAt = value.Time
+			}
+		case subscriptionentitlementorder.FieldReversedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field reversed_at", values[i])
+			} else if value.Valid {
+				_m.ReversedAt = new(time.Time)
+				*_m.ReversedAt = value.Time
 			}
 		case subscriptionentitlementorder.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -198,6 +225,21 @@ func (_m *SubscriptionEntitlementOrder) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("days_added=")
 	builder.WriteString(fmt.Sprintf("%v", _m.DaysAdded))
+	builder.WriteString(", ")
+	if v := _m.BeforeExpiresAt; v != nil {
+		builder.WriteString("before_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AfterExpiresAt; v != nil {
+		builder.WriteString("after_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ReversedAt; v != nil {
+		builder.WriteString("reversed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

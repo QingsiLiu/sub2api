@@ -71,6 +71,7 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
+	ExpectedPlanRevision string
 	UserID               int64
 	Amount               float64
 	PaymentType          string
@@ -97,6 +98,7 @@ type SubscriptionQuoteRequest struct {
 }
 
 type SubscriptionQuoteResponse struct {
+	PlanRevision         string                    `json:"plan_revision"`
 	PlanID               int64                     `json:"plan_id"`
 	SubscriptionMode     string                    `json:"subscription_mode"`
 	SubscriptionQuantity int                       `json:"subscription_quantity"`

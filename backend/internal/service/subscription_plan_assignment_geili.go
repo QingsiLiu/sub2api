@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -28,12 +29,15 @@ func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input 
 	reused := false
 	err := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 		client := dbent.TxFromContext(txCtx).Client()
-		if _, err := client.User.Query().Where(user.IDEQ(input.UserID)).ForUpdate().Only(txCtx); err != nil {
+		if _, err := client.User.Query().Unique(false).Where(user.IDEQ(input.UserID), geilisub.LockRows).Only(txCtx); err != nil {
 			return fmt.Errorf("lock subscription owner: %w", err)
 		}
 		plan, err := client.SubscriptionPlan.Get(txCtx, *input.PlanID)
 		if err != nil {
-			return infraerrors.NotFound("PLAN_NOT_FOUND", "subscription plan not found")
+			if dbent.IsNotFound(err) {
+				return infraerrors.NotFound("PLAN_NOT_FOUND", "subscription plan not found")
+			}
+			return err
 		}
 		if plan.ArchivedAt != nil && !input.AllowArchivedPlan {
 			return infraerrors.BadRequest("PLAN_ARCHIVED", "plan is archived")
@@ -57,12 +61,22 @@ func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input 
 		}
 		if existing != nil {
 			reused = true
+			if input.SkipEntitlement {
+				result, err = s.userSubRepo.GetByID(txCtx, existing.ID)
+				return err
+			}
 			sub, err := s.userSubRepo.GetByID(txCtx, existing.ID)
 			if err != nil {
 				return err
 			}
 			if extend || sub.IsExpired() || sub.Status == SubscriptionStatusExpired {
-				if err := s.updateExistingSubscriptionTerm(txCtx, sub.ID, days, input.Notes, !extend); err != nil {
+				if _, err := geilisub.LockParent(txCtx, client, sub.ID); err != nil {
+					return err
+				}
+				if _, err := geilisub.EnsureLegacyLot(txCtx, client, sub.ID); err != nil {
+					return err
+				}
+				if err := geilisub.Purchase(txCtx, client, sub.ID, &plan.ID, 0, days, 1, "renew", plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd, grantSource(input), input.SourceReference, input.AssignedBy, s.now()); err != nil {
 					return err
 				}
 			} else {
@@ -89,6 +103,11 @@ func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input 
 		}
 		if err := s.userSubRepo.Create(txCtx, sub); err != nil {
 			return err
+		}
+		if !input.SkipEntitlement {
+			if err := geilisub.Purchase(txCtx, client, sub.ID, &plan.ID, 0, days, 1, "stack", plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd, grantSource(input), input.SourceReference, input.AssignedBy, now); err != nil {
+				return err
+			}
 		}
 		result, err = s.userSubRepo.GetByID(txCtx, sub.ID)
 		return err
@@ -118,7 +137,13 @@ func (s *SubscriptionService) FindByUserAndPlan(ctx context.Context, userID, pla
 	row, err := client.UserSubscription.Query().Where(usersubscription.UserIDEQ(userID), usersubscription.PlanIDEQ(planID)).Only(ctx)
 	if dbent.IsNotFound(err) {
 		plan, planErr := client.SubscriptionPlan.Get(ctx, planID)
-		if planErr != nil || plan.GroupID == nil {
+		if planErr != nil {
+			if dbent.IsNotFound(planErr) {
+				return nil, ErrSubscriptionNotFound
+			}
+			return nil, planErr
+		}
+		if plan.GroupID == nil {
 			return nil, ErrSubscriptionNotFound
 		}
 		row, err = client.UserSubscription.Query().Where(usersubscription.UserIDEQ(userID), usersubscription.GroupIDEQ(*plan.GroupID), usersubscription.Or(usersubscription.PlanIDIsNil(), usersubscription.HasPlanWith(subscriptionplan.IsLegacyCompatEQ(true)))).Only(ctx)
@@ -130,4 +155,11 @@ func (s *SubscriptionService) FindByUserAndPlan(ctx context.Context, userID, pla
 		return nil, err
 	}
 	return s.userSubRepo.GetByID(ctx, row.ID)
+}
+
+func grantSource(input *AssignSubscriptionInput) string {
+	if input.SourceType != "" {
+		return input.SourceType
+	}
+	return "admin"
 }

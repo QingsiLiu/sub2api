@@ -80,6 +80,21 @@ func DaysAdded(v int) predicate.SubscriptionEntitlementOrder {
 	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldDaysAdded, v))
 }
 
+// BeforeExpiresAt applies equality check predicate on the "before_expires_at" field. It's identical to BeforeExpiresAtEQ.
+func BeforeExpiresAt(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldBeforeExpiresAt, v))
+}
+
+// AfterExpiresAt applies equality check predicate on the "after_expires_at" field. It's identical to AfterExpiresAtEQ.
+func AfterExpiresAt(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldAfterExpiresAt, v))
+}
+
+// ReversedAt applies equality check predicate on the "reversed_at" field. It's identical to ReversedAtEQ.
+func ReversedAt(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldReversedAt, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.SubscriptionEntitlementOrder {
 	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldCreatedAt, v))
@@ -268,6 +283,156 @@ func DaysAddedLT(v int) predicate.SubscriptionEntitlementOrder {
 // DaysAddedLTE applies the LTE predicate on the "days_added" field.
 func DaysAddedLTE(v int) predicate.SubscriptionEntitlementOrder {
 	return predicate.SubscriptionEntitlementOrder(sql.FieldLTE(FieldDaysAdded, v))
+}
+
+// BeforeExpiresAtEQ applies the EQ predicate on the "before_expires_at" field.
+func BeforeExpiresAtEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtNEQ applies the NEQ predicate on the "before_expires_at" field.
+func BeforeExpiresAtNEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNEQ(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtIn applies the In predicate on the "before_expires_at" field.
+func BeforeExpiresAtIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIn(FieldBeforeExpiresAt, vs...))
+}
+
+// BeforeExpiresAtNotIn applies the NotIn predicate on the "before_expires_at" field.
+func BeforeExpiresAtNotIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotIn(FieldBeforeExpiresAt, vs...))
+}
+
+// BeforeExpiresAtGT applies the GT predicate on the "before_expires_at" field.
+func BeforeExpiresAtGT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGT(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtGTE applies the GTE predicate on the "before_expires_at" field.
+func BeforeExpiresAtGTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGTE(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtLT applies the LT predicate on the "before_expires_at" field.
+func BeforeExpiresAtLT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLT(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtLTE applies the LTE predicate on the "before_expires_at" field.
+func BeforeExpiresAtLTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLTE(FieldBeforeExpiresAt, v))
+}
+
+// BeforeExpiresAtIsNil applies the IsNil predicate on the "before_expires_at" field.
+func BeforeExpiresAtIsNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIsNull(FieldBeforeExpiresAt))
+}
+
+// BeforeExpiresAtNotNil applies the NotNil predicate on the "before_expires_at" field.
+func BeforeExpiresAtNotNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotNull(FieldBeforeExpiresAt))
+}
+
+// AfterExpiresAtEQ applies the EQ predicate on the "after_expires_at" field.
+func AfterExpiresAtEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtNEQ applies the NEQ predicate on the "after_expires_at" field.
+func AfterExpiresAtNEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNEQ(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtIn applies the In predicate on the "after_expires_at" field.
+func AfterExpiresAtIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIn(FieldAfterExpiresAt, vs...))
+}
+
+// AfterExpiresAtNotIn applies the NotIn predicate on the "after_expires_at" field.
+func AfterExpiresAtNotIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotIn(FieldAfterExpiresAt, vs...))
+}
+
+// AfterExpiresAtGT applies the GT predicate on the "after_expires_at" field.
+func AfterExpiresAtGT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGT(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtGTE applies the GTE predicate on the "after_expires_at" field.
+func AfterExpiresAtGTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGTE(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtLT applies the LT predicate on the "after_expires_at" field.
+func AfterExpiresAtLT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLT(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtLTE applies the LTE predicate on the "after_expires_at" field.
+func AfterExpiresAtLTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLTE(FieldAfterExpiresAt, v))
+}
+
+// AfterExpiresAtIsNil applies the IsNil predicate on the "after_expires_at" field.
+func AfterExpiresAtIsNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIsNull(FieldAfterExpiresAt))
+}
+
+// AfterExpiresAtNotNil applies the NotNil predicate on the "after_expires_at" field.
+func AfterExpiresAtNotNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotNull(FieldAfterExpiresAt))
+}
+
+// ReversedAtEQ applies the EQ predicate on the "reversed_at" field.
+func ReversedAtEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldEQ(FieldReversedAt, v))
+}
+
+// ReversedAtNEQ applies the NEQ predicate on the "reversed_at" field.
+func ReversedAtNEQ(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNEQ(FieldReversedAt, v))
+}
+
+// ReversedAtIn applies the In predicate on the "reversed_at" field.
+func ReversedAtIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIn(FieldReversedAt, vs...))
+}
+
+// ReversedAtNotIn applies the NotIn predicate on the "reversed_at" field.
+func ReversedAtNotIn(vs ...time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotIn(FieldReversedAt, vs...))
+}
+
+// ReversedAtGT applies the GT predicate on the "reversed_at" field.
+func ReversedAtGT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGT(FieldReversedAt, v))
+}
+
+// ReversedAtGTE applies the GTE predicate on the "reversed_at" field.
+func ReversedAtGTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldGTE(FieldReversedAt, v))
+}
+
+// ReversedAtLT applies the LT predicate on the "reversed_at" field.
+func ReversedAtLT(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLT(FieldReversedAt, v))
+}
+
+// ReversedAtLTE applies the LTE predicate on the "reversed_at" field.
+func ReversedAtLTE(v time.Time) predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldLTE(FieldReversedAt, v))
+}
+
+// ReversedAtIsNil applies the IsNil predicate on the "reversed_at" field.
+func ReversedAtIsNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldIsNull(FieldReversedAt))
+}
+
+// ReversedAtNotNil applies the NotNil predicate on the "reversed_at" field.
+func ReversedAtNotNil() predicate.SubscriptionEntitlementOrder {
+	return predicate.SubscriptionEntitlementOrder(sql.FieldNotNull(FieldReversedAt))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

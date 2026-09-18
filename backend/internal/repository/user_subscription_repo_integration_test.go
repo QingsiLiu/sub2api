@@ -877,9 +877,23 @@ func (s *UserSubscriptionRepoSuite) TestUpdate_NilInput() {
 // --- 并发用量更新测试 ---
 
 func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Concurrent() {
+	// Each concurrent operation must own its own transaction/connection. Sharing
+	// tx.Client() across goroutines tests lib/pq protocol interleaving, not row locks.
+	s.client = testEntClient(s.T())
+	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)
+
 	user := s.mustCreateUser("concurrent@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-concurrent")
 	sub := s.mustCreateSubscription(user.ID, group.ID, nil)
+
+	s.T().Cleanup(func() {
+		_, err := integrationDB.ExecContext(s.ctx, "DELETE FROM user_subscriptions WHERE id=$1", sub.ID)
+		s.Require().NoError(err)
+		_, err = integrationDB.ExecContext(s.ctx, "DELETE FROM users WHERE id=$1", user.ID)
+		s.Require().NoError(err)
+		_, err = integrationDB.ExecContext(s.ctx, "DELETE FROM groups WHERE id=$1", group.ID)
+		s.Require().NoError(err)
+	})
 
 	const numGoroutines = 10
 	const incrementPerGoroutine = 1.5

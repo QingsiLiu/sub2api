@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"math"
 	"net/http"
 	"sort"
@@ -207,6 +208,7 @@ func (l *openAIWSConnLease) WriteJSONWithContextTimeout(ctx context.Context, val
 	if err != nil {
 		return err
 	}
+	ctxkey.MarkUpstreamDispatched(ctx)
 	return conn.writeJSONWithTimeout(ctx, value, timeout)
 }
 
@@ -215,6 +217,7 @@ func (l *openAIWSConnLease) WriteJSONContext(ctx context.Context, value any) err
 	if err != nil {
 		return err
 	}
+	ctxkey.MarkUpstreamDispatched(ctx)
 	return conn.writeJSON(value, ctx)
 }
 

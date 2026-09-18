@@ -74,10 +74,16 @@ type Tx struct {
 	Setting *SettingClient
 	// SubscriptionEntitlementOrder is the client for interacting with the SubscriptionEntitlementOrder builders.
 	SubscriptionEntitlementOrder *SubscriptionEntitlementOrderClient
+	// SubscriptionOperation is the client for interacting with the SubscriptionOperation builders.
+	SubscriptionOperation *SubscriptionOperationClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// SubscriptionPlanGroup is the client for interacting with the SubscriptionPlanGroup builders.
 	SubscriptionPlanGroup *SubscriptionPlanGroupClient
+	// SubscriptionRefund is the client for interacting with the SubscriptionRefund builders.
+	SubscriptionRefund *SubscriptionRefundClient
+	// SubscriptionRequest is the client for interacting with the SubscriptionRequest builders.
+	SubscriptionRequest *SubscriptionRequestClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -261,8 +267,11 @@ func (tx *Tx) init() {
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
 	tx.SubscriptionEntitlementOrder = NewSubscriptionEntitlementOrderClient(tx.config)
+	tx.SubscriptionOperation = NewSubscriptionOperationClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
 	tx.SubscriptionPlanGroup = NewSubscriptionPlanGroupClient(tx.config)
+	tx.SubscriptionRefund = NewSubscriptionRefundClient(tx.config)
+	tx.SubscriptionRequest = NewSubscriptionRequestClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)

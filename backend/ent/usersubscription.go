@@ -64,6 +64,8 @@ type UserSubscription struct {
 
 // UserSubscriptionEdges holds the relations/edges for other nodes in the graph.
 type UserSubscriptionEdges struct {
+	// EntitlementOperations holds the value of the entitlement_operations edge.
+	EntitlementOperations []*SubscriptionOperation `json:"entitlement_operations,omitempty"`
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
 	// Group holds the value of the group edge.
@@ -80,7 +82,16 @@ type UserSubscriptionEdges struct {
 	Entitlements []*UserSubscriptionEntitlement `json:"entitlements,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [7]bool
+	loadedTypes [8]bool
+}
+
+// EntitlementOperationsOrErr returns the EntitlementOperations value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserSubscriptionEdges) EntitlementOperationsOrErr() ([]*SubscriptionOperation, error) {
+	if e.loadedTypes[0] {
+		return e.EntitlementOperations, nil
+	}
+	return nil, &NotLoadedError{edge: "entitlement_operations"}
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -88,7 +99,7 @@ type UserSubscriptionEdges struct {
 func (e UserSubscriptionEdges) UserOrErr() (*User, error) {
 	if e.User != nil {
 		return e.User, nil
-	} else if e.loadedTypes[0] {
+	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "user"}
@@ -99,7 +110,7 @@ func (e UserSubscriptionEdges) UserOrErr() (*User, error) {
 func (e UserSubscriptionEdges) GroupOrErr() (*Group, error) {
 	if e.Group != nil {
 		return e.Group, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[2] {
 		return nil, &NotFoundError{label: group.Label}
 	}
 	return nil, &NotLoadedError{edge: "group"}
@@ -110,7 +121,7 @@ func (e UserSubscriptionEdges) GroupOrErr() (*Group, error) {
 func (e UserSubscriptionEdges) PlanOrErr() (*SubscriptionPlan, error) {
 	if e.Plan != nil {
 		return e.Plan, nil
-	} else if e.loadedTypes[2] {
+	} else if e.loadedTypes[3] {
 		return nil, &NotFoundError{label: subscriptionplan.Label}
 	}
 	return nil, &NotLoadedError{edge: "plan"}
@@ -121,7 +132,7 @@ func (e UserSubscriptionEdges) PlanOrErr() (*SubscriptionPlan, error) {
 func (e UserSubscriptionEdges) AssignedByUserOrErr() (*User, error) {
 	if e.AssignedByUser != nil {
 		return e.AssignedByUser, nil
-	} else if e.loadedTypes[3] {
+	} else if e.loadedTypes[4] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "assigned_by_user"}
@@ -130,7 +141,7 @@ func (e UserSubscriptionEdges) AssignedByUserOrErr() (*User, error) {
 // UsageLogsOrErr returns the UsageLogs value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserSubscriptionEdges) UsageLogsOrErr() ([]*UsageLog, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.UsageLogs, nil
 	}
 	return nil, &NotLoadedError{edge: "usage_logs"}
@@ -139,7 +150,7 @@ func (e UserSubscriptionEdges) UsageLogsOrErr() ([]*UsageLog, error) {
 // GroupEntitlementsOrErr returns the GroupEntitlements value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserSubscriptionEdges) GroupEntitlementsOrErr() ([]*UserSubscriptionGroup, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[6] {
 		return e.GroupEntitlements, nil
 	}
 	return nil, &NotLoadedError{edge: "group_entitlements"}
@@ -148,7 +159,7 @@ func (e UserSubscriptionEdges) GroupEntitlementsOrErr() ([]*UserSubscriptionGrou
 // EntitlementsOrErr returns the Entitlements value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserSubscriptionEdges) EntitlementsOrErr() ([]*UserSubscriptionEntitlement, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[7] {
 		return e.Entitlements, nil
 	}
 	return nil, &NotLoadedError{edge: "entitlements"}
@@ -315,6 +326,11 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *UserSubscription) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryEntitlementOperations queries the "entitlement_operations" edge of the UserSubscription entity.
+func (_m *UserSubscription) QueryEntitlementOperations() *SubscriptionOperationQuery {
+	return NewUserSubscriptionClient(_m.config).QueryEntitlementOperations(_m)
 }
 
 // QueryUser queries the "user" edge of the UserSubscription entity.

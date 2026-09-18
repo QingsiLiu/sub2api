@@ -14,27 +14,30 @@ import (
 
 // Lot carries a quota snapshot independent of mutable sale-plan configuration.
 type Lot struct {
-	ID                 int64      `json:"id"`
-	UserSubscriptionID int64      `json:"user_subscription_id"`
-	PlanID             *int64     `json:"plan_id,omitempty"`
-	SourceOrderID      *int64     `json:"source_order_id,omitempty"`
-	LotIndex           int        `json:"lot_index"`
-	PurchaseMode       string     `json:"purchase_mode"`
-	Status             string     `json:"status"`
-	StartsAt           time.Time  `json:"starts_at"`
-	ExpiresAt          time.Time  `json:"expires_at"`
-	DailyLimitUSD      *float64   `json:"daily_limit_usd"`
-	WeeklyLimitUSD     *float64   `json:"weekly_limit_usd"`
-	MonthlyLimitUSD    *float64   `json:"monthly_limit_usd"`
-	DailyWindowStart   *time.Time `json:"daily_window_start"`
-	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
-	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
-	DailyUsageUSD      float64    `json:"daily_usage_usd"`
-	WeeklyUsageUSD     float64    `json:"weekly_usage_usd"`
-	MonthlyUsageUSD    float64    `json:"monthly_usage_usd"`
-	LifetimeUsageUSD   float64    `json:"lifetime_usage_usd"`
-	RefundedAt         *time.Time `json:"refunded_at,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
+	AllocationWatermark int64      `json:"allocation_watermark,omitempty"`
+	SourceType          string     `json:"source_type"`
+	SourceReference     string     `json:"source_reference,omitempty"`
+	ID                  int64      `json:"id"`
+	UserSubscriptionID  int64      `json:"user_subscription_id"`
+	PlanID              *int64     `json:"plan_id,omitempty"`
+	SourceOrderID       *int64     `json:"source_order_id,omitempty"`
+	LotIndex            int        `json:"lot_index"`
+	PurchaseMode        string     `json:"purchase_mode"`
+	Status              string     `json:"status"`
+	StartsAt            time.Time  `json:"starts_at"`
+	ExpiresAt           time.Time  `json:"expires_at"`
+	DailyLimitUSD       *float64   `json:"daily_limit_usd"`
+	WeeklyLimitUSD      *float64   `json:"weekly_limit_usd"`
+	MonthlyLimitUSD     *float64   `json:"monthly_limit_usd"`
+	DailyWindowStart    *time.Time `json:"daily_window_start"`
+	WeeklyWindowStart   *time.Time `json:"weekly_window_start"`
+	MonthlyWindowStart  *time.Time `json:"monthly_window_start"`
+	DailyUsageUSD       float64    `json:"daily_usage_usd"`
+	WeeklyUsageUSD      float64    `json:"weekly_usage_usd"`
+	MonthlyUsageUSD     float64    `json:"monthly_usage_usd"`
+	LifetimeUsageUSD    float64    `json:"lifetime_usage_usd"`
+	RefundedAt          *time.Time `json:"refunded_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
 type Summary struct {
@@ -290,24 +293,8 @@ func SyncAggregate(ctx context.Context, q SQL, id int64, lots []Lot, now time.Ti
 	if len(lots) == 0 {
 		return nil
 	}
-	s := Aggregate(lots, now)
-	// Keep an expiry for historical display even when the last lot is gone.
-	latest := lots[0].ExpiresAt
-	for _, e := range lots {
-		if e.Status != "refunded" && e.ExpiresAt.After(latest) {
-			latest = e.ExpiresAt
-		}
-	}
-	if s.ExpiresAt != nil {
-		latest = *s.ExpiresAt
-	} else if latest.After(now) {
-		latest = now
-	}
-	status := "active"
-	if s.ActiveLotCount == 0 {
-		status = "expired"
-	}
-	_, err := q.ExecContext(ctx, `UPDATE user_subscriptions SET expires_at=$2,status=CASE WHEN status='suspended' THEN status ELSE $3 END,daily_usage_usd=$4,weekly_usage_usd=$5,monthly_usage_usd=$6,updated_at=NOW() WHERE id=$1`, id, latest, status, s.DailyUsageUSD, s.WeeklyUsageUSD, s.MonthlyUsageUSD)
+	s, latest, status := ParentProjection(lots, now)
+	_, err := q.ExecContext(ctx, `UPDATE user_subscriptions SET expires_at=$2,status=CASE WHEN status IN ('suspended','revoked') THEN status ELSE $3 END,daily_usage_usd=$4,weekly_usage_usd=$5,monthly_usage_usd=$6,updated_at=NOW() WHERE id=$1`, id, latest, status, s.DailyUsageUSD, s.WeeklyUsageUSD, s.MonthlyUsageUSD)
 	return err
 }
 func Debit(ctx context.Context, q SQL, id int64, cost float64, now time.Time) (bool, error) {
@@ -331,71 +318,24 @@ func Debit(ctx context.Context, q SQL, id int64, cost float64, now time.Time) (b
 	return true, SyncAggregate(ctx, q, id, lots, now)
 }
 
-// ApplyPurchase applies one paid order to the aggregate. It is intentionally
-// SQL based so it can run inside the payment fulfillment transaction.
-func ApplyPurchase(ctx context.Context, q SQL, subscriptionID, planID, orderID int64, days, quantity int, mode string, daily, weekly, monthly *float64, now time.Time) error {
-	if quantity <= 0 {
-		quantity = 1
-	}
-	if quantity > 10 {
-		return errors.New("subscription quantity exceeds maximum")
-	}
-	if mode != "stack" {
-		mode = "renew"
-	}
-	if err := LockSubscription(ctx, q, subscriptionID); err != nil {
-		return err
-	}
-	lots, err := LoadLots(ctx, q, subscriptionID, true)
-	if err != nil {
-		return err
-	}
-	active := make([]Lot, 0, len(lots))
+// ParentProjection is shared by SQL billing and Ent management persistence.
+func ParentProjection(lots []Lot, now time.Time) (Summary, time.Time, string) {
+	a := Aggregate(lots, now)
+	latest := time.Time{}
 	for _, e := range lots {
-		if e.PlanID != nil && *e.PlanID == planID && e.Active(now) {
-			active = append(active, e)
+		if e.Status != "refunded" && e.Status != "revoked" && e.ExpiresAt.After(latest) {
+			latest = e.ExpiresAt
 		}
 	}
-	SortLots(active)
-	if mode == "renew" {
-		for i := 0; i < quantity && i < len(active); i++ {
-			e := active[i]
-			e.ExpiresAt = e.ExpiresAt.AddDate(0, 0, days)
-			if e.ExpiresAt.Before(now) {
-				e.ExpiresAt = now.AddDate(0, 0, days)
-			}
-			if e.ExpiresAt.Year() > 9998 {
-				return errors.New("subscription expiry exceeds maximum")
-			}
-			if _, err := q.ExecContext(ctx, `UPDATE user_subscription_entitlements SET expires_at=$2,purchase_mode='renew',updated_at=NOW() WHERE id=$1`, e.ID, e.ExpiresAt); err != nil {
-				return err
-			}
-			if _, err := q.ExecContext(ctx, `INSERT INTO subscription_entitlement_orders(entitlement_id,order_id,lot_index,operation,days_added) VALUES($1,$2,$3,'renew',$4) ON CONFLICT(order_id,lot_index) DO NOTHING`, e.ID, orderID, i, days); err != nil {
-				return err
-			}
-		}
-		quantity -= minInt(quantity, len(active))
+	if a.ExpiresAt != nil {
+		latest = *a.ExpiresAt
 	}
-	for i := 0; i < quantity; i++ {
-		idx := i
-		if mode == "renew" {
-			idx = i + len(active)
-		}
-		expires := now.AddDate(0, 0, days)
-		_, err := q.ExecContext(ctx, `INSERT INTO user_subscription_entitlements(user_subscription_id,plan_id,source_order_id,lot_index,purchase_mode,status,starts_at,expires_at,daily_limit_usd,weekly_limit_usd,monthly_limit_usd,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,NOW(),NOW()) ON CONFLICT DO NOTHING`, subscriptionID, planID, orderID, idx, mode, now, expires, daily, weekly, monthly)
-		if err != nil {
-			return err
-		}
+	if latest.IsZero() {
+		latest = now
 	}
-	lots, err = LoadLots(ctx, q, subscriptionID, true)
-	if err != nil {
-		return err
+	state := "expired"
+	if a.ActiveLotCount > 0 {
+		state = "active"
 	}
-	return SyncAggregate(ctx, q, subscriptionID, lots, now)
-}
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return a, latest, state
 }

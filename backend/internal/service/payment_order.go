@@ -7,13 +7,14 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
-	"sort"
+
 	"strconv"
 	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -124,73 +125,46 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 	if req.PlanID <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_INPUT", "subscription plan is required")
 	}
-	mode := strings.TrimSpace(req.SubscriptionMode)
-	if mode == "" {
-		mode = "renew"
-	}
-	if mode != "renew" && mode != "stack" {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_MODE", "subscription mode must be renew or stack")
-	}
-	requested := req.SubscriptionQuantity
-	if requested <= 0 {
-		requested = 1
-	}
-	if requested > 10 {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUANTITY", "subscription quantity must be between 1 and 10")
+	mode, requested, err := geilisub.PurchaseOptions(req.SubscriptionMode, req.SubscriptionQuantity)
+	if err != nil {
+		return nil, err
 	}
 	plan, err := s.configService.GetPlan(ctx, req.PlanID)
-	if err != nil || plan == nil || !plan.ForSale || plan.ArchivedAt != nil {
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil || !plan.ForSale || plan.ArchivedAt != nil {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
 	var current *SubscriptionQuotaSummary
 	var lots []SubscriptionEntitlement
 	if s.subscriptionSvc != nil {
-		if sub, e := s.subscriptionSvc.FindByUserAndPlan(ctx, req.UserID, req.PlanID); e == nil && sub != nil {
-			current = sub.AggregateQuotaSummary()
+		sub, e := s.subscriptionSvc.FindByUserAndPlan(ctx, req.UserID, req.PlanID)
+		if e != nil && !errors.Is(e, ErrSubscriptionNotFound) {
+			return nil, e
+		}
+		if sub != nil {
+			if sub.Status != "active" && sub.Status != "expired" {
+				return nil, geilisub.ErrStateConflict
+			}
 			lots = append(lots, sub.Entitlements...)
+			if len(lots) == 0 {
+				daily, weekly, monthly := sub.QuotaLimits(sub.Group)
+				lots = append(lots, SubscriptionEntitlement{ID: sub.ID, PlanID: sub.PlanID, Status: sub.Status, StartsAt: sub.StartsAt, ExpiresAt: sub.ExpiresAt, DailyLimitUSD: daily, WeeklyLimitUSD: weekly, MonthlyLimitUSD: monthly, DailyUsageUSD: sub.DailyUsageUSD, WeeklyUsageUSD: sub.WeeklyUsageUSD, MonthlyUsageUSD: sub.MonthlyUsageUSD, DailyWindowStart: sub.DailyWindowStart, WeeklyWindowStart: sub.WeeklyWindowStart, MonthlyWindowStart: sub.MonthlyWindowStart})
+			}
+			summary := geilisub.Aggregate(lots, time.Now())
+			current = &summary
 		}
 	}
 	now := time.Now()
 	validityDays := psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
-	canRenew := 0
-	for _, lot := range lots {
-		if lot.Status == SubscriptionEntitlementStatusActive && lot.ExpiresAt.After(now) {
-			canRenew++
-		}
+	projectedLots, canRenew, err := geilisub.PreviewPurchase(lots, mode, requested, validityDays, plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd, now)
+	if err != nil {
+		return nil, err
 	}
-	remaining := requested
-	if mode == "renew" {
-		sort.SliceStable(lots, func(i, j int) bool {
-			if lots[i].ExpiresAt.Equal(lots[j].ExpiresAt) {
-				return lots[i].ID < lots[j].ID
-			}
-			return lots[i].ExpiresAt.Before(lots[j].ExpiresAt)
-		})
-		for i := range lots {
-			if remaining == 0 {
-				break
-			}
-			if lots[i].Status == SubscriptionEntitlementStatusActive && lots[i].ExpiresAt.After(now) {
-				lots[i].ExpiresAt = lots[i].ExpiresAt.AddDate(0, 0, validityDays)
-				remaining--
-			}
-		}
-	}
-	for i := 0; i < remaining; i++ {
-		lots = append(lots, SubscriptionEntitlement{PlanID: &plan.ID, Status: SubscriptionEntitlementStatusActive, StartsAt: now, ExpiresAt: now.AddDate(0, 0, validityDays), DailyLimitUSD: plan.DailyLimitUsd, WeeklyLimitUSD: plan.WeeklyLimitUsd, MonthlyLimitUSD: plan.MonthlyLimitUsd})
-	}
-	daily, weekly, monthly := aggregateEntitlementLimits(lots)
-	projected := &SubscriptionQuotaSummary{DailyLimitUSD: daily, WeeklyLimitUSD: weekly, MonthlyLimitUSD: monthly}
-	for _, lot := range lots {
-		if lot.Status == SubscriptionEntitlementStatusActive && lot.ExpiresAt.After(now) {
-			projected.ActiveLotCount++
-			if projected.ExpiresAt == nil || lot.ExpiresAt.After(*projected.ExpiresAt) {
-				t := lot.ExpiresAt
-				projected.ExpiresAt = &t
-			}
-		}
-	}
-	return &SubscriptionQuoteResponse{PlanID: plan.ID, SubscriptionMode: mode, SubscriptionQuantity: requested, OrderAmount: plan.Price * float64(requested), ValidityDays: validityDays, CanRenewLots: canRenew, Current: current, Projected: projected}, nil
+	projected := geilisub.Aggregate(projectedLots, now)
+	return &SubscriptionQuoteResponse{PlanRevision: plan.UpdatedAt.UTC().Format(time.RFC3339Nano), PlanID: plan.ID, SubscriptionMode: mode, SubscriptionQuantity: requested, OrderAmount: plan.Price * float64(requested), ValidityDays: validityDays, CanRenewLots: canRenew, Current: current, Projected: &projected}, nil
+
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
@@ -222,11 +196,17 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUANTITY", "subscription quantity must be between 1 and 10")
 	}
 	plan, err := s.configService.GetPlan(ctx, req.PlanID)
-	if err != nil || !plan.ForSale {
+	if err != nil || plan == nil || !plan.ForSale {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
 	if plan.ArchivedAt != nil {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan is archived")
+	}
+	if req.ExpectedPlanRevision != "" && req.ExpectedPlanRevision != plan.UpdatedAt.UTC().Format(time.RFC3339Nano) {
+		return nil, infraerrors.Conflict("SUBSCRIPTION_QUOTE_CHANGED", "plan changed; review the updated quote before paying")
+	}
+	if _, err := s.QuoteSubscription(ctx, SubscriptionQuoteRequest{UserID: req.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity}); err != nil {
+		return nil, err
 	}
 	return plan, nil
 }
@@ -297,6 +277,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		if mode == "" {
 			mode = "renew"
 		}
+		snapshotCurrency := payment.DefaultPaymentCurrency
+		if sel != nil {
+			snapshotCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
+		}
+		b.SetSubscriptionSnapshot(map[string]any{"version": 1, "plan_id": plan.ID, "price": plan.Price, "currency": snapshotCurrency, "daily_limit_usd": plan.DailyLimitUsd, "weekly_limit_usd": plan.WeeklyLimitUsd, "monthly_limit_usd": plan.MonthlyLimitUsd, "validity_days": psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit), "mode": mode, "quantity": quantity})
 		b.SetPlanID(plan.ID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)).SetSubscriptionMode(mode).SetSubscriptionQuantity(quantity)
 	}
 	order, err := b.Save(ctx)

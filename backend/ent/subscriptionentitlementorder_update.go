@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -113,6 +114,66 @@ func (_u *SubscriptionEntitlementOrderUpdate) AddDaysAdded(v int) *SubscriptionE
 	return _u
 }
 
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.SetBeforeExpiresAt(v)
+	return _u
+}
+
+// SetNillableBeforeExpiresAt sets the "before_expires_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdate) SetNillableBeforeExpiresAt(v *time.Time) *SubscriptionEntitlementOrderUpdate {
+	if v != nil {
+		_u.SetBeforeExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearBeforeExpiresAt clears the value of the "before_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) ClearBeforeExpiresAt() *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.ClearBeforeExpiresAt()
+	return _u
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.SetAfterExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfterExpiresAt sets the "after_expires_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdate) SetNillableAfterExpiresAt(v *time.Time) *SubscriptionEntitlementOrderUpdate {
+	if v != nil {
+		_u.SetAfterExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfterExpiresAt clears the value of the "after_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) ClearAfterExpiresAt() *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.ClearAfterExpiresAt()
+	return _u
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.SetReversedAt(v)
+	return _u
+}
+
+// SetNillableReversedAt sets the "reversed_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdate) SetNillableReversedAt(v *time.Time) *SubscriptionEntitlementOrderUpdate {
+	if v != nil {
+		_u.SetReversedAt(*v)
+	}
+	return _u
+}
+
+// ClearReversedAt clears the value of the "reversed_at" field.
+func (_u *SubscriptionEntitlementOrderUpdate) ClearReversedAt() *SubscriptionEntitlementOrderUpdate {
+	_u.mutation.ClearReversedAt()
+	return _u
+}
+
 // SetEntitlement sets the "entitlement" edge to the UserSubscriptionEntitlement entity.
 func (_u *SubscriptionEntitlementOrderUpdate) SetEntitlement(v *UserSubscriptionEntitlement) *SubscriptionEntitlementOrderUpdate {
 	return _u.SetEntitlementID(v.ID)
@@ -209,6 +270,24 @@ func (_u *SubscriptionEntitlementOrderUpdate) sqlSave(ctx context.Context) (_nod
 	}
 	if value, ok := _u.mutation.AddedDaysAdded(); ok {
 		_spec.AddField(subscriptionentitlementorder.FieldDaysAdded, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BeforeExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldBeforeExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.BeforeExpiresAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldBeforeExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfterExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldAfterExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfterExpiresAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldAfterExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ReversedAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldReversedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReversedAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldReversedAt, field.TypeTime)
 	}
 	if _u.mutation.EntitlementCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -372,6 +451,66 @@ func (_u *SubscriptionEntitlementOrderUpdateOne) AddDaysAdded(v int) *Subscripti
 	return _u
 }
 
+// SetBeforeExpiresAt sets the "before_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetBeforeExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.SetBeforeExpiresAt(v)
+	return _u
+}
+
+// SetNillableBeforeExpiresAt sets the "before_expires_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetNillableBeforeExpiresAt(v *time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	if v != nil {
+		_u.SetBeforeExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearBeforeExpiresAt clears the value of the "before_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) ClearBeforeExpiresAt() *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.ClearBeforeExpiresAt()
+	return _u
+}
+
+// SetAfterExpiresAt sets the "after_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetAfterExpiresAt(v time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.SetAfterExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfterExpiresAt sets the "after_expires_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetNillableAfterExpiresAt(v *time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	if v != nil {
+		_u.SetAfterExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfterExpiresAt clears the value of the "after_expires_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) ClearAfterExpiresAt() *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.ClearAfterExpiresAt()
+	return _u
+}
+
+// SetReversedAt sets the "reversed_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetReversedAt(v time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.SetReversedAt(v)
+	return _u
+}
+
+// SetNillableReversedAt sets the "reversed_at" field if the given value is not nil.
+func (_u *SubscriptionEntitlementOrderUpdateOne) SetNillableReversedAt(v *time.Time) *SubscriptionEntitlementOrderUpdateOne {
+	if v != nil {
+		_u.SetReversedAt(*v)
+	}
+	return _u
+}
+
+// ClearReversedAt clears the value of the "reversed_at" field.
+func (_u *SubscriptionEntitlementOrderUpdateOne) ClearReversedAt() *SubscriptionEntitlementOrderUpdateOne {
+	_u.mutation.ClearReversedAt()
+	return _u
+}
+
 // SetEntitlement sets the "entitlement" edge to the UserSubscriptionEntitlement entity.
 func (_u *SubscriptionEntitlementOrderUpdateOne) SetEntitlement(v *UserSubscriptionEntitlement) *SubscriptionEntitlementOrderUpdateOne {
 	return _u.SetEntitlementID(v.ID)
@@ -498,6 +637,24 @@ func (_u *SubscriptionEntitlementOrderUpdateOne) sqlSave(ctx context.Context) (_
 	}
 	if value, ok := _u.mutation.AddedDaysAdded(); ok {
 		_spec.AddField(subscriptionentitlementorder.FieldDaysAdded, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BeforeExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldBeforeExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.BeforeExpiresAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldBeforeExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfterExpiresAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldAfterExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfterExpiresAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldAfterExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ReversedAt(); ok {
+		_spec.SetField(subscriptionentitlementorder.FieldReversedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReversedAtCleared() {
+		_spec.ClearField(subscriptionentitlementorder.FieldReversedAt, field.TypeTime)
 	}
 	if _u.mutation.EntitlementCleared() {
 		edge := &sqlgraph.EdgeSpec{

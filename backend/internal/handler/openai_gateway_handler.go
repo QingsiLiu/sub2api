@@ -2515,6 +2515,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+
+	ctx, _ = ctxkey.WithUpstreamDispatch(ctx)
+	turnRights := service.NewSubscriptionTurnAdmission(ctx, subscription)
+	defer turnRights.CloseUnsent()
+
 	requestPlatform := openAICompatibleRequestPlatform(ctx, apiKey)
 	requiredTransport := service.OpenAIUpstreamTransportResponsesWebsocketV2Ingress
 	if requestPlatform == service.PlatformGrok {
@@ -2893,9 +2898,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				currentUserRelease = wrapReleaseOnDone(ctx, userReleaseFunc)
 				currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
-				return nil
+				return turnRights.Begin()
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				turnSubscription := turnRights.Current()
+				billingScheduled := false
+				defer func() {
+					var retry *service.UpstreamFailoverError
+					turnRights.End(billingScheduled, errors.As(turnErr, &retry))
+				}()
+
 				turnStart := getTurnStart(turn)
 				cyberBlockBody := takeCyberTurnBody(turn)
 				// 每次 attempt 都清 cyber mark；failover 链结束前保留 recorded guard，
@@ -2926,7 +2938,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				turnUsageFields := turnMapping.ToUsageFields(turnRequestedModel, turnUpstreamModel)
 				cyberMarked := service.GetOpsCyberPolicy(c) != nil
-				h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash)
+				billingScheduled = cyberMarked && turnErr != nil
+				h.recordCyberPolicyIfMarked(c, apiKey, account, turnSubscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash)
 				cyberBlockedThisConn, cyberBlockPendingAfterFailover = advanceOpenAIWSCyberBlockState(
 					cyberBlockedThisConn,
 					cyberBlockPendingAfterFailover,
@@ -2973,13 +2986,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				sessionID := service.ExtractClientSessionID(c)
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+				billingScheduled = true
 				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:             result,
 						APIKey:             apiKey,
 						User:               apiKey.User,
 						Account:            account,
-						Subscription:       subscription,
+						Subscription:       turnSubscription,
 						InboundEndpoint:    inboundEndpoint,
 						UpstreamEndpoint:   upstreamEndpoint,
 						UserAgent:          userAgent,
@@ -3023,6 +3037,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		for {
+			if err := turnRights.Begin(); err != nil {
+				closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "subscription admission failed")
+				return
+			}
 			err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks)
 			if err == nil {
 				reqLog.Info("openai.websocket_ingress_closed", zap.Int64("account_id", account.ID))

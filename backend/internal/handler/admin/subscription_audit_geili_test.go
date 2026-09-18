@@ -1,4 +1,4 @@
-//go:build unit && subscriptionaudit
+//go:build unit
 
 package admin
 

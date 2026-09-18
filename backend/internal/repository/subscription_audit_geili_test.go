@@ -1,4 +1,4 @@
-//go:build unit && subscriptionaudit && !integration
+//go:build unit && !integration
 
 package repository
 
