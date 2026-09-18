@@ -45,9 +45,13 @@ export const paymentAPI = {
   },
 
   /** Create a new payment order */
-  createOrder(data: CreateOrderRequest) {
-    return apiClient.post<CreateOrderResult>('/payment/orders', data)
-  },
+	createOrder(data: CreateOrderRequest) {
+		return apiClient.post<CreateOrderResult>('/payment/orders', data)
+	},
+
+	quoteSubscription(data: { plan_id: number; subscription_mode: 'renew' | 'stack'; subscription_quantity: number }) {
+		return apiClient.post<import('@/types/payment').SubscriptionQuoteResponse>('/payment/subscription-quote', data)
+	},
 
   /** Get current user's orders */
   getMyOrders(params?: { page?: number; page_size?: number; status?: string }) {

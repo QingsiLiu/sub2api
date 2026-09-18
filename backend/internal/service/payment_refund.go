@@ -16,6 +16,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionentitlementorder"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptionentitlement"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -159,17 +161,19 @@ func (s *PaymentService) RequestRefund(ctx context.Context, oid, uid int64, reas
 	if err != nil {
 		return err
 	}
-	u, err := s.userRepo.GetByID(ctx, o.UserID)
-	if err != nil {
-		return fmt.Errorf("get user: %w", err)
-	}
-	if u.Balance < o.Amount {
-		return infraerrors.BadRequest("BALANCE_NOT_ENOUGH", "refund amount exceeds balance")
+	if o.OrderType == payment.OrderTypeBalance {
+		u, err := s.userRepo.GetByID(ctx, o.UserID)
+		if err != nil {
+			return fmt.Errorf("get user: %w", err)
+		}
+		if u.Balance < o.Amount {
+			return infraerrors.BadRequest("BALANCE_NOT_ENOUGH", "refund amount exceeds balance")
+		}
 	}
 	nr := strings.TrimSpace(reason)
 	now := time.Now()
 	by := fmt.Sprintf("%d", uid)
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.UserIDEQ(uid), paymentorder.StatusEQ(OrderStatusCompleted), paymentorder.OrderTypeEQ(payment.OrderTypeBalance)).SetStatus(OrderStatusRefundRequested).SetRefundRequestedAt(now).SetRefundRequestReason(nr).SetRefundRequestedBy(by).SetRefundAmount(o.Amount).Save(ctx)
+	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.UserIDEQ(uid), paymentorder.StatusEQ(OrderStatusCompleted)).SetStatus(OrderStatusRefundRequested).SetRefundRequestedAt(now).SetRefundRequestReason(nr).SetRefundRequestedBy(by).SetRefundAmount(o.Amount).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
@@ -187,9 +191,6 @@ func (s *PaymentService) validateRefundRequest(ctx context.Context, oid, uid int
 	}
 	if o.UserID != uid {
 		return nil, infraerrors.Forbidden("FORBIDDEN", "no permission")
-	}
-	if o.OrderType != payment.OrderTypeBalance {
-		return nil, infraerrors.BadRequest("INVALID_ORDER_TYPE", "only balance orders can request refund")
 	}
 	if o.Status != OrderStatusCompleted {
 		return nil, infraerrors.BadRequest("INVALID_STATUS", "only completed orders can request refund")
@@ -268,6 +269,36 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 			}
 			if err == nil && sub != nil {
 				p.SubscriptionID = sub.ID
+				if o.PlanID != nil {
+					lots, lotErr := s.entClient.UserSubscriptionEntitlement.Query().Where(usersubscriptionentitlement.UserSubscriptionIDEQ(sub.ID)).All(ctx)
+					if lotErr == nil {
+						for _, lot := range lots {
+							if lot.SourceOrderID != nil && *lot.SourceOrderID == o.ID {
+								p.SubscriptionLots = append(p.SubscriptionLots, SubscriptionLotAdjustment{ID: lot.ID, Days: 0, Operation: "revoke"})
+							}
+						}
+					}
+					lines, lineErr := s.entClient.SubscriptionEntitlementOrder.Query().Where(subscriptionentitlementorder.OrderIDEQ(o.ID)).All(ctx)
+					if lineErr == nil {
+						for _, line := range lines {
+							p.SubscriptionLots = append(p.SubscriptionLots, SubscriptionLotAdjustment{ID: line.EntitlementID, Days: line.DaysAdded, Operation: line.Operation})
+						}
+					}
+					associated := map[int64]bool{}
+					for _, adj := range p.SubscriptionLots {
+						associated[adj.ID] = true
+					}
+					for _, lot := range lots {
+						if !associated[lot.ID] {
+							continue
+						}
+						if lot.LifetimeUsageUsd > 0 || !lot.ExpiresAt.After(time.Now()) {
+							if !force {
+								return &RefundResult{Success: false, Warning: "subscription entitlement has been used or expired; manual review is required", RequireForce: true}
+							}
+						}
+					}
+				}
 			} else if !force {
 				return &RefundResult{Success: false, Warning: "cannot find active subscription for deduction, use force", RequireForce: true}
 			}
@@ -612,6 +643,9 @@ func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr e
 }
 
 func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if err := s.applySubscriptionLotRefund(ctx, p); err != nil {
+		return nil, err
+	}
 	fs := OrderStatusRefunded
 	if p.RefundAmount < p.Order.Amount {
 		fs = OrderStatusPartiallyRefunded
@@ -625,7 +659,32 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
 }
 
+func (s *PaymentService) applySubscriptionLotRefund(ctx context.Context, p *RefundPlan) error {
+	return applySubscriptionLotRefundWithClient(ctx, s.entClient, p)
+}
+
+func applySubscriptionLotRefundWithClient(ctx context.Context, client *dbent.Client, p *RefundPlan) error {
+	if p == nil || len(p.SubscriptionLots) == 0 {
+		return nil
+	}
+	for _, adj := range p.SubscriptionLots {
+		if adj.Operation == "renew" && adj.Days > 0 {
+			if _, err := client.UserSubscriptionEntitlement.UpdateOneID(adj.ID).SetExpiresAt(time.Now()).SetStatus("refunded").SetRefundedAt(time.Now()).Save(ctx); err != nil {
+				return err
+			}
+		} else {
+			if _, err := client.UserSubscriptionEntitlement.UpdateOneID(adj.ID).SetStatus("refunded").SetRefundedAt(time.Now()).Save(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *PaymentService) markRefundOkTx(ctx context.Context, client *dbent.Client, p *RefundPlan) (*RefundResult, error) {
+	if err := applySubscriptionLotRefundWithClient(ctx, client, p); err != nil {
+		return nil, err
+	}
 	fs := OrderStatusRefunded
 	if p.RefundAmount < p.Order.Amount {
 		fs = OrderStatusPartiallyRefunded

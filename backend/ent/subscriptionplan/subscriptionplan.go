@@ -56,6 +56,8 @@ const (
 	EdgeGroupEntitlements = "group_entitlements"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
 	EdgeSubscriptions = "subscriptions"
+	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
+	EdgeEntitlements = "entitlements"
 	// Table holds the table name of the subscriptionplan in the database.
 	Table = "subscription_plans"
 	// GroupEntitlementsTable is the table that holds the group_entitlements relation/edge.
@@ -72,6 +74,13 @@ const (
 	SubscriptionsInverseTable = "user_subscriptions"
 	// SubscriptionsColumn is the table column denoting the subscriptions relation/edge.
 	SubscriptionsColumn = "plan_id"
+	// EntitlementsTable is the table that holds the entitlements relation/edge.
+	EntitlementsTable = "user_subscription_entitlements"
+	// EntitlementsInverseTable is the table name for the UserSubscriptionEntitlement entity.
+	// It exists in this package in order to avoid circular dependency with the "usersubscriptionentitlement" package.
+	EntitlementsInverseTable = "user_subscription_entitlements"
+	// EntitlementsColumn is the table column denoting the entitlements relation/edge.
+	EntitlementsColumn = "plan_id"
 )
 
 // Columns holds all SQL columns for subscriptionplan fields.
@@ -273,6 +282,20 @@ func BySubscriptions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newSubscriptionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByEntitlementsCount orders the results by entitlements count.
+func ByEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEntitlementsStep(), opts...)
+	}
+}
+
+// ByEntitlements orders the results by entitlements terms.
+func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newGroupEntitlementsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -285,5 +308,12 @@ func newSubscriptionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SubscriptionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionsTable, SubscriptionsColumn),
+	)
+}
+func newEntitlementsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EntitlementsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, EntitlementsTable, EntitlementsColumn),
 	)
 }

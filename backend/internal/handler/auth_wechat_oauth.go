@@ -87,10 +87,20 @@ type wechatOAuthUserInfoResponse struct {
 }
 
 type wechatPaymentOAuthContext struct {
-	PaymentType string `json:"payment_type"`
-	Amount      string `json:"amount,omitempty"`
-	OrderType   string `json:"order_type,omitempty"`
-	PlanID      int64  `json:"plan_id,omitempty"`
+	PaymentType          string `json:"payment_type"`
+	Amount               string `json:"amount,omitempty"`
+	OrderType            string `json:"order_type,omitempty"`
+	PlanID               int64  `json:"plan_id,omitempty"`
+	SubscriptionMode     string `json:"subscription_mode,omitempty"`
+	SubscriptionQuantity int    `json:"subscription_quantity,omitempty"`
+}
+
+func parsePositiveInt(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 1 {
+		return 0
+	}
+	return n
 }
 
 // WeChatOAuthStart starts the WeChat OAuth login flow and stores the short-lived
@@ -356,10 +366,12 @@ func (h *AuthHandler) WeChatPaymentOAuthStart(c *gin.Context) {
 		redirectTo = wechatPaymentOAuthDefaultTo
 	}
 	rawContext, err := encodeWeChatPaymentOAuthContext(wechatPaymentOAuthContext{
-		PaymentType: paymentType,
-		Amount:      strings.TrimSpace(c.Query("amount")),
-		OrderType:   strings.TrimSpace(c.Query("order_type")),
-		PlanID:      parseWeChatPaymentPlanID(c.Query("plan_id")),
+		PaymentType:          paymentType,
+		Amount:               strings.TrimSpace(c.Query("amount")),
+		OrderType:            strings.TrimSpace(c.Query("order_type")),
+		PlanID:               parseWeChatPaymentPlanID(c.Query("plan_id")),
+		SubscriptionMode:     strings.TrimSpace(c.Query("subscription_mode")),
+		SubscriptionQuantity: parsePositiveInt(c.Query("subscription_quantity")),
 	})
 	if err != nil {
 		response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_CONTEXT_ENCODE_FAILED", "failed to encode oauth context").WithCause(err))
@@ -456,13 +468,15 @@ func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
 	}
 
 	resumeToken, err := h.wechatPaymentResumeService().CreateWeChatPaymentResumeToken(service.WeChatPaymentResumeClaims{
-		OpenID:      openid,
-		PaymentType: paymentContext.PaymentType,
-		Amount:      paymentContext.Amount,
-		OrderType:   paymentContext.OrderType,
-		PlanID:      paymentContext.PlanID,
-		RedirectTo:  redirectTo,
-		Scope:       scope,
+		OpenID:               openid,
+		PaymentType:          paymentContext.PaymentType,
+		Amount:               paymentContext.Amount,
+		OrderType:            paymentContext.OrderType,
+		PlanID:               paymentContext.PlanID,
+		SubscriptionMode:     paymentContext.SubscriptionMode,
+		SubscriptionQuantity: paymentContext.SubscriptionQuantity,
+		RedirectTo:           redirectTo,
+		Scope:                scope,
 	})
 	if err != nil {
 		redirectOAuthError(c, frontendCallback, "invalid_context", "failed to encode payment resume context", "")

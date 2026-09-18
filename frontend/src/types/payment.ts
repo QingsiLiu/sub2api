@@ -112,7 +112,9 @@ export interface PaymentOrder {
   refund_requested_at?: string
   refund_requested_by?: number
   refund_request_reason?: string
-  plan_id?: number
+	plan_id?: number
+	subscription_mode?: 'renew' | 'stack'
+	subscription_quantity?: number
   provider_instance_id?: string
 }
 
@@ -184,12 +186,25 @@ export interface CreateOrderRequest {
   amount: number
   payment_type: string
   order_type: string
-  plan_id?: number
+	plan_id?: number
+	subscription_mode?: 'renew' | 'stack'
+	subscription_quantity?: number
   return_url?: string
   payment_source?: string
   openid?: string
   wechat_resume_token?: string
   is_mobile?: boolean
+}
+
+export interface SubscriptionQuoteResponse {
+	plan_id: number
+	subscription_mode: 'renew' | 'stack'
+	subscription_quantity: number
+	order_amount: number
+	validity_days: number
+	can_renew_lots: number
+	current?: Record<string, unknown>
+	projected: Record<string, unknown>
 }
 
 export type CreateOrderResultType = 'order_created' | 'oauth_required' | 'jsapi_ready'

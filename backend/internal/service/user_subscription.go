@@ -1,6 +1,7 @@
 package service
 
 import (
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -15,6 +16,9 @@ type SubscriptionQuotaPlan struct {
 	WeeklyLimitUSD  *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD *float64 `json:"monthly_limit_usd"`
 }
+
+type SubscriptionEntitlement = geilisub.Lot
+type SubscriptionQuotaSummary = geilisub.Summary
 
 type UserSubscription struct {
 	PlanID           *int64
@@ -43,6 +47,9 @@ type UserSubscription struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
+
+	Entitlements []SubscriptionEntitlement
+	QuotaSummary *geilisub.Summary
 
 	User           *User
 	Group          *Group
@@ -218,6 +225,9 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 // QuotaLimits resolves plan-owned quotas; group limits exist only for old
 // subscriptions created before the decoupling migration or legacy test callers.
 func (s *UserSubscription) QuotaLimits(legacy *Group) (daily, weekly, monthly *float64) {
+	if s != nil && len(s.Entitlements) > 0 {
+		return aggregateEntitlementLimits(s.Entitlements)
+	}
 	if s != nil && s.Plan != nil {
 		return s.Plan.DailyLimitUSD, s.Plan.WeeklyLimitUSD, s.Plan.MonthlyLimitUSD
 	}
@@ -226,6 +236,28 @@ func (s *UserSubscription) QuotaLimits(legacy *Group) (daily, weekly, monthly *f
 	}
 	return nil, nil, nil
 }
+
+func (s *UserSubscription) AggregateQuotaSummary() *geilisub.Summary {
+	if s == nil || len(s.Entitlements) == 0 {
+		return nil
+	}
+	if s.QuotaSummary == nil {
+		summary := geilisub.Aggregate(s.Entitlements, time.Now())
+		s.QuotaSummary = &summary
+	}
+	return s.QuotaSummary
+}
+
+func aggregateEntitlementLimits(entitlements []SubscriptionEntitlement) (daily, weekly, monthly *float64) {
+	summary := geilisub.Aggregate(entitlements, time.Now())
+	return summary.DailyLimitUSD, summary.WeeklyLimitUSD, summary.MonthlyLimitUSD
+}
+
+const SubscriptionEntitlementStatusActive = "active"
+const SubscriptionEntitlementStatusExpired = "expired"
+const SubscriptionEntitlementStatusRefunded = "refunded"
+const SubscriptionEntitlementStatusRefundPending = "refund_pending"
+
 func (s *UserSubscription) QuotaName() string {
 	if s != nil && s.Plan != nil {
 		return s.Plan.Name

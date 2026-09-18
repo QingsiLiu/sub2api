@@ -41,6 +41,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionentitlementorder"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
@@ -52,6 +53,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptionentitlement"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscriptiongroup"
 )
 
@@ -142,6 +144,7 @@ func checkColumn(t, c string) error {
 			redeemcode.Table:                    redeemcode.ValidColumn,
 			securitysecret.Table:                securitysecret.ValidColumn,
 			setting.Table:                       setting.ValidColumn,
+			subscriptionentitlementorder.Table:  subscriptionentitlementorder.ValidColumn,
 			subscriptionplan.Table:              subscriptionplan.ValidColumn,
 			subscriptionplangroup.Table:         subscriptionplangroup.ValidColumn,
 			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
@@ -153,6 +156,7 @@ func checkColumn(t, c string) error {
 			userattributevalue.Table:            userattributevalue.ValidColumn,
 			userplatformquota.Table:             userplatformquota.ValidColumn,
 			usersubscription.Table:              usersubscription.ValidColumn,
+			usersubscriptionentitlement.Table:   usersubscriptionentitlement.ValidColumn,
 			usersubscriptiongroup.Table:         usersubscriptiongroup.ValidColumn,
 		})
 	})

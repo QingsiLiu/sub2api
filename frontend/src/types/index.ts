@@ -2119,7 +2119,28 @@ export interface UserSubscription {
   revoked_at?: string | null
   expires_at: string | null
   user?: User
-  group?: Group
+	group?: Group
+	quota_summary?: {
+		active_lot_count: number
+		daily_limit_usd: number | null
+		weekly_limit_usd: number | null
+		monthly_limit_usd: number | null
+		daily_usage_usd: number
+		weekly_usage_usd: number
+		monthly_usage_usd: number
+		next_expiry_at?: string | null
+		expires_at?: string | null
+	}
+	entitlements?: Array<{
+		id: number
+		source_order_id?: number
+		starts_at: string
+		expires_at: string
+		daily_limit_usd?: number | null
+		weekly_limit_usd?: number | null
+		monthly_limit_usd?: number | null
+		lifetime_usage_usd: number
+	}>
 }
 
 export interface SubscriptionProgress {

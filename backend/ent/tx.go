@@ -72,6 +72,8 @@ type Tx struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SubscriptionEntitlementOrder is the client for interacting with the SubscriptionEntitlementOrder builders.
+	SubscriptionEntitlementOrder *SubscriptionEntitlementOrderClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
 	// SubscriptionPlanGroup is the client for interacting with the SubscriptionPlanGroup builders.
@@ -94,6 +96,8 @@ type Tx struct {
 	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
+	// UserSubscriptionEntitlement is the client for interacting with the UserSubscriptionEntitlement builders.
+	UserSubscriptionEntitlement *UserSubscriptionEntitlementClient
 	// UserSubscriptionGroup is the client for interacting with the UserSubscriptionGroup builders.
 	UserSubscriptionGroup *UserSubscriptionGroupClient
 
@@ -256,6 +260,7 @@ func (tx *Tx) init() {
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
+	tx.SubscriptionEntitlementOrder = NewSubscriptionEntitlementOrderClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
 	tx.SubscriptionPlanGroup = NewSubscriptionPlanGroupClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
@@ -267,6 +272,7 @@ func (tx *Tx) init() {
 	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
 	tx.UserPlatformQuota = NewUserPlatformQuotaClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)
+	tx.UserSubscriptionEntitlement = NewUserSubscriptionEntitlementClient(tx.config)
 	tx.UserSubscriptionGroup = NewUserSubscriptionGroupClient(tx.config)
 }
 

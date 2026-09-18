@@ -16,6 +16,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
@@ -599,15 +600,39 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 		case lookupErr != nil && !errors.Is(lookupErr, ErrSubscriptionNotFound):
 			return fmt.Errorf("check existing subscription assignment: %w", lookupErr)
 		default:
-			if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-				UserID:  o.UserID,
-				GroupID: groupID,
-				PlanID:  paymentSettlementPlanID(o), AllowArchivedPlan: true,
-				ValidityDays: days,
-				AssignedBy:   0,
-				Notes:        orderNote,
-			}, true); err != nil {
-				return fmt.Errorf("assign subscription: %w", err)
+			if existing == nil {
+				if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+					UserID:  o.UserID,
+					GroupID: groupID,
+					PlanID:  paymentSettlementPlanID(o), AllowArchivedPlan: true,
+					ValidityDays: days,
+					AssignedBy:   0,
+					Notes:        orderNote,
+				}, true); err != nil {
+					return fmt.Errorf("assign subscription: %w", err)
+				}
+			}
+		}
+		if o.PlanID != nil && !recoveredFromNote {
+			parent, parentErr := s.subscriptionSvc.FindByUserAndPlan(txCtx, o.UserID, *o.PlanID)
+			if parentErr != nil || parent == nil {
+				return fmt.Errorf("resolve aggregate subscription: %w", parentErr)
+			}
+			plan, planErr := txClient.SubscriptionPlan.Get(txCtx, *o.PlanID)
+			if planErr != nil {
+				return fmt.Errorf("load plan quota snapshot: %w", planErr)
+			}
+			daily, weekly, monthly := plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd
+			planID, planDays := plan.ID, plan.ValidityDays
+			if o.SubscriptionDays != nil {
+				planDays = *o.SubscriptionDays
+			}
+			mode := strings.TrimSpace(o.SubscriptionMode)
+			if mode == "" {
+				mode = "renew"
+			}
+			if err := geilisub.ApplyPurchase(txCtx, txClient, parent.ID, planID, o.ID, planDays, o.SubscriptionQuantity, mode, daily, weekly, monthly, time.Now()); err != nil {
+				return fmt.Errorf("apply subscription entitlement purchase: %w", err)
 			}
 		}
 

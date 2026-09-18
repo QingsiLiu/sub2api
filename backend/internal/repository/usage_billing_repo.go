@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -213,6 +215,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
+	if applied, err := geilisub.Debit(ctx, tx, subscriptionID, costUSD, time.Now()); err == nil {
+		if !applied {
+			return service.ErrSubscriptionNotFound
+		}
+		return nil
+	} else {
+		return err
+	}
 	const updateSQL = `
 		UPDATE user_subscriptions us
 		SET

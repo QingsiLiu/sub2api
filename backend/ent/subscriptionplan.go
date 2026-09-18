@@ -67,9 +67,11 @@ type SubscriptionPlanEdges struct {
 	GroupEntitlements []*SubscriptionPlanGroup `json:"group_entitlements,omitempty"`
 	// Subscriptions holds the value of the subscriptions edge.
 	Subscriptions []*UserSubscription `json:"subscriptions,omitempty"`
+	// Entitlements holds the value of the entitlements edge.
+	Entitlements []*UserSubscriptionEntitlement `json:"entitlements,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // GroupEntitlementsOrErr returns the GroupEntitlements value or an error if the edge
@@ -88,6 +90,15 @@ func (e SubscriptionPlanEdges) SubscriptionsOrErr() ([]*UserSubscription, error)
 		return e.Subscriptions, nil
 	}
 	return nil, &NotLoadedError{edge: "subscriptions"}
+}
+
+// EntitlementsOrErr returns the Entitlements value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionPlanEdges) EntitlementsOrErr() ([]*UserSubscriptionEntitlement, error) {
+	if e.loadedTypes[2] {
+		return e.Entitlements, nil
+	}
+	return nil, &NotLoadedError{edge: "entitlements"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -267,6 +278,11 @@ func (_m *SubscriptionPlan) QueryGroupEntitlements() *SubscriptionPlanGroupQuery
 // QuerySubscriptions queries the "subscriptions" edge of the SubscriptionPlan entity.
 func (_m *SubscriptionPlan) QuerySubscriptions() *UserSubscriptionQuery {
 	return NewSubscriptionPlanClient(_m.config).QuerySubscriptions(_m)
+}
+
+// QueryEntitlements queries the "entitlements" edge of the SubscriptionPlan entity.
+func (_m *SubscriptionPlan) QueryEntitlements() *UserSubscriptionEntitlementQuery {
+	return NewSubscriptionPlanClient(_m.config).QueryEntitlements(_m)
 }
 
 // Update returns a builder for updating this SubscriptionPlan.

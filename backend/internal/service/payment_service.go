@@ -71,20 +71,40 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
-	UserID          int64
-	Amount          float64
-	PaymentType     string
-	OpenID          string
-	ClientIP        string
-	IsMobile        bool
-	IsWeChatBrowser bool
-	SrcHost         string
-	SrcURL          string
-	ReturnURL       string
-	PaymentSource   string
-	OrderType       string
-	PlanID          int64
-	Locale          string
+	UserID               int64
+	Amount               float64
+	PaymentType          string
+	OpenID               string
+	ClientIP             string
+	IsMobile             bool
+	IsWeChatBrowser      bool
+	SrcHost              string
+	SrcURL               string
+	ReturnURL            string
+	PaymentSource        string
+	OrderType            string
+	PlanID               int64
+	SubscriptionMode     string
+	SubscriptionQuantity int
+	Locale               string
+}
+
+type SubscriptionQuoteRequest struct {
+	UserID               int64
+	PlanID               int64
+	SubscriptionMode     string
+	SubscriptionQuantity int
+}
+
+type SubscriptionQuoteResponse struct {
+	PlanID               int64                     `json:"plan_id"`
+	SubscriptionMode     string                    `json:"subscription_mode"`
+	SubscriptionQuantity int                       `json:"subscription_quantity"`
+	OrderAmount          float64                   `json:"order_amount"`
+	ValidityDays         int                       `json:"validity_days"`
+	CanRenewLots         int                       `json:"can_renew_lots"`
+	Current              *SubscriptionQuotaSummary `json:"current,omitempty"`
+	Projected            *SubscriptionQuotaSummary `json:"projected"`
 }
 
 type CreateOrderResponse struct {
@@ -122,17 +142,24 @@ type OrderListParams struct {
 }
 
 type RefundPlan struct {
-	OrderID         int64
-	Order           *dbent.PaymentOrder
-	RefundAmount    float64
-	GatewayAmount   float64
-	Reason          string
-	Force           bool
-	DeductBalance   bool
-	DeductionType   string
-	BalanceToDeduct float64
-	SubDaysToDeduct int
-	SubscriptionID  int64
+	OrderID          int64
+	Order            *dbent.PaymentOrder
+	RefundAmount     float64
+	GatewayAmount    float64
+	Reason           string
+	Force            bool
+	DeductBalance    bool
+	DeductionType    string
+	BalanceToDeduct  float64
+	SubDaysToDeduct  int
+	SubscriptionID   int64
+	SubscriptionLots []SubscriptionLotAdjustment
+}
+
+type SubscriptionLotAdjustment struct {
+	ID        int64
+	Days      int
+	Operation string
 }
 
 type RefundResult struct {

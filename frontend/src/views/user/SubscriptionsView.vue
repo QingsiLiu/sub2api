@@ -58,6 +58,11 @@
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
                   </span>
                 </div>
+                <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
+                  <span>有效份额 {{ subscription.quota_summary.active_lot_count }} 份</span>
+                  <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">下一次额度变化：{{ formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }}</span>
+                  <span v-if="subscription.entitlements?.length" class="ml-3">可展开查看 {{ subscription.entitlements.length }} 次购买</span>
+                </div>
               </div>
             </div>
             <div class="flex items-center gap-2">

@@ -50,6 +50,10 @@ const (
 	FieldSubscriptionGroupID = "subscription_group_id"
 	// FieldSubscriptionDays holds the string denoting the subscription_days field in the database.
 	FieldSubscriptionDays = "subscription_days"
+	// FieldSubscriptionMode holds the string denoting the subscription_mode field in the database.
+	FieldSubscriptionMode = "subscription_mode"
+	// FieldSubscriptionQuantity holds the string denoting the subscription_quantity field in the database.
+	FieldSubscriptionQuantity = "subscription_quantity"
 	// FieldProviderInstanceID holds the string denoting the provider_instance_id field in the database.
 	FieldProviderInstanceID = "provider_instance_id"
 	// FieldProviderKey holds the string denoting the provider_key field in the database.
@@ -94,6 +98,10 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
+	// EdgeSubscriptionEntitlements holds the string denoting the subscription_entitlements edge name in mutations.
+	EdgeSubscriptionEntitlements = "subscription_entitlements"
+	// EdgeSubscriptionEntitlementOrders holds the string denoting the subscription_entitlement_orders edge name in mutations.
+	EdgeSubscriptionEntitlementOrders = "subscription_entitlement_orders"
 	// Table holds the table name of the paymentorder in the database.
 	Table = "payment_orders"
 	// UserTable is the table that holds the user relation/edge.
@@ -103,6 +111,20 @@ const (
 	UserInverseTable = "users"
 	// UserColumn is the table column denoting the user relation/edge.
 	UserColumn = "user_id"
+	// SubscriptionEntitlementsTable is the table that holds the subscription_entitlements relation/edge.
+	SubscriptionEntitlementsTable = "user_subscription_entitlements"
+	// SubscriptionEntitlementsInverseTable is the table name for the UserSubscriptionEntitlement entity.
+	// It exists in this package in order to avoid circular dependency with the "usersubscriptionentitlement" package.
+	SubscriptionEntitlementsInverseTable = "user_subscription_entitlements"
+	// SubscriptionEntitlementsColumn is the table column denoting the subscription_entitlements relation/edge.
+	SubscriptionEntitlementsColumn = "source_order_id"
+	// SubscriptionEntitlementOrdersTable is the table that holds the subscription_entitlement_orders relation/edge.
+	SubscriptionEntitlementOrdersTable = "subscription_entitlement_orders"
+	// SubscriptionEntitlementOrdersInverseTable is the table name for the SubscriptionEntitlementOrder entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionentitlementorder" package.
+	SubscriptionEntitlementOrdersInverseTable = "subscription_entitlement_orders"
+	// SubscriptionEntitlementOrdersColumn is the table column denoting the subscription_entitlement_orders relation/edge.
+	SubscriptionEntitlementOrdersColumn = "order_id"
 )
 
 // Columns holds all SQL columns for paymentorder fields.
@@ -126,6 +148,8 @@ var Columns = []string{
 	FieldPlanID,
 	FieldSubscriptionGroupID,
 	FieldSubscriptionDays,
+	FieldSubscriptionMode,
+	FieldSubscriptionQuantity,
 	FieldProviderInstanceID,
 	FieldProviderKey,
 	FieldProviderSnapshot,
@@ -180,6 +204,12 @@ var (
 	DefaultOrderType string
 	// OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
 	OrderTypeValidator func(string) error
+	// DefaultSubscriptionMode holds the default value on creation for the "subscription_mode" field.
+	DefaultSubscriptionMode string
+	// SubscriptionModeValidator is a validator for the "subscription_mode" field. It is called by the builders before save.
+	SubscriptionModeValidator func(string) error
+	// DefaultSubscriptionQuantity holds the default value on creation for the "subscription_quantity" field.
+	DefaultSubscriptionQuantity int
 	// ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	ProviderInstanceIDValidator func(string) error
 	// ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
@@ -304,6 +334,16 @@ func BySubscriptionDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionDays, opts...).ToFunc()
 }
 
+// BySubscriptionMode orders the results by the subscription_mode field.
+func BySubscriptionMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionMode, opts...).ToFunc()
+}
+
+// BySubscriptionQuantity orders the results by the subscription_quantity field.
+func BySubscriptionQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionQuantity, opts...).ToFunc()
+}
+
 // ByProviderInstanceID orders the results by the provider_instance_id field.
 func ByProviderInstanceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProviderInstanceID, opts...).ToFunc()
@@ -410,10 +450,52 @@ func ByUserField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUserStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// BySubscriptionEntitlementsCount orders the results by subscription_entitlements count.
+func BySubscriptionEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionEntitlementsStep(), opts...)
+	}
+}
+
+// BySubscriptionEntitlements orders the results by subscription_entitlements terms.
+func BySubscriptionEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySubscriptionEntitlementOrdersCount orders the results by subscription_entitlement_orders count.
+func BySubscriptionEntitlementOrdersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionEntitlementOrdersStep(), opts...)
+	}
+}
+
+// BySubscriptionEntitlementOrders orders the results by subscription_entitlement_orders terms.
+func BySubscriptionEntitlementOrders(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionEntitlementOrdersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UserInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, UserTable, UserColumn),
+	)
+}
+func newSubscriptionEntitlementsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionEntitlementsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionEntitlementsTable, SubscriptionEntitlementsColumn),
+	)
+}
+func newSubscriptionEntitlementOrdersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionEntitlementOrdersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SubscriptionEntitlementOrdersTable, SubscriptionEntitlementOrdersColumn),
 	)
 }

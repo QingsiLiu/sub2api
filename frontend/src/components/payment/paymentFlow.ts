@@ -80,7 +80,9 @@ export interface BuildCreateOrderPayloadInput {
   amount: number
   paymentType: string
   orderType: OrderType
-  planId?: number
+	planId?: number
+	subscriptionMode?: 'renew' | 'stack'
+	subscriptionQuantity?: number
   origin?: string
   isMobile: boolean
   isWechatBrowser: boolean
@@ -136,9 +138,15 @@ export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): Cr
       : 'hosted_redirect',
   }
 
-  if (input.planId) {
-    payload.plan_id = input.planId
-  }
+	if (input.planId) {
+		payload.plan_id = input.planId
+	}
+	if (input.orderType === 'subscription') {
+		if (input.subscriptionMode || input.subscriptionQuantity !== undefined) {
+			payload.subscription_mode = input.subscriptionMode || 'renew'
+			payload.subscription_quantity = Math.min(10, Math.max(1, input.subscriptionQuantity || 1))
+		}
+	}
   if (normalizedOrigin) {
     payload.return_url = `${normalizedOrigin}/payment/result`
   }

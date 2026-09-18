@@ -68,6 +68,11 @@
             <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
             <span class="text-gray-900 dark:text-white">${{ refundTarget.amount.toFixed(2) }}</span>
           </div>
+          <div v-if="refundTarget.order_type === 'subscription' && refundTarget.subscription_mode" class="mt-2 flex justify-between text-sm">
+            <span class="text-gray-500 dark:text-gray-400">订阅操作</span>
+            <span class="text-gray-900 dark:text-white">{{ refundTarget.subscription_mode === 'stack' ? '叠加额度' : '续期' }} × {{ refundTarget.subscription_quantity || 1 }}</span>
+          </div>
+          <p v-if="refundTarget.order_type === 'subscription'" class="mt-3 text-xs text-amber-600 dark:text-amber-300">已使用或已过期的权益需要人工审核。</p>
         </div>
         <div>
           <label class="input-label">{{ t('payment.refundReason') }}</label>

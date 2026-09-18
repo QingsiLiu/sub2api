@@ -1149,6 +1149,8 @@ var (
 		{Name: "plan_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "subscription_days", Type: field.TypeInt, Nullable: true},
+		{Name: "subscription_mode", Type: field.TypeString, Size: 20, Default: "renew"},
+		{Name: "subscription_quantity", Type: field.TypeInt, Default: 1},
 		{Name: "provider_instance_id", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "provider_key", Type: field.TypeString, Nullable: true, Size: 30},
 		{Name: "provider_snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1180,7 +1182,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "payment_orders_users_payment_orders",
-				Columns:    []*schema.Column{PaymentOrdersColumns[39]},
+				Columns:    []*schema.Column{PaymentOrdersColumns[41]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1197,32 +1199,32 @@ var (
 			{
 				Name:    "paymentorder_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[39]},
+				Columns: []*schema.Column{PaymentOrdersColumns[41]},
 			},
 			{
 				Name:    "paymentorder_status",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[21]},
+				Columns: []*schema.Column{PaymentOrdersColumns[23]},
 			},
 			{
 				Name:    "paymentorder_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[29]},
+				Columns: []*schema.Column{PaymentOrdersColumns[31]},
 			},
 			{
 				Name:    "paymentorder_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[37]},
+				Columns: []*schema.Column{PaymentOrdersColumns[39]},
 			},
 			{
 				Name:    "paymentorder_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[30]},
+				Columns: []*schema.Column{PaymentOrdersColumns[32]},
 			},
 			{
 				Name:    "paymentorder_payment_type_paid_at",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[30]},
+				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[32]},
 			},
 			{
 				Name:    "paymentorder_order_type",
@@ -1545,6 +1547,48 @@ var (
 		Name:       "settings",
 		Columns:    SettingsColumns,
 		PrimaryKey: []*schema.Column{SettingsColumns[0]},
+	}
+	// SubscriptionEntitlementOrdersColumns holds the columns for the "subscription_entitlement_orders" table.
+	SubscriptionEntitlementOrdersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "lot_index", Type: field.TypeInt, Default: 0},
+		{Name: "operation", Type: field.TypeString, Size: 20},
+		{Name: "days_added", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "order_id", Type: field.TypeInt64},
+		{Name: "entitlement_id", Type: field.TypeInt64},
+	}
+	// SubscriptionEntitlementOrdersTable holds the schema information for the "subscription_entitlement_orders" table.
+	SubscriptionEntitlementOrdersTable = &schema.Table{
+		Name:       "subscription_entitlement_orders",
+		Columns:    SubscriptionEntitlementOrdersColumns,
+		PrimaryKey: []*schema.Column{SubscriptionEntitlementOrdersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_entitlement_orders_payment_orders_subscription_entitlement_orders",
+				Columns:    []*schema.Column{SubscriptionEntitlementOrdersColumns[5]},
+				RefColumns: []*schema.Column{PaymentOrdersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "subscription_entitlement_orders_user_subscription_entitlements_order_lines",
+				Columns:    []*schema.Column{SubscriptionEntitlementOrdersColumns[6]},
+				RefColumns: []*schema.Column{UserSubscriptionEntitlementsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionentitlementorder_order_id_lot_index",
+				Unique:  true,
+				Columns: []*schema.Column{SubscriptionEntitlementOrdersColumns[5], SubscriptionEntitlementOrdersColumns[1]},
+			},
+			{
+				Name:    "subscriptionentitlementorder_entitlement_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionEntitlementOrdersColumns[6]},
+			},
+		},
 	}
 	// SubscriptionPlansColumns holds the columns for the "subscription_plans" table.
 	SubscriptionPlansColumns = []*schema.Column{
@@ -2154,6 +2198,74 @@ var (
 			},
 		},
 	}
+	// UserSubscriptionEntitlementsColumns holds the columns for the "user_subscription_entitlements" table.
+	UserSubscriptionEntitlementsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "lot_index", Type: field.TypeInt, Default: 0},
+		{Name: "purchase_mode", Type: field.TypeString, Size: 20, Default: "renew"},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "starts_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "daily_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "weekly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "daily_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "weekly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "monthly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "daily_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "weekly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "monthly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "lifetime_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "refunded_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "source_order_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "plan_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_subscription_id", Type: field.TypeInt64},
+	}
+	// UserSubscriptionEntitlementsTable holds the schema information for the "user_subscription_entitlements" table.
+	UserSubscriptionEntitlementsTable = &schema.Table{
+		Name:       "user_subscription_entitlements",
+		Columns:    UserSubscriptionEntitlementsColumns,
+		PrimaryKey: []*schema.Column{UserSubscriptionEntitlementsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_subscription_entitlements_payment_orders_subscription_entitlements",
+				Columns:    []*schema.Column{UserSubscriptionEntitlementsColumns[19]},
+				RefColumns: []*schema.Column{PaymentOrdersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "user_subscription_entitlements_subscription_plans_entitlements",
+				Columns:    []*schema.Column{UserSubscriptionEntitlementsColumns[20]},
+				RefColumns: []*schema.Column{SubscriptionPlansColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "user_subscription_entitlements_user_subscriptions_entitlements",
+				Columns:    []*schema.Column{UserSubscriptionEntitlementsColumns[21]},
+				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "usersubscriptionentitlement_user_subscription_id_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserSubscriptionEntitlementsColumns[21], UserSubscriptionEntitlementsColumns[5]},
+			},
+			{
+				Name:    "usersubscriptionentitlement_source_order_id_lot_index",
+				Unique:  true,
+				Columns: []*schema.Column{UserSubscriptionEntitlementsColumns[19], UserSubscriptionEntitlementsColumns[1]},
+			},
+			{
+				Name:    "usersubscriptionentitlement_status_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{UserSubscriptionEntitlementsColumns[3], UserSubscriptionEntitlementsColumns[5]},
+			},
+		},
+	}
 	// UserSubscriptionGroupsColumns holds the columns for the "user_subscription_groups" table.
 	UserSubscriptionGroupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2224,6 +2336,7 @@ var (
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
+		SubscriptionEntitlementOrdersTable,
 		SubscriptionPlansTable,
 		SubscriptionPlanGroupsTable,
 		TLSFingerprintProfilesTable,
@@ -2235,6 +2348,7 @@ var (
 		UserAttributeValuesTable,
 		UserPlatformQuotasTable,
 		UserSubscriptionsTable,
+		UserSubscriptionEntitlementsTable,
 		UserSubscriptionGroupsTable,
 	}
 )
@@ -2350,6 +2464,11 @@ func init() {
 	SettingsTable.Annotation = &entsql.Annotation{
 		Table: "settings",
 	}
+	SubscriptionEntitlementOrdersTable.ForeignKeys[0].RefTable = PaymentOrdersTable
+	SubscriptionEntitlementOrdersTable.ForeignKeys[1].RefTable = UserSubscriptionEntitlementsTable
+	SubscriptionEntitlementOrdersTable.Annotation = &entsql.Annotation{
+		Table: "subscription_entitlement_orders",
+	}
 	SubscriptionPlansTable.Annotation = &entsql.Annotation{
 		Table: "subscription_plans",
 	}
@@ -2398,6 +2517,12 @@ func init() {
 	UserSubscriptionsTable.ForeignKeys[3].RefTable = UsersTable
 	UserSubscriptionsTable.Annotation = &entsql.Annotation{
 		Table: "user_subscriptions",
+	}
+	UserSubscriptionEntitlementsTable.ForeignKeys[0].RefTable = PaymentOrdersTable
+	UserSubscriptionEntitlementsTable.ForeignKeys[1].RefTable = SubscriptionPlansTable
+	UserSubscriptionEntitlementsTable.ForeignKeys[2].RefTable = UserSubscriptionsTable
+	UserSubscriptionEntitlementsTable.Annotation = &entsql.Annotation{
+		Table: "user_subscription_entitlements",
 	}
 	UserSubscriptionGroupsTable.ForeignKeys[0].RefTable = GroupsTable
 	UserSubscriptionGroupsTable.ForeignKeys[1].RefTable = UserSubscriptionsTable

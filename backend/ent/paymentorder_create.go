@@ -12,7 +12,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionentitlementorder"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscriptionentitlement"
 )
 
 // PaymentOrderCreate is the builder for creating a PaymentOrder entity.
@@ -207,6 +209,34 @@ func (_c *PaymentOrderCreate) SetSubscriptionDays(v int) *PaymentOrderCreate {
 func (_c *PaymentOrderCreate) SetNillableSubscriptionDays(v *int) *PaymentOrderCreate {
 	if v != nil {
 		_c.SetSubscriptionDays(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionMode sets the "subscription_mode" field.
+func (_c *PaymentOrderCreate) SetSubscriptionMode(v string) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionMode(v)
+	return _c
+}
+
+// SetNillableSubscriptionMode sets the "subscription_mode" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionMode(v *string) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionMode(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionQuantity sets the "subscription_quantity" field.
+func (_c *PaymentOrderCreate) SetSubscriptionQuantity(v int) *PaymentOrderCreate {
+	_c.mutation.SetSubscriptionQuantity(v)
+	return _c
+}
+
+// SetNillableSubscriptionQuantity sets the "subscription_quantity" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillableSubscriptionQuantity(v *int) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetSubscriptionQuantity(*v)
 	}
 	return _c
 }
@@ -478,6 +508,36 @@ func (_c *PaymentOrderCreate) SetUser(v *User) *PaymentOrderCreate {
 	return _c.SetUserID(v.ID)
 }
 
+// AddSubscriptionEntitlementIDs adds the "subscription_entitlements" edge to the UserSubscriptionEntitlement entity by IDs.
+func (_c *PaymentOrderCreate) AddSubscriptionEntitlementIDs(ids ...int64) *PaymentOrderCreate {
+	_c.mutation.AddSubscriptionEntitlementIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionEntitlements adds the "subscription_entitlements" edges to the UserSubscriptionEntitlement entity.
+func (_c *PaymentOrderCreate) AddSubscriptionEntitlements(v ...*UserSubscriptionEntitlement) *PaymentOrderCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionEntitlementIDs(ids...)
+}
+
+// AddSubscriptionEntitlementOrderIDs adds the "subscription_entitlement_orders" edge to the SubscriptionEntitlementOrder entity by IDs.
+func (_c *PaymentOrderCreate) AddSubscriptionEntitlementOrderIDs(ids ...int64) *PaymentOrderCreate {
+	_c.mutation.AddSubscriptionEntitlementOrderIDs(ids...)
+	return _c
+}
+
+// AddSubscriptionEntitlementOrders adds the "subscription_entitlement_orders" edges to the SubscriptionEntitlementOrder entity.
+func (_c *PaymentOrderCreate) AddSubscriptionEntitlementOrders(v ...*SubscriptionEntitlementOrder) *PaymentOrderCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSubscriptionEntitlementOrderIDs(ids...)
+}
+
 // Mutation returns the PaymentOrderMutation object of the builder.
 func (_c *PaymentOrderCreate) Mutation() *PaymentOrderMutation {
 	return _c.mutation
@@ -524,6 +584,14 @@ func (_c *PaymentOrderCreate) defaults() {
 	if _, ok := _c.mutation.OrderType(); !ok {
 		v := paymentorder.DefaultOrderType
 		_c.mutation.SetOrderType(v)
+	}
+	if _, ok := _c.mutation.SubscriptionMode(); !ok {
+		v := paymentorder.DefaultSubscriptionMode
+		_c.mutation.SetSubscriptionMode(v)
+	}
+	if _, ok := _c.mutation.SubscriptionQuantity(); !ok {
+		v := paymentorder.DefaultSubscriptionQuantity
+		_c.mutation.SetSubscriptionQuantity(v)
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := paymentorder.DefaultStatus
@@ -616,6 +684,17 @@ func (_c *PaymentOrderCreate) check() error {
 		if err := paymentorder.OrderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SubscriptionMode(); !ok {
+		return &ValidationError{Name: "subscription_mode", err: errors.New(`ent: missing required field "PaymentOrder.subscription_mode"`)}
+	}
+	if v, ok := _c.mutation.SubscriptionMode(); ok {
+		if err := paymentorder.SubscriptionModeValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_mode", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.subscription_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SubscriptionQuantity(); !ok {
+		return &ValidationError{Name: "subscription_quantity", err: errors.New(`ent: missing required field "PaymentOrder.subscription_quantity"`)}
 	}
 	if v, ok := _c.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
@@ -769,6 +848,14 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 		_spec.SetField(paymentorder.FieldSubscriptionDays, field.TypeInt, value)
 		_node.SubscriptionDays = &value
 	}
+	if value, ok := _c.mutation.SubscriptionMode(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionMode, field.TypeString, value)
+		_node.SubscriptionMode = value
+	}
+	if value, ok := _c.mutation.SubscriptionQuantity(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionQuantity, field.TypeInt, value)
+		_node.SubscriptionQuantity = value
+	}
 	if value, ok := _c.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
 		_node.ProviderInstanceID = &value
@@ -868,6 +955,38 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UserID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionEntitlementsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionEntitlementsTable,
+			Columns: []string{paymentorder.SubscriptionEntitlementsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(usersubscriptionentitlement.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SubscriptionEntitlementOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   paymentorder.SubscriptionEntitlementOrdersTable,
+			Columns: []string{paymentorder.SubscriptionEntitlementOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionentitlementorder.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -1213,6 +1332,36 @@ func (u *PaymentOrderUpsert) AddSubscriptionDays(v int) *PaymentOrderUpsert {
 // ClearSubscriptionDays clears the value of the "subscription_days" field.
 func (u *PaymentOrderUpsert) ClearSubscriptionDays() *PaymentOrderUpsert {
 	u.SetNull(paymentorder.FieldSubscriptionDays)
+	return u
+}
+
+// SetSubscriptionMode sets the "subscription_mode" field.
+func (u *PaymentOrderUpsert) SetSubscriptionMode(v string) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionMode, v)
+	return u
+}
+
+// UpdateSubscriptionMode sets the "subscription_mode" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionMode() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionMode)
+	return u
+}
+
+// SetSubscriptionQuantity sets the "subscription_quantity" field.
+func (u *PaymentOrderUpsert) SetSubscriptionQuantity(v int) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldSubscriptionQuantity, v)
+	return u
+}
+
+// UpdateSubscriptionQuantity sets the "subscription_quantity" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdateSubscriptionQuantity() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldSubscriptionQuantity)
+	return u
+}
+
+// AddSubscriptionQuantity adds v to the "subscription_quantity" field.
+func (u *PaymentOrderUpsert) AddSubscriptionQuantity(v int) *PaymentOrderUpsert {
+	u.Add(paymentorder.FieldSubscriptionQuantity, v)
 	return u
 }
 
@@ -1925,6 +2074,41 @@ func (u *PaymentOrderUpsertOne) UpdateSubscriptionDays() *PaymentOrderUpsertOne 
 func (u *PaymentOrderUpsertOne) ClearSubscriptionDays() *PaymentOrderUpsertOne {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearSubscriptionDays()
+	})
+}
+
+// SetSubscriptionMode sets the "subscription_mode" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionMode(v string) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionMode(v)
+	})
+}
+
+// UpdateSubscriptionMode sets the "subscription_mode" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionMode() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionMode()
+	})
+}
+
+// SetSubscriptionQuantity sets the "subscription_quantity" field.
+func (u *PaymentOrderUpsertOne) SetSubscriptionQuantity(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionQuantity(v)
+	})
+}
+
+// AddSubscriptionQuantity adds v to the "subscription_quantity" field.
+func (u *PaymentOrderUpsertOne) AddSubscriptionQuantity(v int) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionQuantity(v)
+	})
+}
+
+// UpdateSubscriptionQuantity sets the "subscription_quantity" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdateSubscriptionQuantity() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionQuantity()
 	})
 }
 
@@ -2857,6 +3041,41 @@ func (u *PaymentOrderUpsertBulk) UpdateSubscriptionDays() *PaymentOrderUpsertBul
 func (u *PaymentOrderUpsertBulk) ClearSubscriptionDays() *PaymentOrderUpsertBulk {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearSubscriptionDays()
+	})
+}
+
+// SetSubscriptionMode sets the "subscription_mode" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionMode(v string) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionMode(v)
+	})
+}
+
+// UpdateSubscriptionMode sets the "subscription_mode" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionMode() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionMode()
+	})
+}
+
+// SetSubscriptionQuantity sets the "subscription_quantity" field.
+func (u *PaymentOrderUpsertBulk) SetSubscriptionQuantity(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetSubscriptionQuantity(v)
+	})
+}
+
+// AddSubscriptionQuantity adds v to the "subscription_quantity" field.
+func (u *PaymentOrderUpsertBulk) AddSubscriptionQuantity(v int) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.AddSubscriptionQuantity(v)
+	})
+}
+
+// UpdateSubscriptionQuantity sets the "subscription_quantity" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdateSubscriptionQuantity() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdateSubscriptionQuantity()
 	})
 }
 

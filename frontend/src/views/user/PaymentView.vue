@@ -121,6 +121,21 @@
                 <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
                   {{ selectedPlan.description }}
                 </p>
+                <div class="mt-4 rounded-lg bg-gray-50 p-3 dark:bg-dark-700/50">
+                  <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">订阅操作</div>
+                  <div class="flex gap-2">
+                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'renew' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'renew'">续期</button>
+                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'stack' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'stack'">叠加额度</button>
+                  </div>
+                  <label class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+                    <span>{{ subscriptionMode === 'renew' ? '续期份数' : '购买份数' }}</span>
+                    <select v-model.number="subscriptionQuantity" class="input w-24 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ n }} 份</option></select>
+                  </label>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ subscriptionMode === 'stack' ? '新权益从支付成功时开始，额度与当前权益叠加。' : '优先延长最早到期的权益。' }}</p>
+                  <p v-if="subscriptionQuote?.projected" class="mt-2 text-xs text-primary-600 dark:text-primary-300">
+                    预计权益 {{ subscriptionQuote.projected.active_lot_count || 0 }} 份，最晚到期 {{ subscriptionQuote.projected.expires_at ? formatDateTimeToMinute(subscriptionQuote.projected.expires_at) : '—' }}
+                  </p>
+                </div>
                 <!-- Rate + Limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
                   <div v-if="selectedPlan.group_id != null">
@@ -348,6 +363,9 @@ const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
+const subscriptionMode = ref<'renew' | 'stack'>('renew')
+const subscriptionQuantity = ref(1)
+const subscriptionQuote = ref<{ order_amount: number; projected?: { active_lot_count?: number; daily_limit_usd?: number | null; expires_at?: string | null } } | null>(null)
 const previewImage = ref('')
 
 const paymentPhase = ref<'select' | 'paying'>('select')
@@ -463,7 +481,7 @@ async function redirectToPaymentResult(state: PaymentRecoverySnapshot): Promise<
 
 function buildWechatOAuthAuthorizeUrl(
   authorizeUrl: string,
-  context: { paymentType: string; orderType: OrderType; planId?: number; orderAmount: number },
+  context: { paymentType: string; orderType: OrderType; planId?: number; orderAmount: number; subscriptionMode?: 'renew' | 'stack'; subscriptionQuantity?: number },
 ): string {
   const normalizedUrl = authorizeUrl.trim()
   if (!normalizedUrl || typeof window === 'undefined') {
@@ -484,6 +502,8 @@ function buildWechatOAuthAuthorizeUrl(
     } else {
       redirectUrl.searchParams.delete('plan_id')
     }
+    if (context.subscriptionMode) redirectUrl.searchParams.set('subscription_mode', context.subscriptionMode)
+    if (context.subscriptionQuantity) redirectUrl.searchParams.set('subscription_quantity', String(context.subscriptionQuantity))
 
     if (context.orderAmount > 0) {
       redirectUrl.searchParams.set('amount', String(context.orderAmount))
@@ -693,7 +713,7 @@ const canSubmit = computed(() =>
 
 const subPaymentAmount = computed(() => {
   const price = selectedPlan.value?.price ?? 0
-  return subscriptionPaymentAmountForCurrency(price, selectedCurrency.value)
+  return subscriptionPaymentAmountForCurrency(price * subscriptionQuantity.value, selectedCurrency.value)
 })
 
 const subFeeAmount = computed(() => {
@@ -715,7 +735,7 @@ function subscriptionTotalAmountForCurrency(value: number, currency: string): nu
 
 // Subscription-specific: method options based on gateway pay amount
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
-  const price = selectedPlan.value?.price ?? 0
+  const price = (selectedPlan.value?.price ?? 0) * subscriptionQuantity.value
   return enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     const currency = normalizePaymentCurrency(ml?.currency)
@@ -779,6 +799,8 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
 
 function selectPlan(plan: SubscriptionPlan) {
   selectedPlan.value = plan
+  subscriptionMode.value = activeSubscriptions.value.some(s => s.plan_id === plan.id && s.status === 'active') ? 'renew' : 'stack'
+  subscriptionQuantity.value = 1
   errorMessage.value = ''
 }
 
@@ -786,12 +808,19 @@ function selectPlanFromModal(plan: SubscriptionPlan) {
   showRenewalModal.value = false
   renewGroupId.value = null
   selectedPlan.value = plan
+  subscriptionMode.value = 'renew'
+  subscriptionQuantity.value = 1
   errorMessage.value = ''
 }
 
 function closeRenewalModal() {
   showRenewalModal.value = false
   renewGroupId.value = null
+}
+
+function formatDateTimeToMinute(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 async function handleSubmitRecharge() {
@@ -801,7 +830,13 @@ async function handleSubmitRecharge() {
 
 async function confirmSubscribe() {
   if (!selectedPlan.value || submitting.value) return
-  await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
+  try {
+    const quote = await paymentAPI.quoteSubscription({ plan_id: selectedPlan.value.id, subscription_mode: subscriptionMode.value, subscription_quantity: subscriptionQuantity.value })
+    subscriptionQuote.value = quote.data
+  } catch {
+    subscriptionQuote.value = null
+  }
+  await createOrder(selectedPlan.value.price * subscriptionQuantity.value, 'subscription', selectedPlan.value.id)
 }
 
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
@@ -815,6 +850,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       paymentType: requestType,
       orderType,
       planId,
+      subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
+      subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
@@ -880,6 +917,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         orderType,
         planId,
         orderAmount,
+        subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
+        subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
       })
       return
     }
@@ -922,6 +961,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
               planId,
               paymentType: visibleMethod,
               attempted: options.mobileQrFallbackAttempted === true,
+              subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
+              subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
             },
           )
           if (!fallbackApplied) {
@@ -940,6 +981,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           planId,
           paymentType: visibleMethod,
           attempted: options.mobileQrFallbackAttempted === true,
+          subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
+          subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
         })
         if (!fallbackApplied) {
           throw err
@@ -969,6 +1012,8 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       planId,
       paymentType: requestType,
       attempted: options.mobileQrFallbackAttempted === true,
+      subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
+      subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
     })) {
       return
     } else {
@@ -996,6 +1041,8 @@ interface MobileQrFallbackContext {
   planId?: number
   paymentType: string
   attempted: boolean
+  subscriptionMode?: 'renew' | 'stack'
+  subscriptionQuantity?: number
 }
 
 function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempted: boolean): boolean {
@@ -1043,6 +1090,8 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       paymentType: visibleMethod,
       orderType: context.orderType,
       planId: context.planId,
+      subscriptionMode: context.subscriptionMode,
+      subscriptionQuantity: context.subscriptionQuantity,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: false,
       isWechatBrowser: false,
@@ -1114,6 +1163,8 @@ async function resumeWechatPaymentFromQuery() {
   }
   if (resume.orderType === 'subscription' && resume.planId) {
     selectedPlan.value = checkout.value.plans.find(plan => plan.id === resume.planId) ?? null
+    subscriptionMode.value = resume.subscriptionMode || 'renew'
+    subscriptionQuantity.value = resume.subscriptionQuantity || 1
   }
 
   await router.replace({ path: route.path, query: stripWechatResumeQuery(route.query) })

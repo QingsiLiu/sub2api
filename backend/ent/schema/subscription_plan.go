@@ -86,5 +86,5 @@ func (SubscriptionPlan) Indexes() []ent.Index {
 }
 
 func (SubscriptionPlan) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("group_entitlements", SubscriptionPlanGroup.Type), edge.To("subscriptions", UserSubscription.Type)}
+	return []ent.Edge{edge.To("group_entitlements", SubscriptionPlanGroup.Type), edge.To("subscriptions", UserSubscription.Type), edge.To("entitlements", UserSubscriptionEntitlement.Type)}
 }

@@ -101,6 +101,7 @@ func (UserSubscription) Edges() []ent.Edge {
 			Unique(),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.To("group_entitlements", UserSubscriptionGroup.Type),
+		edge.To("entitlements", UserSubscriptionEntitlement.Type),
 	}
 }
 

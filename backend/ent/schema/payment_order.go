@@ -87,6 +87,11 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Int("subscription_days").
 			Optional().
 			Nillable(),
+		field.String("subscription_mode").
+			MaxLen(20).
+			Default("renew"),
+		field.Int("subscription_quantity").
+			Default(1),
 		field.String("provider_instance_id").
 			Optional().
 			Nillable().
@@ -180,6 +185,8 @@ func (PaymentOrder) Edges() []ent.Edge {
 			Field("user_id").
 			Unique().
 			Required(),
+		edge.To("subscription_entitlements", UserSubscriptionEntitlement.Type),
+		edge.To("subscription_entitlement_orders", SubscriptionEntitlementOrder.Type),
 	}
 }
 

@@ -782,8 +782,10 @@ type UserSubscription struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User         *User                             `json:"user,omitempty"`
+	Group        *Group                            `json:"group,omitempty"`
+	QuotaSummary *service.SubscriptionQuotaSummary `json:"quota_summary,omitempty"`
+	Entitlements []service.SubscriptionEntitlement `json:"entitlements,omitempty"`
 }
 
 // AdminUserSubscription 是管理员接口使用的订阅 DTO（包含分配信息/备注等字段）。
