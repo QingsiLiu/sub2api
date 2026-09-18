@@ -1,22 +1,22 @@
 <template>
   <button
     type="button"
-    class="group text-left p-5 rounded-2xl min-h-[280px] w-full bg-white/70 backdrop-blur-xl border border-gray-200/80 shadow-card dark:bg-dark-800/60 dark:border-dark-700/70 hover:-translate-y-1 hover:shadow-card-hover dark:hover:border-primary-500/30 hover:border-gray-300 transition-all duration-300 ease-out flex flex-col"
+    class="group flex min-h-0 w-full flex-col rounded-2xl border border-gray-200/80 bg-white/80 p-3 text-left shadow-sm backdrop-blur-xl transition-all duration-200 ease-out hover:border-gray-300 hover:shadow-md dark:border-dark-700/70 dark:bg-dark-800/70 dark:hover:border-primary-500/30 sm:p-4"
     @click="emit('click')"
   >
     <!-- Header: icon + name/model + status chip -->
-    <div class="flex items-start gap-3">
+    <div class="flex min-w-0 items-center gap-2.5">
       <span
-        class="w-9 h-9 rounded-xl ring-1 ring-black/5 dark:ring-white/10 grid place-items-center flex-shrink-0"
+        class="grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1 ring-black/5 dark:ring-white/10"
         :class="[providerGradient(item.provider), providerTintClass]"
       >
         <ProviderIcon :provider="item.provider" :size="20" />
       </span>
       <div class="flex-1 min-w-0">
-        <div class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">
+        <div class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100 sm:text-base">
           {{ item.name }}
         </div>
-        <div class="mt-0.5 flex items-center gap-1.5 min-w-0">
+        <div class="mt-0.5 flex min-w-0 items-center gap-1.5">
           <span
             class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0"
             :class="providerBadgeClass(item.provider)"
@@ -36,43 +36,46 @@
         </div>
       </div>
       <span
-        class="px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
+        class="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
         :class="statusBadgeClass(item.primary_status)"
       >
         {{ statusLabel(item.primary_status) }}
       </span>
     </div>
 
-    <!-- Metrics -->
-    <MonitorMetricPair
-      primary-icon="bolt"
-      :primary-label="t('monitorCommon.dialogLatency')"
-      :primary-value="formatLatency(item.primary_latency_ms)"
-      primary-unit="ms"
-      secondary-icon="globe"
-      :secondary-label="t('monitorCommon.endpointPing')"
-      :secondary-value="formatLatency(item.primary_ping_latency_ms)"
-      secondary-unit="ms"
-    />
+    <div class="grid min-w-0 gap-x-4 gap-y-2 lg:grid-cols-[minmax(0,1.15fr)_minmax(180px,0.85fr)] lg:items-center">
+      <div class="min-w-0">
+        <!-- Metrics -->
+        <MonitorMetricPair
+          primary-icon="bolt"
+          :primary-label="t('monitorCommon.dialogLatency')"
+          :primary-value="formatLatency(item.primary_latency_ms)"
+          primary-unit="ms"
+          secondary-icon="globe"
+          :secondary-label="t('monitorCommon.endpointPing')"
+          :secondary-value="formatLatency(item.primary_ping_latency_ms)"
+          secondary-unit="ms"
+        />
 
-    <!-- 配额模式：最新用量/余额快照（服务端已按系统开关剥离，此处 flag 为纵深防御） -->
-    <MonitorQuotaView v-if="quotaVisible" :snapshot="item.latest_quota" class="mt-2" />
+        <!-- 配额模式：最新用量/余额快照（服务端已按系统开关剥离，此处 flag 为纵深防御） -->
+        <MonitorQuotaView v-if="quotaVisible" :snapshot="item.latest_quota" class="mt-2" />
+      </div>
 
-    <!-- Divider -->
-    <div class="mt-4 border-t border-gray-100 dark:border-dark-700/60"></div>
+      <div class="min-w-0 border-t border-gray-100 pt-0.5 dark:border-dark-700/60 lg:border-t-0 lg:pt-0">
+        <!-- Availability row -->
+        <MonitorAvailabilityRow
+          :window-label="availabilityLabel"
+          :value="availabilityValue"
+          :samples-label="extraModelsCountLabel"
+        />
 
-    <!-- Availability row -->
-    <MonitorAvailabilityRow
-      :window-label="availabilityLabel"
-      :value="availabilityValue"
-      :samples-label="extraModelsCountLabel"
-    />
-
-    <!-- Timeline -->
-    <MonitorTimeline
-      :buckets="item.timeline"
-      :countdown-seconds="countdownSeconds"
-    />
+        <!-- Timeline -->
+        <MonitorTimeline
+          :buckets="item.timeline"
+          :countdown-seconds="countdownSeconds"
+        />
+      </div>
+    </div>
   </button>
 </template>
 

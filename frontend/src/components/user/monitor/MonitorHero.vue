@@ -1,9 +1,18 @@
 <template>
-  <section class="py-3 md:py-4">
-    <div class="flex items-center justify-end gap-3 flex-wrap">
+  <section class="monitor-hero mb-3 rounded-2xl border border-gray-200/80 bg-white/80 p-2.5 shadow-sm backdrop-blur-xl dark:border-dark-700/70 dark:bg-dark-800/70 sm:p-3">
+    <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="inline-flex min-w-0 items-center self-start rounded-full px-2.5 py-1 text-xs font-semibold tracking-wider uppercase sm:self-auto"
+        :class="overallChipClass"
+      >
+        <span class="mr-1.5 h-1.5 w-1.5 rounded-full" :class="overallDotClass"></span>
+        <span class="truncate">{{ overallLabel }}</span>
+      </div>
+
+      <div class="flex min-w-0 items-center gap-2">
       <div
         role="tablist"
-        class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
+        class="inline-flex min-w-0 flex-1 rounded-xl border border-gray-200/60 bg-gray-100 p-0.5 text-xs dark:border-dark-700/60 dark:bg-dark-800 sm:flex-none"
       >
         <button
           v-for="opt in windowOptions"
@@ -11,7 +20,7 @@
           type="button"
           role="tab"
           :aria-selected="window === opt.value"
-          class="px-3 py-1 rounded-lg transition-colors"
+          class="min-w-0 flex-1 rounded-lg px-2.5 py-1.5 transition-colors sm:flex-none sm:px-3"
           :class="window === opt.value
             ? 'bg-white dark:bg-dark-700 shadow-sm text-gray-900 dark:text-white font-semibold'
             : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
@@ -21,20 +30,9 @@
         </button>
       </div>
 
-      <span
-        class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase"
-        :class="overallChipClass"
-      >
-        <span
-          class="w-1.5 h-1.5 rounded-full mr-1.5"
-          :class="overallDotClass"
-        ></span>
-        {{ overallLabel }}
-      </span>
-
       <button
         type="button"
-        class="h-8 w-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
+        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-200"
         :disabled="loading"
         :title="t('common.refresh')"
         @click="emit('refresh')"
@@ -51,6 +49,7 @@
         @update:enabled="autoRefresh.setEnabled"
         @update:interval="autoRefresh.setInterval"
       />
+      </div>
     </div>
   </section>
 </template>

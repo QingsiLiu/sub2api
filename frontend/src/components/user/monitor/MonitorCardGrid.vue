@@ -2,12 +2,12 @@
   <div>
     <div
       v-if="loading && items.length === 0"
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="grid grid-cols-1 gap-3 lg:grid-cols-2"
     >
       <div
         v-for="i in 6"
         :key="i"
-        class="p-5 rounded-2xl min-h-[280px] bg-white/70 dark:bg-dark-800/60 border border-gray-200/80 dark:border-dark-700/70 animate-pulse"
+        class="min-h-[156px] rounded-2xl border border-gray-200/80 bg-white/70 p-3 dark:border-dark-700/70 dark:bg-dark-800/60 sm:p-4"
       >
         <div class="flex items-start gap-3">
           <div class="w-9 h-9 rounded-xl bg-gray-200 dark:bg-dark-700"></div>
@@ -17,11 +17,11 @@
           </div>
           <div class="h-6 w-16 rounded-full bg-gray-200 dark:bg-dark-700"></div>
         </div>
-        <div class="mt-5 grid grid-cols-2 gap-2">
-          <div class="h-16 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
-          <div class="h-16 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <div class="h-12 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
+          <div class="h-12 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
         </div>
-        <div class="mt-6 h-5 w-full rounded bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="mt-3 h-4 w-full rounded bg-gray-100 dark:bg-dark-900/40"></div>
       </div>
     </div>
 
@@ -33,7 +33,7 @@
 
     <div
       v-else
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="grid grid-cols-1 gap-3 lg:grid-cols-2"
     >
       <MonitorCard
         v-for="item in items"
