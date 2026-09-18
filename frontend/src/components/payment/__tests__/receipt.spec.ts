@@ -114,6 +114,17 @@ describe('receipt helpers', () => {
     expect(model.paymentMethod).toBe('支付宝')
   })
 
+  it('uses the provider transaction number when it is available', () => {
+    const model = buildReceiptModel({
+      order: order({ payment_trade_no: '2026091823001481451440748515' }),
+      siteName: '给力 API',
+      siteUrl: 'https://sub.geiliapi.com',
+      copy,
+      paymentMethodLabel: '支付宝',
+    })
+    expect(model.tradeNo).toBe('2026091823001481451440748515')
+  })
+
   it('uses the public website when the software default name is still configured', () => {
     expect(resolveReceiptMerchant('Sub2API', 'https://sub.geiliapi.com/')).toBe('sub.geiliapi.com')
     const model = buildReceiptModel({

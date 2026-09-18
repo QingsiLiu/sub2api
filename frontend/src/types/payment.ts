@@ -101,6 +101,8 @@ export interface PaymentOrder {
   fee_rate: number
   payment_type: string
   out_trade_no: string
+  /** Provider transaction/order number (for example, Alipay trade_no). */
+  payment_trade_no?: string
   status: OrderStatus
   order_type: OrderType
   created_at: string

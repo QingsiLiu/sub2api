@@ -100,14 +100,16 @@ describe('UserOrdersView receipt', () => {
     expect(buttons).toHaveLength(1)
   })
 
-  it('opens the receipt and downloads a PDF', async () => {
-    const wrapper = mountOrders([completed])
+  it.each([undefined, '2026091823001481451440748515'])('opens the receipt and downloads a PDF with provider number %s', async (paymentTradeNo) => {
+    const tradeNo = paymentTradeNo || completed.out_trade_no
+    const wrapper = mountOrders([{ ...completed, payment_trade_no: paymentTradeNo }])
     await flushPromises()
     const open = wrapper.findAll('button').find(button => button.text().includes('payment.orders.viewReceipt'))
     expect(open).toBeTruthy()
     await open!.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('payment.receipt.title')
+    expect(wrapper.text()).toContain(tradeNo)
     expect(wrapper.text()).toContain('payment.receipt.itemBalance')
     expect(wrapper.text()).toContain('人民币贰万伍仟元整')
     expect(wrapper.text()).toContain('给力 API')
@@ -119,7 +121,7 @@ describe('UserOrdersView receipt', () => {
     expect(download).toBeTruthy()
     await download!.trigger('click')
     expect(downloadReceiptPdf).toHaveBeenCalledTimes(1)
-    expect(downloadReceiptPdf.mock.calls[0][0].tradeNo).toBe('sub2_20260806abc')
+    expect(downloadReceiptPdf.mock.calls[0][0].tradeNo).toBe(tradeNo)
     expect(downloadReceiptPdf.mock.calls[0][0].filename).toMatch(/^RCP-.*\.pdf$/)
   })
 })

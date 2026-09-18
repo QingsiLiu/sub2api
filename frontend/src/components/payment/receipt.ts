@@ -250,7 +250,7 @@ export function buildReceiptModel(input: {
     payerEmail: input.payer?.email?.trim() || '—',
     payerName: input.payer?.username?.trim() || input.payer?.email?.trim() || '—',
     paymentMethod: input.paymentMethodLabel,
-    tradeNo: order.out_trade_no || `ORD-${order.id}`,
+    tradeNo: order.payment_trade_no || order.out_trade_no || `ORD-${order.id}`,
     merchant: resolveReceiptMerchant(input.siteName, input.siteUrl),
     siteUrl: resolveReceiptSiteUrl(input.siteUrl),
     contactInfo: input.contactInfo?.trim() || '',
