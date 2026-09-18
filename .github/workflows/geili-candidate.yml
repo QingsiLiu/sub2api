@@ -30,6 +30,7 @@ jobs:
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
+          pnpm test:run
           pnpm build
       - name: Validate subscriptions and compile candidate
         working-directory: backend
@@ -39,10 +40,10 @@ jobs:
           VERSION="$(tr -d '[:space:]' < cmd/server/VERSION)"
           test -n "$VERSION"
           echo "GEILI_VERSION=$VERSION" >> "$GITHUB_ENV"
-          if ! go test ./internal/service ./internal/server/routes ./internal/server/middleware ./internal/handler/admin ./migrations; then
-            echo 'candidate tests failed once; retrying the same packages'
-            go test ./internal/service ./internal/server/routes ./internal/server/middleware ./internal/handler/admin ./migrations
-          fi
+          go test ./...
+          go test -tags=unit ./...
+          CI=true go test -tags=integration ./...
+          go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch' -count=1
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${CANDIDATE_SHA} -X main.BuildType=release" -o ../sub2api ./cmd/server
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -69,7 +70,16 @@ jobs:
           REVISION: ${{ github.sha }}
         run: |
           printf '{"revision":"%s","image":"ghcr.io/qingsiliu/sub2api@%s"}\n' "$REVISION" "$DIGEST" > candidate.json
+          python3 - <<'PYCODE'
+          import hashlib,json,pathlib,os
+          files=sorted(pathlib.Path('backend/migrations').glob('*.sql'))
+          migrations={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+          record={'revision':os.environ['REVISION'],'image':'ghcr.io/qingsiliu/sub2api@'+os.environ['DIGEST'],'gates':{'frontend_full':'passed','go_default':'passed','go_unit':'passed','go_integration':'passed','subscription_race':'passed'},'migration_checksums':migrations,'production_ready':False,'remaining':['stage_business_acceptance','external_sandbox_and_limited_upstream_acceptance','explicit_production_authorization']}
+          pathlib.Path('candidate-gates.json').write_text(json.dumps(record,indent=2)+'\n')
+          PYCODE
       - uses: actions/upload-artifact@v7
         with:
           name: geili-candidate
-          path: candidate.json
+          path: |
+            candidate.json
+            candidate-gates.json

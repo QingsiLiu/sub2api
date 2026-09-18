@@ -1,0 +1,28 @@
+{
+  "checked_at": "2026-09-18T18:28:35.660118+08:00",
+  "base_revision": "9e1d84d6ee78691426ebd8ade4c55fc5d2133dfc",
+  "version": "0.2.5-geili.3",
+  "scope": "local synthetic acceptance; not production authorization",
+  "results": {
+    "go_default_all": "passed",
+    "go_unit_all": "passed",
+    "go_integration_all": "passed",
+    "subscription_race": "passed",
+    "frontend_full": {
+      "files": 291,
+      "tests": 2198,
+      "status": "passed"
+    },
+    "frontend_typecheck": "passed",
+    "frontend_build": "passed",
+    "geili_verify": "passed",
+    "postgres_concurrent_requests": 100,
+    "http_decoupled_checks": 72,
+    "http_payment_checks": 21
+  },
+  "blocked": [
+    "real_payment_sandbox_credentials_unavailable",
+    "dedicated_limited_upstream_key_unavailable"
+  ],
+  "production_ready": false
+}

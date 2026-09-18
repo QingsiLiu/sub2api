@@ -16,8 +16,11 @@ import concurrent.futures
 
 ROOT = Path(__file__).resolve().parents[2]
 PRIVATE = ROOT / 'deploy/.secrets/acceptance'
-PROJECT = 'geili-acceptance-local'
-BASE = 'http://127.0.0.1:18489'
+PROJECT = os.getenv('GEILI_ACCEPTANCE_PROJECT', 'geili-acceptance-local')
+PG_PORT = int(os.getenv('GEILI_ACCEPTANCE_PG_PORT', '15439'))
+REDIS_PORT = int(os.getenv('GEILI_ACCEPTANCE_REDIS_PORT', '16389'))
+MOCK_PORT = int(os.getenv('GEILI_ACCEPTANCE_MOCK_PORT', '18989'))
+BASE = os.getenv('GEILI_ACCEPTANCE_BASE', 'http://127.0.0.1:18489')
 MOCK_CALLS = []
 
 def run(args, **kw):
@@ -103,8 +106,8 @@ def serve():
     pg_env=PRIVATE/'postgres.env'
     pg_env.write_text('POSTGRES_USER=acceptance\nPOSTGRES_DB=acceptance\nPOSTGRES_PASSWORD='+cfg['password']+'\n');pg_env.chmod(0o600)
     for name, args in [
-        ('postgres', ['--env-file', str(pg_env), '-p','127.0.0.1:15439:5432','postgres:18-alpine']),
-        ('redis', ['-p','127.0.0.1:16389:6379','redis:8-alpine'])]:
+        ('postgres', ['--env-file', str(pg_env), '-p',f'127.0.0.1:{PG_PORT}:5432','postgres:18-alpine']),
+        ('redis', ['-p',f'127.0.0.1:{REDIS_PORT}:6379','redis:8-alpine'])]:
         cname=PROJECT+'-'+name
         if subprocess.run(['docker','inspect',cname],capture_output=True).returncode:
             run(['docker','run','-d','--name',cname,'--label','geili.acceptance=local']+args)
@@ -112,10 +115,10 @@ def serve():
     for _ in range(50):
         if subprocess.run(['docker','exec',PROJECT+'-postgres','pg_isready','-U','acceptance'],capture_output=True).returncode==0: break
         time.sleep(.2)
-    mock=http.server.ThreadingHTTPServer(('127.0.0.1',18989), Mock)
+    mock=http.server.ThreadingHTTPServer(('127.0.0.1',MOCK_PORT), Mock)
     threading.Thread(target=mock.serve_forever,daemon=True).start()
     runtime=PRIVATE/'runtime';runtime.mkdir(exist_ok=True,mode=0o700)
-    env={**os.environ, 'AUTO_SETUP':'true','SERVER_HOST':'127.0.0.1','SERVER_PORT':'18489','DATA_DIR':str(runtime),'DATABASE_HOST':'127.0.0.1','DATABASE_PORT':'15439','DATABASE_USER':'acceptance','DATABASE_DBNAME':'acceptance','DATABASE_PASSWORD':cfg['password'],'DATABASE_SSLMODE':'disable','REDIS_HOST':'127.0.0.1','REDIS_PORT':'16389','ADMIN_EMAIL':'admin@acceptance.invalid','ADMIN_PASSWORD':cfg['admin_password'],'JWT_SECRET':cfg['password']*2,'TOTP_ENCRYPTION_KEY':secrets.token_hex(32),'TZ':'Asia/Shanghai'}
+    env={**os.environ, 'AUTO_SETUP':'true','SERVER_HOST':'127.0.0.1','SERVER_PORT':str(urllib.parse.urlparse(BASE).port),'DATA_DIR':str(runtime),'DATABASE_HOST':'127.0.0.1','DATABASE_PORT':str(PG_PORT),'DATABASE_USER':'acceptance','DATABASE_DBNAME':'acceptance','DATABASE_PASSWORD':cfg['password'],'DATABASE_SSLMODE':'disable','REDIS_HOST':'127.0.0.1','REDIS_PORT':str(REDIS_PORT),'ADMIN_EMAIL':'admin@acceptance.invalid','ADMIN_PASSWORD':cfg['admin_password'],'JWT_SECRET':cfg['password']*2,'TOTP_ENCRYPTION_KEY':secrets.token_hex(32),'TZ':'Asia/Shanghai'}
     logfile=open(PRIVATE/'server.log','a')
     app=subprocess.Popen([str(ROOT/'backend/bin/acceptance-server')],cwd=runtime,env=env,stdout=logfile,stderr=subprocess.STDOUT)
     (PRIVATE/'app.pid').write_text(str(app.pid))
@@ -142,7 +145,7 @@ def bootstrap():
     for name,provider,model,rate in [('stable','openai','gpt-4.1-mini',1),('pro','openai','gpt-4.1-mini',3),('claude','anthropic','claude-sonnet-4-6',2),('grok','grok','grok-4.3',4),('deepseek','deepseek','deepseek-chat',.5)]:
         g=api('/admin/groups',{'name':'acceptance-'+name+'-'+stamp,'platform':provider,'rate_multiplier':.2,'subscription_rate_multiplier':rate,'model_pricing':[{'models':[model],'billing_mode':'token','input_price':0.000001,'output_price':0.000002,'cache_read_price':0.0000001}], 'long_context_pricing_enabled':False},token)
         groups[name]={'id':g['id'],'model':model,'platform':provider,'rate':rate}
-        api('/admin/accounts',{'name':'acceptance-'+name+'-'+stamp,'platform':provider,'type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':'http://127.0.0.1:18989/'+name,'model_mapping':{model:model}},'group_ids':[g['id']],'concurrency':5,'priority':1,'rate_multiplier':1},token)
+        api('/admin/accounts',{'name':'acceptance-'+name+'-'+stamp,'platform':provider,'type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':f'http://127.0.0.1:{MOCK_PORT}/'+name,'model_mapping':{model:model}},'group_ids':[g['id']],'concurrency':5,'priority':1,'rate_multiplier':1},token)
     facade=api('/admin/groups',{'name':'acceptance-all-'+stamp,'platform':'composite','subscription_type':'subscription','rate_multiplier':1,'subscription_rate_multiplier':1,'daily_limit_usd':10},token)
     for name,g in groups.items():
         api('/admin/groups/'+str(facade['id'])+'/composite-routes',{'public_model':g['model'],'match_type':'exact','target_platform':g['platform'],'target_group_id':g['id'],'profile_key':name,'upstream_model':g['model'],'enabled':True,'priority':20 if name=='pro' else 10},token)
@@ -270,7 +273,7 @@ def verify():
     secondKey=api('/keys',{'name':'second-plan','group_id':fid,'subscription_id':sub2['id']},user)
     before=snapshot();call('stable',credential=secondKey['key']);row=lastlog(secondKey['id'])
     check('selected second subscription owns the charge',row['subscription_id']==sub2['id'] and snapshot()==before,row)
-    api('/admin/accounts',{'name':'legacy-pool-'+str(owner['id']),'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':'http://127.0.0.1:18989/legacy','model_mapping':{'gpt-4.1-mini':'gpt-4.1-mini'}},'group_ids':[owner['id']],'concurrency':5,'priority':1},admin)
+    api('/admin/accounts',{'name':'legacy-pool-'+str(owner['id']),'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':f'http://127.0.0.1:{MOCK_PORT}/legacy','model_mapping':{'gpt-4.1-mini':'gpt-4.1-mini'}},'group_ids':[owner['id']],'concurrency':5,'priority':1},admin)
     legacy=api('/keys',{'name':'legacy-single-provider','group_id':owner['id']},user)
     call('stable',credential=legacy['key']);row=lastlog(legacy['id'])
     check('legacy subscription key retains its quota owner and independent rate',row['subscription_id']==sub2['id'] and abs(row['actual_cost']-.0012*1.7)<1e-9,row)
@@ -287,12 +290,12 @@ def verify():
     # Force a fresh pool, with a failing first account and a working second one.
     retryGroup=api('/admin/groups',{'name':'retry-pool-'+str(owner['id']),'platform':'openai','rate_multiplier':.2,'subscription_rate_multiplier':1,'model_pricing':[{'models':['gpt-4.1-mini'],'input_price':.000001,'output_price':.000002}]},admin)
     for label,priority in [('down',1),('retry-ok',2)]:
-        api('/admin/accounts',{'name':label+'-'+str(owner['id']),'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':'http://127.0.0.1:18989/'+label,'model_mapping':{'gpt-4.1-mini':'gpt-4.1-mini'}},'group_ids':[retryGroup['id']],'concurrency':5,'priority':priority},admin)
+        api('/admin/accounts',{'name':label+'-'+str(owner['id']),'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':f'http://127.0.0.1:{MOCK_PORT}/'+label,'model_mapping':{'gpt-4.1-mini':'gpt-4.1-mini'}},'group_ids':[retryGroup['id']],'concurrency':5,'priority':priority},admin)
     stable=next(r for r in routes if r['profile_key']=='stable')
     api('/admin/groups/'+str(fid)+'/composite-routes/'+str(stable['id']),{**stable,'target_group_id':retryGroup['id']},admin,'PUT')
-    before=snapshot();countBefore=len(request('/__calls',base='http://127.0.0.1:18989')[1])
+    before=snapshot();countBefore=len(request('/__calls',base=f'http://127.0.0.1:{MOCK_PORT}')[1])
     row=call('stable')
-    calls=request('/__calls',base='http://127.0.0.1:18989')[1][countBefore:]
+    calls=request('/__calls',base=f'http://127.0.0.1:{MOCK_PORT}')[1][countBefore:]
     check('upstream 503 switches account within selected pool',any('/down/' in x['path'] for x in calls) and any('/retry-ok/' in x['path'] for x in calls),calls)
     check('failover settles only successful request once',row['group_id']==retryGroup['id'] and abs(snapshot()['used']-before['used']-.0012)<1e-9,row)
     api('/admin/groups/'+str(fid)+'/composite-routes/'+str(stable['id']),stable,admin,'PUT')
