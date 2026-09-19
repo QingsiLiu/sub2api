@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { getExpirationDateRelation, getRemainingExpiryDuration } from '../subscriptionQuota'
+import type { UserSubscription } from '@/types'
+import { getExpirationDateRelation, getRemainingExpiryDuration, getSubscriptionResetAt } from '../subscriptionQuota'
 
 describe('subscription expiry timing', () => {
   it('uses local calendar dates for today and tomorrow', () => {
@@ -60,5 +61,29 @@ describe('subscription expiry timing', () => {
       unit: 'days',
       days: 2
     })
+  })
+})
+
+
+describe('subscription effective reset times', () => {
+  const subscription = {
+    starts_at: '2026-09-18T21:00:00+08:00', expires_at: '2026-10-18T21:00:00+08:00',
+    daily_window_start: '2026-09-18T00:00:00+08:00', weekly_window_start: null, monthly_window_start: null
+  }
+  it('uses the next lot reset even if the parent window is stale or absent', () => {
+    const quota_summary: NonNullable<UserSubscription['quota_summary']> = {
+      active_lot_count: 2, daily_limit_usd: 180, weekly_limit_usd: 1260, monthly_limit_usd: 5400,
+      daily_usage_usd: 90.21, weekly_usage_usd: 181.27, monthly_usage_usd: 181.27,
+      daily_reset_at: '2026-09-20T00:00:00+08:00', weekly_reset_at: '2026-09-25T21:00:00+08:00', monthly_reset_at: null
+    }
+    expect(getSubscriptionResetAt({ ...subscription, quota_summary }, 'daily')).toBe(quota_summary.daily_reset_at)
+    expect(getSubscriptionResetAt({ ...subscription, quota_summary }, 'weekly')).toBe(quota_summary.weekly_reset_at)
+    expect(getSubscriptionResetAt({ ...subscription, monthly_window_start: subscription.starts_at, quota_summary }, 'monthly')).toBeNull()
+  })
+  it('retains legacy windows and one-time daily quota expiry', () => {
+    expect(getSubscriptionResetAt(subscription, 'daily')).toBe('2026-09-18T16:00:00.000Z')
+    expect(getSubscriptionResetAt(subscription, 'weekly')).toBeNull()
+    expect(getSubscriptionResetAt({ ...subscription, expires_at: '2026-09-19T21:00:00+08:00' }, 'daily')).toBe('2026-09-19T21:00:00+08:00')
+    expect(getSubscriptionResetAt({ ...subscription, daily_window_start: 'invalid' }, 'daily')).toBeNull()
   })
 })

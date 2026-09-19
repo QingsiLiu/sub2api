@@ -89,3 +89,25 @@ export function getRemainingExpiryDuration(
     minutes: totalMinutes % 60
   }
 }
+
+export type SubscriptionQuotaPeriod = 'daily' | 'weekly' | 'monthly'
+
+// Geili lots can reset independently. A present summary is authoritative even
+// when its reset is null (unused or no active lots); never reuse a stale parent.
+export function getSubscriptionResetAt(
+  subscription: Pick<UserSubscription, 'quota_summary' | 'starts_at' | 'expires_at' | 'daily_window_start' | 'weekly_window_start' | 'monthly_window_start'>,
+  period: SubscriptionQuotaPeriod
+): string | null {
+  if (subscription.quota_summary) {
+    return subscription.quota_summary[`${period}_reset_at`] ?? null
+  }
+  if (period === 'daily' && isOneTimeDailyQuota(subscription)) {
+    return subscription.expires_at
+  }
+  const start = subscription[`${period}_window_start`]
+  if (!start) return null
+  const time = new Date(start).getTime()
+  if (!Number.isFinite(time)) return null
+  const days = { daily: 1, weekly: 7, monthly: 30 }[period]
+  return new Date(time + days * ONE_DAY_MS).toISOString()
+}

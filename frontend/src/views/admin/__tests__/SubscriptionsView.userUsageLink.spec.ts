@@ -119,6 +119,24 @@ describe('admin subscription users', () => {
     }
   })
 
+  it('shows lot reset countdowns when parent windows are absent', async () => {
+    const now = Date.now()
+    listSubscriptions.mockResolvedValue({ items: [{
+      id: 9, user_id: 42, status: 'active', starts_at: new Date(now - 86400000).toISOString(), expires_at: new Date(now + 30 * 86400000).toISOString(),
+      daily_usage_usd: 90.21, weekly_usage_usd: 181.27, monthly_usage_usd: 181.27,
+      daily_window_start: null, weekly_window_start: null, monthly_window_start: null,
+      quota_summary: { active_lot_count: 1, daily_limit_usd: 90, weekly_limit_usd: 630, monthly_limit_usd: 2700,
+        daily_reset_at: new Date(now + 6 * 3600000).toISOString(), weekly_reset_at: new Date(now + 2 * 86400000).toISOString(), monthly_reset_at: new Date(now + 12 * 86400000).toISOString() }
+    }], total: 1, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.findAll('.reset-info')).toHaveLength(3)
+    expect(wrapper.text()).toContain('admin.subscriptions.resetInHoursMinutes')
+    expect(wrapper.text()).toContain('admin.subscriptions.resetInDaysHours')
+    expect(wrapper.text()).not.toContain('admin.subscriptions.windowNotActive')
+    wrapper.unmount()
+  })
+
   it('displays purchased aggregate quota instead of the edited sale plan', async () => {
     listSubscriptions.mockResolvedValue({ items: [{ id: 9, user_id: 42, status: 'active', plan: { id: 3, name: 'Edited plan', daily_limit_usd: 90 }, quota_summary: { active_lot_count: 1, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, daily_usage_usd: 2 }, daily_usage_usd: 2, weekly_usage_usd: 2, monthly_usage_usd: 2 }], total: 1, pages: 1 })
     const wrapper = mountView()

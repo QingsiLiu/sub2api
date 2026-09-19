@@ -268,7 +268,7 @@
                     ${{ (row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.daily_window_start">
+                <div class="reset-info" v-if="getSubscriptionResetAt(row, 'daily')">
                   <svg
                     class="h-3 w-3"
                     fill="none"
@@ -305,7 +305,7 @@
                     ${{ (row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.weekly_window_start">
+                <div class="reset-info" v-if="getSubscriptionResetAt(row, 'weekly')">
                   <svg
                     class="h-3 w-3"
                     fill="none"
@@ -319,7 +319,7 @@
                       d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <span>{{ formatResetTime(row.weekly_window_start, 'weekly') }}</span>
+                  <span>{{ formatResetTime(row, 'weekly') }}</span>
                 </div>
               </div>
 
@@ -342,7 +342,7 @@
                     ${{ (row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.monthly_window_start">
+                <div class="reset-info" v-if="getSubscriptionResetAt(row, 'monthly')">
                   <svg
                     class="h-3 w-3"
                     fill="none"
@@ -356,14 +356,15 @@
                       d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <span>{{ formatResetTime(row.monthly_window_start, 'monthly') }}</span>
+                  <span>{{ formatResetTime(row, 'monthly') }}</span>
                 </div>
               </div>
 
               <!-- No Limits - Unlimited badge -->
               <div
                 v-if="
-                  !(row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd &&
+                  (!row.quota_summary || row.quota_summary.active_lot_count > 0) &&
+                !(row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd &&
                   !(row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd &&
                   !(row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd
                 "
@@ -850,6 +851,8 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
   getRemainingDurationParts,
+  getSubscriptionResetAt,
+  type SubscriptionQuotaPeriod,
   getRemainingExpiryDuration,
   isOneTimeDailyQuota,
   type RemainingDurationParts
@@ -1537,32 +1540,13 @@ const formatDailyUsageWindow = (subscription: UserSubscription): string => {
     return parts ? formatQuotaEndDuration(parts) : t('admin.subscriptions.windowNotActive')
   }
 
-  return formatResetTime(subscription.daily_window_start, 'daily')
+  return formatResetTime(subscription, 'daily')
 }
 
-// Format reset time based on window start and period type
-const formatResetTime = (windowStart: string | null, period: 'daily' | 'weekly' | 'monthly'): string => {
-  if (!windowStart) return t('admin.subscriptions.windowNotActive')
-
-  const start = new Date(windowStart)
-  const now = new Date()
-
-  // Calculate reset time based on period
-  let resetTime: Date
-  switch (period) {
-    case 'daily':
-      resetTime = new Date(start.getTime() + 24 * 60 * 60 * 1000)
-      break
-    case 'weekly':
-      resetTime = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
-      break
-    case 'monthly':
-      resetTime = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000)
-      break
-  }
-
-  const parts = getRemainingDurationParts(resetTime, now)
-
+// Geili hook: use the next effective lot reset, retaining the legacy fallback.
+const formatResetTime = (subscription: UserSubscription, period: SubscriptionQuotaPeriod): string => {
+  const resetAt = getSubscriptionResetAt(subscription, period)
+  const parts = resetAt ? getRemainingDurationParts(resetAt) : null
   return parts ? formatResetDuration(parts) : t('admin.subscriptions.windowNotActive')
 }
 

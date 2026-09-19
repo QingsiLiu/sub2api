@@ -222,6 +222,7 @@ function getMaxUsagePercentage(sub: UserSubscription): number {
 }
 
 function isUnlimited(sub: UserSubscription): boolean {
+  if (sub.quota_summary?.active_lot_count === 0) return false
   return (
     !(sub.quota_summary ?? sub.plan ?? sub.group)?.daily_limit_usd &&
     !(sub.quota_summary ?? sub.plan ?? sub.group)?.weekly_limit_usd &&

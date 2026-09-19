@@ -122,14 +122,14 @@
             </div>
 
             <!-- Daily Usage -->
-            <div v-if="(subscription.plan ?? subscription.group)?.daily_limit_usd" class="space-y-2">
+            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.daily') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.plan ?? subscription.group)!.daily_limit_usd!.toFixed(2)
+                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -139,19 +139,19 @@
                   :class="
                     getProgressBarClass(
                       subscription.daily_usage_usd,
-                      (subscription.plan ?? subscription.group)!.daily_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!
                     )
                   "
                   :style="{
                     width: getProgressWidth(
                       subscription.daily_usage_usd,
-                      (subscription.plan ?? subscription.group)!.daily_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!
                     )
                   }"
                 ></div>
               </div>
               <p
-                v-if="subscription.daily_window_start"
+                v-if="getSubscriptionResetAt(subscription, 'daily')"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{ formatDailyUsageWindow(subscription) }}
@@ -159,14 +159,14 @@
             </div>
 
             <!-- Weekly Usage -->
-            <div v-if="(subscription.plan ?? subscription.group)?.weekly_limit_usd" class="space-y-2">
+            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.weekly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.weekly_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.plan ?? subscription.group)!.weekly_limit_usd!.toFixed(2)
+                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -176,38 +176,38 @@
                   :class="
                     getProgressBarClass(
                       subscription.weekly_usage_usd,
-                      (subscription.plan ?? subscription.group)!.weekly_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!
                     )
                   "
                   :style="{
                     width: getProgressWidth(
                       subscription.weekly_usage_usd,
-                      (subscription.plan ?? subscription.group)!.weekly_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!
                     )
                   }"
                 ></div>
               </div>
               <p
-                v-if="subscription.weekly_window_start"
+                v-if="getSubscriptionResetAt(subscription, 'weekly')"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{
                   t('userSubscriptions.resetIn', {
-                    time: formatResetTime(subscription.weekly_window_start, 168)
+                    time: formatResetTime(subscription, 'weekly')
                   })
                 }}
               </p>
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="(subscription.plan ?? subscription.group)?.monthly_limit_usd" class="space-y-2">
+            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.monthly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.monthly_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.plan ?? subscription.group)!.monthly_limit_usd!.toFixed(2)
+                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -217,24 +217,24 @@
                   :class="
                     getProgressBarClass(
                       subscription.monthly_usage_usd,
-                      (subscription.plan ?? subscription.group)!.monthly_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!
                     )
                   "
                   :style="{
                     width: getProgressWidth(
                       subscription.monthly_usage_usd,
-                      (subscription.plan ?? subscription.group)!.monthly_limit_usd!
+                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!
                     )
                   }"
                 ></div>
               </div>
               <p
-                v-if="subscription.monthly_window_start"
+                v-if="getSubscriptionResetAt(subscription, 'monthly')"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
                 {{
                   t('userSubscriptions.resetIn', {
-                    time: formatResetTime(subscription.monthly_window_start, 720)
+                    time: formatResetTime(subscription, 'monthly')
                   })
                 }}
               </p>
@@ -243,9 +243,10 @@
             <!-- No limits configured - Unlimited badge -->
             <div
               v-if="
-                !(subscription.plan ?? subscription.group)?.daily_limit_usd &&
-                !(subscription.plan ?? subscription.group)?.weekly_limit_usd &&
-                !(subscription.plan ?? subscription.group)?.monthly_limit_usd
+                (!subscription.quota_summary || subscription.quota_summary.active_lot_count > 0) &&
+                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd &&
+                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd &&
+                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
               "
               class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
             >
@@ -283,6 +284,8 @@ import { platformBorderClass, platformBadgeClass, platformButtonClass, platformL
 import {
   getExpirationDateRelation,
   getRemainingDurationParts,
+  getSubscriptionResetAt,
+  type SubscriptionQuotaPeriod,
   isOneTimeDailyQuota,
   type RemainingDurationParts
 } from '@/utils/subscriptionQuota'
@@ -395,17 +398,13 @@ function formatDailyUsageWindow(subscription: UserSubscription): string {
   }
 
   return t('userSubscriptions.resetIn', {
-    time: formatResetTime(subscription.daily_window_start, 24)
+    time: formatResetTime(subscription, 'daily')
   })
 }
 
-function formatResetTime(windowStart: string | null, windowHours: number): string {
-  if (!windowStart) return t('userSubscriptions.windowNotActive')
-
-  const start = new Date(windowStart)
-  const end = new Date(start.getTime() + windowHours * 60 * 60 * 1000)
-  const parts = getRemainingDurationParts(end)
-
+function formatResetTime(subscription: UserSubscription, period: SubscriptionQuotaPeriod): string {
+  const resetAt = getSubscriptionResetAt(subscription, period)
+  const parts = resetAt ? getRemainingDurationParts(resetAt) : null
   return parts ? formatDurationParts(parts) : t('userSubscriptions.windowNotActive')
 }
 

@@ -80,6 +80,14 @@ func add(a, b float64) float64 {
 	return v
 }
 
+// windowResetAnchor keeps displayed weekly/monthly resets aligned with Normalize.
+func (e Lot) windowResetAnchor(start time.Time) time.Time {
+	if start.Equal(timezone.StartOfDay(e.StartsAt)) && start.Before(e.StartsAt) {
+		return e.StartsAt
+	}
+	return start
+}
+
 // Normalize only mutates a detached snapshot. Persistence is serialized by the
 // aggregate subscription lock. Expired lots never receive fresh quota.
 func (e *Lot) Normalize(now time.Time, activate bool) {
@@ -109,10 +117,7 @@ func (e *Lot) Normalize(now time.Time, activate bool) {
 		if *start == nil {
 			return
 		}
-		anchor := **start
-		if anchor.Equal(timezone.StartOfDay(e.StartsAt)) && anchor.Before(e.StartsAt) {
-			anchor = e.StartsAt
-		}
+		anchor := e.windowResetAnchor(**start)
 		next := anchor.Add(duration)
 		if now.Before(next) || !next.Before(e.ExpiresAt) {
 			return
@@ -165,14 +170,14 @@ func Aggregate(lots []Lot, now time.Time) Summary {
 			earlier(&s.DailyResetAt, t)
 		}
 		if e.WeeklyWindowStart != nil {
-			t := e.WeeklyWindowStart.Add(7 * 24 * time.Hour)
+			t := e.windowResetAnchor(*e.WeeklyWindowStart).Add(7 * 24 * time.Hour)
 			if t.After(e.ExpiresAt) {
 				t = e.ExpiresAt
 			}
 			earlier(&s.WeeklyResetAt, t)
 		}
 		if e.MonthlyWindowStart != nil {
-			t := e.MonthlyWindowStart.Add(30 * 24 * time.Hour)
+			t := e.windowResetAnchor(*e.MonthlyWindowStart).Add(30 * 24 * time.Hour)
 			if t.After(e.ExpiresAt) {
 				t = e.ExpiresAt
 			}

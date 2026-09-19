@@ -14,3 +14,5 @@
 `git config rerere.enabled true` 记录重复冲突的解决方案。
 
 - 权益修复约定与验收见 `audits/2026-09-18-subscription-repair.md`；生产发布不能只验证最近一项UI改动，须绑定完整SHA/digest/迁移及全门禁结果。
+
+- 所有订阅展示查询（含 `ListActiveByUserID`）必须预载额度份额；有份额时按份额自身窗口投影，不能对主订阅兼容窗口执行展示归零。顶部、列表、摘要与进度的用量、额度上限、下一次重置时间均使用权益聚合；无份额订阅才回退旧逻辑。跨日显示回归见 `audits/2026-09-19-subscription-display.md`。

@@ -263,6 +263,8 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 		).
 		WithGroup().WithPlan().
 		WithGroupEntitlements().
+		// geili hook: active-list consumers need the authoritative quota lots.
+		WithEntitlements().
 		Order(dbent.Desc(usersubscription.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {

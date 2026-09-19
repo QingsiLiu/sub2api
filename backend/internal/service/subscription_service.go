@@ -958,6 +958,11 @@ func normalizeExpiredWindows(subs []UserSubscription) {
 func normalizeExpiredWindowsAt(subs []UserSubscription, now time.Time) {
 	for i := range subs {
 		sub := &subs[i]
+		// geili hook: parent windows are legacy snapshots; each lot owns its window.
+		if len(sub.Entitlements) > 0 {
+			effectiveSubscriptionSummary(sub, now)
+			continue
+		}
 		// 日窗口过期：清零展示数据
 		if sub.canAutomaticallyResetDailyAt(now) {
 			sub.DailyWindowStart = nil
@@ -1284,6 +1289,10 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 
 // calculateProgress 根据已加载的订阅和分组数据计算使用进度（纯内存计算，无 DB 查询）
 func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
+	// geili hook: aggregate progress must not use stale or absent parent windows.
+	if len(sub.Entitlements) > 0 {
+		return entitlementSubscriptionProgress(sub, group, time.Now())
+	}
 	copy := *sub
 	sub = &copy
 	effectiveSubscriptionSummary(sub, time.Now())

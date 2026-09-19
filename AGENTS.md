@@ -20,7 +20,7 @@
 
 - 官方文件尽量只读。二开收拢到 `*_geili.go`、`.github/geili/`、带 `geili hook` 注释的最小挂钩。
 - 前端用官方组件和样式，不要恢复已删除的 `frontend/src/geili/` 主题覆盖。
-- 对外版本只改 `backend/cmd/server/VERSION`，形如 `0.2.5-geili.1`。候选 CI 必须注入这个文件，不要再写 `*.acceptance`。下次热修是 `0.2.5-geili.2`。
+- 对外版本只改 `backend/cmd/server/VERSION`，形如 `0.2.5-geili.1`。候选 CI 必须注入这个文件，不要再写 `*.acceptance`。当前源码候选是 `0.2.5-geili.4`，下次热修是 `0.2.5-geili.5`。
 - `rate_multiplier` 是余额倍率，`subscription_rate_multiplier` 是订阅倍率；零是有效值。新 Key 必须有明确 `billing_source`。
 - 分组图/视频单价（`image_price_*` / `video_price_*`）也是有效定价，余额 Key 不能只认 token 价卡。
 - 保留官方迁移文件名和校验和；二开只加新迁移。

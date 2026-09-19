@@ -2129,6 +2129,9 @@ export interface UserSubscription {
 		daily_usage_usd: number
 		weekly_usage_usd: number
 		monthly_usage_usd: number
+		daily_reset_at?: string | null
+		weekly_reset_at?: string | null
+		monthly_reset_at?: string | null
 		next_expiry_at?: string | null
 		expires_at?: string | null
 	}

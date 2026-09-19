@@ -96,3 +96,25 @@ func TestLotAuditWindowBoundaries(t *testing.T) {
 		require.Equal(t, 5.0, lots[0].DailyUsageUSD)
 	})
 }
+
+func TestLotAuditDisplayedResetMatchesLegacyWindowAnchor(t *testing.T) {
+	start := timezone.StartOfDay(time.Now()).Add(-24 * time.Hour).Add(13 * time.Hour)
+	midnight := timezone.StartOfDay(start)
+	lot := Lot{Status: "active", StartsAt: start, ExpiresAt: start.AddDate(0, 0, 60), WeeklyWindowStart: &midnight, MonthlyWindowStart: &midnight, WeeklyUsageUSD: 5, MonthlyUsageUSD: 5}
+	summary := Aggregate([]Lot{lot}, start.Add(time.Hour))
+	require.Equal(t, start.AddDate(0, 0, 7), *summary.WeeklyResetAt)
+	require.Equal(t, start.AddDate(0, 0, 30), *summary.MonthlyResetAt)
+	for _, reset := range []time.Time{*summary.WeeklyResetAt, *summary.MonthlyResetAt} {
+		before := lot
+		before.Normalize(reset.Add(-time.Nanosecond), false)
+		after := lot
+		after.Normalize(reset, false)
+		if reset.Equal(*summary.WeeklyResetAt) {
+			require.Equal(t, 5.0, before.WeeklyUsageUSD)
+			require.Zero(t, after.WeeklyUsageUSD)
+		} else {
+			require.Equal(t, 5.0, before.MonthlyUsageUSD)
+			require.Zero(t, after.MonthlyUsageUSD)
+		}
+	}
+}
