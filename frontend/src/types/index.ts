@@ -2123,6 +2123,7 @@ export interface UserSubscription {
 	group?: Group
 	quota_summary?: {
 		active_lot_count: number
+		remaining_usd?: number | null
 		daily_limit_usd: number | null
 		weekly_limit_usd: number | null
 		monthly_limit_usd: number | null

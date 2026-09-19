@@ -356,8 +356,10 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 		return nil, nil, err
 	}
 
+	// geili hook: all-status/revoked admin lists need the same quota projection.
+	q = q.WithPlan().WithEntitlements().WithEntitlementOperations()
 	if !includeSoftDeleted {
-		q = q.WithUser().WithGroup().WithPlan().WithAssignedByUser().WithEntitlements().WithEntitlementOperations()
+		q = q.WithUser().WithGroup().WithAssignedByUser()
 	}
 
 	// Determine sort field

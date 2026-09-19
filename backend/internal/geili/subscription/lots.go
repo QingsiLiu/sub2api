@@ -54,6 +54,7 @@ type Summary struct {
 	WeeklyResetAt   *time.Time `json:"weekly_reset_at"`
 	MonthlyResetAt  *time.Time `json:"monthly_reset_at"`
 	AvailableUSD    float64    `json:"-"`
+	RemainingUSD    *float64   `json:"remaining_usd"` // nil means unlimited; zero means exhausted.
 }
 
 func (e Lot) Active(now time.Time) bool {
@@ -192,6 +193,10 @@ func Aggregate(lots []Lot, now time.Time) Summary {
 	}
 	if !unlimited[2] {
 		s.MonthlyLimitUSD = &sums[2]
+	}
+	if !math.IsInf(s.AvailableUSD, 1) {
+		remaining := s.AvailableUSD
+		s.RemainingUSD = &remaining
 	}
 	return s
 }

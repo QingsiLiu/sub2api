@@ -4,12 +4,14 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	adminhandler "github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -70,6 +72,7 @@ func TestSubscriptionDisplayGeiliHTTP(t *testing.T) {
 			svc := service.NewSubscriptionService(nil, repo, nil, nil, nil)
 			t.Cleanup(svc.Stop)
 			h := handler.NewSubscriptionHandler(svc)
+			ah := adminhandler.NewSubscriptionHandler(svc)
 			for _, endpoint := range []struct {
 				path    string
 				run     gin.HandlerFunc
@@ -78,6 +81,8 @@ func TestSubscriptionDisplayGeiliHTTP(t *testing.T) {
 			}{
 				{"/subscriptions/active", h.GetActive, "data.0.", false},
 				{"/subscriptions", h.List, "data.0.", false},
+				{fmt.Sprintf("/admin/subscriptions?user_id=%d", parent.UserID), ah.List, "data.items.0.", false},
+				{fmt.Sprintf("/admin/subscriptions?user_id=%d&status=active", parent.UserID), ah.List, "data.items.0.", false},
 				{"/subscriptions/summary", h.GetSummary, "data.subscriptions.0.", true},
 				{"/subscriptions/progress", h.GetProgress, "data.0.subscription.", false},
 			} {

@@ -619,6 +619,14 @@ describe('user KeysView column settings', () => {
       expect(wrapper.get('#key-subscription').text()).toContain('Monthly A')
       expect(getAvailableGroups).toHaveBeenCalledWith('subscription')
     })
+    it.each([0, 175, null])('uses authoritative remaining quota %s instead of mutable sale plan', async (remaining) => {
+      getActiveSubscriptions.mockResolvedValue([{ id: 42, plan: { name: 'Stacked plan', daily_limit_usd: 900 }, quota_summary: { active_lot_count: 2, remaining_usd: remaining, daily_limit_usd: 180, weekly_limit_usd: 1260, monthly_limit_usd: 5400 }, daily_usage_usd: 5, weekly_usage_usd: 5, monthly_usage_usd: 5, starts_at: '2020-01-01T00:00:00Z', expires_at: '2099-01-01T00:00:00Z', status: 'active' }])
+      const wrapper = await openCreate()
+      await wrapper.get('#key-billing-source').setValue('subscription')
+      await flushPromises()
+      expect(wrapper.get('#key-subscription').text()).toContain(remaining === null ? 'payment.admin.unlimited' : '$' + remaining.toFixed(4))
+      expect(wrapper.get('#key-subscription').text()).not.toContain('$895.0000')
+    })
     it('requires selection when several subscriptions are effective', async () => {
       getActiveSubscriptions.mockResolvedValue([41,42].map(id => ({ id, plan: { name: `Plan ${id}` }, starts_at:'2020-01-01T00:00:00Z', expires_at:'2099-01-01T00:00:00Z',status:'active' })))
       const wrapper = await openCreate()

@@ -1597,12 +1597,16 @@ const compositeKeySummary = (key: ApiKey) => {
   return t('keys.selectedGroupsCount', { count: key.group_ids?.length || 0 })
 }
 const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
-  const quota = sub.plan ?? sub.group
+  const quota = sub.quota_summary ?? sub.plan ?? sub.group
   const available: number[] = []
   if (quota?.daily_limit_usd && quota.daily_limit_usd > 0) available.push(Math.max(0, quota.daily_limit_usd - sub.daily_usage_usd))
   if (quota?.weekly_limit_usd && quota.weekly_limit_usd > 0) available.push(Math.max(0, quota.weekly_limit_usd - sub.weekly_usage_usd))
   if (quota?.monthly_limit_usd && quota.monthly_limit_usd > 0) available.push(Math.max(0, quota.monthly_limit_usd - sub.monthly_usage_usd))
-  const remaining = available.length ? '$' + Math.min(...available).toFixed(4) : t('payment.admin.unlimited')
+  // geili hook: sum each lot's spendable capacity, not the minimum of aggregate dimensions.
+  const effectiveRemaining = sub.quota_summary?.active_lot_count === 0 ? 0
+    : sub.quota_summary?.remaining_usd !== undefined ? sub.quota_summary.remaining_usd
+    : available.length ? Math.min(...available) : null
+  const remaining = effectiveRemaining === null ? t('payment.admin.unlimited') : '$' + effectiveRemaining.toFixed(4)
   return `${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
 }
 

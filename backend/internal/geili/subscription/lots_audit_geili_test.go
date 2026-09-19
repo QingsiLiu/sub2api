@@ -1,6 +1,7 @@
 package subscription
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
@@ -116,5 +117,35 @@ func TestLotAuditDisplayedResetMatchesLegacyWindowAnchor(t *testing.T) {
 			require.Equal(t, 5.0, before.MonthlyUsageUSD)
 			require.Zero(t, after.MonthlyUsageUSD)
 		}
+	}
+}
+
+func TestLotRemainingDisplayMatchesAdmission(t *testing.T) {
+	now := time.Now()
+	limit := 10.0
+	base := Lot{Status: "active", StartsAt: now.Add(-time.Hour), ExpiresAt: now.AddDate(0, 0, 30), DailyLimitUSD: &limit, WeeklyLimitUSD: &limit}
+	a, b := base, base
+	a.DailyUsageUSD = 10
+	b.WeeklyUsageUSD = 10
+	for _, tc := range []struct {
+		name string
+		lots []Lot
+		want *float64
+	}{
+		{"different_dimensions_exhausted", []Lot{a, b}, ptr(0)},
+		{"stacked", []Lot{base, base}, ptr(20)},
+		{"no_effective_lots", nil, ptr(0)},
+		{"unlimited", []Lot{{Status: "active", StartsAt: base.StartsAt, ExpiresAt: base.ExpiresAt}}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Aggregate(tc.lots, now)
+			require.Equal(t, tc.want, got.RemainingUSD)
+			raw, err := json.Marshal(got)
+			require.NoError(t, err)
+			require.Contains(t, string(raw), "remaining_usd")
+			if got.RemainingUSD != nil {
+				require.Equal(t, got.AvailableUSD, *got.RemainingUSD)
+			}
+		})
 	}
 }
