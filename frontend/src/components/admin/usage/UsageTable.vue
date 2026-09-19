@@ -118,10 +118,16 @@
         </template>
 
         <template #cell-billing_source="{ row }">
-          <div class="text-xs text-gray-700 dark:text-gray-300">
-            <span v-if="row.billing_type === 1">{{ t('keys.subscriptionSource') }}: {{ row.subscription_name || row.subscription?.plan?.name || row.subscription?.group?.name || '' }} · #{{ row.subscription_id }}</span>
-            <span v-else>{{ t('keys.balanceSource') }}</span>
-          </div>
+          <!-- geili hook: keep settlement badges consistent across admin and user usage. -->
+          <span
+            class="inline-flex max-w-[min(240px,45vw)] items-center rounded px-2 py-0.5 align-middle text-xs font-medium"
+            :class="row.billing_type === 1
+              ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'"
+            :title="getBillingSourceLabel(row)"
+          >
+            <span class="truncate">{{ getBillingSourceLabel(row) }}</span>
+          </span>
         </template>
         <template #cell-effective_multiplier="{ row }">
           <span class="text-sm tabular-nums">×{{ formatMultiplier(row.rate_multiplier ?? 1) }}</span>
@@ -631,6 +637,14 @@ const emit = defineEmits<{
   ipGeoBatchFailed: []
 }>()
 const { t } = useI18n()
+const getBillingSourceLabel = (row: AdminUsageLog): string => {
+  if (row.billing_type !== 1) return t('keys.balanceSource')
+  const name = row.subscription_name?.trim()
+    || row.subscription?.plan?.name?.trim()
+    || row.subscription?.group?.name?.trim()
+  return name ? t('keys.namedSubscriptionSource', { name }) : t('keys.subscriptionSource')
+}
+
 const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const showAccountBilling = props.showAccountBilling

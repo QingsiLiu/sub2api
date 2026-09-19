@@ -133,15 +133,15 @@
           <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="emitChange" />
         </div>
 
-        <!-- Billing Type Filter (usage only) -->
-        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
-          <label class="input-label">{{ t('admin.usage.billingType') }}</label>
-          <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
-        </div>
-
         <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
           <label class="input-label">{{ t('keys.subscriptionLabel') }} ID</label>
           <input v-model.number="filters.subscription_id" type="number" min="1" class="input" @change="emitChange" />
+        </div>
+
+        <!-- geili hook: settlement source uses the existing billing_type filter. -->
+        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
+          <label class="input-label">{{ t('admin.usage.billingType') }}</label>
+          <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
         </div>
 
         <!-- Billing Mode Filter (usage only；用户排行的 user-breakdown 接口不支持该维度) -->
@@ -290,7 +290,7 @@ const compactionOptions = ref<SelectOption[]>([
   { value: true, label: t('usage.compactionOnly') }
 ])
 
-const billingTypeOptions = ref<SelectOption[]>([
+const billingTypeOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('admin.usage.allBillingTypes') },
   { value: 0, label: t('admin.usage.billingTypeBalance') },
   { value: 1, label: t('admin.usage.billingTypeSubscription') }

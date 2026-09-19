@@ -106,6 +106,7 @@ export default {
     expiresLabel: "Expires",
     balanceSource: "Balance",
     subscriptionSource: "Subscription",
+    namedSubscriptionSource: "Subscription: {name}",
     selectedGroupsCount: "{count} groups selected",
 
     title: 'API Keys',

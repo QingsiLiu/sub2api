@@ -106,6 +106,7 @@ export default {
     expiresLabel: "有效期至",
     balanceSource: "余额",
     subscriptionSource: "订阅",
+    namedSubscriptionSource: "订阅：{name}",
     selectedGroupsCount: "已选 {count} 个分组",
 
     title: 'API 密钥',
