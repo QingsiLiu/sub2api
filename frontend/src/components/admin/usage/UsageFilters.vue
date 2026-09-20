@@ -87,6 +87,12 @@
         <!-- Account Filter -->
         <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('admin.usage.account') }}</label>
+          <div v-if="selectedAccounts.length" class="mb-1 flex flex-wrap gap-1">
+            <span v-for="a in selectedAccounts" :key="a.id" class="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+              {{ a.name }}
+              <button type="button" class="text-primary-500" :aria-label="`Remove ${a.name}`" @click="toggleAccount(a)">×</button>
+            </span>
+          </div>
           <input
             v-model="accountKeyword"
             type="text"
@@ -96,7 +102,7 @@
             @focus="showAccountDropdown = true"
           />
           <button
-            v-if="filters.account_id"
+            v-if="selectedAccounts.length"
             type="button"
             @click="clearAccount"
             class="absolute right-2 top-9 text-gray-400"
@@ -112,11 +118,13 @@
               v-for="a in accountResults"
               :key="a.id"
               type="button"
-              @click="selectAccount(a)"
-              class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
+              data-testid="usage-account-option"
+              @click="toggleAccount(a)"
+              class="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
             >
               <span class="truncate">{{ a.name }}</span>
               <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
+              <span v-if="selectedAccountIDs.includes(a.id)" class="ml-2 text-primary-600">✓</span>
             </button>
           </div>
         </div>
@@ -269,6 +277,16 @@ const accountKeyword = ref('')
 const accountResults = ref<SimpleAccount[]>([])
 const showAccountDropdown = ref(false)
 let accountSearchTimeout: ReturnType<typeof setTimeout> | null = null
+
+const selectedAccountIDs = computed<number[]>(() => {
+  const ids = filters.value.account_ids
+  if (Array.isArray(ids)) return ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+  return filters.value.account_id ? [Number(filters.value.account_id)] : []
+})
+const selectedAccounts = computed<SimpleAccount[]>(() => {
+  const byID = new Map(accountResults.value.map((a) => [a.id, a]))
+  return selectedAccountIDs.value.map((id) => byID.get(id) || { id, name: `#${id}` })
+})
 
 const modelOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('admin.usage.allModels') },
@@ -444,10 +462,13 @@ const debounceAccountSearch = () => {
   }, 300)
 }
 
-const selectAccount = (a: SimpleAccount) => {
-  accountKeyword.value = a.name
-  showAccountDropdown.value = false
-  filters.value.account_id = a.id
+const toggleAccount = (a: SimpleAccount) => {
+  const ids = selectedAccountIDs.value
+  const next = ids.includes(a.id) ? ids.filter((id) => id !== a.id) : [...ids, a.id]
+  filters.value.account_ids = next.length ? next : undefined
+  filters.value.account_id = undefined
+  accountKeyword.value = ''
+  showAccountDropdown.value = true
   emitChange()
 }
 
@@ -456,6 +477,7 @@ const clearAccount = () => {
   accountResults.value = []
   showAccountDropdown.value = false
   filters.value.account_id = undefined
+  filters.value.account_ids = undefined
   emitChange()
 }
 
@@ -525,6 +547,16 @@ watch(
       accountResults.value = []
     }
   }
+)
+
+watch(
+  () => filters.value.account_ids,
+  (accountIDs) => {
+    if (Array.isArray(accountIDs) && accountIDs.length) {
+      filters.value.account_id = undefined
+    }
+  },
+  { deep: true }
 )
 
 onMounted(async () => {

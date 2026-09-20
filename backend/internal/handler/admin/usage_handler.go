@@ -49,6 +49,7 @@ type CreateUsageCleanupTaskRequest struct {
 	UserID      *int64  `json:"user_id"`
 	APIKeyID    *int64  `json:"api_key_id"`
 	AccountID   *int64  `json:"account_id"`
+	AccountIDs  []int64 `json:"account_ids"` // geili hook
 	GroupID     *int64  `json:"group_id"`
 	Model       *string `json:"model"`
 	RequestType *string `json:"request_type"`
@@ -60,6 +61,12 @@ type CreateUsageCleanupTaskRequest struct {
 // List handles listing all usage records with filters
 // GET /api/v1/admin/usage
 func (h *UsageHandler) List(c *gin.Context) {
+	// geili hook: validate the multi-account filter before querying.
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 	page, pageSize := response.ParsePagination(c)
 	exactTotal := false
 	if exactTotalRaw := strings.TrimSpace(c.Query("exact_total")); exactTotalRaw != "" {
@@ -201,6 +208,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		UserID:                userID,
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,
+		AccountIDs:            accountIDs,
 		GroupID:               groupID,
 		SubscriptionID:        subscriptionID,
 		RequestID:             requestID,
@@ -233,6 +241,12 @@ func (h *UsageHandler) List(c *gin.Context) {
 // Stats handles getting usage statistics with filters
 // GET /api/v1/admin/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {
+	// geili hook: validate the multi-account filter before querying.
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 	// Parse filters - same as List endpoint
 	var subscriptionID int64
 	if raw := c.Query("subscription_id"); raw != "" {
@@ -371,6 +385,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		UserID:                userID,
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,
+		AccountIDs:            accountIDs,
 		GroupID:               groupID,
 		SubscriptionID:        subscriptionID,
 		Model:                 model,
@@ -568,6 +583,7 @@ func (h *UsageHandler) CreateCleanupTask(c *gin.Context) {
 		UserID:      req.UserID,
 		APIKeyID:    req.APIKeyID,
 		AccountID:   req.AccountID,
+		AccountIDs:  req.AccountIDs,
 		GroupID:     req.GroupID,
 		Model:       req.Model,
 		RequestType: requestType,

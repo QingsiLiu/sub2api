@@ -389,6 +389,9 @@ func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any)
 	conditions := make([]string, 0, 8)
 	args := make([]any, 0, 8)
 	idx := 1
+	// geili hook: preserve the same account set used by the usage list.
+	conditions, args = appendUsageAccountIDsWhereGeili(conditions, args, filters.AccountIDs, "account_id")
+	idx = len(args) + 1
 	if !filters.StartTime.IsZero() {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", idx))
 		args = append(args, filters.StartTime)

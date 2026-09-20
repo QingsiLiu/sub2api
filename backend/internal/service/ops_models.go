@@ -102,8 +102,9 @@ type OpsErrorLogDetail struct {
 }
 
 type OpsErrorLogFilter struct {
-	StartTime *time.Time
-	EndTime   *time.Time
+	AccountIDs []int64
+	StartTime  *time.Time
+	EndTime    *time.Time
 
 	Platform  string
 	GroupID   *int64

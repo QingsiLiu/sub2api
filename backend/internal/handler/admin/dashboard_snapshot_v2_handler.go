@@ -41,6 +41,7 @@ type dashboardSnapshotV2Filters struct {
 	UserID                int64
 	APIKeyID              int64
 	AccountID             int64
+	AccountIDs            []int64 `json:"account_ids,omitempty"` // geili hook: multi-account filter
 	GroupID               int64
 	Model                 string
 	RequestType           *int16
@@ -51,26 +52,27 @@ type dashboardSnapshotV2Filters struct {
 }
 
 type dashboardSnapshotV2CacheKey struct {
-	SubscriptionID        int64  `json:"subscription_id"`
-	StartTime             string `json:"start_time"`
-	EndTime               string `json:"end_time"`
-	Granularity           string `json:"granularity"`
-	UserID                int64  `json:"user_id"`
-	APIKeyID              int64  `json:"api_key_id"`
-	AccountID             int64  `json:"account_id"`
-	GroupID               int64  `json:"group_id"`
-	Model                 string `json:"model"`
-	RequestType           *int16 `json:"request_type"`
-	Stream                *bool  `json:"stream"`
-	NativeCompactionV2    *bool  `json:"native_compaction_v2"`
-	BillingType           *int8  `json:"billing_type"`
-	UpstreamModelMismatch *bool  `json:"upstream_model_mismatch"`
-	IncludeStats          bool   `json:"include_stats"`
-	IncludeTrend          bool   `json:"include_trend"`
-	IncludeModels         bool   `json:"include_models"`
-	IncludeGroups         bool   `json:"include_groups"`
-	IncludeUsersTrend     bool   `json:"include_users_trend"`
-	UsersTrendLimit       int    `json:"users_trend_limit"`
+	SubscriptionID        int64   `json:"subscription_id"`
+	StartTime             string  `json:"start_time"`
+	EndTime               string  `json:"end_time"`
+	Granularity           string  `json:"granularity"`
+	UserID                int64   `json:"user_id"`
+	APIKeyID              int64   `json:"api_key_id"`
+	AccountID             int64   `json:"account_id"`
+	AccountIDs            []int64 `json:"account_ids,omitempty"` // geili hook: multi-account filter
+	GroupID               int64   `json:"group_id"`
+	Model                 string  `json:"model"`
+	RequestType           *int16  `json:"request_type"`
+	Stream                *bool   `json:"stream"`
+	NativeCompactionV2    *bool   `json:"native_compaction_v2"`
+	BillingType           *int8   `json:"billing_type"`
+	UpstreamModelMismatch *bool   `json:"upstream_model_mismatch"`
+	IncludeStats          bool    `json:"include_stats"`
+	IncludeTrend          bool    `json:"include_trend"`
+	IncludeModels         bool    `json:"include_models"`
+	IncludeGroups         bool    `json:"include_groups"`
+	IncludeUsersTrend     bool    `json:"include_users_trend"`
+	UsersTrendLimit       int     `json:"users_trend_limit"`
 }
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
@@ -105,6 +107,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		UserID:                filters.UserID,
 		APIKeyID:              filters.APIKeyID,
 		AccountID:             filters.AccountID,
+		AccountIDs:            filters.AccountIDs,
 		GroupID:               filters.GroupID,
 		SubscriptionID:        filters.SubscriptionID,
 		Model:                 filters.Model,
@@ -195,6 +198,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.AccountIDs,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -218,6 +222,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.AccountIDs,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -240,6 +245,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.NativeCompactionV2,
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
+			filters.AccountIDs,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -263,6 +269,11 @@ func parseDashboardSnapshotV2Filters(c *gin.Context) (*dashboardSnapshotV2Filter
 	filters := &dashboardSnapshotV2Filters{
 		Model: strings.TrimSpace(c.Query("model")),
 	}
+	accountIDs, err := parseUsageAccountIDsGeili(c)
+	if err != nil {
+		return nil, err
+	}
+	filters.AccountIDs = accountIDs
 
 	if value := c.Query("subscription_id"); value != "" {
 		id, err := strconv.ParseInt(value, 10, 64)

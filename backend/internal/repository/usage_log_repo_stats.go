@@ -671,6 +671,8 @@ func (r *usageLogRepository) GetStatsWithFilters(ctx context.Context, filters Us
 		conditions = append(conditions, fmt.Sprintf("account_id = $%d", len(args)+1))
 		args = append(args, filters.AccountID)
 	}
+	// geili hook: selected accounts are ORed within the account dimension.
+	conditions, args = appendUsageAccountIDsWhereGeili(conditions, args, filters.AccountIDs, "account_id")
 	if filters.SubscriptionID > 0 {
 		conditions = append(conditions, fmt.Sprintf("subscription_id = $%d", len(args)+1))
 		args = append(args, filters.SubscriptionID)
@@ -740,7 +742,7 @@ func (r *usageLogRepository) GetStatsWithFilters(ctx context.Context, filters Us
 
 	stats := &UsageStats{}
 	var totalAccountCost float64
-	useAccountCostForEndpoint := filters.AccountID > 0 && filters.UserID == 0 && filters.APIKeyID == 0
+	useAccountCostForEndpoint := (filters.AccountID > 0 || len(filters.AccountIDs) > 0) && filters.UserID == 0 && filters.APIKeyID == 0
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

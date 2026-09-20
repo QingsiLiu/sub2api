@@ -103,7 +103,12 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, AccountIDs: accountIDs}
 
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime

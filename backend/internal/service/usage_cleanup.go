@@ -26,6 +26,7 @@ const (
 // - nil 表示未设置该过滤条件
 // - 过滤条件均为精确匹配
 type UsageCleanupFilters struct {
+	AccountIDs  []int64   `json:"account_ids,omitempty"` // geili hook
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
 	UserID      *int64    `json:"user_id,omitempty"`

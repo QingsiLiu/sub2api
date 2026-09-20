@@ -235,6 +235,39 @@ describe('UsageFilters — user search dropdown', () => {
   })
 })
 
+describe('UsageFilters — account multi-select', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockAccountsList.mockReset()
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('keeps multiple account IDs selected and emits changes for each toggle', async () => {
+    mockAccountsList.mockResolvedValue({ items: [
+      { id: 11, name: 'First account' },
+      { id: 22, name: 'Second account' },
+    ] })
+    const wrapper = mountFilters()
+    const accountInput = wrapper.findAll('input[type="text"]')[2]
+    await accountInput.trigger('focus')
+    await accountInput.setValue('account')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+
+    const options = wrapper.findAll('[data-testid="usage-account-option"]')
+    expect(options).toHaveLength(2)
+    await options[0].trigger('click')
+    await options[1].trigger('click')
+    expect(wrapper.props('modelValue').account_ids).toEqual([11, 22])
+    expect(wrapper.props('modelValue').account_id).toBeUndefined()
+
+    await options[0].trigger('click')
+    expect(wrapper.props('modelValue').account_ids).toEqual([22])
+    expect(wrapper.emitted('change')?.length).toBe(3)
+  })
+})
+
 describe('UsageFilters — model options come from prop (no dup request)', () => {
   beforeEach(() => {
     vi.useFakeTimers()

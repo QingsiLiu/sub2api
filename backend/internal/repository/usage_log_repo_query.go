@@ -112,6 +112,8 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		conditions = append(conditions, fmt.Sprintf("account_id = $%d", len(args)+1))
 		args = append(args, filters.AccountID)
 	}
+	// geili hook: selected accounts are ORed within the account dimension.
+	conditions, args = appendUsageAccountIDsWhereGeili(conditions, args, filters.AccountIDs, "account_id")
 	if filters.SubscriptionID > 0 {
 		conditions = append(conditions, fmt.Sprintf("subscription_id = $%d", len(args)+1))
 		args = append(args, filters.SubscriptionID)

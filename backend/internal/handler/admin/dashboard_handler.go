@@ -203,6 +203,11 @@ func (h *DashboardHandler) GetRealtimeMetrics(c *gin.Context) {
 // GET /api/v1/admin/dashboard/trend
 // Query params: start_date, end_date (YYYY-MM-DD), granularity (day/hour), user_id, api_key_id, model, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 	subscriptionID, ok := parseDashboardSubscriptionID(c)
 	if !ok {
 		return
@@ -277,7 +282,7 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 		return
 	}
 
-	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, subscriptionID)
+	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get usage trend")
 		return
@@ -296,6 +301,11 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 // GET /api/v1/admin/dashboard/models
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetModelStats(c *gin.Context) {
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 	subscriptionID, ok := parseDashboardSubscriptionID(c)
 	if !ok {
 		return
@@ -373,7 +383,7 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 		return
 	}
 
-	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, subscriptionID)
+	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get model statistics")
 		return
@@ -391,6 +401,11 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 // GET /api/v1/admin/dashboard/groups
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 	subscriptionID, ok := parseDashboardSubscriptionID(c)
 	if !ok {
 		return
@@ -459,7 +474,7 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 		return
 	}
 
-	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, subscriptionID)
+	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get group statistics")
 		return
@@ -681,8 +696,13 @@ func (h *DashboardHandler) GetBatchAPIKeysUsage(c *gin.Context) {
 // Query params: start_date, end_date, group_id, model, endpoint, endpoint_type, limit
 func (h *DashboardHandler) GetUserBreakdown(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
+	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
+	if accountErr != nil {
+		response.BadRequest(c, accountErr.Error())
+		return
+	}
 
-	dim := usagestats.UserBreakdownDimension{}
+	dim := usagestats.UserBreakdownDimension{AccountIDs: accountIDs}
 	if v := c.Query("group_id"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			dim.GroupID = id

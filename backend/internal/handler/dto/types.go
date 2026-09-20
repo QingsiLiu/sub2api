@@ -717,6 +717,7 @@ type AdminUsageLog struct {
 }
 
 type UsageCleanupFilters struct {
+	AccountIDs  []int64   `json:"account_ids,omitempty"` // geili hook
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
 	UserID      *int64    `json:"user_id,omitempty"`

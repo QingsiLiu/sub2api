@@ -289,6 +289,14 @@ func (s *UsageCleanupService) isTaskCanceled(ctx context.Context, taskID int64) 
 }
 
 func (s *UsageCleanupService) validateFilters(filters UsageCleanupFilters) error {
+	if len(filters.AccountIDs) > 200 || (len(filters.AccountIDs) > 0 && filters.AccountID != nil) {
+		return infraerrors.BadRequest("USAGE_CLEANUP_INVALID_ACCOUNTS", "Invalid account_ids filter")
+	}
+	for _, id := range filters.AccountIDs {
+		if id <= 0 {
+			return infraerrors.BadRequest("USAGE_CLEANUP_INVALID_ACCOUNTS", "Invalid account_ids filter")
+		}
+	}
 	if filters.StartTime.IsZero() || filters.EndTime.IsZero() {
 		return infraerrors.BadRequest("USAGE_CLEANUP_MISSING_RANGE", "start_date and end_date are required")
 	}
