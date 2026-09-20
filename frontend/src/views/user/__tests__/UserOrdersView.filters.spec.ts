@@ -6,7 +6,10 @@ import Pagination from '@/components/common/Pagination.vue'
 
 const api = vi.hoisted(() => ({ getMyOrders: vi.fn(), getRefundEligibleProviders: vi.fn() }))
 vi.mock('@/api/payment', () => ({ paymentAPI: api }))
-vi.mock('@/stores', () => ({ useAppStore: () => ({ showError: vi.fn() }) }))
+vi.mock('@/stores', () => ({
+  useAppStore: () => ({ showError: vi.fn() }),
+  useAuthStore: () => ({ user: {} }),
+}))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
