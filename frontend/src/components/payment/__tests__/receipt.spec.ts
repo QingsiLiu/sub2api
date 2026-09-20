@@ -37,7 +37,6 @@ const copy = {
   total: '合计',
   notesTitle: '收据说明',
   noteProof: 'a',
-  noteNotInvoice: 'b',
   noteRefund: 'c',
   issuerTitle: '开具方',
   itemBalance: 'API 账户充值',

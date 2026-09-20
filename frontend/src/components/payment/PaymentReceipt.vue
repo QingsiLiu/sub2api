@@ -93,7 +93,6 @@
         <h4 class="text-sm font-semibold">{{ copy.notesTitle }}</h4>
         <ol class="mt-2 list-decimal space-y-1 pl-4 text-xs leading-5 text-slate-500">
           <li>{{ copy.noteProof }}</li>
-          <li>{{ copy.noteNotInvoice }}</li>
           <li>{{ copy.noteRefund }}</li>
         </ol>
       </div>

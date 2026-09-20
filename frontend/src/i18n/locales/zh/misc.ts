@@ -424,7 +424,6 @@ export default {
       total: '合计',
       notesTitle: '收据说明',
       noteProof: '本收据用于证明上述款项已支付并对应服务已入账。',
-      noteNotInvoice: '本收据不等同于增值税发票；如需发票，请联系站点客服。',
       noteRefund: '若发生退款，以站点记录与支付渠道到账结果为准。',
       issuerTitle: '开具方',
       itemBalance: 'API 账户充值',

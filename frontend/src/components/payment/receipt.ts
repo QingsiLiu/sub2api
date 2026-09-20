@@ -80,7 +80,6 @@ export interface ReceiptCopy {
   total: string
   notesTitle: string
   noteProof: string
-  noteNotInvoice: string
   noteRefund: string
   issuerTitle: string
   itemBalance: string

@@ -115,7 +115,8 @@ describe('UserOrdersView receipt', () => {
     expect(wrapper.text()).toContain('给力 API')
     expect(wrapper.text()).toContain('https://sub.geiliapi.com')
     expect(wrapper.text()).not.toContain('Sub2API')
-    expect(wrapper.text()).toContain('payment.receipt.noteNotInvoice')
+    expect(wrapper.findAll('.receipt-sheet ol li')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('payment.receipt.noteNotInvoice')
 
     const download = wrapper.findAll('button').find(button => button.text().includes('payment.orders.downloadReceipt'))
     expect(download).toBeTruthy()

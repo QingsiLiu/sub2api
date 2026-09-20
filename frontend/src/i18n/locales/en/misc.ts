@@ -400,7 +400,6 @@ export default {
       total: 'Total',
       notesTitle: 'Notes',
       noteProof: 'This receipt confirms the payment above has been received and credited.',
-      noteNotInvoice: 'This is not a VAT invoice. Contact support if you need a tax invoice.',
       noteRefund: 'Refunds follow the site record and the payment channel result.',
       issuerTitle: 'Issued by',
       itemBalance: 'API balance top-up',

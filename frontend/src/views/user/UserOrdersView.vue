@@ -165,7 +165,6 @@ const receiptCopy = computed((): ReceiptCopy => ({
   total: t('payment.receipt.total'),
   notesTitle: t('payment.receipt.notesTitle'),
   noteProof: t('payment.receipt.noteProof'),
-  noteNotInvoice: t('payment.receipt.noteNotInvoice'),
   noteRefund: t('payment.receipt.noteRefund'),
   issuerTitle: t('payment.receipt.issuerTitle'),
   itemBalance: t('payment.receipt.itemBalance'),

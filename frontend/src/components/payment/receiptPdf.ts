@@ -241,7 +241,7 @@ export function renderReceiptCanvas(model: ReceiptModel, copy: ReceiptCopy): HTM
   ctx.fillStyle = '#475569'
   ctx.font = '20px "PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif'
   let noteY = y + 36
-  ;[copy.noteProof, copy.noteNotInvoice, copy.noteRefund].forEach((line, i) => {
+  ;[copy.noteProof, copy.noteRefund].forEach((line, i) => {
     noteY = drawWrapped(ctx, `${i + 1}. ${line}`, pad, noteY, notesWidth, 28)
   })
   ctx.fillStyle = '#0f172a'
