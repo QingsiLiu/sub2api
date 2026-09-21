@@ -84,47 +84,81 @@
           <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
         </div>
 
-        <!-- Account Filter -->
-        <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
+        <!-- geili hook: keep account chips and search inside one responsive control. -->
+        <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full min-w-0 sm:w-80">
           <label class="input-label">{{ t('admin.usage.account') }}</label>
-          <div v-if="selectedAccounts.length" class="mb-1 flex flex-wrap gap-1">
-            <span v-for="a in selectedAccounts" :key="a.id" class="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-              {{ a.name }}
-              <button type="button" class="text-primary-500" :aria-label="`Remove ${a.name}`" @click="toggleAccount(a)">×</button>
-            </span>
+          <div class="rounded-xl border border-gray-200 bg-white transition-colors focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30 dark:border-dark-600 dark:bg-dark-800">
+            <div v-if="selectedAccounts.length" class="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto px-2.5 pt-2.5">
+              <span
+                v-for="a in selectedAccounts"
+                :key="a.id"
+                class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-primary-100 bg-primary-50 py-0.5 pl-2 pr-0.5 text-xs font-medium text-primary-700 dark:border-primary-800/50 dark:bg-primary-900/30 dark:text-primary-300"
+              >
+                <span class="min-w-0 truncate" :title="a.name">{{ a.name }}</span>
+                <button
+                  type="button"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-primary-500 transition-colors hover:bg-primary-100 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400 dark:hover:bg-primary-800/50 dark:hover:text-primary-200"
+                  :aria-label="`Remove ${a.name}`"
+                  @click="toggleAccount(a)"
+                >
+                  <Icon name="x" size="xs" aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 px-3">
+              <Icon name="search" size="sm" class="shrink-0 text-gray-400 dark:text-dark-400" aria-hidden="true" />
+              <input
+                v-model="accountKeyword"
+                type="text"
+                class="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-gray-100 dark:placeholder:text-dark-400"
+                :aria-label="t('admin.usage.account')"
+                :placeholder="t('admin.usage.searchAccountPlaceholder')"
+                @input="debounceAccountSearch"
+                @focus="showAccountDropdown = true"
+                @keydown.esc="showAccountDropdown = false"
+              />
+              <button
+                v-if="selectedAccounts.length"
+                type="button"
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                aria-label="Clear account filter"
+                @click="clearAccount"
+              >
+                <Icon name="x" size="sm" aria-hidden="true" />
+              </button>
+            </div>
           </div>
-          <input
-            v-model="accountKeyword"
-            type="text"
-            class="input pr-8"
-            :placeholder="t('admin.usage.searchAccountPlaceholder')"
-            @input="debounceAccountSearch"
-            @focus="showAccountDropdown = true"
-          />
-          <button
-            v-if="selectedAccounts.length"
-            type="button"
-            @click="clearAccount"
-            class="absolute right-2 top-9 text-gray-400"
-            aria-label="Clear account filter"
-          >
-            ✕
-          </button>
           <div
             v-if="showAccountDropdown && (accountResults.length > 0 || accountKeyword)"
-            class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:bg-dark-800"
+            class="absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
           >
             <button
               v-for="a in accountResults"
               :key="a.id"
               type="button"
               data-testid="usage-account-option"
+              :aria-pressed="selectedAccountIDs.includes(a.id)"
+              :class="[
+                'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500',
+                selectedAccountIDs.includes(a.id)
+                  ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                  : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-dark-700'
+              ]"
               @click="toggleAccount(a)"
-              class="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
             >
-              <span class="truncate">{{ a.name }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
-              <span v-if="selectedAccountIDs.includes(a.id)" class="ml-2 text-primary-600">✓</span>
+              <span
+                aria-hidden="true"
+                :class="[
+                  'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                  selectedAccountIDs.includes(a.id)
+                    ? 'border-primary-500 bg-primary-500 text-white'
+                    : 'border-gray-300 dark:border-dark-500'
+                ]"
+              >
+                <Icon v-if="selectedAccountIDs.includes(a.id)" name="check" size="xs" :stroke-width="2" />
+              </span>
+              <span class="min-w-0 flex-1 truncate" :title="a.name">{{ a.name }}</span>
+              <span class="shrink-0 text-xs tabular-nums text-gray-400">#{{ a.id }}</span>
             </button>
           </div>
         </div>
@@ -216,6 +250,7 @@ import { ref, onMounted, onUnmounted, toRef, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 import type { SimpleApiKey, SimpleUser } from '@/api/admin/usage'
 
