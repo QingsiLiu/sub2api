@@ -40,7 +40,7 @@
               <div class="min-w-0 flex-1 break-words">
                 <div class="flex items-center gap-2">
                   <h3 class="font-semibold text-gray-900 dark:text-white">
-                    {{ subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
+                    {{ subscription.contract ? contractLabel(subscription.contract, t) : subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
                   </h3>
                   <span v-if="!subscription.plan" :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
                     {{ platformLabel(subscription.group?.platform || '') }}
@@ -58,6 +58,7 @@
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
                   </span>
                 </div>
+                <p v-if="subscription.contract?.mode === 'legacy_daily'" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
                 <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
                   <span>{{ t('subscriptionRights.active', { count: subscription.quota_summary.active_lot_count }) }}</span>
                   <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }) }}</span>
@@ -69,7 +70,7 @@
                         <p>{{ t('subscriptionRights.created') }}: {{ formatDateTimeToMinute(lot.created_at) }}</p>
                         <p>{{ formatDateTimeToMinute(lot.starts_at) }} → {{ formatDateTimeToMinute(lot.expires_at) }}</p>
                         <p v-if="lot.source_order_id">{{ t('subscriptionRights.sourceOrder') }} #{{ lot.source_order_id }}</p>
-                        <p v-for="period in (['daily', 'weekly', 'monthly'] as const)" :key="period">{{ t(`subscriptionRights.${period}`) }}: {{ lot[`${period}_limit_usd`] == null || lot[`${period}_limit_usd`] === 0 ? t('subscriptionRights.unlimited') : '$' + lot[`${period}_limit_usd`] }}</p>
+                        <p v-for="period in (subscription.contract ? ['daily'] as const : ['daily', 'weekly', 'monthly'] as const)" :key="period">{{ t(`subscriptionRights.${period}`) }}: {{ lot[`${period}_limit_usd`] == null || lot[`${period}_limit_usd`] === 0 ? t('subscriptionRights.unlimited') : '$' + lot[`${period}_limit_usd`] }}</p>
                       </li>
                     </ul>
                     <h4 v-if="subscription.entitlement_operations?.length" class="mt-3 font-medium">{{ t('subscriptionRights.history') }}</h4>
@@ -91,13 +92,9 @@
               >
                 {{ t(`userSubscriptions.status.${subscription.status}`) }}
               </span>
-              <button
-                v-if="subscription.status === 'active'"
-                :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
-                @click="router.push({ path: '/purchase', query: { tab: 'subscription', ...(subscription.plan_id ? { plan: String(subscription.plan_id) } : { group: String(subscription.group_id) }) } })"
-              >
-                {{ t('payment.renewNow') }}
-              </button>
+              <template v-if="subscription.status === 'active' && subscription.contract?.mode === 'v2'">
+                <button v-for="operation in (subscription.contract.unit_daily_usd < 180 ? ['stack', 'renew', 'upgrade'] as const : ['stack', 'renew'] as const)" :key="operation" class="btn btn-primary px-3 py-1.5 text-xs" @click="router.push({ path: '/purchase', query: { tab: 'subscription', ...(operation === 'upgrade' ? {} : { plan: String(subscription.contract.plan_id) }), operation } })">{{ t(`subscriptionRights.${operation}`) }}</button>
+              </template>
             </div>
           </div>
 
@@ -121,15 +118,19 @@
               }}</span>
             </div>
 
+            <div v-if="subscription.contract" class="space-y-1 text-sm">
+              <p class="font-medium text-gray-900 dark:text-white">{{ t('subscriptionRights.remaining') }}: {{ subscriptionQuota(subscription).remaining == null ? t('subscriptionRights.unlimited') : '$' + subscriptionQuota(subscription).remaining!.toFixed(4) }}</p>
+              <p class="text-xs text-gray-500">{{ t('subscriptionRights.dailyReset') }}</p>
+            </div>
             <!-- Daily Usage -->
-            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd" class="space-y-2">
+            <div v-if="subscriptionQuota(subscription).daily" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.daily') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!.toFixed(2)
+                  ${{ (subscriptionQuota(subscription).dailyUsed || 0).toFixed(2) }} / ${{
+                    subscriptionQuota(subscription).daily!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -138,14 +139,14 @@
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
-                      subscription.daily_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!
+                      subscriptionQuota(subscription).dailyUsed,
+                      subscriptionQuota(subscription).daily
                     )
                   "
                   :style="{
                     width: getProgressWidth(
-                      subscription.daily_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.daily_limit_usd!
+                      subscriptionQuota(subscription).dailyUsed,
+                      subscriptionQuota(subscription).daily
                     )
                   }"
                 ></div>
@@ -159,14 +160,14 @@
             </div>
 
             <!-- Weekly Usage -->
-            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd" class="space-y-2">
+            <div v-if="subscriptionQuota(subscription).weekly" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.weekly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (subscription.weekly_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!.toFixed(2)
+                  ${{ (subscriptionQuota(subscription).weeklyUsed || 0).toFixed(2) }} / ${{
+                    subscriptionQuota(subscription).weekly!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -175,14 +176,14 @@
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
-                      subscription.weekly_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!
+                      subscriptionQuota(subscription).weeklyUsed,
+                      subscriptionQuota(subscription).weekly
                     )
                   "
                   :style="{
                     width: getProgressWidth(
-                      subscription.weekly_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.weekly_limit_usd!
+                      subscriptionQuota(subscription).weeklyUsed,
+                      subscriptionQuota(subscription).weekly
                     )
                   }"
                 ></div>
@@ -200,14 +201,14 @@
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd" class="space-y-2">
+            <div v-if="subscriptionQuota(subscription).monthly" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.monthly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (subscription.monthly_usage_usd || 0).toFixed(2) }} / ${{
-                    (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!.toFixed(2)
+                  ${{ (subscriptionQuota(subscription).monthlyUsed || 0).toFixed(2) }} / ${{
+                    subscriptionQuota(subscription).monthly!.toFixed(2)
                   }}
                 </span>
               </div>
@@ -216,14 +217,14 @@
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
-                      subscription.monthly_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!
+                      subscriptionQuota(subscription).monthlyUsed,
+                      subscriptionQuota(subscription).monthly
                     )
                   "
                   :style="{
                     width: getProgressWidth(
-                      subscription.monthly_usage_usd,
-                      (subscription.quota_summary ?? subscription.plan ?? subscription.group)!.monthly_limit_usd!
+                      subscriptionQuota(subscription).monthlyUsed,
+                      subscriptionQuota(subscription).monthly
                     )
                   }"
                 ></div>
@@ -244,9 +245,9 @@
             <div
               v-if="
                 (!subscription.quota_summary || subscription.quota_summary.active_lot_count > 0) &&
-                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd &&
-                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd &&
-                !(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
+                !subscriptionQuota(subscription).daily &&
+                !subscriptionQuota(subscription).weekly &&
+                !subscriptionQuota(subscription).monthly
               "
               class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
             >
@@ -270,7 +271,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { subscriptionQuota, contractLabel, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -280,7 +282,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
-import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
+import { platformBorderClass, platformBadgeClass, platformLabel } from '@/utils/platformColors'
 import {
   getExpirationDateRelation,
   getRemainingDurationParts,
@@ -306,6 +308,8 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+let refreshTimeout: ReturnType<typeof setTimeout> | undefined
+let unmounted = false
 
 function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
   return hasPeakRate(subscription.group)
@@ -315,15 +319,16 @@ function subscriptionPeakRateLabel(subscription: UserSubscription): string {
   return formatPeakRateWindow(subscription.group, serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset))
 }
 
-async function loadSubscriptions() {
+async function loadSubscriptions(showSpinner = true) {
   try {
-    loading.value = true
+    if (showSpinner) loading.value = true
     subscriptions.value = await subscriptionsAPI.getMySubscriptions()
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
   } finally {
     loading.value = false
+    if (!unmounted) refreshTimeout = setTimeout(() => loadSubscriptions(false), Math.min(300_000, subscriptionRefreshDelay(subscriptions.value) ?? 300_000))
   }
 }
 
@@ -391,7 +396,7 @@ function formatDurationParts(parts: RemainingDurationParts): string {
 }
 
 function formatDailyUsageWindow(subscription: UserSubscription): string {
-  if (isOneTimeDailyQuota(subscription) && subscription.expires_at) {
+  if (!subscription.contract && isOneTimeDailyQuota(subscription) && subscription.expires_at) {
     const parts = getRemainingDurationParts(subscription.expires_at)
     if (!parts) return t('userSubscriptions.windowNotActive')
     return t('userSubscriptions.quotaEndsIn', { time: formatDurationParts(parts) })
@@ -407,6 +412,8 @@ function formatResetTime(subscription: UserSubscription, period: SubscriptionQuo
   const parts = resetAt ? getRemainingDurationParts(resetAt) : null
   return parts ? formatDurationParts(parts) : t('userSubscriptions.windowNotActive')
 }
+
+onUnmounted(() => { unmounted = true; if (refreshTimeout) clearTimeout(refreshTimeout) })
 
 onMounted(() => {
   loadSubscriptions()

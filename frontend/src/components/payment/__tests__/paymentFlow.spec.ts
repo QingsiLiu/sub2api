@@ -491,3 +491,18 @@ describe('readPaymentRecoverySnapshot', () => {
     expect(restored?.paymentEnv).toBe('')
   })
 })
+
+describe('V2 accepted quote payload', () => {
+  it('sends quote identity with independent renewal periods and no legacy quantity', () => {
+    const payload = buildCreateOrderPayload({ amount: 75, paymentType: 'wxpay', orderType: 'subscription', planId: 4, quoteId: 'quote-locked', operation: 'renew', periods: 3, subscriptionMode: 'renew', subscriptionQuantity: 7, isMobile: true, isWechatBrowser: true })
+    expect(payload).toMatchObject({ quote_id: 'quote-locked', operation: 'renew', periods: 3 })
+    expect(payload.subscription_quantity).toBeUndefined()
+    expect(payload.subscription_mode).toBeUndefined()
+    expect(payload.units).toBeUndefined()
+  })
+  it('keeps stack units separate from periods through payment launch', () => {
+    const payload = buildCreateOrderPayload({ amount: 3.57, paymentType: 'alipay', orderType: 'subscription', quoteId: 'quote-stack', operation: 'stack', units: 2, isMobile: false, isWechatBrowser: false })
+    expect(payload).toMatchObject({ amount: 3.57, quote_id: 'quote-stack', operation: 'stack', units: 2 })
+    expect(payload.periods).toBeUndefined()
+  })
+})

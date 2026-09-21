@@ -2098,7 +2098,25 @@ export interface SubscriptionQuotaPlan {
   monthly_limit_usd: number | null
 }
 
+export interface SubscriptionContract {
+  mode: 'v2' | 'legacy_daily'
+  kind: 'week' | 'month' | ''
+  unit_daily_usd: number
+  quantity: number
+  period_days: number
+  term_id: string
+  revision: number
+  expires_at: string
+  starts_at: string
+  plan_id: number
+  plan_name: string
+  status: string
+  subscription_id: number
+  user_id: number
+}
+
 export interface UserSubscription {
+  contract?: SubscriptionContract
  entitlement_operations?: Array<{ id:number; entitlement_id:number; operation:string; source_type:string; source_reference?:string; created_at:string; before_expires_at?:string; after_expires_at?:string }>
   plan_id?: number | null
   plan?: SubscriptionQuotaPlan

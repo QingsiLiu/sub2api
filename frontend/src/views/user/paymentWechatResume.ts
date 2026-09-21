@@ -1,5 +1,5 @@
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
-import type { SubscriptionPlan } from '@/types/payment'
+import type { SubscriptionOperation, SubscriptionPlan } from '@/types/payment'
 import { normalizeVisibleMethod } from '@/components/payment/paymentFlow'
 
 export interface ParsedWechatResumeRoute {
@@ -7,7 +7,11 @@ export interface ParsedWechatResumeRoute {
   orderType: 'balance' | 'subscription'
   paymentType: string
   planId?: number
-  subscriptionMode?: 'renew' | 'stack'
+  subscriptionMode?: SubscriptionOperation
+  operation?: SubscriptionOperation
+  units?: number
+  periods?: number
+  quoteId?: string
   subscriptionQuantity?: number
   openid?: string
   wechatResumeToken?: string
@@ -43,7 +47,14 @@ export function parseWechatResumeRoute(
   const planId = Number.parseInt(readQueryString(query, 'plan_id'), 10)
   const hasPlanId = Number.isFinite(planId) && planId > 0
   const modeRaw = readQueryString(query, 'subscription_mode')
-  const subscriptionMode = modeRaw === 'stack' || modeRaw === 'renew' ? modeRaw : undefined
+  const subscriptionMode = ['purchase', 'stack', 'renew', 'upgrade'].includes(modeRaw) ? modeRaw as SubscriptionOperation : undefined
+  const operationRaw = readQueryString(query, 'operation')
+  const v2 = {
+    operation: ['purchase', 'stack', 'renew', 'upgrade'].includes(operationRaw) ? operationRaw as SubscriptionOperation : undefined,
+    units: Number.parseInt(readQueryString(query, 'units'), 10) || undefined,
+    periods: Number.parseInt(readQueryString(query, 'periods'), 10) || undefined,
+    quoteId: readQueryString(query, 'quote_id') || undefined,
+  }
   const subscriptionQuantity = Number.parseInt(readQueryString(query, 'subscription_quantity'), 10)
   const orderType = readQueryString(query, 'order_type') === 'subscription' || hasPlanId
     ? 'subscription'
@@ -57,6 +68,7 @@ export function parseWechatResumeRoute(
       orderAmount: 0,
       planId: hasPlanId ? planId : undefined,
       subscriptionMode,
+      ...v2,
       subscriptionQuantity: Number.isFinite(subscriptionQuantity) && subscriptionQuantity > 0 ? subscriptionQuantity : undefined,
     }
   }
@@ -80,6 +92,7 @@ export function parseWechatResumeRoute(
     orderAmount,
     planId: hasPlanId ? planId : undefined,
     subscriptionMode,
+    ...v2,
     subscriptionQuantity: Number.isFinite(subscriptionQuantity) && subscriptionQuantity > 0 ? subscriptionQuantity : undefined,
   }
 }
@@ -96,6 +109,10 @@ export function stripWechatResumeQuery(query: LocationQuery): LocationQueryRaw {
   delete nextQuery.order_type
   delete nextQuery.plan_id
   delete nextQuery.subscription_mode
+  delete nextQuery.operation
+  delete nextQuery.units
+  delete nextQuery.periods
+  delete nextQuery.quote_id
   delete nextQuery.subscription_quantity
   return nextQuery
 }

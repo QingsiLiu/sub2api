@@ -1238,6 +1238,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionQuota, contractLabel } from '@/utils/subscriptionV2'
 	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
@@ -1619,17 +1620,9 @@ const compositeKeySummary = (key: ApiKey) => {
   return t('keys.selectedGroupsCount', { count: key.group_ids?.length || 0 })
 }
 const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
-  const quota = sub.quota_summary ?? sub.plan ?? sub.group
-  const available: number[] = []
-  if (quota?.daily_limit_usd && quota.daily_limit_usd > 0) available.push(Math.max(0, quota.daily_limit_usd - sub.daily_usage_usd))
-  if (quota?.weekly_limit_usd && quota.weekly_limit_usd > 0) available.push(Math.max(0, quota.weekly_limit_usd - sub.weekly_usage_usd))
-  if (quota?.monthly_limit_usd && quota.monthly_limit_usd > 0) available.push(Math.max(0, quota.monthly_limit_usd - sub.monthly_usage_usd))
-  // geili hook: sum each lot's spendable capacity, not the minimum of aggregate dimensions.
-  const effectiveRemaining = sub.quota_summary?.active_lot_count === 0 ? 0
-    : sub.quota_summary?.remaining_usd !== undefined ? sub.quota_summary.remaining_usd
-    : available.length ? Math.min(...available) : null
+  const effectiveRemaining = subscriptionQuota(sub).remaining
   const remaining = effectiveRemaining === null ? t('payment.admin.unlimited') : '$' + effectiveRemaining.toFixed(4)
-  return `${sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
+  return `${sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
 }
 
 const subscriptionOptions = computed(() => [

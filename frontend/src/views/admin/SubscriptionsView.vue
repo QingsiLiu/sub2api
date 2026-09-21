@@ -235,7 +235,8 @@
           </template>
 
           <template #cell-group="{ row }">
-            <span v-if="row.plan" class="text-sm font-medium">{{ row.plan.name }}</span>
+            <span v-if="row.contract" class="text-sm font-medium">{{ contractLabel(row.contract, t) }}</span>
+            <span v-else-if="row.plan" class="text-sm font-medium">{{ row.plan.name }}</span>
             <GroupBadge
               v-else-if="row.group"
               :name="row.group.name"
@@ -250,22 +251,22 @@
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
               <!-- Daily Usage -->
-              <div v-if="(row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd" class="usage-row">
+              <div v-if="subscriptionQuota(row).daily" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd)"
+                      :class="getProgressClass(subscriptionQuota(row).dailyUsed, subscriptionQuota(row).daily)"
                       :style="{
-                        width: getProgressWidth(row.daily_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd)
+                        width: getProgressWidth(subscriptionQuota(row).dailyUsed, subscriptionQuota(row).daily)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
-                    ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
+                    ${{ subscriptionQuota(row).dailyUsed?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ (row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd?.toFixed(2) }}
+                    ${{ subscriptionQuota(row).daily?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="getSubscriptionResetAt(row, 'daily')">
@@ -287,22 +288,22 @@
               </div>
 
               <!-- Weekly Usage -->
-              <div v-if="(row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd" class="usage-row">
+              <div v-if="subscriptionQuota(row).weekly" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.weekly_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd)"
+                      :class="getProgressClass(subscriptionQuota(row).weeklyUsed, subscriptionQuota(row).weekly)"
                       :style="{
-                        width: getProgressWidth(row.weekly_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd)
+                        width: getProgressWidth(subscriptionQuota(row).weeklyUsed, subscriptionQuota(row).weekly)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
-                    ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
+                    ${{ subscriptionQuota(row).weeklyUsed?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ (row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd?.toFixed(2) }}
+                    ${{ subscriptionQuota(row).weekly?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="getSubscriptionResetAt(row, 'weekly')">
@@ -324,22 +325,22 @@
               </div>
 
               <!-- Monthly Usage -->
-              <div v-if="(row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd" class="usage-row">
+              <div v-if="subscriptionQuota(row).monthly" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.monthly_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd)"
+                      :class="getProgressClass(subscriptionQuota(row).monthlyUsed, subscriptionQuota(row).monthly)"
                       :style="{
-                        width: getProgressWidth(row.monthly_usage_usd, (row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd)
+                        width: getProgressWidth(subscriptionQuota(row).monthlyUsed, subscriptionQuota(row).monthly)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
-                    ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
+                    ${{ subscriptionQuota(row).monthlyUsed?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ (row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd?.toFixed(2) }}
+                    ${{ subscriptionQuota(row).monthly?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="getSubscriptionResetAt(row, 'monthly')">
@@ -364,9 +365,9 @@
               <div
                 v-if="
                   (!row.quota_summary || row.quota_summary.active_lot_count > 0) &&
-                !(row.quota_summary ?? row.plan ?? row.group)?.daily_limit_usd &&
-                  !(row.quota_summary ?? row.plan ?? row.group)?.weekly_limit_usd &&
-                  !(row.quota_summary ?? row.plan ?? row.group)?.monthly_limit_usd
+                !subscriptionQuota(row).daily &&
+                  !subscriptionQuota(row).weekly &&
+                  !subscriptionQuota(row).monthly
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
               >
@@ -671,7 +672,7 @@
           </p>
         </div>
         <div>
-          <fieldset v-if="extendingSubscription.entitlements?.length" class="mb-4 space-y-2">
+          <fieldset v-if="extendingSubscription.contract?.mode !== 'v2' && extendingSubscription.entitlements?.length" class="mb-4 space-y-2">
             <legend class="input-label">{{ t('subscriptionRights.selectLots') }}</legend>
             <button type="button" class="btn btn-secondary text-xs" @click="extendForm.entitlement_ids = extendingSubscription.entitlements.filter(e => e.status === 'active' || e.status === 'expired').map(e => e.id)">{{ t('subscriptionRights.selectAll') }}</button>
             <label v-for="lot in extendingSubscription.entitlements" :key="lot.id" class="flex items-center gap-2 text-sm">
@@ -679,6 +680,7 @@
               #{{ lot.id }} · {{ formatDateTimeToMinute(lot.expires_at) }} · {{ lot.status }}
             </label>
           </fieldset>
+          <p v-if="extendingSubscription.contract?.mode === 'v2'" class="mb-3 text-sm text-gray-600 dark:text-gray-300">{{ contractLabel(extendingSubscription.contract, t) }} · {{ t('subscriptionRights.wholeContract') }}</p>
           <label class="input-label">{{ t('admin.subscriptions.form.adjustDays') }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -825,6 +827,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionQuota, contractLabel } from '@/utils/subscriptionV2'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -1369,7 +1372,7 @@ const handleAssignSubscription = async () => {
 const handleExtend = (subscription: UserSubscription) => {
   extendingSubscription.value = subscription
   extendForm.days = 30
-  extendForm.entitlement_ids = (subscription.entitlements?.length === 1 ? [subscription.entitlements[0].id] : [])
+  extendForm.entitlement_ids = subscription.contract?.mode === 'v2' ? [] : (subscription.entitlements?.length === 1 ? [subscription.entitlements[0].id] : [])
   showExtendModal.value = true
 }
 
@@ -1381,7 +1384,7 @@ const closeExtendModal = () => {
 const handleExtendSubscription = async () => {
   if (!extendingSubscription.value) return
 
-  if ((extendingSubscription.value.entitlements?.length ?? 0) > 1 && extendForm.entitlement_ids.length === 0) {
+  if (extendingSubscription.value.contract?.mode !== 'v2' && (extendingSubscription.value.entitlements?.length ?? 0) > 1 && extendForm.entitlement_ids.length === 0) {
     appStore.showError(t('subscriptionRights.selectionRequired')); return
   }
 
@@ -1535,7 +1538,7 @@ const formatQuotaEndDuration = (parts: RemainingDurationParts): string => {
 }
 
 const formatDailyUsageWindow = (subscription: UserSubscription): string => {
-  if (isOneTimeDailyQuota(subscription) && subscription.expires_at) {
+  if (!subscription.contract && isOneTimeDailyQuota(subscription) && subscription.expires_at) {
     const parts = getRemainingDurationParts(subscription.expires_at)
     return parts ? formatQuotaEndDuration(parts) : t('admin.subscriptions.windowNotActive')
   }

@@ -49,7 +49,7 @@ export const paymentAPI = {
 		return apiClient.post<CreateOrderResult>('/payment/orders', data)
 	},
 
-	quoteSubscription(data: { plan_id: number; subscription_mode: 'renew' | 'stack'; subscription_quantity: number }) {
+	quoteSubscription(data: import('@/types/payment').SubscriptionQuoteRequest) {
 		return apiClient.post<import('@/types/payment').SubscriptionQuoteResponse>('/payment/subscription-quote', data)
 	},
 

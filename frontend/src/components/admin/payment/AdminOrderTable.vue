@@ -69,9 +69,9 @@
         </span>
       </template>
 
-      <template #cell-status="{ value }">
+      <template #cell-status="{ value, row }">
         <span :class="['badge', statusBadgeClass(value)]">
-          {{ t('payment.status.' + value.toLowerCase(), value) }}
+          {{ isPaidSubscriptionReview(row) ? t('subscriptionRights.paidReview') : t('payment.status.' + value.toLowerCase(), value) }}
         </span>
       </template>
 
@@ -79,7 +79,7 @@
         <span class="text-sm text-gray-700 dark:text-gray-300">
           {{ t('payment.admin.' + value + 'Order', value) }}
         </span>
-      <div v-if="row.order_type === 'subscription'" class="text-xs text-gray-500">{{ t(row.subscription_mode === 'stack' ? 'subscriptionRights.stack' : 'subscriptionRights.renew') }} × {{ row.subscription_quantity || 1 }}</div>
+      <div v-if="row.order_type === 'subscription'" class="text-xs text-gray-500">{{ subscriptionOrderLabel(row, t) }}</div>
       </template>
 
       <template #cell-created_at="{ value }">
@@ -135,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionOrderLabel, isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PaymentOrder } from '@/types/payment'
@@ -230,7 +231,7 @@ const orderTypeFilterOptions = computed(() => [
 ])
 
 function canRefundRow(order: PaymentOrder): boolean {
-  return canRefund(order.status)
+  return isPaidSubscriptionReview(order) || canRefund(order.status)
 }
 
 function formatDateTime(dateStr: string): string {

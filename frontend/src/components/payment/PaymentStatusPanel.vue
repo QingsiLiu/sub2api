@@ -36,6 +36,13 @@
     </template>
 
     <!-- Cancelled -->
+    <template v-else-if="outcome === 'review'">
+      <div class="card space-y-3 p-6 text-center" role="status">
+        <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('subscriptionRights.paidReview') }}</p>
+        <p class="text-sm text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.paidReviewHint') }}</p>
+        <a href="/orders" class="btn btn-primary">{{ t('payment.orders.requestRefund') }}</a>
+      </div>
+    </template>
     <template v-else-if="outcome === 'cancelled'">
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4 py-4">
@@ -223,6 +230,7 @@ import { useI18n } from 'vue-i18n'
 import { usePaymentStore } from '@/stores/payment'
 import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
+import { isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import { currencySymbol, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
@@ -252,7 +260,7 @@ const props = defineProps<{
   mobileAlipayDeepLink?: boolean
 }>()
 
-type PaymentOutcome = 'success' | 'cancelled' | 'expired'
+type PaymentOutcome = 'success' | 'cancelled' | 'expired' | 'review'
 
 const emit = defineEmits<{ done: []; success: []; settled: [outcome: PaymentOutcome] }>()
 
@@ -279,7 +287,7 @@ const localeCode = computed(() => {
   return undefined
 })
 
-// Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired'
+// Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired' | 'review'
 const outcome = ref<PaymentOutcome | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -431,6 +439,9 @@ async function pollStatus() {
       paidOrder.value = order
       setOutcome('success')
       emit('success')
+    } else if (isPaidSubscriptionReview(order)) {
+      cleanup()
+      setOutcome('review')
     } else if (order.status === 'CANCELLED') {
       cleanup()
       setOutcome('cancelled')

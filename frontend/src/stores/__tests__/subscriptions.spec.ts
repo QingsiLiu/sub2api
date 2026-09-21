@@ -225,6 +225,19 @@ describe('useSubscriptionStore', () => {
       store.stopPolling()
     })
 
+    it('refreshes the daily ledger at Beijing midnight before the normal five-minute poll', async () => {
+      vi.setSystemTime(new Date('2026-09-21T15:59:59Z'))
+      mockGetActiveSubscriptions.mockResolvedValue([{ ...fakeSubscriptions[0], expires_at: '2026-10-01T00:00:00Z', quota_summary: { daily_reset_at: '2026-09-21T16:00:00Z' } }])
+      const store = useSubscriptionStore()
+      await store.fetchActiveSubscriptions()
+      store.startPolling()
+      await vi.advanceTimersByTimeAsync(1_101)
+      expect(mockGetActiveSubscriptions).toHaveBeenCalledTimes(2)
+      store.stopPolling()
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(mockGetActiveSubscriptions).toHaveBeenCalledTimes(2)
+    })
+
     it('stopPolling 停止定期刷新', () => {
       const store = useSubscriptionStore()
       mockGetActiveSubscriptions.mockResolvedValue([])

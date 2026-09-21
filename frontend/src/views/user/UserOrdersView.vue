@@ -68,11 +68,11 @@
             <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
             <span class="text-gray-900 dark:text-white">${{ refundTarget.amount.toFixed(2) }}</span>
           </div>
-          <div v-if="refundTarget.order_type === 'subscription' && refundTarget.subscription_mode" class="mt-2 flex justify-between text-sm">
-            <span class="text-gray-500 dark:text-gray-400">订阅操作</span>
-            <span class="text-gray-900 dark:text-white">{{ refundTarget.subscription_mode === 'stack' ? '叠加额度' : '续期' }} × {{ refundTarget.subscription_quantity || 1 }}</span>
+          <div v-if="refundTarget.order_type === 'subscription' " class="mt-2 flex justify-between text-sm">
+            <span class="text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.operation') }}</span>
+            <span class="text-gray-900 dark:text-white">{{ subscriptionOrderLabel(refundTarget, t) }}</span>
           </div>
-          <p v-if="refundTarget.order_type === 'subscription'" class="mt-3 text-xs text-amber-600 dark:text-amber-300">已使用或已过期的权益需要人工审核。</p>
+          <p v-if="refundTarget.order_type === 'subscription'" class="mt-3 text-xs text-amber-600 dark:text-amber-300">{{ t('subscriptionRights.manualRefund') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('payment.refundReason') }}</label>
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionOrderLabel, isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -251,7 +252,7 @@ async function confirmRefund() {
 }
 
 function canRequestRefund(order: PaymentOrder): boolean {
-  if (order.status !== 'COMPLETED') return false
+  if (order.status !== 'COMPLETED' && !isPaidSubscriptionReview(order)) return false
   if (!order.provider_instance_id) return false
   return refundEligibleProviders.value.has(order.provider_instance_id)
 }

@@ -14,6 +14,10 @@
         </div>
         <!-- Payment in progress (shared by recharge and subscription) -->
         <template v-if="paymentPhase === 'paying'">
+          <div v-if="paymentState.orderType === 'subscription' && errorHintMessage" role="status" class="card space-y-2 p-4 text-sm text-amber-700 dark:text-amber-300">
+            <p>{{ errorHintMessage }}</p>
+            <a href="/orders" class="underline">{{ t('payment.orders.title') }}</a>
+          </div>
           <PaymentStatusPanel
             :order-id="paymentState.orderId"
             :amount="paymentState.amount"
@@ -111,11 +115,11 @@
                 </div>
                 <!-- Price -->
                 <div class="flex items-baseline gap-2">
-                  <span v-if="selectedPlan.original_price" class="text-sm text-gray-400 line-through dark:text-gray-500">
+                  <span v-if="selectedPlan.original_price && subscriptionMode === 'purchase'" class="text-sm text-gray-400 line-through dark:text-gray-500">
                     {{ formatSelectedSubscriptionPaymentAmount(selectedPlan.original_price) }}
                   </span>
-                  <span :class="['text-3xl font-bold', planTextClass]">{{ formatSelectedSubscriptionPaymentAmount(subscriptionQuote ? subscriptionQuote.order_amount / subscriptionQuantity : selectedPlan.price) }}</span>
-                  <span class="text-sm text-gray-500 dark:text-gray-400">/ {{ planValiditySuffix }}</span>
+                  <span :class="['text-3xl font-bold', planTextClass]">{{ subscriptionQuote ? formatSelectedSubscriptionPaymentAmount(subscriptionQuote.order_amount) : '—' }}</span>
+                  <span class="text-sm text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.quoteTotal') }}</span>
                 </div>
                 <!-- Description -->
                 <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
@@ -124,23 +128,31 @@
                 <div class="mt-4 rounded-lg bg-gray-50 p-3 dark:bg-dark-700/50">
                   <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.operation') }}</div>
                   <div class="flex gap-2">
-                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'renew' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'renew'">{{ t('subscriptionRights.renew') }}</button>
-                    <button type="button" class="btn flex-1 py-2 text-xs" :class="subscriptionMode === 'stack' ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = 'stack'">{{ t('subscriptionRights.stack') }}</button>
+                    <button v-for="operation in availableOperations" :key="operation" type="button" class="btn flex-1 py-2 text-xs" :disabled="submitting" :class="subscriptionMode === operation ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = operation">{{ t(`subscriptionRights.${operation}`) }}</button>
                   </div>
-                  <label class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+                  <label v-if="subscriptionMode === 'purchase' || subscriptionMode === 'stack'" class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
                     <span>{{ t('subscriptionRights.quantity') }}</span>
-                    <select v-model.number="subscriptionQuantity" class="input w-24 py-1 text-sm"><option v-for="n in maxSubscriptionQuantity" :key="n" :value="n">{{ t('subscriptionRights.units', { count: n }) }}</option></select>
+                    <select v-model.number="subscriptionQuantity" :disabled="submitting" class="input w-24 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ t('subscriptionRights.units', { count: n }) }}</option></select>
                   </label>
-                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(subscriptionMode === 'stack' ? 'subscriptionRights.stackHint' : 'subscriptionRights.renewHint') }}</p>
+                  <label v-if="subscriptionMode === 'renew'" class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
+                    <span>{{ t('subscriptionRights.periodCount') }}</span>
+                    <select v-model.number="subscriptionPeriods" :disabled="submitting" class="input w-28 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ t('subscriptionRights.periods', { count: n }) }}</option></select>
+                  </label>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(`subscriptionRights.${subscriptionMode}Hint`) }}</p>
+                  <p v-if="subscriptionBlockedReason" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t(subscriptionBlockedReason) }}</p>
+                  <p v-if="quoteExpired" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.quoteExpired') }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button></p>
                   <p v-if="quoteLoading" role="status" class="mt-2 text-xs">{{ t('subscriptionRights.loading') }}</p>
                   <div v-if="quoteError" role="alert" class="mt-2 text-xs text-red-600">
                     {{ quoteError }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button>
                   </div>
                   <div v-if="subscriptionQuote?.projected" aria-live="polite" class="mt-2 space-y-1 text-xs text-primary-600 dark:text-primary-300">
-                    <p>{{ t('subscriptionRights.preview', { count: subscriptionQuote.projected.active_lot_count }) }}</p>
-                    <p v-for="period in (['daily', 'weekly', 'monthly'] as const)" :key="period">{{ t(`subscriptionRights.${period}`) }}: {{ subscriptionQuote.projected[`${period}_limit_usd`] == null || subscriptionQuote.projected[`${period}_limit_usd`] === 0 ? t('subscriptionRights.unlimited') : '$' + subscriptionQuote.projected[`${period}_limit_usd`] }}</p>
-                    <p>{{ t('subscriptionRights.expiry', { time: subscriptionQuote.projected.expires_at ? formatDateTimeToMinute(subscriptionQuote.projected.expires_at) : '—' }) }}</p>
-                    <p v-if="subscriptionQuote.projected.next_expiry_at">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscriptionQuote.projected.next_expiry_at) }) }}</p>
+                    <p v-if="subscriptionQuote.current_contract">{{ t('subscriptionRights.before') }}: {{ contractLabel(subscriptionQuote.current_contract, t) }} · {{ formatDateTimeToMinute(subscriptionQuote.current_contract.expires_at) }}</p>
+                    <p v-if="subscriptionQuote.projected_contract">{{ t('subscriptionRights.after') }}: {{ contractLabel(subscriptionQuote.projected_contract, t) }}</p>
+                    <p>{{ t('subscriptionRights.daily') }}: ${{ subscriptionQuote.projected.daily_limit_usd }} · {{ t('subscriptionRights.remaining') }}: {{ subscriptionQuote.projected.remaining_usd == null ? '—' : '$' + subscriptionQuote.projected.remaining_usd.toFixed(4) }}</p>
+                    <p>{{ t('subscriptionRights.expiry', { time: formatDateTimeToMinute(subscriptionQuote.projected_contract?.expires_at || subscriptionQuote.projected.expires_at || '') }) }}</p>
+                    <p v-if="subscriptionMode === 'stack' || subscriptionMode === 'upgrade'">{{ t('subscriptionRights.billableDays', { days: subscriptionQuote.billable_days }) }}</p>
+                    <p v-if="subscriptionQuote.expires_at">{{ t('subscriptionRights.quoteExpires', { time: formatDateTimeToMinute(subscriptionQuote.expires_at) }) }}</p>
+                    <p>{{ t('subscriptionRights.dailyReset') }}</p>
                   </div>
                 </div>
                 <!-- Rate + Limits grid -->
@@ -158,18 +170,10 @@
                     </div>
                   </div>
                   <div v-if="selectedPlan.daily_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('subscriptionRights.unitDaily') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.daily_limit_usd }}</div>
                   </div>
-                  <div v-if="selectedPlan.weekly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.weeklyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.weekly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.monthly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.monthly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
+                  <div v-if="selectedPlan.daily_limit_usd == null">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
                     <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t('payment.planCard.unlimited') }}</div>
                   </div>
@@ -198,6 +202,7 @@
                   </div>
                 </div>
               </div>
+              <p v-if="subscriptionAmountError" role="alert" class="text-sm text-amber-700 dark:text-amber-300">{{ subscriptionAmountError }}</p>
               <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
                 <span v-if="submitting" class="flex items-center justify-center gap-2">
                   <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -209,12 +214,13 @@
             </template>
             <!-- Plan list -->
             <template v-else>
+              <p v-if="hasLegacySubscription" role="status" class="card p-4 text-sm text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
               <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
                 <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
@@ -225,13 +231,13 @@
                     <div :class="['h-6 w-1 shrink-0 rounded-full', sub.plan ? 'bg-primary-500' : platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel') }}</span>
+                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel') }}</span>
                         <span v-if="!sub.plan && sub.group" :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group.platform || '')]">{{ platformLabel(sub.group.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
                         <span v-if="!sub.plan && sub.group">{{ t('payment.planCard.rate') }}: ×{{ sub.group.subscription_rate_multiplier ?? sub.group.rate_multiplier ?? 1 }}</span>
                         <span v-if="!sub.plan && subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
-                        <span v-if="subscriptionQuota(sub).daily != null">{{ t('payment.planCard.dailyLimit') }} ${{ subscriptionQuota(sub).daily }}</span>
+                        <span v-if="subscriptionQuota(sub).daily != null">{{ t('subscriptionRights.unitDaily') }} ${{ subscriptionQuota(sub).daily }}</span>
                         <span v-if="subscriptionQuota(sub).weekly != null">{{ t('payment.planCard.weeklyLimit') }} ${{ subscriptionQuota(sub).weekly }}</span>
                         <span v-if="subscriptionQuota(sub).monthly != null">{{ t('payment.planCard.monthlyLimit') }} ${{ subscriptionQuota(sub).monthly }}</span>
                         <span v-if="!subscriptionQuota(sub).daily && !subscriptionQuota(sub).weekly && !subscriptionQuota(sub).monthly">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
@@ -268,7 +274,7 @@
             </button>
             <h3 class="mb-4 shrink-0 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="min-h-0 space-y-4 overflow-y-auto">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -298,10 +304,13 @@ import { useSubscriptionStore } from '@/stores/subscriptions'
 import { useAppStore } from '@/stores'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { paymentAPI } from '@/api/payment'
+import subscriptionsAPI from '@/api/subscriptions'
+import type { UserSubscription } from '@/types'
+import { subscriptionActions, subscriptionQuota, contractLabel, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
-import type { SubscriptionQuoteResponse, SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionOperation, SubscriptionQuoteResponse, SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -322,8 +331,8 @@ import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import SubscriptionGroupRates from '@/components/payment/SubscriptionGroupRates.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { DEFAULT_PAYMENT_CURRENCY, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
-import { planValiditySuffix as validitySuffixOf } from '@/components/payment/validity'
+import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
+import { subscriptionPaymentAmounts } from '@/components/payment/subscriptionAmounts'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
 import { hasWechatResumeQuery, parseWechatResumeRoute, stripWechatResumeQuery } from './paymentWechatResume'
@@ -338,20 +347,15 @@ const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
+const eligibilitySubscriptions = ref<UserSubscription[]>([])
+const eligibilityNow = ref(Date.now())
+let eligibilityTimer: ReturnType<typeof setTimeout> | undefined
+let eligibilityUnmounted = false
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-}
-
-function subscriptionQuota(sub: Pick<import('@/types').UserSubscription, 'quota_summary' | 'plan' | 'group'>) {
-  const source = sub.quota_summary ?? sub.plan ?? sub.group
-  return {
-    daily: source?.daily_limit_usd ?? null,
-    weekly: source?.weekly_limit_usd ?? null,
-    monthly: source?.monthly_limit_usd ?? null,
-  }
 }
 
 function subscriptionHasPeakRate(sub: { group?: PeakRateFields | null }): boolean {
@@ -370,30 +374,42 @@ const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
-const subscriptionMode = ref<'renew' | 'stack'>('renew')
+const subscriptionMode = ref<SubscriptionOperation>('purchase')
+const subscriptionPeriods = ref(1)
+const subscriptionsReady = ref(false)
+const quoteNow = ref(Date.now())
+let quoteTimer: ReturnType<typeof setInterval> | undefined
 const subscriptionQuantity = ref(1)
 const subscriptionQuote = ref<SubscriptionQuoteResponse | null>(null)
 const quoteLoading = ref(false)
 const quoteError = ref('')
 let quoteRevision = 0
-const maxSubscriptionQuantity = computed(() => subscriptionMode.value === 'renew' && (subscriptionQuote.value?.can_renew_lots ?? 0) > 0 ? Math.min(10, subscriptionQuote.value!.can_renew_lots) : 10)
+const availableOperations = computed(() => selectedPlan.value ? subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).actions : [])
+const subscriptionBlockedReason = computed(() => !subscriptionsReady.value ? 'subscriptionRights.loading' : selectedPlan.value ? subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).reason : undefined)
+watch(availableOperations, operations => {
+  if (selectedPlan.value && operations.length && !operations.includes(subscriptionMode.value)) {
+    subscriptionMode.value = operations.includes('renew') ? 'renew' : operations[0]
+  }
+})
+const quoteExpired = computed(() => !!subscriptionQuote.value && (!Number.isFinite(Date.parse(subscriptionQuote.value.expires_at)) || Date.parse(subscriptionQuote.value.expires_at) <= quoteNow.value))
+const hasLegacySubscription = computed(() => eligibilitySubscriptions.value.some(sub => sub.status === 'active' && (!sub.expires_at || Date.parse(sub.expires_at) > eligibilityNow.value) && sub.contract?.mode !== 'v2'))
 async function refreshSubscriptionQuote() {
   const revision = ++quoteRevision
   subscriptionQuote.value = null
   quoteError.value = ''
-  if (!selectedPlan.value) { quoteLoading.value = false; return }
+  if (!selectedPlan.value || !subscriptionsReady.value || !availableOperations.value.includes(subscriptionMode.value)) { quoteLoading.value = false; return }
   quoteLoading.value = true
-  const request = { plan_id: selectedPlan.value.id, subscription_mode: subscriptionMode.value, subscription_quantity: subscriptionQuantity.value }
+  const request = { plan_id: selectedPlan.value.id, operation: subscriptionMode.value, units: subscriptionMode.value === 'purchase' || subscriptionMode.value === 'stack' ? subscriptionQuantity.value : undefined, periods: subscriptionMode.value === 'renew' ? subscriptionPeriods.value : undefined }
   try {
     const response = await paymentAPI.quoteSubscription(request)
-    if (revision === quoteRevision) subscriptionQuote.value = response.data
+    if (revision === quoteRevision) { subscriptionQuote.value = response.data; quoteNow.value = Date.now() }
   } catch (error) {
     if (revision === quoteRevision) quoteError.value = extractApiErrorMessage(error) || t('subscriptionRights.previewFailed')
   } finally {
     if (revision === quoteRevision) quoteLoading.value = false
   }
 }
-watch([() => selectedPlan.value?.id, subscriptionMode, subscriptionQuantity], refreshSubscriptionQuote)
+watch([() => selectedPlan.value?.id, subscriptionMode, subscriptionQuantity, subscriptionPeriods, subscriptionsReady, () => eligibilitySubscriptions.value], refreshSubscriptionQuote)
 
 const previewImage = ref('')
 
@@ -401,6 +417,7 @@ const paymentPhase = ref<'select' | 'paying'>('select')
 
 interface CreateOrderOptions {
   openid?: string
+  quoteId?: string
   wechatResumeToken?: string
   paymentType?: string
   isResume?: boolean
@@ -510,7 +527,7 @@ async function redirectToPaymentResult(state: PaymentRecoverySnapshot): Promise<
 
 function buildWechatOAuthAuthorizeUrl(
   authorizeUrl: string,
-  context: { paymentType: string; orderType: OrderType; planId?: number; orderAmount: number; subscriptionMode?: 'renew' | 'stack'; subscriptionQuantity?: number },
+  context: { paymentType: string; orderType: OrderType; planId?: number; orderAmount: number; subscriptionMode?: SubscriptionOperation; operation?: SubscriptionOperation; units?: number; periods?: number; quoteId?: string; subscriptionQuantity?: number },
 ): string {
   const normalizedUrl = authorizeUrl.trim()
   if (!normalizedUrl || typeof window === 'undefined') {
@@ -531,8 +548,12 @@ function buildWechatOAuthAuthorizeUrl(
     } else {
       redirectUrl.searchParams.delete('plan_id')
     }
-    if (context.subscriptionMode) redirectUrl.searchParams.set('subscription_mode', context.subscriptionMode)
-    if (context.subscriptionQuantity) redirectUrl.searchParams.set('subscription_quantity', String(context.subscriptionQuantity))
+    if (!context.operation && context.subscriptionMode) redirectUrl.searchParams.set('subscription_mode', context.subscriptionMode)
+    if (!context.operation && context.subscriptionQuantity) redirectUrl.searchParams.set('subscription_quantity', String(context.subscriptionQuantity))
+    if (context.operation) redirectUrl.searchParams.set('operation', context.operation)
+    if (context.units) redirectUrl.searchParams.set('units', String(context.units))
+    if (context.periods) redirectUrl.searchParams.set('periods', String(context.periods))
+    if (context.quoteId) redirectUrl.searchParams.set('quote_id', context.quoteId)
 
     if (context.orderAmount > 0) {
       redirectUrl.searchParams.set('amount', String(context.orderAmount))
@@ -553,6 +574,7 @@ function onPaymentDone() {
   selectedPlan.value = null
   if (wasSubscription) {
     subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
+    void refreshEligibilitySubscriptions()
   }
 }
 
@@ -562,6 +584,7 @@ async function onPaymentSuccess() {
   authStore.refreshUser()
   if (paymentState.value.orderType === 'subscription') {
     subscriptionStore.fetchActiveSubscriptions(true).catch(() => {})
+    void refreshEligibilitySubscriptions()
   }
   await redirectToPaymentResult(completedPayment)
 }
@@ -658,33 +681,8 @@ const localeCode = computed(() => {
   return undefined
 })
 
-function currencyFractionDigits(currency: string): number {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
-}
-
-function roundPaymentAmount(value: number, currency: string): number {
-  if (!Number.isFinite(value)) return 0
-  const factor = 10 ** currencyFractionDigits(currency)
-  return Math.round(value * factor) / factor
-}
-
-function ceilPaymentAmount(value: number, currency: string): number {
-  if (!Number.isFinite(value)) return 0
-  const factor = 10 ** currencyFractionDigits(currency)
-  return Math.ceil(value * factor) / factor
-}
-
 function subscriptionPaymentAmountForCurrency(value: number, currency: string): number {
-  const rate = subscriptionUsdToCnyRate.value
-  if (rate <= 0 || currency !== DEFAULT_PAYMENT_CURRENCY) return roundPaymentAmount(value, currency)
-  return roundPaymentAmount(value * rate, currency)
+  return subscriptionPaymentAmounts(value, currency, subscriptionUsdToCnyRate.value, 0).base
 }
 
 function formatSelectedPaymentAmount(value: number): string {
@@ -740,47 +738,41 @@ const canSubmit = computed(() =>
     && selectedLimit.value?.available !== false
 )
 
-const subPaymentAmount = computed(() => {
-  const price = selectedPlan.value?.price ?? 0
-  return subscriptionPaymentAmountForCurrency(subscriptionQuote.value?.order_amount ?? price * subscriptionQuantity.value, selectedCurrency.value)
-})
-
-const subFeeAmount = computed(() => {
-  if (feeRate.value <= 0 || subPaymentAmount.value <= 0) return 0
-  return ceilPaymentAmount((subPaymentAmount.value * feeRate.value) / 100, selectedCurrency.value)
-})
-
-const subTotalAmount = computed(() => {
-  if (feeRate.value <= 0 || subPaymentAmount.value <= 0) return subPaymentAmount.value
-  return roundPaymentAmount(subPaymentAmount.value + subFeeAmount.value, selectedCurrency.value)
-})
-
-function subscriptionTotalAmountForCurrency(value: number, currency: string): number {
-  const paymentAmount = subscriptionPaymentAmountForCurrency(value, currency)
-  if (feeRate.value <= 0 || paymentAmount <= 0) return paymentAmount
-  const fee = ceilPaymentAmount((paymentAmount * feeRate.value) / 100, currency)
-  return roundPaymentAmount(paymentAmount + fee, currency)
-}
+const quotedSubscriptionAmounts = computed(() => subscriptionPaymentAmounts(subscriptionQuote.value?.order_amount ?? 0, selectedCurrency.value, subscriptionUsdToCnyRate.value, feeRate.value))
+const subPaymentAmount = computed(() => quotedSubscriptionAmounts.value.base)
+const subFeeAmount = computed(() => quotedSubscriptionAmounts.value.fee)
+const subTotalAmount = computed(() => quotedSubscriptionAmounts.value.total)
 
 // Subscription-specific: method options based on gateway pay amount
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
-  const price = subscriptionQuote.value?.order_amount ?? (selectedPlan.value?.price ?? 0) * subscriptionQuantity.value
+  const price = subscriptionQuote.value?.order_amount ?? 0
   return enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     const currency = normalizePaymentCurrency(ml?.currency)
+    const amounts = subscriptionPaymentAmounts(price, currency, subscriptionUsdToCnyRate.value, feeRate.value)
     return {
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(price, currency), type),
+      available: amounts.valid && ml?.available !== false && amountFitsMethod(amounts.total, type),
     }
   })
 })
 
+const subscriptionAmountError = computed(() => {
+  if (!subscriptionQuote.value || quoteLoading.value) return ''
+  const limit = selectedLimit.value
+  if (limit?.single_min && subTotalAmount.value < limit.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(limit.single_min) })
+  if (limit?.single_max && subTotalAmount.value > limit.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(limit.single_max) })
+  if (!subMethodOptions.value.some(method => method.available)) return t('payment.amountNoMethod')
+  return ''
+})
+
 const canSubmitSubscription = computed(() =>
   selectedPlan.value !== null
-    && subscriptionQuote.value !== null && !quoteLoading.value && !quoteError.value
-    && amountFitsMethod(subTotalAmount.value, selectedMethod.value)
+    && subscriptionsReady.value && !subscriptionBlockedReason.value
+    && !!subscriptionQuote.value?.quote_id && !quoteExpired.value && !quoteLoading.value && !quoteError.value
+    && quotedSubscriptionAmounts.value.valid && amountFitsMethod(subTotalAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
 
@@ -814,11 +806,6 @@ const renewalPlans = computed(() => {
   return checkout.value.plans.filter(p => p.group_id === renewGroupId.value)
 })
 
-const planValiditySuffix = computed(() => {
-  if (!selectedPlan.value) return ''
-  return validitySuffixOf(selectedPlan.value, t)
-})
-
 function planHasPeakRate(plan: SubscriptionPlan): boolean {
   return hasPeakRate(plan)
 }
@@ -828,8 +815,11 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
 }
 
 function selectPlan(plan: SubscriptionPlan) {
+  if (!subscriptionsReady.value || !subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value).actions.length) return
   selectedPlan.value = plan
-  subscriptionMode.value = activeSubscriptions.value.some(s => s.plan_id === plan.id && s.status === 'active') ? 'renew' : 'stack'
+  const actions = subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value).actions
+  subscriptionMode.value = actions.includes('renew') ? 'renew' : actions[0] ?? 'purchase'
+  subscriptionPeriods.value = 1
   subscriptionQuantity.value = 1
   errorMessage.value = ''
 }
@@ -837,10 +827,7 @@ function selectPlan(plan: SubscriptionPlan) {
 function selectPlanFromModal(plan: SubscriptionPlan) {
   showRenewalModal.value = false
   renewGroupId.value = null
-  selectedPlan.value = plan
-  subscriptionMode.value = 'renew'
-  subscriptionQuantity.value = 1
-  errorMessage.value = ''
+  selectPlan(plan)
 }
 
 function closeRenewalModal() {
@@ -863,20 +850,36 @@ async function confirmSubscribe() {
   await createOrder(subscriptionQuote.value.order_amount, 'subscription', selectedPlan.value.id)
 }
 
+function preserveSubscriptionCheckout(snapshot: PaymentRecoverySnapshot, showHint = false) {
+  paymentState.value = snapshot
+  paymentPhase.value = 'paying'
+  persistRecoverySnapshot(snapshot)
+  if (showHint) {
+    errorHintMessage.value = t('subscriptionRights.existingPaymentHint')
+    appStore.showWarning(errorHintMessage.value)
+  }
+}
+
 async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
+  let createdSubscriptionOrder: PaymentRecoverySnapshot | null = null
+  const accepted = { operation: subscriptionMode.value, units: subscriptionQuantity.value, periods: subscriptionPeriods.value, quote: subscriptionQuote.value }
   submitting.value = true
   errorMessage.value = ''
   errorHintMessage.value = ''
   const requestType = normalizeVisibleMethod(options.paymentType || selectedMethod.value) || options.paymentType || selectedMethod.value
   try {
     const payload = buildCreateOrderPayload({
- expectedPlanRevision:subscriptionQuote.value?.plan_revision,
+ expectedPlanRevision: accepted.quote?.plan_revision,
       amount: orderAmount,
       paymentType: requestType,
       orderType,
       planId,
-      subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
-      subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
+      subscriptionMode: orderType === 'subscription' ? accepted.operation : undefined,
+      subscriptionQuantity: orderType === 'subscription' ? accepted.units : undefined,
+      operation: orderType === 'subscription' ? accepted.operation : undefined,
+      units: orderType === 'subscription' && ['purchase', 'stack'].includes(accepted.operation) ? accepted.units : undefined,
+      periods: orderType === 'subscription' && accepted.operation === 'renew' ? accepted.periods : undefined,
+      quoteId: orderType === 'subscription' ? options.quoteId || accepted.quote?.quote_id : undefined,
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: isMobileDevice(),
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
@@ -891,6 +894,10 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     }
 
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (orderType === 'subscription' && result.order_id > 0) {
+      createdSubscriptionOrder = decidePaymentLaunch(result, { visibleMethod: requestType, orderType, isMobile: isMobileDevice() }).recovery
+      preserveSubscriptionCheckout(createdSubscriptionOrder)
+    }
     const openWindow = (url: string) => {
       const win = window.open(url, 'paymentPopup', getPaymentPopupFeatures())
       if (!win || win.closed) {
@@ -942,13 +949,18 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         orderType,
         planId,
         orderAmount,
-        subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
-        subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
+        subscriptionMode: orderType === 'subscription' ? accepted.operation : undefined,
+        subscriptionQuantity: orderType === 'subscription' ? accepted.units : undefined,
+      operation: orderType === 'subscription' ? accepted.operation : undefined,
+      units: orderType === 'subscription' && ['purchase', 'stack'].includes(accepted.operation) ? accepted.units : undefined,
+      periods: orderType === 'subscription' && accepted.operation === 'renew' ? accepted.periods : undefined,
+      quoteId: orderType === 'subscription' ? options.quoteId || accepted.quote?.quote_id : undefined,
       })
       return
     }
 
     if (decision.kind === 'unhandled') {
+      if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return }
       applyScenarioError({ reason: 'UNHANDLED_PAYMENT_SCENARIO' }, visibleMethod)
       return
     }
@@ -956,6 +968,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
     paymentState.value = decision.paymentState
     paymentPhase.value = 'paying'
     persistRecoverySnapshot(decision.recovery)
+    if (createdSubscriptionOrder) createdSubscriptionOrder = decision.recovery
 
     if (decision.kind === 'stripe_popup') {
       openWindow(decision.paymentState.payUrl)
@@ -974,9 +987,11 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         const jsapiResult = await invokeWechatJsapiPayment(decision.jsapi as Record<string, unknown>)
         const errMsg = String(jsapiResult.err_msg || '').toLowerCase()
         if (errMsg.includes('cancel')) {
+          if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return }
           appStore.showInfo(t('payment.qr.cancelled'))
           resetPayment()
         } else if (errMsg && !errMsg.includes('ok')) {
+          if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return }
           resetPayment()
           const fallbackApplied = await attemptMobileQrFallback(
             { reason: 'WECHAT_JSAPI_FAILED', message: errMsg },
@@ -986,8 +1001,12 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
               planId,
               paymentType: visibleMethod,
               attempted: options.mobileQrFallbackAttempted === true,
-              subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
-              subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
+              subscriptionMode: orderType === 'subscription' ? accepted.operation : undefined,
+              subscriptionQuantity: orderType === 'subscription' ? accepted.units : undefined,
+      operation: orderType === 'subscription' ? accepted.operation : undefined,
+      units: orderType === 'subscription' && ['purchase', 'stack'].includes(accepted.operation) ? accepted.units : undefined,
+      periods: orderType === 'subscription' && accepted.operation === 'renew' ? accepted.periods : undefined,
+      quoteId: orderType === 'subscription' ? options.quoteId || accepted.quote?.quote_id : undefined,
             },
           )
           if (!fallbackApplied) {
@@ -999,7 +1018,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           await redirectToPaymentResult(resultState)
         }
       } catch (err: unknown) {
- if (orderType === 'subscription') void refreshSubscriptionQuote()
+        if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return }
         resetPayment()
         const fallbackApplied = await attemptMobileQrFallback(err, {
           orderAmount,
@@ -1007,8 +1026,12 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           planId,
           paymentType: visibleMethod,
           attempted: options.mobileQrFallbackAttempted === true,
-          subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
-          subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
+          subscriptionMode: orderType === 'subscription' ? accepted.operation : undefined,
+          subscriptionQuantity: orderType === 'subscription' ? accepted.units : undefined,
+      operation: orderType === 'subscription' ? accepted.operation : undefined,
+      units: orderType === 'subscription' && ['purchase', 'stack'].includes(accepted.operation) ? accepted.units : undefined,
+      periods: orderType === 'subscription' && accepted.operation === 'renew' ? accepted.periods : undefined,
+      quoteId: orderType === 'subscription' ? options.quoteId || accepted.quote?.quote_id : undefined,
         })
         if (!fallbackApplied) {
           throw err
@@ -1024,10 +1047,16 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       openWindow(decision.paymentState.payUrl)
     }
   } catch (err: unknown) {
+    if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return }
     const apiErr = err as Record<string, unknown>
     if (apiErr.reason === 'TOO_MANY_PENDING') {
       const metadata = apiErr.metadata as Record<string, unknown> | undefined
       errorMessage.value = t('payment.errors.tooManyPending', { max: metadata?.max || '' })
+      errorHintMessage.value = ''
+    } else if (typeof apiErr.reason === 'string' && (apiErr.reason.includes('QUOTE') || apiErr.reason.includes('CONTRACT_CHANGED'))) {
+      subscriptionQuote.value = null
+      quoteError.value = extractApiErrorMessage(err) || t('subscriptionRights.quoteExpired')
+      errorMessage.value = quoteError.value
       errorHintMessage.value = ''
     } else if (apiErr.reason === 'CANCEL_RATE_LIMITED') {
       errorMessage.value = t('payment.errors.cancelRateLimited')
@@ -1038,8 +1067,12 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       planId,
       paymentType: requestType,
       attempted: options.mobileQrFallbackAttempted === true,
-      subscriptionMode: orderType === 'subscription' ? subscriptionMode.value : undefined,
-      subscriptionQuantity: orderType === 'subscription' ? subscriptionQuantity.value : undefined,
+      subscriptionMode: orderType === 'subscription' ? accepted.operation : undefined,
+      subscriptionQuantity: orderType === 'subscription' ? accepted.units : undefined,
+      operation: orderType === 'subscription' ? accepted.operation : undefined,
+      units: orderType === 'subscription' && ['purchase', 'stack'].includes(accepted.operation) ? accepted.units : undefined,
+      periods: orderType === 'subscription' && accepted.operation === 'renew' ? accepted.periods : undefined,
+      quoteId: orderType === 'subscription' ? options.quoteId || accepted.quote?.quote_id : undefined,
     })) {
       return
     } else {
@@ -1067,7 +1100,7 @@ interface MobileQrFallbackContext {
   planId?: number
   paymentType: string
   attempted: boolean
-  subscriptionMode?: 'renew' | 'stack'
+  subscriptionMode?: SubscriptionOperation; operation?: SubscriptionOperation; units?: number; periods?: number; quoteId?: string
   subscriptionQuantity?: number
 }
 
@@ -1105,14 +1138,23 @@ function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempte
 }
 
 async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackContext): Promise<boolean> {
+  if (context.orderType === 'subscription' && paymentState.value.orderType === 'subscription' && paymentState.value.orderId > 0) {
+    preserveSubscriptionCheckout(paymentState.value, true)
+    return true
+  }
   if (!shouldFallbackToDesktopQr(err, context.paymentType, context.attempted)) {
     return false
   }
 
+  let createdSubscriptionOrder: PaymentRecoverySnapshot | null = null
   try {
     const visibleMethod = normalizeVisibleMethod(context.paymentType) || context.paymentType
     const payload = buildCreateOrderPayload({
- expectedPlanRevision:subscriptionQuote.value?.plan_revision,
+ expectedPlanRevision: subscriptionQuote.value?.plan_revision,
+      operation: context.operation,
+      units: context.units,
+      periods: context.periods,
+      quoteId: context.quoteId,
       amount: context.orderAmount,
       paymentType: visibleMethod,
       orderType: context.orderType,
@@ -1124,6 +1166,10 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       isWechatBrowser: false,
     })
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
+    if (context.orderType === 'subscription' && result.order_id > 0) {
+      createdSubscriptionOrder = decidePaymentLaunch(result, { visibleMethod, orderType: context.orderType, isMobile: false }).recovery
+      preserveSubscriptionCheckout(createdSubscriptionOrder)
+    }
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
     const stripeRouteUrl = result.client_secret
       ? router.resolve({
@@ -1146,6 +1192,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
     })
 
     if (decision.kind !== 'qr_waiting' || !decision.paymentState.qrCode) {
+      if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return true }
       return false
     }
 
@@ -1157,6 +1204,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
     appStore.showWarning(t('payment.errors.mobilePaymentFallbackToQr'))
     return true
   } catch {
+    if (createdSubscriptionOrder) { preserveSubscriptionCheckout(createdSubscriptionOrder, true); return true }
     return false
   }
 }
@@ -1190,8 +1238,9 @@ async function resumeWechatPaymentFromQuery() {
   }
   if (resume.orderType === 'subscription' && resume.planId) {
     selectedPlan.value = checkout.value.plans.find(plan => plan.id === resume.planId) ?? null
-    subscriptionMode.value = resume.subscriptionMode || 'renew'
-    subscriptionQuantity.value = resume.subscriptionQuantity || 1
+    subscriptionMode.value = resume.operation || resume.subscriptionMode || 'purchase'
+    subscriptionPeriods.value = resume.periods || 1
+    subscriptionQuantity.value = resume.units || resume.subscriptionQuantity || 1
   }
 
   await router.replace({ path: route.path, query: stripWechatResumeQuery(route.query) })
@@ -1208,6 +1257,7 @@ async function resumeWechatPaymentFromQuery() {
   if (resume.orderAmount > 0 && resume.openid) {
     await createOrder(resume.orderAmount, resume.orderType, resume.planId, {
       openid: resume.openid,
+      quoteId: resume.quoteId,
       paymentType: resume.paymentType,
       isResume: true,
     })
@@ -1219,15 +1269,46 @@ async function loadCheckout() {
   checkout.value = res.data
 }
 
+function scheduleEligibilityRefresh() {
+  if (eligibilityTimer) clearTimeout(eligibilityTimer)
+  if (eligibilityUnmounted) return
+  const delay = Math.min(300_000, subscriptionRefreshDelay(eligibilitySubscriptions.value) ?? 300_000)
+  eligibilityTimer = setTimeout(() => { void refreshEligibilitySubscriptions() }, delay)
+}
+
+async function refreshEligibilitySubscriptions() {
+  if (eligibilityUnmounted || !subscriptionEnabled.value) return
+  try {
+    const subscriptions = await subscriptionsAPI.getMySubscriptions()
+    if (eligibilityUnmounted) return
+    eligibilityNow.value = Date.now()
+    eligibilitySubscriptions.value = [...subscriptions]
+    subscriptionsReady.value = true
+  } catch {
+    if (!eligibilityUnmounted && subscriptionRefreshDelay(eligibilitySubscriptions.value) === null) subscriptionsReady.value = false
+  } finally {
+    scheduleEligibilityRefresh()
+  }
+}
+
 function refreshCheckoutWhenVisible() {
   if (document.visibilityState !== 'visible' || paymentPhase.value !== 'select') return
   loadCheckout().catch(() => {})
+  if (subscriptionEnabled.value) void refreshEligibilitySubscriptions()
 }
 
 onMounted(async () => {
   document.addEventListener('visibilitychange', refreshCheckoutWhenVisible)
   try {
     await loadCheckout()
+    if (subscriptionEnabled.value) {
+      const [subscriptions] = await Promise.all([subscriptionsAPI.getMySubscriptions(), subscriptionStore.fetchActiveSubscriptions()])
+      eligibilitySubscriptions.value = subscriptions
+      eligibilityNow.value = Date.now()
+      scheduleEligibilityRefresh()
+    }
+    subscriptionsReady.value = true
+    quoteTimer = setInterval(() => { quoteNow.value = Date.now() }, 1000)
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1267,11 +1348,18 @@ onMounted(async () => {
     // Handle renewal navigation: ?tab=subscription&group=123 (ignored when subscriptions are disabled)
     if (route.query.tab === 'subscription' && subscriptionEnabled.value) {
       activeTab.value = 'subscription'
-      if (route.query.group) {
+      if (route.query.plan) {
+        const plan = checkout.value.plans.find(item => item.id === Number(route.query.plan))
+        if (plan) {
+          selectPlan(plan)
+          const action = route.query.operation as SubscriptionOperation
+          if (availableOperations.value.includes(action)) subscriptionMode.value = action
+        }
+      } else if (route.query.group) {
         const groupId = Number(route.query.group)
         const groupPlans = checkout.value.plans.filter(p => p.group_id === groupId)
         if (groupPlans.length === 1) {
-          selectedPlan.value = groupPlans[0]
+          selectPlan(groupPlans[0])
         } else if (groupPlans.length > 1) {
           renewGroupId.value = groupId
           showRenewalModal.value = true
@@ -1287,7 +1375,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+ eligibilityUnmounted = true
+ if (eligibilityTimer) clearTimeout(eligibilityTimer)
  quoteRevision++
+  if (quoteTimer) clearInterval(quoteTimer)
   document.removeEventListener('visibilitychange', refreshCheckoutWhenVisible)
 })
 </script>

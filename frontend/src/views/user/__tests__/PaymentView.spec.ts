@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
+import subscriptionsAPI from '@/api/subscriptions'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
@@ -8,6 +9,7 @@ import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import SubscriptionGroupRates from '@/components/payment/SubscriptionGroupRates.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
+import type { UserSubscription } from '@/types'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
 
 const routeState = vi.hoisted(() => ({
@@ -20,15 +22,16 @@ const routerPush = vi.hoisted(() => vi.fn())
 const routerResolve = vi.hoisted(() => vi.fn(() => ({ href: '/payment/stripe?mock=1' })))
 const createOrder = vi.hoisted(() => vi.fn())
 const refreshUser = vi.hoisted(() => vi.fn())
+const activeSubscriptionState = vi.hoisted(() => ({ items: [] as UserSubscription[] }))
 const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
-const quoteSubscription = vi.hoisted(() => vi.fn(async (request: { plan_id: number; subscription_quantity: number }) => {
+const quoteSubscription = vi.hoisted(() => vi.fn(async (request: { plan_id: number; units?: number; periods?: number }) => {
   const checkout = await getCheckoutInfo.mock.results.at(-1)?.value
   const plan = checkout?.data.plans.find((p: { id: number }) => p.id === request.plan_id)
-  return { data: { order_amount: (plan?.price ?? 128) * request.subscription_quantity, can_renew_lots: 0, projected: { active_lot_count: request.subscription_quantity, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } }
+  return { data: { quote_id: 'quote-test', expires_at: '2099-01-01T00:00:00Z', order_amount: (plan?.price ?? 128) * (request.units ?? request.periods ?? 1), can_renew_lots: 0, projected: { active_lot_count: (request.units ?? request.periods ?? 1), daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } }
 }))
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
@@ -79,7 +82,7 @@ vi.mock('@/stores/payment', () => ({
 
 vi.mock('@/stores/subscriptions', () => ({
   useSubscriptionStore: () => ({
-    activeSubscriptions: [],
+    get activeSubscriptions() { return activeSubscriptionState.items },
     fetchActiveSubscriptions,
   }),
 }))
@@ -101,6 +104,8 @@ vi.mock('@/stores', async () => {
     }),
   }
 })
+
+vi.mock('@/api/subscriptions', () => ({ default: { getMySubscriptions: vi.fn(async () => activeSubscriptionState.items) } }))
 
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
@@ -148,6 +153,9 @@ function checkoutInfoWithPlansFixture(options: {
   checkout?: Partial<CheckoutInfoResponse>
   method?: Partial<MethodLimit>
   plan?: Partial<SubscriptionPlan>
+  subscriptions?: UserSubscription[]
+  query?: Record<string, unknown>
+  useFakeClock?: boolean
 } = {}) {
   const base = checkoutInfoFixture(options.checkout).data
   const plan: SubscriptionPlan = {
@@ -160,7 +168,7 @@ function checkoutInfoWithPlansFixture(options: {
     validity_days: 30,
     validity_unit: 'day',
     rate_multiplier: 1,
-    daily_limit_usd: null,
+    daily_limit_usd: 45,
     weekly_limit_usd: null,
     monthly_limit_usd: null,
     features: [],
@@ -227,12 +235,14 @@ function oauthOrderFixture() {
 }
 
 async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoWithPlansFixture>[0] = {}) {
-  vi.useRealTimers()
+  if (!options.useFakeClock) vi.useRealTimers()
   routeState.path = '/purchase'
   routeState.query = {
     tab: 'subscription',
     group: '3',
+    ...options.query,
   }
+  activeSubscriptionState.items = options.subscriptions ?? []
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -813,7 +823,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(locationState.href).toContain('/api/v1/auth/oauth/wechat/payment/start?')
     expect(new URL(locationState.href, 'http://localhost').searchParams.get('redirect')).toBe(
-      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7&subscription_mode=renew&subscription_quantity=1',
+      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7&operation=purchase&units=1',
     )
 
     Object.defineProperty(window, 'location', {
@@ -940,6 +950,7 @@ describe('PaymentView subscription feature flag', () => {
 describe('Subscription audit purchase preview', () => {
   it('loads the projected benefits before the user commits to payment', async () => {
     quoteSubscription.mockReset().mockResolvedValue({ data: {
+      quote_id: 'quote-test', expires_at: '2099-01-01T00:00:00Z',
       order_amount: 128,
       projected: { active_lot_count: 1, daily_limit_usd: 45, expires_at: '2099-02-01T00:00:00Z' },
     } })
@@ -952,7 +963,7 @@ describe('Subscription audit purchase preview', () => {
     }
   })
   it('uses the accepted quote price in the payment confirmation', async () => {
-    quoteSubscription.mockReset().mockResolvedValue({ data: { order_amount: 20, can_renew_lots: 0, projected: { active_lot_count: 1, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } })
+    quoteSubscription.mockReset().mockResolvedValue({ data: { quote_id: 'quote-test', expires_at: '2099-01-01T00:00:00Z', order_amount: 20, can_renew_lots: 0, projected: { active_lot_count: 1, daily_limit_usd: 45, weekly_limit_usd: null, monthly_limit_usd: null, expires_at: '2099-02-01T00:00:00Z' } } })
     const wrapper = await mountSubscriptionConfirm({ plan: { price: 10 }, method: { currency: 'USD' } })
     expect(wrapper.findAll('button').some(button => button.text().includes(formatPaymentAmount(20, 'USD')))).toBe(true)
     wrapper.unmount()
@@ -967,4 +978,148 @@ describe('Subscription audit purchase preview', () => {
     wrapper.unmount()
   })
 
+})
+
+describe('Subscription V2 purchase safety', () => {
+  const quote = (amount = 12, expires = '2099-01-01T00:00:00Z') => ({ data: { quote_id: 'quote-v2', expires_at: expires, order_amount: amount, projected: { active_lot_count: 1, daily_limit_usd: 45, remaining_usd: 45, expires_at: '2099-02-01T00:00:00Z' } } })
+  afterEach(() => { activeSubscriptionState.items = [] })
+  it('sends the accepted quote when opening a new subscription through its plan link', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote())
+    const wrapper = await mountSubscriptionConfirm({ query: { plan: '7', operation: 'purchase' } })
+    createOrder.mockResolvedValue({ order_id: 123, amount: 12, pay_amount: 12, expires_at: '2099-01-01', qr_code: 'test', fee_rate: 0 })
+    const pay = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(pay.attributes('disabled')).toBeUndefined()
+    await pay.trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ quote_id: 'quote-v2', operation: 'purchase', units: 1, plan_id: 7, amount: 12 }))
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('subscription_quantity')
+    wrapper.unmount()
+  })
+  it('blocks an expired quote until a refreshed quote is shown', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote(12, '2000-01-01T00:00:00Z'))
+    const wrapper = await mountSubscriptionConfirm()
+    const pay = () => wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(pay().attributes('disabled')).toBeDefined()
+    quoteSubscription.mockResolvedValue(quote(13))
+    await wrapper.findAll('button').find(button => button.text().includes('subscriptionRights.retry'))!.trigger('click')
+    await flushPromises()
+    expect(pay().attributes('disabled')).toBeUndefined()
+    expect(pay().text()).toContain('13')
+    wrapper.unmount()
+  })
+  it('ignores an older quote response after the quantity changes', async () => {
+    let resolveOld!: (value: ReturnType<typeof quote>) => void
+    quoteSubscription.mockReset().mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve })).mockResolvedValue(quote(24))
+    const wrapper = await mountSubscriptionConfirm()
+    await wrapper.find('select').setValue('2')
+    await flushPromises()
+    resolveOld(quote(12))
+    await flushPromises()
+    expect(wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.text()).toContain('24')
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'purchase', units: 2 }))
+    wrapper.unmount()
+  })
+  it('renews every current unit using separate period count and can switch to stack', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote())
+    const contract = { mode: 'v2', kind: 'month', unit_daily_usd: 45, quantity: 2, period_days: 30, term_id: 'term-1', revision: 1, plan_id: 7, expires_at: '2099-01-01T00:00:00Z' }
+    const wrapper = await mountSubscriptionConfirm({ subscriptions: [{ id: 9, plan_id: 7, status: 'active', expires_at: contract.expires_at, contract } as UserSubscription] })
+    await wrapper.find('select').setValue('3')
+    await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'renew', periods: 3, units: undefined }))
+    await wrapper.findAll('button').find(button => button.text() === 'subscriptionRights.stack')!.trigger('click')
+    await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'stack', units: 1, periods: undefined }))
+    wrapper.unmount()
+  })
+  it('does not enter checkout for a legacy compatibility contract', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote())
+    const wrapper = await mountSubscriptionConfirm({ subscriptions: [{ id: 9, status: 'active', expires_at: '2099-01-01', contract: { mode: 'legacy_daily' } } as UserSubscription] })
+    expect(quoteSubscription).not.toHaveBeenCalled()
+    expect(wrapper.findAll('button').some(button => button.text().includes('payment.createOrder'))).toBe(false)
+    expect(wrapper.text()).toContain('subscriptionRights.compatibilityHint')
+    wrapper.unmount()
+  })
+})
+
+describe('V2 subscription payment recovery', () => {
+  const validQuote = { data: { quote_id: 'quote-jsapi', expires_at: '2099-01-01T00:00:00Z', order_amount: 1.4, projected: { active_lot_count: 1, daily_limit_usd: 45, expires_at: '2099-02-01T00:00:00Z' } } }
+  afterEach(() => { activeSubscriptionState.items = [] })
+
+  it.each(['get_brand_wcpay_request:fail', 'get_brand_wcpay_request:cancel', 'throw'])('preserves the one pending subscription order when JSAPI reports %s', async (result) => {
+    quoteSubscription.mockReset().mockResolvedValue(validQuote)
+    const wrapper = await mountSubscriptionConfirm()
+    createOrder.mockResolvedValue(jsapiOrderFixture('resume-existing'))
+    bridgeInvoke.mockImplementation((_action, _payload, callback) => {
+      if (result === 'throw') throw new Error('wechat_jsapi_unavailable')
+      callback({ err_msg: result })
+    })
+    ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = { invoke: bridgeInvoke }
+    await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)!)).toMatchObject({ orderId: 123, orderType: 'subscription', resumeToken: 'resume-existing' })
+    expect(wrapper.html()).toContain('payment-status-panel-stub')
+    expect(wrapper.text()).toContain('subscriptionRights.existingPaymentHint')
+    expect(routerPush).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('preserves an existing subscription if post-create navigation fails', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(validQuote)
+    const wrapper = await mountSubscriptionConfirm()
+    createOrder.mockResolvedValue({ ...jsapiOrderFixture(), client_secret: 'cs-test' })
+    routerResolve.mockImplementationOnce(() => { throw new Error('PAYMENT_GATEWAY_ERROR') })
+    await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)!)).toMatchObject({ orderId: 123, orderType: 'subscription' })
+    expect(wrapper.text()).toContain('subscriptionRights.existingPaymentHint')
+    wrapper.unmount()
+  })
+
+  it('keeps a channel capped at 1.47 available for a 1.40 quote plus 5% fee', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(validQuote)
+    const wrapper = await mountSubscriptionConfirm({ method: { currency: 'USD', single_max: 1.47 }, checkout: { recharge_fee_rate: 5 } })
+    const pay = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(pay.attributes('disabled')).toBeUndefined()
+    expect(pay.text()).toContain('1.47')
+    expect(wrapper.text()).not.toContain('1.48')
+    wrapper.unmount()
+  })
+
+  it('blocks a suspended contract even when the active-only header store is empty', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(validQuote)
+    const wrapper = await mountSubscriptionConfirm({ subscriptions: [{ id: 10, status: 'suspended', expires_at: '2099-01-01', contract: { mode: 'v2' } } as UserSubscription] })
+    expect(quoteSubscription).not.toHaveBeenCalled()
+    expect(wrapper.findAll('button').some(button => button.text().includes('payment.createOrder'))).toBe(false)
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)[0].props('activeSubscriptions')[0].status).toBe('suspended')
+    wrapper.unmount()
+  })
+})
+
+describe('V2 checkout natural expiry', () => {
+  it('refreshes full eligibility at expiry and changes the selected renewal to purchase', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-21T12:00:00Z'))
+    quoteSubscription.mockReset().mockResolvedValue({ data: { quote_id: 'quote-expiry', expires_at: '2026-09-21T12:05:00Z', order_amount: 10, projected: { active_lot_count: 1, daily_limit_usd: 45, expires_at: '2026-10-21T12:00:00Z' } } })
+    const subscription = { id: 9, status: 'active', expires_at: '2026-09-21T12:00:02Z', contract: { mode: 'v2', kind: 'month', period_days: 30, unit_daily_usd: 45, quantity: 1, plan_id: 7, expires_at: '2026-09-21T12:00:02Z' } } as UserSubscription
+    const wrapper = await mountSubscriptionConfirm({ useFakeClock: true, subscriptions: [subscription] })
+    try {
+      expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'renew' }))
+      const callsBefore = vi.mocked(subscriptionsAPI.getMySubscriptions).mock.calls.length
+      activeSubscriptionState.items = []
+      await vi.advanceTimersByTimeAsync(2_101)
+      await flushPromises()
+      expect(vi.mocked(subscriptionsAPI.getMySubscriptions).mock.calls.length).toBeGreaterThan(callsBefore)
+      expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'purchase', units: 1, periods: undefined }))
+      expect(wrapper.findAll('button').some(button => button.text() === 'subscriptionRights.purchase')).toBe(true)
+      wrapper.unmount()
+      const callsAfter = vi.mocked(subscriptionsAPI.getMySubscriptions).mock.calls.length
+      await vi.advanceTimersByTimeAsync(300_001)
+      expect(vi.mocked(subscriptionsAPI.getMySubscriptions).mock.calls.length).toBe(callsAfter)
+    } finally {
+      wrapper.unmount()
+      activeSubscriptionState.items = []
+      vi.useRealTimers()
+    }
+  })
 })

@@ -19,6 +19,7 @@
             class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
             <div class="h-10 w-10 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent"></div>
           </div>
+          <div v-else-if="isReview" class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-4xl text-amber-700 dark:bg-amber-900/30">!</div>
           <div v-else
             class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
             <svg class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -28,6 +29,7 @@
           <h2 class="mt-4 text-2xl font-bold text-gray-900 dark:text-white">
             {{ statusTitle }}
           </h2>
+          <p v-if="isReview" role="status" class="mt-2 text-sm text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.paidReviewHint') }}</p>
           <p v-if="isPending" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
             {{ t('payment.result.processingHint') }}
           </p>
@@ -55,9 +57,9 @@
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
               <span class="font-bold text-primary-600 dark:text-primary-400">{{ formatGatewayAmount(order.pay_amount) }}</span>
             </div>
-            <div v-if="hasAmountFields(order) && order.amount !== order.pay_amount" class="flex justify-between">
+            <div v-if="hasAmountFields(order) && order.order_type === 'balance' && order.amount !== order.pay_amount" class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.creditedAmount') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ order.order_type === 'balance' ? '$' + order.amount.toFixed(2) : formatGatewayAmount(order.amount) }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ '$' + order.amount.toFixed(2) }}</span>
             </div>
             <div v-if="hasPaymentType(order)" class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.paymentMethod') }}</span>
@@ -65,7 +67,8 @@
             </div>
             <div class="flex justify-between">
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.status') }}</span>
-              <OrderStatusBadge :status="displayOrderStatus(order.status)" />
+              <span v-if="isReview" class="badge badge-warning">{{ t('subscriptionRights.paidReview') }}</span>
+              <OrderStatusBadge v-else :status="displayOrderStatus(order.status)" />
             </div>
           </div>
         </div>
@@ -97,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+import { isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -177,7 +181,10 @@ const isPending = computed(() => {
   return isPendingStatus(order.value?.status)
 })
 
+const isReview = computed(() => !!order.value && 'order_type' in order.value && isPaidSubscriptionReview(order.value as PaymentOrder))
+
 const statusTitle = computed(() => {
+  if (isReview.value) return t('subscriptionRights.paidReview')
   if (isSuccess.value) {
     return t('payment.result.success')
   }

@@ -55,3 +55,13 @@ describe('stripWechatResumeQuery', () => {
     })
   })
 })
+
+describe('V2 WeChat quote identity', () => {
+  it('preserves operation, distinct counts and quote on resume and strips them after reading', () => {
+    const query = { wechat_resume: '1', openid: 'openid-1', order_type: 'subscription', plan_id: '7', operation: 'renew', periods: '3', quote_id: 'quote-1', amount: '35' }
+    const result = parseWechatResumeRoute(query, [], 0)
+    expect(result).toMatchObject({ operation: 'renew', periods: 3, quoteId: 'quote-1', orderAmount: 35 })
+    expect(result?.units).toBeUndefined()
+    expect(stripWechatResumeQuery(query)).toEqual({})
+  })
+})

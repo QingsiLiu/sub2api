@@ -3,6 +3,7 @@ import type {
   CreateOrderResult,
   MethodLimit,
   OrderType,
+  SubscriptionOperation,
   WechatJSAPIPayload,
   WechatOAuthInfo,
 } from '@/types/payment'
@@ -77,12 +78,16 @@ export interface PaymentLaunchDecision {
 }
 
 export interface BuildCreateOrderPayloadInput {
- expectedPlanRevision?: string
+  expectedPlanRevision?: string
+  operation?: SubscriptionOperation
+  units?: number
+  periods?: number
+  quoteId?: string
   amount: number
   paymentType: string
   orderType: OrderType
 	planId?: number
-	subscriptionMode?: 'renew' | 'stack'
+	subscriptionMode?: SubscriptionOperation
 	subscriptionQuantity?: number
   origin?: string
   isMobile: boolean
@@ -143,8 +148,14 @@ export function buildCreateOrderPayload(input: BuildCreateOrderPayloadInput): Cr
 		payload.plan_id = input.planId
 	}
 	if (input.orderType === 'subscription') {
+    if (input.quoteId) payload.quote_id = input.quoteId
+    if (input.operation) {
+      payload.operation = input.operation
+      if (input.units !== undefined) payload.units = input.units
+      if (input.periods !== undefined) payload.periods = input.periods
+    }
     if (input.expectedPlanRevision) payload.expected_plan_revision = input.expectedPlanRevision
-		if (input.subscriptionMode || input.subscriptionQuantity !== undefined) {
+		if (!input.operation && (input.subscriptionMode || input.subscriptionQuantity !== undefined)) {
 			payload.subscription_mode = input.subscriptionMode || 'renew'
 			payload.subscription_quantity = Math.min(10, Math.max(1, input.subscriptionQuantity || 1))
 		}

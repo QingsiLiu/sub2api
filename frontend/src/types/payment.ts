@@ -22,6 +22,7 @@ export type OrderStatus =
 export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex'
 
 export type OrderType = 'balance' | 'subscription'
+export type SubscriptionOperation = 'purchase' | 'stack' | 'renew' | 'upgrade'
 
 // ==================== Configuration ====================
 
@@ -115,8 +116,12 @@ export interface PaymentOrder {
   refund_requested_by?: number
   refund_request_reason?: string
 	plan_id?: number
-	subscription_mode?: 'renew' | 'stack'
+	subscription_mode?: SubscriptionOperation
 	subscription_quantity?: number
+  operation?: SubscriptionOperation
+  units?: number
+  periods?: number
+  failed_reason?: string
   provider_instance_id?: string
 }
 
@@ -185,12 +190,16 @@ export interface ProviderInstance {
 // ==================== Request / Response ====================
 
 export interface CreateOrderRequest {
- expected_plan_revision?: string
+  expected_plan_revision?: string
+  operation?: SubscriptionOperation
+  units?: number
+  periods?: number
+  quote_id?: string
   amount: number
   payment_type: string
   order_type: string
 	plan_id?: number
-	subscription_mode?: 'renew' | 'stack'
+	subscription_mode?: SubscriptionOperation
 	subscription_quantity?: number
   return_url?: string
   payment_source?: string
@@ -199,14 +208,29 @@ export interface CreateOrderRequest {
   is_mobile?: boolean
 }
 
+export interface SubscriptionQuoteRequest {
+  plan_id: number
+  operation: SubscriptionOperation
+  units?: number
+  periods?: number
+}
+
 export interface SubscriptionQuoteResponse {
+  quote_id: string
+  expires_at: string
+  billable_days: number
+  operation: SubscriptionOperation
+  units: number
+  periods: number
+  current_contract?: import('@/types').SubscriptionContract | null
+  projected_contract: import('@/types').SubscriptionContract
  plan_revision?: string
 	plan_id: number
-	subscription_mode: 'renew' | 'stack'
-	subscription_quantity: number
+	subscription_mode?: SubscriptionOperation
+	subscription_quantity?: number
 	order_amount: number
 	validity_days: number
-	can_renew_lots: number
+	can_renew_lots?: number
 	current?: import('@/types').UserSubscription['quota_summary']
 	projected: NonNullable<import('@/types').UserSubscription['quota_summary']>
 }

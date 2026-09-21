@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import subscriptionsAPI from '@/api/subscriptions'
+import { subscriptionRefreshDelay } from '@/utils/subscriptionV2'
 import type { UserSubscription } from '@/types'
 
 // Cache TTL: 60 seconds
@@ -25,6 +26,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
   let activePromise: Promise<UserSubscription[]> | null = null
 
   // Auto-refresh interval
+  let boundaryTimeout: ReturnType<typeof setTimeout> | null = null
   let pollerInterval: ReturnType<typeof setInterval> | null = null
 
   // Computed
@@ -63,6 +65,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
           activeSubscriptions.value = data
           loaded.value = true
           lastFetchedAt.value = Date.now()
+          scheduleBoundaryRefresh()
         }
         return data
       })
@@ -85,6 +88,17 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
   /**
    * Start auto-refresh polling 
    */
+  function scheduleBoundaryRefresh() {
+    if (boundaryTimeout) clearTimeout(boundaryTimeout)
+    boundaryTimeout = null
+    if (!pollerInterval) return
+    const delay = subscriptionRefreshDelay(activeSubscriptions.value)
+    if (delay !== null) boundaryTimeout = setTimeout(() => {
+      boundaryTimeout = null
+      fetchActiveSubscriptions(true).catch(() => {})
+    }, delay)
+  }
+
   function startPolling() {
     if (pollerInterval) return
 
@@ -93,12 +107,15 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
         console.error('Subscription polling failed:', error)
       })
     }, 5 * 60 * 1000)
+    scheduleBoundaryRefresh()
   }
 
   /**
    * Stop auto-refresh polling
    */
   function stopPolling() {
+    if (boundaryTimeout) clearTimeout(boundaryTimeout)
+    boundaryTimeout = null
     if (pollerInterval) {
       clearInterval(pollerInterval)
       pollerInterval = null

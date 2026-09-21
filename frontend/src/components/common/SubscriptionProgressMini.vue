@@ -46,7 +46,7 @@
           >
             <div class="mb-2 flex items-center justify-between">
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
+                {{ subscription.contract ? contractLabel(subscription.contract, t) : subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
               </span>
               <span
                 v-if="subscription.expires_at"
@@ -57,6 +57,7 @@
               </span>
             </div>
 
+            <p v-if="subscription.contract" class="mb-2 text-xs text-gray-500">{{ t('subscriptionRights.remaining') }}: {{ subscriptionQuota(subscription).remaining == null ? t('subscriptionRights.unlimited') : '$' + subscriptionQuota(subscription).remaining!.toFixed(4) }}</p>
             <!-- Progress bars or Unlimited badge -->
             <div class="space-y-1.5">
               <!-- Unlimited subscription badge -->
@@ -72,7 +73,7 @@
 
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
-                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd" class="flex items-center gap-2">
+                <div v-if="subscriptionQuota(subscription).daily" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.daily')
                   }}</span>
@@ -81,26 +82,26 @@
                       class="h-1.5 rounded-full transition-all"
                       :class="
                         getProgressBarClass(
-                          subscription.daily_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd
+                          subscriptionQuota(subscription).dailyUsed,
+                          subscriptionQuota(subscription).daily
                         )
                       "
                       :style="{
                         width: getProgressWidth(
-                          subscription.daily_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd
+                          subscriptionQuota(subscription).dailyUsed,
+                          subscriptionQuota(subscription).daily
                         )
                       }"
                     ></div>
                   </div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{
-                      formatUsage(subscription.daily_usage_usd, (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.daily_limit_usd)
+                      formatUsage(subscriptionQuota(subscription).dailyUsed, subscriptionQuota(subscription).daily)
                     }}
                   </span>
                 </div>
 
-                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd" class="flex items-center gap-2">
+                <div v-if="subscriptionQuota(subscription).weekly" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.weekly')
                   }}</span>
@@ -109,26 +110,26 @@
                       class="h-1.5 rounded-full transition-all"
                       :class="
                         getProgressBarClass(
-                          subscription.weekly_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd
+                          subscriptionQuota(subscription).weeklyUsed,
+                          subscriptionQuota(subscription).weekly
                         )
                       "
                       :style="{
                         width: getProgressWidth(
-                          subscription.weekly_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd
+                          subscriptionQuota(subscription).weeklyUsed,
+                          subscriptionQuota(subscription).weekly
                         )
                       }"
                     ></div>
                   </div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{
-                      formatUsage(subscription.weekly_usage_usd, (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.weekly_limit_usd)
+                      formatUsage(subscriptionQuota(subscription).weeklyUsed, subscriptionQuota(subscription).weekly)
                     }}
                   </span>
                 </div>
 
-                <div v-if="(subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd" class="flex items-center gap-2">
+                <div v-if="subscriptionQuota(subscription).monthly" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.monthly')
                   }}</span>
@@ -137,14 +138,14 @@
                       class="h-1.5 rounded-full transition-all"
                       :class="
                         getProgressBarClass(
-                          subscription.monthly_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
+                          subscriptionQuota(subscription).monthlyUsed,
+                          subscriptionQuota(subscription).monthly
                         )
                       "
                       :style="{
                         width: getProgressWidth(
-                          subscription.monthly_usage_usd,
-                          (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
+                          subscriptionQuota(subscription).monthlyUsed,
+                          subscriptionQuota(subscription).monthly
                         )
                       }"
                     ></div>
@@ -152,8 +153,8 @@
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{
                       formatUsage(
-                        subscription.monthly_usage_usd,
-                        (subscription.quota_summary ?? subscription.plan ?? subscription.group)?.monthly_limit_usd
+                        subscriptionQuota(subscription).monthlyUsed,
+                        subscriptionQuota(subscription).monthly
                       )
                     }}
                   </span>
@@ -178,6 +179,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionQuota, contractLabel } from '@/utils/subscriptionV2'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
@@ -209,14 +211,14 @@ const displaySubscriptions = computed(() => {
 
 function getMaxUsagePercentage(sub: UserSubscription): number {
   const percentages: number[] = []
-  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.daily_limit_usd) {
-    percentages.push(((sub.daily_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.daily_limit_usd!) * 100)
+  if (subscriptionQuota(sub).daily) {
+    percentages.push(((subscriptionQuota(sub).dailyUsed || 0) / subscriptionQuota(sub).daily!) * 100)
   }
-  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.weekly_limit_usd) {
-    percentages.push(((sub.weekly_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.weekly_limit_usd!) * 100)
+  if (subscriptionQuota(sub).weekly) {
+    percentages.push(((subscriptionQuota(sub).weeklyUsed || 0) / subscriptionQuota(sub).weekly!) * 100)
   }
-  if ((sub.quota_summary ?? sub.plan ?? sub.group)?.monthly_limit_usd) {
-    percentages.push(((sub.monthly_usage_usd || 0) / (sub.quota_summary ?? sub.plan ?? sub.group)!.monthly_limit_usd!) * 100)
+  if (subscriptionQuota(sub).monthly) {
+    percentages.push(((subscriptionQuota(sub).monthlyUsed || 0) / subscriptionQuota(sub).monthly!) * 100)
   }
   return percentages.length > 0 ? Math.max(...percentages) : 0
 }
@@ -224,9 +226,9 @@ function getMaxUsagePercentage(sub: UserSubscription): number {
 function isUnlimited(sub: UserSubscription): boolean {
   if (sub.quota_summary?.active_lot_count === 0) return false
   return (
-    !(sub.quota_summary ?? sub.plan ?? sub.group)?.daily_limit_usd &&
-    !(sub.quota_summary ?? sub.plan ?? sub.group)?.weekly_limit_usd &&
-    !(sub.quota_summary ?? sub.plan ?? sub.group)?.monthly_limit_usd
+    !subscriptionQuota(sub).daily &&
+    !subscriptionQuota(sub).weekly &&
+    !subscriptionQuota(sub).monthly
   )
 }
 

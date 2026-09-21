@@ -13,6 +13,8 @@ export interface SubscriptionSummary {
   active_count: number
   subscriptions: Array<{
     id: number
+    contract?: import('@/types').SubscriptionContract
+    quota_summary?: UserSubscription['quota_summary']
     group_name: string
     status: string
     daily_progress: number | null

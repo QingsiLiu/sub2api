@@ -415,7 +415,7 @@
               <GroupBadge
                 v-for="sub in row.subscriptions"
                 :key="sub.id"
-                :name="sub.group?.name || ''"
+                :name="sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || ''"
                 :platform="sub.group?.platform"
                 :subscription-type="sub.group?.subscription_type"
                 :rate-multiplier="sub.group?.rate_multiplier"
@@ -792,6 +792,7 @@
 </template>
 
 <script setup lang="ts">
+import { contractLabel } from '@/utils/subscriptionV2'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

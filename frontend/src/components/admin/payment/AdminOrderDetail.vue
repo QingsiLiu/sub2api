@@ -6,6 +6,7 @@
     @close="emit('close')"
   >
     <div v-if="order" class="space-y-4">
+<p v-if="isPaidSubscriptionReview(order)" role="status" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ t('subscriptionRights.paidReviewHint') }}</p>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.orders.orderId') }}</p>
@@ -14,7 +15,7 @@
         <div>
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.orders.status') }}</p>
           <span :class="['badge', statusBadgeClass(order.status)]">
-            {{ t('payment.status.' + order.status.toLowerCase(), order.status) }}
+            {{ isPaidSubscriptionReview(order) ? t('subscriptionRights.paidReview') : t('payment.status.' + order.status.toLowerCase(), order.status) }}
           </span>
         </div>
         <div>
@@ -43,7 +44,7 @@
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.orderType') }}</p>
           <p class="text-sm text-gray-700 dark:text-gray-300">
             {{ t('payment.admin.' + order.order_type + 'Order', order.order_type) }}
-          <span v-if="order.order_type === 'subscription'"> · {{ t(order.subscription_mode === 'stack' ? 'subscriptionRights.stack' : 'subscriptionRights.renew') }} × {{ order.subscription_quantity || 1 }}</span>
+          <span v-if="order.order_type === 'subscription'"> · {{ subscriptionOrderLabel(order, t) }}</span>
           </p>
         </div>
         <div>
@@ -115,6 +116,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionOrderLabel, isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -157,7 +159,7 @@ const emit = defineEmits<{
 }>()
 
 function canRefund(order: PaymentOrder): boolean {
-  return canRefundStatus(order.status)
+  return isPaidSubscriptionReview(order) || canRefundStatus(order.status)
 }
 
 function formatDateTime(dateStr: string): string {

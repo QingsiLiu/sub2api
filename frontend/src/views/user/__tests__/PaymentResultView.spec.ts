@@ -536,3 +536,16 @@ describe('PaymentResultView', () => {
     expect(wrapper.text()).not.toContain('payment.methods.alipay_direct')
   })
 })
+
+describe('subscription result currency display', () => {
+  it('does not mislabel the subscription quote amount as credited gateway currency', async () => {
+    routeState.query = { order_id: '42' }
+    pollOrderStatus.mockResolvedValue({ ...orderFactory('COMPLETED'), order_type: 'subscription', amount: 10, pay_amount: 70, currency: 'CNY' })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(formatPaymentAmount(70, 'CNY'))
+    expect(wrapper.text()).not.toContain('payment.orders.creditedAmount')
+    expect(wrapper.text()).not.toContain(formatPaymentAmount(10, 'CNY'))
+    wrapper.unmount()
+  })
+})

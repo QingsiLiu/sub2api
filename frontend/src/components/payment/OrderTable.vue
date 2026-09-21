@@ -1,7 +1,8 @@
 <template>
   <DataTable :columns="columns" :data="orders" :loading="loading">
-    <template #cell-id="{ value }">
+    <template #cell-id="{ value, row }">
       <span class="font-mono text-sm">#{{ value }}</span>
+      <p v-if="row.order_type === 'subscription'" class="text-xs text-gray-500">{{ subscriptionOrderLabel(row, t) }}</p>
     </template>
     <template #cell-out_trade_no="{ value }">
       <span class="text-sm text-gray-900 dark:text-white">{{ value }}</span>
@@ -26,8 +27,9 @@
     <template #cell-payment_type="{ value }">
       <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('payment.methods.' + value, value) }}</span>
     </template>
-    <template #cell-status="{ value }">
-      <OrderStatusBadge :status="value" />
+    <template #cell-status="{ value, row }">
+      <span v-if="isPaidSubscriptionReview(row)" class="badge badge-warning">{{ t('subscriptionRights.paidReview') }}</span>
+      <OrderStatusBadge v-else :status="value" />
     </template>
     <template #cell-created_at="{ value }">
       <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatDate(value) }}</span>
@@ -39,6 +41,7 @@
 </template>
 
 <script setup lang="ts">
+import { subscriptionOrderLabel, isPaidSubscriptionReview } from '@/utils/subscriptionV2'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PaymentOrder } from '@/types/payment'
