@@ -160,7 +160,7 @@ func TestContractStoreV2UpgradeKeepsHistoricalTargetPool(t *testing.T) {
 	require.Equal(t, high.ID, got.PlanID)
 	untouched, err := c.UserSubscription.Get(ctx, expired.ID)
 	require.NoError(t, err)
-	require.Equal(t, expired.ExpiresAt, untouched.ExpiresAt)
+	require.True(t, expired.ExpiresAt.Equal(untouched.ExpiresAt), "historical expiry instant must remain unchanged")
 	require.Equal(t, "expired", untouched.Status)
 }
 func TestContractStoreV2SpecialLegacyNeverUpgradesAutomatically(t *testing.T) {
