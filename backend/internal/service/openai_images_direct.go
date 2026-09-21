@@ -181,6 +181,28 @@ func isOpenAIImagesMainModelError(status int, body []byte) bool {
 		strings.Contains(message, `"`+model+`"`)
 }
 
+// GPT Image 2.5 is exposed by some ChatGPT accounts through the Responses
+// image tool while the native Codex Images endpoint returns a model/permission
+// rejection. Keep the native endpoint for the older models, but recover this
+// specific capability mismatch without treating ordinary upstream failures as
+// a second request.
+func shouldFallbackGPTImage25ToResponses(status int, body []byte, model string) bool {
+	if status != http.StatusBadRequest && status != http.StatusForbidden {
+		return false
+	}
+	model = strings.ToLower(strings.TrimSpace(model))
+	if !strings.HasPrefix(model, "gpt-image-2.5-") {
+		return false
+	}
+	message := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(body)))
+	for _, marker := range []string{"not supported", "unsupported", "not available", "unavailable", "access forbidden", "forbidden"} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // Images 端点只输出图片；未提供输出分类时，output_tokens 全部是图片 token。
 // 缓存图片数量只采信明确明细，不根据总缓存量猜测图文占比。
 func codexDirectImagesUsage(body []byte) (OpenAIUsage, bool) {
