@@ -97,9 +97,10 @@
       <button
         type="button"
         @click="fillRelated"
-        class="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
+        :disabled="isFillingRelated"
+        class="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
       >
-        {{ t('admin.accounts.fillRelatedModels') }}
+        {{ isFillingRelated ? t('common.loading') : t('admin.accounts.fillRelatedModels') }}
       </button>
       <button
         v-if="canSyncUpstream"
@@ -149,6 +150,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { accountsAPI } from '@/api/admin/accounts'
+import { getOpenAISyncModelIDs } from '@/api/admin/settings'
 import type { SyncUpstreamPreviewParams } from '@/api/admin/accounts'
 import { useClipboard } from '@/composables/useClipboard'
 import ModelIcon from '@/components/common/ModelIcon.vue'
@@ -183,6 +185,7 @@ const searchQuery = ref('')
 const customModel = ref('')
 const isComposing = ref(false)
 const isSyncingUpstream = ref(false)
+const isFillingRelated = ref(false)
 const normalizedPlatforms = computed(() => {
   const rawPlatforms =
     props.platforms && props.platforms.length > 0
@@ -282,16 +285,25 @@ const handleEnter = () => {
   if (!isComposing.value) addCustom()
 }
 
-const fillRelated = () => {
-  const newModels = [...props.modelValue]
-  for (const platform of normalizedPlatforms.value) {
-    for (const model of getModelsByPlatform(platform)) {
-      if (!newModels.includes(model)) {
-        newModels.push(model)
-      }
-    }
+// geili hook: OpenAI's curated sync list is administered independently of upstream sync.
+const fillRelated = async () => {
+  if (isFillingRelated.value) return
+  isFillingRelated.value = true
+  const platforms = [...normalizedPlatforms.value]
+  try {
+    const related = await Promise.all(platforms.map(platform =>
+      platform.toLowerCase() === 'openai'
+        ? getOpenAISyncModelIDs()
+        : getModelsByPlatform(platform)
+    ))
+    // A pending fetch must not append a former platform's models after the form changes.
+    if (platforms.join() !== normalizedPlatforms.value.join()) return
+    emit('update:modelValue', [...new Set([...props.modelValue, ...related.flat()])])
+  } catch {
+    appStore.showError(t('admin.settings.openaiSyncModels.loadFailed'))
+  } finally {
+    isFillingRelated.value = false
   }
-  emit('update:modelValue', newModels)
 }
 
 const syncUpstreamModels = async () => {

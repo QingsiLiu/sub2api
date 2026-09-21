@@ -217,11 +217,12 @@ type UpdateSettingsRequest struct {
 	ForceEmailOnThirdPartySignup              *bool                             `json:"force_email_on_third_party_signup"`
 
 	// Model fallback configuration
-	EnableModelFallback      bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic   string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI      string `json:"fallback_model_openai"`
-	FallbackModelGemini      string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity string `json:"fallback_model_antigravity"`
+	EnableModelFallback      bool     `json:"enable_model_fallback"`
+	FallbackModelAnthropic   string   `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI      string   `json:"fallback_model_openai"`
+	FallbackModelGemini      string   `json:"fallback_model_gemini"`
+	FallbackModelAntigravity string   `json:"fallback_model_antigravity"`
+	OpenAISyncModelIDs       []string `json:"openai_sync_model_ids"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
@@ -494,6 +495,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	// geili hook: null is not an omitted model catalog; reject it before any settings write.
+	if _, sent := sentFields[service.SettingKeyOpenAISyncModelIDs]; sent && req.OpenAISyncModelIDs == nil {
+		response.BadRequest(c, "openai_sync_model_ids must be a non-empty array")
+		return
+	}
 	auditReq := settingsAuditRequest(req)
 	omitted := omittedSettingKeys(sentFields)
 
@@ -501,6 +507,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+
+	if _, sent := sentFields[service.SettingKeyOpenAISyncModelIDs]; !sent {
+		if len(previousSettings.OpenAISyncModelIDs) == 0 {
+			req.OpenAISyncModelIDs = append([]string(nil), service.DefaultOpenAISyncModelIDs()...)
+		} else {
+			req.OpenAISyncModelIDs = append([]string(nil), previousSettings.OpenAISyncModelIDs...)
+		}
 	}
 	previousAuthSourceDefaults, err := h.settingService.GetAuthSourceDefaultSettings(c.Request.Context())
 	if err != nil {
@@ -1646,6 +1660,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelOpenAI:                    req.FallbackModelOpenAI,
 		FallbackModelGemini:                    req.FallbackModelGemini,
 		FallbackModelAntigravity:               req.FallbackModelAntigravity,
+		OpenAISyncModelIDs:                     req.OpenAISyncModelIDs,
 		EnableIdentityPatch:                    req.EnableIdentityPatch,
 		IdentityPatchPrompt:                    req.IdentityPatchPrompt,
 		MinClaudeCodeVersion:                   req.MinClaudeCodeVersion,
@@ -2286,6 +2301,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelOpenAI:                                    updatedSettings.FallbackModelOpenAI,
 		FallbackModelGemini:                                    updatedSettings.FallbackModelGemini,
 		FallbackModelAntigravity:                               updatedSettings.FallbackModelAntigravity,
+		OpenAISyncModelIDs:                                     updatedSettings.OpenAISyncModelIDs,
+		OpenAISyncModelCandidates:                              service.OpenAISyncModelCandidates(),
 		EnableIdentityPatch:                                    updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    updatedSettings.IdentityPatchPrompt,
 		OpsMonitoringEnabled:                                   updatedSettings.OpsMonitoringEnabled,

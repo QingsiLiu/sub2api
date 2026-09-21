@@ -599,6 +599,8 @@ export interface SystemSettings {
   fallback_model_openai: string;
   fallback_model_gemini: string;
   fallback_model_antigravity: string;
+  openai_sync_model_ids: string[];
+  readonly openai_sync_model_candidates: string[];
   grok_default_text_model: string;
   grok_cross_client_model_map_enabled: boolean;
   grok_default_base_url_mode: string;
@@ -931,6 +933,7 @@ export interface UpdateSettingsRequest {
   fallback_model_openai?: string;
   fallback_model_gemini?: string;
   fallback_model_antigravity?: string;
+  openai_sync_model_ids?: string[];
   grok_default_text_model?: string;
   grok_cross_client_model_map_enabled?: boolean;
   grok_default_base_url_mode?: string;
@@ -1052,27 +1055,47 @@ export interface UpdateSettingsRequest {
   allow_user_view_error_requests?: boolean;
 }
 
-/**
- * Get all system settings
- * @returns System settings
- */
+// geili hook: cache only the curated IDs, never the entire admin settings payload.
+let openAISyncCache: { ids: string[]; expiresAt: number } | null = null;
+let openAISyncRequest: Promise<string[]> | null = null;
+let openAISyncRevision = 0;
+
+function cacheOpenAISyncModelIDs(ids: unknown): void {
+  openAISyncRevision += 1;
+  openAISyncCache = Array.isArray(ids) && ids.length > 0 && ids.every(id => typeof id === "string" && id.trim())
+    ? { ids: [...ids], expiresAt: Date.now() + 30_000 }
+    : null;
+}
+
 export async function getSettings(): Promise<SystemSettings> {
+  const revision = openAISyncRevision;
   const { data } = await apiClient.get<SystemSettings>("/admin/settings");
+  if (revision === openAISyncRevision) cacheOpenAISyncModelIDs(data.openai_sync_model_ids);
   return data;
 }
 
-/**
- * Update system settings
- * @param settings - Partial settings to update
- * @returns Updated settings
- */
-export async function updateSettings(
-  settings: UpdateSettingsRequest,
-): Promise<SystemSettings> {
-  const { data } = await apiClient.put<SystemSettings>(
-    "/admin/settings",
-    settings,
-  );
+export async function getOpenAISyncModelIDs(): Promise<string[]> {
+  if (openAISyncCache && openAISyncCache.expiresAt > Date.now()) return [...openAISyncCache.ids];
+  if (!openAISyncRequest) {
+    const request = getSettings().then(settings => {
+      const ids = openAISyncCache?.ids ?? settings.openai_sync_model_ids;
+      if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== "string" || !id.trim())) {
+        throw new Error("OpenAI sync model catalog is unavailable");
+      }
+      return ids;
+    });
+    openAISyncRequest = request;
+    void request.finally(() => {
+      if (openAISyncRequest === request) openAISyncRequest = null;
+    }).catch(() => {});
+  }
+  return [...await openAISyncRequest];
+}
+
+/** Update only the provided settings and refresh the curated catalog after success. */
+export async function updateSettings(settings: UpdateSettingsRequest): Promise<SystemSettings> {
+  const { data } = await apiClient.put<SystemSettings>("/admin/settings", settings);
+  cacheOpenAISyncModelIDs(data.openai_sync_model_ids);
   return data;
 }
 

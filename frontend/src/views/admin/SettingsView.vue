@@ -1060,6 +1060,12 @@
               </template>
             </div>
           </div>
+          <!-- geili hook: editable curated list for the account model sync action. -->
+          <OpenAISyncModelsField
+            v-model="form.openai_sync_model_ids"
+            :candidates="openAISyncKnownModels"
+            :disabled="!openAISyncModelsLoaded"
+          />
           <!-- OpenAI Fast/Flex Policy Settings -->
           <div class="card">
             <div
@@ -8831,6 +8837,8 @@ import type {
   Proxy,
 } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
+import { DEFAULT_OPENAI_SYNC_MODEL_IDS } from "@/constants/openaiSyncModels";
+import OpenAISyncModelsField from "@/components/admin/OpenAISyncModelsField.vue";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
@@ -9548,6 +9556,7 @@ type SettingsForm = Omit<
   | "wechat_connect_open_enabled"
   | "wechat_connect_mp_enabled"
   | "wechat_connect_mobile_enabled"
+  | "openai_sync_model_candidates"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */
   channel_monitor_hide_throughput: boolean;
@@ -9588,6 +9597,7 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_weight_upstream_cost: string;
   openai_advanced_scheduler_weight_previous_response: string;
   openai_advanced_scheduler_weight_session_sticky: string;
+  openai_sync_model_ids: string[];
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
@@ -9799,6 +9809,7 @@ const form = reactive<SettingsForm>({
   fallback_model_openai: "gpt-4o",
   fallback_model_gemini: "gemini-2.5-pro",
   fallback_model_antigravity: "gemini-2.5-pro",
+  openai_sync_model_ids: [...DEFAULT_OPENAI_SYNC_MODEL_IDS],
   grok_default_text_model: "grok-4.5",
   grok_cross_client_model_map_enabled: false,
   grok_default_base_url_mode: "cli",
@@ -10848,6 +10859,7 @@ async function loadSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    loadOpenAISyncModels(settings);
     syncCaptchaProviderSelection();
     if (!form.claude_oauth_system_prompt_blocks?.trim()) {
       form.claude_oauth_system_prompt_blocks =
@@ -11098,6 +11110,18 @@ const siteBillingModeHint = computed(() =>
   t(`admin.settings.features.siteBillingMode.hints.${SITE_BILLING_MODE_I18N_KEYS[siteBillingMode.value]}`),
 );
 
+const openAISyncKnownModels = ref<string[]>([]);
+const openAISyncModelsLoaded = ref(false);
+
+function loadOpenAISyncModels(settings: SystemSettings) {
+  openAISyncModelsLoaded.value = Array.isArray(settings.openai_sync_model_ids)
+    && Array.isArray(settings.openai_sync_model_candidates);
+  openAISyncKnownModels.value = [...(settings.openai_sync_model_candidates ?? [])];
+  if (openAISyncModelsLoaded.value) {
+    form.openai_sync_model_ids = [...settings.openai_sync_model_ids];
+  }
+}
+
 async function saveSettings() {
   saving.value = true;
   try {
@@ -11174,6 +11198,23 @@ async function saveSettings() {
     form.forwarded_client_ip_headers = normalizeForwardedClientIpHeaders(
       form.forwarded_client_ip_headers,
     );
+    if (openAISyncModelsLoaded.value) {
+      const normalizedOpenAISyncModelIDs = form.openai_sync_model_ids
+        .map(model => model.trim())
+        .filter(Boolean);
+      if (normalizedOpenAISyncModelIDs.length === 0) {
+        appStore.showError(t("admin.settings.openaiSyncModels.emptyError"));
+        return;
+      }
+      const unknownOpenAIModel = normalizedOpenAISyncModelIDs.find(
+        model => !openAISyncKnownModels.value.includes(model),
+      );
+      if (unknownOpenAIModel) {
+        appStore.showError(t("admin.settings.openaiSyncModels.unknownError", { model: unknownOpenAIModel }));
+        return;
+      }
+      form.openai_sync_model_ids = [...new Set(normalizedOpenAISyncModelIDs)];
+    }
 
     const normalizedDefaultSubscriptions = normalizeDefaultSubscriptionSettings(
       form.default_subscriptions,
@@ -11420,6 +11461,7 @@ async function saveSettings() {
       fallback_model_openai: form.fallback_model_openai,
       fallback_model_gemini: form.fallback_model_gemini,
       fallback_model_antigravity: form.fallback_model_antigravity,
+      ...(openAISyncModelsLoaded.value ? { openai_sync_model_ids: [...form.openai_sync_model_ids] } : {}),
       grok_default_text_model:
         form.grok_default_text_model.trim() || "grok-4.5",
       grok_cross_client_model_map_enabled:
@@ -11614,6 +11656,7 @@ async function saveSettings() {
         (form as Record<string, unknown>)[key] = value;
       }
     }
+    loadOpenAISyncModels(updated);
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     form.default_platform_quotas = normalizePlatformQuotasMap(updated.default_platform_quotas);
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(

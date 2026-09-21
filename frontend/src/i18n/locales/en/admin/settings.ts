@@ -1098,6 +1098,20 @@ export default {
         presetOpusOnlyDesc: 'Pass for Opus, filter others',
         commonPatterns: 'Common patterns'
       },
+      openaiSyncModels: {
+        moveUp: "Move {model} up",
+        moveDown: "Move {model} down",
+        remove: "Remove {model}",
+        title: "OpenAI Latest Supported Model Catalog",
+        description: "“Sync latest supported models” only adds models from this catalog and never removes existing account models.",
+        addPlaceholder: "Select a registered OpenAI model",
+        add: "Add model",
+        reset: "Reset to 7 defaults",
+        emptyError: 'Keep at least one OpenAI sync model.',
+        unknownError: 'Unknown OpenAI model: {model}',
+        loadFailed: 'Failed to load the OpenAI sync model catalog. Please try again.',
+        hint: "Click Save at the bottom to apply this catalog to all OpenAI accounts. Only missing models are added; upstream sync is unaffected.",
+      },
       openaiFastPolicy: {
         title: 'OpenAI Fast/Flex Policy',
         description: 'Intercept, filter, or pass OpenAI fast(priority), ultrafast, or flex requests based on the request body service_tier field. Applies to the OpenAI gateway only. "All tier values" includes explicitly sent tiers only.',

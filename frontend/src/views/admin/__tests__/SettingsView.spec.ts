@@ -7,6 +7,8 @@ import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
+import OpenAISyncModelsField from "@/components/admin/OpenAISyncModelsField.vue";
+import { DEFAULT_OPENAI_SYNC_MODEL_IDS } from "@/constants/openaiSyncModels";
 
 const {
   getSettings,
@@ -367,6 +369,8 @@ const ImageUploadStub = defineComponent({
 });
 
 const baseSettingsResponse = {
+  openai_sync_model_ids: [...DEFAULT_OPENAI_SYNC_MODEL_IDS],
+  openai_sync_model_candidates: [...DEFAULT_OPENAI_SYNC_MODEL_IDS, "gpt-image-2"],
   registration_enabled: true,
   email_verify_enabled: false,
   registration_email_suffix_whitelist: [],
@@ -720,6 +724,70 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("edits, reorders, restores and saves the curated OpenAI catalog using backend candidates", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      openai_sync_model_ids: ['gpt-reserve', 'gpt-6-astra'],
+      openai_sync_model_candidates: [...DEFAULT_OPENAI_SYNC_MODEL_IDS, 'gpt-image-2'],
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    await openGatewayTab(wrapper);
+    const editor = wrapper.getComponent(OpenAISyncModelsField);
+    const models = () => editor.props('modelValue');
+    const chips = () => editor.findAll('[data-testid="openai-sync-model-chip"]');
+    expect(models()).toEqual(['gpt-reserve', 'gpt-6-astra']);
+    await chips()[1].findAll('button')[0].trigger('click');
+    expect(models()).toEqual(['gpt-6-astra', 'gpt-reserve']);
+    await chips()[1].findAll('button')[2].trigger('click');
+    expect(chips()[0].findAll('button')[2].attributes('disabled')).toBeDefined();
+    const select = editor.findComponent(SelectStub);
+    expect(select.props('options').map((o: { value: string }) => o.value)).not.toContain('gpt-5.2-chat-latest');
+    select.vm.$emit('update:modelValue', 'gpt-image-2');
+    await flushPromises();
+    await editor.findAll('button').find(b => b.text() === 'admin.settings.openaiSyncModels.add')!.trigger('click');
+    expect(models()).toEqual(['gpt-6-astra', 'gpt-image-2']);
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ openai_sync_model_ids: ['gpt-6-astra', 'gpt-image-2'] }));
+    expect(updateSettings.mock.calls.at(-1)![0]).not.toHaveProperty('openai_sync_model_candidates');
+    await editor.findAll('button').find(b => b.text() === 'admin.settings.openaiSyncModels.reset')!.trigger('click');
+    expect(models()).toEqual(DEFAULT_OPENAI_SYNC_MODEL_IDS);
+    wrapper.unmount();
+  });
+
+  it("normalizes duplicates and blanks before saving, while rejecting unknown or empty catalogs", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, openai_sync_model_ids: ['gpt-reserve'], openai_sync_model_candidates: ['gpt-reserve', 'gpt-6-astra'] });
+    const wrapper = mountView();
+    await flushPromises();
+    const editor = wrapper.getComponent(OpenAISyncModelsField);
+    editor.vm.$emit('update:modelValue', [' gpt-reserve ', '', 'gpt-reserve', 'gpt-6-astra']);
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ openai_sync_model_ids: ['gpt-reserve', 'gpt-6-astra'] }));
+    updateSettings.mockClear();
+    editor.vm.$emit('update:modelValue', ['claude-sonnet-4-6']);
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+    editor.vm.$emit('update:modelValue', []);
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("omits the catalog when an older settings response does not include it", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, openai_sync_model_ids: undefined, openai_sync_model_candidates: undefined });
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.getComponent(OpenAISyncModelsField).props('disabled')).toBe(true);
+    await wrapper.find('form').trigger('submit.prevent');
+    await flushPromises();
+    expect(updateSettings.mock.calls.at(-1)![0]).not.toHaveProperty('openai_sync_model_ids');
+    wrapper.unmount();
   });
 
   it("loads and saves the open button visibility for each custom menu", async () => {

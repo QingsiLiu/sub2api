@@ -1092,6 +1092,20 @@ export default {
         presetOpusOnlyDesc: 'Opus 透传，其他模型过滤',
         commonPatterns: '常用模式'
       },
+      openaiSyncModels: {
+        moveUp: "上移 {model}",
+        moveDown: "下移 {model}",
+        remove: "移除 {model}",
+        title: "OpenAI 最新支持模型目录",
+        description: "“同步最新支持模型”只会追加此目录中的模型，不会删除账号已有模型。",
+        addPlaceholder: "选择已登记的 OpenAI 模型",
+        add: "添加模型",
+        reset: "恢复默认 7 个",
+        emptyError: '至少保留一个 OpenAI 同步模型。',
+        unknownError: '未知的 OpenAI 模型：{model}',
+        loadFailed: '获取 OpenAI 同步模型目录失败，请稍后重试。',
+        hint: "点击页面底部“保存”后生效，所有 OpenAI 账号共用此目录。只追加缺失项，不影响上游模型同步。",
+      },
       openaiFastPolicy: {
         title: 'OpenAI Fast/Flex 策略',
         description: '基于请求体 service_tier 字段拦截/过滤/透传 OpenAI fast(priority)、ultrafast 与 flex 请求；仅作用于 OpenAI 网关。“全部 tier 值”仅包含显式传入的 tier。',

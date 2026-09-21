@@ -176,11 +176,13 @@ type SystemSettings struct {
 	DefaultSubscriptions         []DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
-	EnableModelFallback      bool   `json:"enable_model_fallback"`
-	FallbackModelAnthropic   string `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI      string `json:"fallback_model_openai"`
-	FallbackModelGemini      string `json:"fallback_model_gemini"`
-	FallbackModelAntigravity string `json:"fallback_model_antigravity"`
+	EnableModelFallback       bool     `json:"enable_model_fallback"`
+	FallbackModelAnthropic    string   `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI       string   `json:"fallback_model_openai"`
+	FallbackModelGemini       string   `json:"fallback_model_gemini"`
+	FallbackModelAntigravity  string   `json:"fallback_model_antigravity"`
+	OpenAISyncModelIDs        []string `json:"openai_sync_model_ids"`
+	OpenAISyncModelCandidates []string `json:"openai_sync_model_candidates"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`

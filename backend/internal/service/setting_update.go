@@ -397,6 +397,19 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyFallbackModelOpenAI] = settings.FallbackModelOpenAI
 	updates[SettingKeyFallbackModelGemini] = settings.FallbackModelGemini
 	updates[SettingKeyFallbackModelAntigravity] = settings.FallbackModelAntigravity
+	// geili hook: nil preserves catalogs for older callers; explicit empty lists are rejected.
+	if settings.OpenAISyncModelIDs != nil {
+		normalized, err := NormalizeOpenAISyncModelIDs(settings.OpenAISyncModelIDs)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_OPENAI_SYNC_MODEL_IDS", err.Error())
+		}
+		settings.OpenAISyncModelIDs = normalized
+		data, err := json.Marshal(normalized)
+		if err != nil {
+			return nil, fmt.Errorf("marshal OpenAI sync model IDs: %w", err)
+		}
+		updates[SettingKeyOpenAISyncModelIDs] = string(data)
+	}
 
 	// Identity patch configuration (Claude -> Gemini)
 	updates[SettingKeyEnableIdentityPatch] = strconv.FormatBool(settings.EnableIdentityPatch)

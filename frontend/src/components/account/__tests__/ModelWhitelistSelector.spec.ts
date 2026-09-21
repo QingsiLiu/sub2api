@@ -8,7 +8,8 @@ const {
   showInfo,
   showWarning,
   syncUpstreamModels,
-  syncUpstreamModelsPreview
+  syncUpstreamModelsPreview,
+  getOpenAISyncModelIDs
 } = vi.hoisted(() => ({
   copyToClipboard: vi.fn().mockResolvedValue(true),
   showError: vi.fn(),
@@ -16,7 +17,8 @@ const {
   showInfo: vi.fn(),
   showWarning: vi.fn(),
   syncUpstreamModels: vi.fn(),
-  syncUpstreamModelsPreview: vi.fn()
+  syncUpstreamModelsPreview: vi.fn(),
+  getOpenAISyncModelIDs: vi.fn()
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -38,10 +40,13 @@ vi.mock('@/stores/app', () => ({
   })
 }))
 
+vi.mock('@/api/admin/settings', () => ({ getOpenAISyncModelIDs }))
+
 vi.mock('@/api/admin/accounts', () => ({
   accountsAPI: {
     syncUpstreamModels,
-    syncUpstreamModelsPreview
+    syncUpstreamModelsPreview,
+  getOpenAISyncModelIDs
   }
 }))
 
@@ -52,6 +57,7 @@ vi.mock('@/composables/useClipboard', () => ({
 }))
 
 import ModelWhitelistSelector from '../ModelWhitelistSelector.vue'
+import { DEFAULT_OPENAI_SYNC_MODEL_IDS } from '@/constants/openaiSyncModels'
 
 function mountSelector(props: Record<string, unknown> = {}) {
   return mount(ModelWhitelistSelector, {
@@ -89,6 +95,7 @@ describe('ModelWhitelistSelector', () => {
     showWarning.mockReset()
     syncUpstreamModels.mockReset()
     syncUpstreamModelsPreview.mockReset()
+    getOpenAISyncModelIDs.mockReset().mockResolvedValue(['codex-auto-review', 'gpt-5.5', 'gpt-reserve'])
   })
 
   it('copies a model ID without selecting the model', async () => {
@@ -116,6 +123,65 @@ describe('ModelWhitelistSelector', () => {
 
     expect(wrapper.emitted('update:modelValue')).toEqual([[['gpt-5.6-sol']]])
     expect(copyToClipboard).not.toHaveBeenCalled()
+  })
+
+
+  it('uses the global OpenAI sync catalog additively', async () => {
+    const wrapper = mountSelector({ modelValue: ['gpt-5.6-sol', 'custom-model'] })
+    const button = wrapper.findAll('button').find(item => item.text() === 'admin.accounts.fillRelatedModels')
+    expect(button).toBeDefined()
+    await button!.trigger('click')
+    await flushPromises()
+    expect(getOpenAISyncModelIDs).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('update:modelValue')).toEqual([[['gpt-5.6-sol', 'custom-model', 'codex-auto-review', 'gpt-5.5', 'gpt-reserve']]])
+  })
+
+  it('fills exactly the seven defaults from empty and is idempotent', async () => {
+    getOpenAISyncModelIDs.mockResolvedValue([...DEFAULT_OPENAI_SYNC_MODEL_IDS])
+    const wrapper = mountSelector()
+    const button = wrapper.findAll('button').find(item => item.text() === 'admin.accounts.fillRelatedModels')!
+    await button.trigger('click')
+    await flushPromises()
+    const added = wrapper.emitted('update:modelValue')![0][0] as string[]
+    expect(added).toEqual(DEFAULT_OPENAI_SYNC_MODEL_IDS)
+    await wrapper.setProps({ modelValue: added })
+    await button.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toEqual(added)
+  })
+
+  it('does not overwrite selection edits while the catalog is loading', async () => {
+    let resolve!: (models: string[]) => void
+    getOpenAISyncModelIDs.mockImplementation(() => new Promise(done => { resolve = done }))
+    const wrapper = mountSelector({ modelValue: ['gpt-5.5'] })
+    const button = wrapper.findAll('button').find(item => item.text() === 'admin.accounts.fillRelatedModels')!
+    await button.trigger('click')
+    await wrapper.setProps({ modelValue: ['custom-model'] })
+    resolve(['gpt-6-astra'])
+    await flushPromises()
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toEqual(['custom-model', 'gpt-6-astra'])
+  })
+
+  it('keeps the selection on failure and allows a retry', async () => {
+    getOpenAISyncModelIDs.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(['gpt-reserve'])
+    const wrapper = mountSelector({ modelValue: ['gpt-6-astra'] })
+    const button = wrapper.findAll('button').find(item => item.text() === 'admin.accounts.fillRelatedModels')!
+    await button.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(showError).toHaveBeenCalledWith('admin.settings.openaiSyncModels.loadFailed')
+    await button.trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toEqual(['gpt-6-astra', 'gpt-reserve'])
+  })
+
+  it('keeps non-OpenAI fill related behavior local', async () => {
+    const wrapper = mountSelector({ platform: 'anthropic' })
+    const button = wrapper.findAll('button').find(item => item.text() === 'admin.accounts.fillRelatedModels')
+    await button!.trigger('click')
+    await flushPromises()
+    expect(getOpenAISyncModelIDs).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toBeDefined()
   })
 
   it('warns when model IDs sync but capability metadata is incomplete', async () => {

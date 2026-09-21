@@ -448,6 +448,8 @@ const (
 	SettingKeyFallbackModelOpenAI      = "fallback_model_openai"
 	SettingKeyFallbackModelGemini      = "fallback_model_gemini"
 	SettingKeyFallbackModelAntigravity = "fallback_model_antigravity"
+	// SettingKeyOpenAISyncModelIDs stores the curated OpenAI model IDs used by the account whitelist sync action.
+	SettingKeyOpenAISyncModelIDs = "openai_sync_model_ids"
 
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
