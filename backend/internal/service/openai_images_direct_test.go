@@ -88,7 +88,7 @@ func TestCodexDirectImagesHTTPErrorFallbacksOnlyWhenEndpointUnavailable(t *testi
 				calls++
 				if calls == 1 {
 					require.Equal(t, "/backend-api/codex/images/generations", req.URL.Path)
-					return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"error":{"type":"server_error","message":"gpt-image-2.5-sunburst is not supported by the native images endpoint"}}`))}, nil
+					return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"error":{"type":"server_error","message":"image request rejected"}}`))}, nil
 				}
 				require.Contains(t, req.URL.Path, "/backend-api/codex/responses")
 				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"aGVsbG8=\"}]}}\n\n"))}, nil
@@ -99,7 +99,7 @@ func TestCodexDirectImagesHTTPErrorFallbacksOnlyWhenEndpointUnavailable(t *testi
 			parsed, err := svc.ParseOpenAIImagesRequest(c, body)
 			require.NoError(t, err)
 			result, err := svc.ForwardImages(context.Background(), c, directImagesTestAccount(), body, parsed, "")
-			if status == http.StatusNotFound || status == http.StatusMethodNotAllowed || status == http.StatusBadRequest || status == http.StatusForbidden {
+			if status == http.StatusNotFound || status == http.StatusMethodNotAllowed {
 				require.NoError(t, err)
 				require.NotNil(t, result)
 				require.Equal(t, 2, calls)
@@ -109,28 +109,6 @@ func TestCodexDirectImagesHTTPErrorFallbacksOnlyWhenEndpointUnavailable(t *testi
 			}
 		})
 	}
-}
-
-func TestGPTImage25NativeCapabilityRejectionFallsBackToResponses(t *testing.T) {
-	calls := 0
-	upstream := &codexModelsHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
-		calls++
-		if req.URL.Path == "/backend-api/codex/images/generations" {
-			return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"error":{"type":"permission_error","message":"gpt-image-2.5-flare is not supported by the native images endpoint"}}`))}, nil
-		}
-		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"aGVsbG8=\"}]}}\n\n"))}, nil
-	}}
-	body := []byte(`{"model":"gpt-image-2.5-flare","prompt":"draw","response_format":"url"}`)
-	c, rec := newOpenAIImagesTestContext(t, body)
-	svc := newOpenAIImagesTestService(upstream)
-	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
-	require.NoError(t, err)
-	result, err := svc.ForwardImages(context.Background(), c, directImagesTestAccount(), body, parsed, "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Equal(t, 1, result.ImageCount)
-	require.Equal(t, 2, calls)
-	require.Contains(t, rec.Body.String(), "data:image/png;base64,aGVsbG8=")
 }
 
 func TestCodexDirectImagesStreamRejectsPlainJSON(t *testing.T) {
