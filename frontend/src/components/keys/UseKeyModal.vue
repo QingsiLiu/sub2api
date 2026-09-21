@@ -269,6 +269,7 @@ import {
   parseCodexCatalogModels,
   selectCodexConfigReasoningEffort
 } from '@/utils/codexCatalogConfig'
+import { OPENAI_CODEX_DEFAULT_MODEL } from '@/utils/ccswitchImport'
 
 interface Props {
   show: boolean
@@ -334,6 +335,7 @@ const codexManifestContext = computed(() => {
 const defaultClientTab = computed(() => {
   switch (props.platform) {
     case 'openai':
+    case 'composite':
       return 'codex'
     case 'grok':
       return 'grok'
@@ -354,6 +356,8 @@ watch(() => props.platform, () => {
 
 watch(() => props.show, (show) => {
   if (show) {
+    activeClientTab.value = defaultClientTab.value
+    activeTab.value = 'unix'
     codexAuthMode.value = 'legacy'
   } else {
     resetCodexModelManifest()
@@ -942,7 +946,7 @@ function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
 
-  const model = selectCodexCatalogModel('gpt-5.5')
+  const model = OPENAI_CODEX_DEFAULT_MODEL
   const reasoningEffortLine = codexReasoningEffortTomlLine(model)
 
   // config.toml content
@@ -1227,7 +1231,7 @@ function generateRoutedCodexFiles(
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
   const preferredModels: Partial<Record<GroupPlatform, string>> = {
-    openai: 'gpt-5.5',
+    openai: OPENAI_CODEX_DEFAULT_MODEL,
     anthropic: 'claude-sonnet-4-6',
     gemini: 'gemini-2.5-pro',
     antigravity: 'claude-sonnet-4-6',
@@ -1237,10 +1241,12 @@ function generateRoutedCodexFiles(
     deepseek: 'deepseek-v4-pro',
     minimax: 'MiniMax-M3',
     opencode_go: 'glm-5.3',
-    composite: 'gpt-5.5'
+    composite: OPENAI_CODEX_DEFAULT_MODEL
   }
   const preferredModel = preferredModels[platform] || ''
-  const model = selectCodexCatalogModel(preferredModel)
+  const model = platform === 'openai' || platform === 'composite'
+    ? OPENAI_CODEX_DEFAULT_MODEL
+    : selectCodexCatalogModel(preferredModel)
   const labels: Record<GroupPlatform, string> = {
     anthropic: 'Anthropic',
     openai: 'OpenAI',
@@ -1291,7 +1297,7 @@ supports_websockets = false`
 function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
-  const model = selectCodexCatalogModel('gpt-5.5')
+  const model = OPENAI_CODEX_DEFAULT_MODEL
   const reasoningEffortLine = codexReasoningEffortTomlLine(model)
 
   // config.toml content with WebSocket v2

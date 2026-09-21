@@ -365,8 +365,8 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('model_provider = "OpenAI"'))
 
     expect(configToml).toBeDefined()
-    expect(configToml).toContain('model = "gpt-5.5"')
-    expect(configToml).toContain('review_model = "gpt-5.5"')
+    expect(configToml).toContain('model = "gpt-6-astra"')
+    expect(configToml).toContain('review_model = "gpt-6-astra"')
     expect(configToml).not.toContain('model = "gpt-5.4"')
     expect(configToml).not.toContain('model_context_window')
     expect(configToml).not.toContain('model_auto_compact_token_limit')
@@ -467,8 +467,8 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('supports_websockets = true'))
 
     expect(configToml).toBeDefined()
-    expect(configToml).toContain('model = "gpt-5.5"')
-    expect(configToml).toContain('review_model = "gpt-5.5"')
+    expect(configToml).toContain('model = "gpt-6-astra"')
+    expect(configToml).toContain('review_model = "gpt-6-astra"')
     expect(configToml).not.toContain('model = "gpt-5.4"')
     expect(configToml).not.toContain('model_context_window')
     expect(configToml).not.toContain('model_auto_compact_token_limit')
@@ -770,8 +770,8 @@ describe('UseKeyModal', () => {
     const loadedUnixConfig = wrapper.findAll('pre code')
       .map((code) => code.text())
       .find((content) => content.includes('[model_providers.sub2api]'))
-    expect(loadedUnixConfig).toContain('model = "claude-opus-4-8"')
-    expect(loadedUnixConfig).toContain('review_model = "claude-opus-4-8"')
+    expect(loadedUnixConfig).toContain('model = "gpt-6-astra"')
+    expect(loadedUnixConfig).toContain('review_model = "gpt-6-astra"')
     expect(loadedUnixConfig).not.toContain('model = "gpt-5.5"')
 
     const downloadButton = wrapper.findAll('button').find((button) =>
@@ -835,8 +835,8 @@ describe('UseKeyModal', () => {
     }
   )
 
-  // Scenario: the platform-preferred model remains selected when the downloaded catalog contains it.
-  it('keeps the preferred Composite default when it exists in the catalog', async () => {
+  // Scenario: the composite Codex tutorial always uses the current GPT-6 default.
+  it('uses GPT-6 Astra for Composite even when the downloaded catalog is older', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -878,11 +878,11 @@ describe('UseKeyModal', () => {
     const config = wrapper.findAll('pre code')
       .map((code) => code.text())
       .find((content) => content.includes('[model_providers.sub2api]'))
-    expect(config).toContain('model = "gpt-5.5"')
-    expect(config).toContain('review_model = "gpt-5.5"')
+    expect(config).toContain('model = "gpt-6-astra"')
+    expect(config).toContain('review_model = "gpt-6-astra"')
   })
 
-  it('derives OpenAI Codex reasoning effort from the selected catalog descriptor', async () => {
+  it('keeps GPT-6 Astra when an OpenAI catalog only contains older models', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -922,7 +922,7 @@ describe('UseKeyModal', () => {
     const configToml = wrapper.findAll('pre code')
       .map((code) => code.text())
       .find((content) => content.includes('model_provider = "OpenAI"'))
-    expect(configToml).toContain('model = "glm-5.3"')
+    expect(configToml).toContain('model = "gpt-6-astra"')
     expect(configToml).not.toContain('model_reasoning_effort')
   })
 })

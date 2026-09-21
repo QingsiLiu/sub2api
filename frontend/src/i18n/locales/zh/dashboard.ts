@@ -328,6 +328,8 @@ export default {
     ccsClientSelect: {
       title: '选择客户端',
       description: '请选择您要导入到 CC-Switch 的客户端类型：',
+      codex: 'Codex',
+      codexDesc: '使用 {model} 导入为 Codex 配置',
       claudeCode: 'Claude Code',
       claudeCodeDesc: '导入为 Claude Code 配置',
       geminiCli: 'Gemini CLI',

@@ -1,9 +1,11 @@
 import type { GroupPlatform } from '@/types'
 
-export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-5.5'
+export const OPENAI_CODEX_DEFAULT_MODEL = 'gpt-6-astra'
+// Keep the older export name for callers that only need the CCS-specific constant.
+export const OPENAI_CC_SWITCH_CODEX_MODEL = OPENAI_CODEX_DEFAULT_MODEL
 export const GROK_CC_SWITCH_MODEL = 'grok-4.5'
 
-export type CcSwitchClientType = 'claude' | 'gemini'
+export type CcSwitchClientType = 'claude' | 'gemini' | 'codex'
 
 export interface CcSwitchImportConfig {
   app: string
@@ -41,6 +43,18 @@ export function resolveCcSwitchImportConfig(
         app: 'codex',
         endpoint: baseUrl,
         model: OPENAI_CC_SWITCH_CODEX_MODEL
+      }
+    case 'composite':
+      if (clientType === 'codex') {
+        return {
+          app: 'codex',
+          endpoint: baseUrl,
+          model: OPENAI_CC_SWITCH_CODEX_MODEL
+        }
+      }
+      return {
+        app: clientType === 'gemini' ? 'gemini' : 'claude',
+        endpoint: baseUrl
       }
     case 'gemini':
       return {

@@ -162,7 +162,14 @@
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
-                <span v-if="row.billing_source && row.routing_mode === 'composite'" class="text-sm text-primary-600 dark:text-primary-400">{{ t('keys.compositeKey') }} · {{ compositeKeySummary(row) }}</span>
+                <GroupBadge
+                  v-if="row.routing_mode === 'composite'"
+                  class="max-w-xs"
+                  :name="`${t('keys.compositeKey')} · ${compositeKeySummary(row)}`"
+                  :title="`${t('keys.compositeKey')} · ${compositeKeySummary(row)}`"
+                  platform="composite"
+                  :show-rate="false"
+                />
                 <GroupBadge
                   v-else-if="row.group"
                   :name="row.group.name"
@@ -1107,12 +1114,12 @@
       :show="showUseKeyModal"
       :api-key="selectedKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"
-      :platform="selectedKey?.group?.platform || null"
+      :platform="keyClientPlatform(selectedKey)"
       :allow-messages-dispatch="selectedKey?.group?.allow_messages_dispatch || false"
       @close="closeUseKeyModal"
     />
 
-    <!-- CCS Client Selection Dialog for Antigravity -->
+    <!-- geili hook: composite keys choose the client explicitly, with Codex preselected. -->
     <BaseDialog
       :show="showCcsClientSelect"
       :title="t('keys.ccsClientSelect.title')"
@@ -1122,38 +1129,38 @@
       <div class="space-y-4">
         <p class="text-sm text-gray-600 dark:text-gray-400">
           {{ t('keys.ccsClientSelect.description') }}
-	        </p>
-	        <div class="grid grid-cols-2 gap-3">
-	          <button
-	            @click="handleCcsClientSelect('claude')"
-	            class="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 dark:border-dark-600 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all"
-	          >
-	            <Icon name="terminal" size="xl" class="text-gray-600 dark:text-gray-400" />
-	            <span class="font-medium text-gray-900 dark:text-white">{{
-	              t('keys.ccsClientSelect.claudeCode')
-	            }}</span>
-	            <span class="text-xs text-gray-500 dark:text-gray-400">{{
-	              t('keys.ccsClientSelect.claudeCodeDesc')
-	            }}</span>
-	          </button>
-	          <button
-	            @click="handleCcsClientSelect('gemini')"
-	            class="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 dark:border-dark-600 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all"
-	          >
-	            <Icon name="sparkles" size="xl" class="text-gray-600 dark:text-gray-400" />
-	            <span class="font-medium text-gray-900 dark:text-white">{{
-	              t('keys.ccsClientSelect.geminiCli')
-	            }}</span>
-	            <span class="text-xs text-gray-500 dark:text-gray-400">{{
-	              t('keys.ccsClientSelect.geminiCliDesc')
-	            }}</span>
-	          </button>
-	        </div>
-	      </div>
+        </p>
+        <fieldset class="space-y-2">
+          <legend class="sr-only">{{ t('keys.ccsClientSelect.title') }}</legend>
+          <label
+            v-for="client in ccsClientOptions"
+            :key="client.value"
+            class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-primary-500/30"
+            :class="ccsClientSelection === client.value
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+              : 'border-gray-200 hover:bg-gray-50 dark:border-dark-600 dark:hover:bg-dark-700'"
+          >
+            <input
+              v-model="ccsClientSelection"
+              type="radio"
+              name="ccs-client"
+              :value="client.value"
+              class="h-4 w-4 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ client.label }}</span>
+              <span class="block text-xs text-gray-500 dark:text-gray-400">{{ client.description }}</span>
+            </span>
+          </label>
+        </fieldset>
+      </div>
       <template #footer>
-        <div class="flex justify-end">
-          <button @click="closeCcsClientSelect" class="btn btn-secondary">
+        <div class="flex justify-end gap-3">
+          <button type="button" @click="closeCcsClientSelect" class="btn btn-secondary">
             {{ t('common.cancel') }}
+          </button>
+          <button type="button" data-testid="ccs-confirm-import" @click="handleCcsClientSelect(ccsClientSelection)" class="btn btn-primary">
+            {{ t('keys.importToCcSwitch') }}
           </button>
         </div>
       </template>
@@ -1266,6 +1273,7 @@ import { KEY_GROUP_PROVIDERS, getKeyGroupProvider, type KeyGroupProvider } from 
 import { normalizeCompositeGroupIds, selectedUsagePanels } from '@/utils/usagePanels'
 import {
   buildCcSwitchImportDeeplink,
+  OPENAI_CODEX_DEFAULT_MODEL,
   type CcSwitchClientType
 } from '@/utils/ccswitchImport'
 
@@ -1435,8 +1443,22 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
+const ccsClientSelection = ref<CcSwitchClientType>('claude')
 const showColumnDropdown = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
+// geili hook: new composite keys have group_ids rather than a single group.
+function keyClientPlatform(key: ApiKey | null): GroupPlatform | null {
+  return key?.routing_mode === 'composite' ? 'composite' : key?.group?.platform ?? null
+}
+const ccsClientOptions = computed(() => [
+  ...(keyClientPlatform(pendingCcsRow.value) === 'composite' ? [{
+    value: 'codex' as const,
+    label: t('keys.ccsClientSelect.codex'),
+    description: t('keys.ccsClientSelect.codexDesc', { model: OPENAI_CODEX_DEFAULT_MODEL })
+  }] : []),
+  { value: 'claude' as const, label: t('keys.ccsClientSelect.claudeCode'), description: t('keys.ccsClientSelect.claudeCodeDesc') },
+  { value: 'gemini' as const, label: t('keys.ccsClientSelect.geminiCli'), description: t('keys.ccsClientSelect.geminiCliDesc') }
+])
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
@@ -2188,11 +2210,13 @@ const resetRateLimitUsage = async () => {
 }
 
 const importToCcswitch = (row: ApiKey) => {
-  const platform = row.group?.platform || 'anthropic'
+  const platform = keyClientPlatform(row) || 'anthropic'
 
-  // For antigravity platform, show client selection dialog
-  if (platform === 'antigravity') {
+  // Antigravity supports two client protocols; composite keys add Codex as the
+  // preferred client because their default model is GPT-6 Astra.
+  if (platform === 'antigravity' || platform === 'composite') {
     pendingCcsRow.value = row
+    ccsClientSelection.value = platform === 'composite' ? 'codex' : 'claude'
     showCcsClientSelect.value = true
     return
   }
@@ -2203,7 +2227,7 @@ const importToCcswitch = (row: ApiKey) => {
 
 const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
   const baseUrl = publicSettings.value?.api_base_url || window.location.origin
-  const platform = row.group?.platform || 'anthropic'
+  const platform = keyClientPlatform(row) || 'anthropic'
 
   const usageScript = `({
     request: {
@@ -2250,13 +2274,13 @@ const handleCcsClientSelect = (clientType: CcSwitchClientType) => {
   if (pendingCcsRow.value) {
     executeCcsImport(pendingCcsRow.value, clientType)
   }
-  showCcsClientSelect.value = false
-  pendingCcsRow.value = null
+  closeCcsClientSelect()
 }
 
 const closeCcsClientSelect = () => {
   showCcsClientSelect.value = false
   pendingCcsRow.value = null
+  ccsClientSelection.value = 'claude'
 }
 
 function formatResetTime(resetAt: string | null): string {

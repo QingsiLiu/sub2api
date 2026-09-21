@@ -32,6 +32,8 @@ const {
   showInfo: vi.fn(),
 }))
 
+vi.mock('@/api/subscriptions', () => ({ getMySubscriptions: vi.fn().mockResolvedValue([]) }))
+
 const messages: Record<string, string> = {
   'admin.dashboard.timeRange': 'Time range',
   'admin.dashboard.granularity': 'Granularity',
@@ -172,6 +174,8 @@ function mountUsageView() {
 
 describe('user UsageView', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 21, 0, 30))
     query.mockReset()
     getStats.mockReset()
     getDashboardModels.mockReset()
@@ -216,14 +220,21 @@ describe('user UsageView', () => {
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
   })
 
-  it('loads logs, stats, model stats, and snapshot on first render', async () => {
+  afterEach(() => { vi.useRealTimers() })
+
+  it('loads logs, stats, model stats, and snapshot for today on first render', async () => {
     mountUsageView()
     await flushPromises()
 
-    expect(query).toHaveBeenCalled()
-    expect(getStats).toHaveBeenCalled()
-    expect(getDashboardModels).toHaveBeenCalled()
+    const todayString = '2026-09-21'
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ start_date: todayString, end_date: todayString }),
+      expect.anything()
+    )
+    expect(getStats).toHaveBeenCalledWith(expect.objectContaining({ start_date: todayString, end_date: todayString }))
+    expect(getDashboardModels).toHaveBeenCalledWith(expect.objectContaining({ start_date: todayString, end_date: todayString }))
     expect(getDashboardSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
+      start_date: todayString, end_date: todayString, granularity: 'hour',
       include_trend: true,
       include_model_stats: false,
       include_group_stats: true,
@@ -231,6 +242,27 @@ describe('user UsageView', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+  })
+
+  it('resets a custom range to today for records, errors, and charts', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const picker = wrapper.findComponent(DateRangePicker)
+    picker.vm.$emit('change', { startDate: '2026-09-01', endDate: '2026-09-10', preset: null })
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'Error records')!.trigger('click')
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Reset')!.trigger('click')
+    await flushPromises()
+    const today = { start_date: '2026-09-21', end_date: '2026-09-21' }
+    expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ ...today, page: 1 }), expect.anything())
+    expect(getStats).toHaveBeenLastCalledWith(expect.objectContaining(today))
+    expect(getDashboardModels).toHaveBeenLastCalledWith(expect.objectContaining(today))
+    expect(getDashboardSnapshotV2).toHaveBeenLastCalledWith(expect.objectContaining({ ...today, granularity: 'hour' }))
+    expect(listMyErrorRequests).toHaveBeenLastCalledWith(expect.objectContaining(today))
+    expect(picker.props()).toMatchObject({ startDate: '2026-09-21', endDate: '2026-09-21' })
+    wrapper.unmount()
   })
 
   it('includes API keys after the first page in both record filters and queries by the selected key', async () => {

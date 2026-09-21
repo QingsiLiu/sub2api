@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 import type { ApiKey } from '@/types'
 import { keysAPI } from '@/api'
 import KeysView from '../KeysView.vue'
+import UseKeyModal from '@/components/keys/UseKeyModal.vue'
+import GroupBadge from '@/components/common/GroupBadge.vue'
 
 const {
   listKeys,
@@ -177,6 +179,7 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <div data-test="key-group"><slot name="cell-group" :row="row" /></div>
         <slot name="cell-actions" :row="row" />
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
@@ -320,6 +323,75 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it.each(['multi-group', 'legacy'] as const)('recognizes %s composite keys in the tutorial and CCS import', async (kind) => {
+    const key: ApiKey = kind === 'multi-group'
+      ? { ...createApiKey(), billing_source: 'balance', routing_mode: 'composite', group_ids: [1, 2] }
+      : { ...createApiKey(), group_id: 1, group: { id: 1, name: 'Composite', platform: 'composite' } as ApiKey['group'] }
+    listKeys.mockResolvedValue({ items: [key], total: 1, page: 1, page_size: 20, pages: 1 })
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'keys.useKey').trigger('click')
+    expect(wrapper.getComponent(UseKeyModal).props()).toMatchObject({ show: true, platform: 'composite', apiKey: key.key })
+    wrapper.getComponent(UseKeyModal).vm.$emit('close')
+
+    await getButtonByText(wrapper, 'keys.importToCcSwitch').trigger('click')
+    const codex = wrapper.get<HTMLInputElement>('input[name="ccs-client"][value="codex"]')
+    expect(codex.element.checked).toBe(true)
+    expect(open).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="ccs-confirm-import"]').trigger('click')
+    expect(open).toHaveBeenCalledTimes(1)
+    const params = new URL(String(open.mock.calls[0][0])).searchParams
+    expect(params.get('app')).toBe('codex')
+    expect(params.get('model')).toBe('gpt-6-astra')
+    expect(params.get('apiKey')).toBe(key.key)
+    wrapper.unmount()
+  })
+
+  it.each(['claude', 'gemini'] as const)('allows composite CCS imports to choose %s and resets to Codex when reopened', async (client) => {
+    listKeys.mockResolvedValue({ items: [{ ...createApiKey(), routing_mode: 'composite', group_ids: [1] }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'keys.importToCcSwitch').trigger('click')
+    await wrapper.get(`input[name="ccs-client"][value="${client}"]`).setValue(true)
+    expect(open).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="ccs-confirm-import"]').trigger('click')
+    const params = new URL(String(open.mock.calls[0][0])).searchParams
+    expect(params.get('app')).toBe(client)
+    expect(params.has('model')).toBe(false)
+    await getButtonByText(wrapper, 'keys.importToCcSwitch').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('input[value="codex"]').element.checked).toBe(true)
+    await getButtonByText(wrapper, 'common.cancel').trigger('click')
+    expect(open).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('imports single OpenAI keys directly with GPT-6 Astra and preserves the endpoint', async () => {
+    listKeys.mockResolvedValue({ items: [{ ...createApiKey(), group_id: 1, group: { id: 1, name: 'OpenAI', platform: 'openai' } }], total: 1, page: 1, page_size: 20, pages: 1 })
+    getPublicSettings.mockResolvedValue({ api_base_url: 'https://api.example.com/v1', site_name: 'Geili' })
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'keys.importToCcSwitch').trigger('click')
+    expect(wrapper.find('input[name="ccs-client"]').exists()).toBe(false)
+    const params = new URL(String(open.mock.calls[0][0])).searchParams
+    expect(params.get('app')).toBe('codex')
+    expect(params.get('model')).toBe('gpt-6-astra')
+    expect(params.get('endpoint')).toBe('https://api.example.com/v1')
+    wrapper.unmount()
+  })
+
+  it('shows the native composite badge without suggesting a single billing multiplier', async () => {
+    listKeys.mockResolvedValue({ items: [{ ...createApiKey(), billing_source: 'subscription', routing_mode: 'composite', group_ids: [1, 2] }], total: 1, page: 1, page_size: 20, pages: 1 })
+    getAvailableGroups.mockResolvedValue([{ id: 1, usage_panel: 'gpt' }, { id: 2, usage_panel: 'claude' }])
+    const wrapper = await mountView()
+    const badge = wrapper.getComponent(GroupBadge)
+    expect(badge.props()).toMatchObject({ platform: 'composite', showRate: false })
+    expect(badge.props('name')).toContain('keys.usagePanel.gpt')
+    expect(badge.props('name')).toContain('keys.usagePanel.claude')
+    wrapper.unmount()
   })
 
   it.each([

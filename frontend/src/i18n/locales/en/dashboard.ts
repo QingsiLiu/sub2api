@@ -323,6 +323,8 @@ export default {
     ccsClientSelect: {
       title: 'Select Client',
       description: 'Please select the client type to import to CC-Switch:',
+      codex: 'Codex',
+      codexDesc: 'Import as Codex with {model}',
       claudeCode: 'Claude Code',
       claudeCodeDesc: 'Import as Claude Code configuration',
       geminiCli: 'Gemini CLI',
