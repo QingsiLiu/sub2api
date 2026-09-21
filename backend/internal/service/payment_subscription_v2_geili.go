@@ -11,6 +11,8 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
@@ -72,11 +74,17 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 	if err != nil {
 		return nil, err
 	}
-	target, err := c.SubscriptionPlan.Get(ctx, req.PlanID)
+	plans, err := lockSubscriptionQuotePlans(ctx, c, req.PlanID, current)
 	if err != nil {
 		return nil, err
 	}
-	if !target.ForSale || target.ArchivedAt != nil {
+	// Parent/plan locks may wait beyond the prior contract's expiry.
+	now = time.Now().Truncate(time.Microsecond)
+	if current != nil && !current.ExpiresAt.After(now) {
+		current = nil
+	}
+	target := plans[req.PlanID]
+	if target == nil || !target.ForSale || target.ArchivedAt != nil {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
 	tp, err := paymentContractPlan(target)
@@ -89,8 +97,8 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 		return nil, geilisub.ErrContractCompatibility
 	}
 	if current != nil && current.ExpiresAt.After(now) {
-		old, err := c.SubscriptionPlan.Get(ctx, current.PlanID)
-		if err != nil {
+		old := plans[current.PlanID]
+		if old == nil {
 			return nil, errSubscriptionQuoteChanged
 		}
 		cp, err = paymentContractPlan(old)
@@ -215,19 +223,27 @@ func (s *PaymentService) validateSubscriptionV2OrderTx(ctx context.Context, c *d
 	if !sameQuotedContract(q.Change.Before, current, time.Now()) {
 		return errSubscriptionQuoteChanged
 	}
-	for id, revision := range map[int64]string{q.Change.After.PlanID: q.PlanRevision} {
-		p, err := c.SubscriptionPlan.Get(ctx, id)
-		if err != nil || p.ArchivedAt != nil || !p.ForSale || p.UpdatedAt.UTC().Format(time.RFC3339Nano) != revision {
-			return errSubscriptionQuoteChanged
-		}
+	plans, err := lockSubscriptionQuotePlans(ctx, c, q.Change.After.PlanID, q.Change.Before)
+	if err != nil {
+		return err
+	}
+	target := plans[q.Change.After.PlanID]
+	if target == nil || target.ArchivedAt != nil || !target.ForSale || target.UpdatedAt.UTC().Format(time.RFC3339Nano) != q.PlanRevision {
+		return errSubscriptionQuoteChanged
 	}
 	if q.Change.Before != nil && q.CurrentPlanRevision != "" {
-		p, err := c.SubscriptionPlan.Get(ctx, q.Change.Before.PlanID)
-		if err != nil || p.UpdatedAt.UTC().Format(time.RFC3339Nano) != q.CurrentPlanRevision {
+		p := plans[q.Change.Before.PlanID]
+		if p == nil || p.UpdatedAt.UTC().Format(time.RFC3339Nano) != q.CurrentPlanRevision {
 			return errSubscriptionQuoteChanged
 		}
 	}
-	return nil
+	if !sameQuotedContract(q.Change.Before, current, time.Now()) {
+		return errSubscriptionQuoteChanged
+	}
+	// Recheck after any plan/parent-lock wait: an expired quote never creates
+	// a chargeable order, even when it was valid on entry to the transaction.
+	_, err = s.readSubscriptionV2Quote(req.QuoteID, req.UserID, time.Now())
+	return err
 }
 func sameQuotedContract(expected, actual *geilisub.Contract, now time.Time) bool {
 	if expected == nil {
@@ -235,16 +251,56 @@ func sameQuotedContract(expected, actual *geilisub.Contract, now time.Time) bool
 	}
 	return actual != nil && actual.Active(now) && actual.Status == expected.Status && actual.Quantity == expected.Quantity && actual.PlanID == expected.PlanID && actual.UnitDailyUSD == expected.UnitDailyUSD && actual.Mode == expected.Mode && actual.SubscriptionID == expected.SubscriptionID && actual.TermID == expected.TermID && actual.Revision == expected.Revision && actual.ExpiresAt.Equal(expected.ExpiresAt) && actual.ExpiresAt.After(now)
 }
+
+// Both plan rows remain stable until the quote or order transaction commits.
+// Sorting also gives concurrent upgrades a consistent plan lock order.
+func lockSubscriptionQuotePlans(ctx context.Context, c *dbent.Client, targetID int64, current *geilisub.Contract) (map[int64]*dbent.SubscriptionPlan, error) {
+	ids := []int64{targetID}
+	if current != nil && current.PlanID > 0 && current.PlanID != targetID {
+		ids = append(ids, current.PlanID)
+	}
+	rows, err := c.SubscriptionPlan.Query().Unique(false).Where(subscriptionplan.IDIn(ids...), geilisub.LockRows).Order(subscriptionplan.ByID()).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plans := make(map[int64]*dbent.SubscriptionPlan, len(rows))
+	for _, row := range rows {
+		plans[row.ID] = row
+	}
+	return plans, nil
+}
+func subscriptionPendingPredicate() predicate.PaymentOrder {
+	return paymentorder.Or(paymentorder.And(paymentorder.StatusEQ(OrderStatusPending), paymentorder.ExpiresAtGT(time.Now())), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusRefundPending), paymentorder.And(paymentorder.StatusEQ(OrderStatusFailed), paymentorder.PaidAtNotNil()))
+}
 func checkSubscriptionPending(ctx context.Context, c *dbent.Client, userID int64) error {
-	exists, err := c.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.OrderTypeEQ(payment.OrderTypeSubscription), paymentorder.Or(paymentorder.And(paymentorder.StatusEQ(OrderStatusPending), paymentorder.ExpiresAtGT(time.Now())), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusRefundPending), paymentorder.And(paymentorder.StatusEQ(OrderStatusFailed), paymentorder.PaidAtNotNil()))).Exist(ctx)
+	exists, err := c.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.OrderTypeEQ(payment.OrderTypeSubscription), subscriptionPendingPredicate()).Exist(ctx)
 	if err != nil {
 		return err
 	}
 	if exists {
 		return errSubscriptionPending
 	}
+	// A failed refund for an unfulfilled, paid V2 order is still unresolved. A
+	// failed refund of an applied contract has restored its original rights.
+	failed, err := c.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.OrderTypeEQ(payment.OrderTypeSubscription), paymentorder.StatusEQ(OrderStatusRefundFailed), paymentorder.PaidAtNotNil()).All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, o := range failed {
+		if !isSubscriptionV2Order(o) {
+			continue
+		}
+		assigned, err := hasPaymentSubscriptionAssignmentAudit(ctx, c, o.ID)
+		if err != nil {
+			return err
+		}
+		if !assigned {
+			return errSubscriptionPending
+		}
+	}
 	return nil
 }
+
 func subscriptionV2Snapshot(q *subscriptionV2Quote) (map[string]any, error) {
 	raw, err := json.Marshal(q)
 	if err != nil {
@@ -307,7 +363,7 @@ func (s *PaymentService) applySubscriptionV2Payment(ctx context.Context, c *dben
 		if current != nil && current.ExpiresAt.After(time.Now()) {
 			return nil, errSubscriptionQuoteChanged
 		}
-		parent, err := c.UserSubscription.Query().Where(usersubscription.UserIDEQ(o.UserID), usersubscription.PlanIDEQ(change.After.PlanID)).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(ctx)
+		parent, err := c.UserSubscription.Query().Where(usersubscription.UserIDEQ(o.UserID), usersubscription.PlanIDEQ(change.After.PlanID), usersubscription.StatusIn("active", "expired"), usersubscription.ExpiresAtLTE(time.Now())).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(ctx)
 		if err != nil && !dbent.IsNotFound(err) {
 			return nil, err
 		}
@@ -327,6 +383,11 @@ func (s *PaymentService) applySubscriptionV2Payment(ctx context.Context, c *dben
 			}
 		}
 		change.After.SubscriptionID = parent.ID
+	}
+	// Capture the fulfillment clock after the parent lock, not while waiting
+	// behind an in-flight request that may finish after this term expires.
+	if _, err := geilisub.LockParent(ctx, c, change.After.SubscriptionID); err != nil {
+		return nil, err
 	}
 	return geilisub.ApplyContractChange(ctx, c, change, o.ID, "payment", geilisub.PurchaseReference(o.ID), 0, time.Now())
 }

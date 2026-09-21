@@ -147,10 +147,13 @@ func (r *userSubscriptionRepository) resetLotWindows(ctx context.Context, id int
 		if contract != nil {
 			weekly, monthly = false, false
 			if daily {
-				if err := resetAdminDailyLedger(tc, c, contract, lots, day); err != nil {
+				// The actual reset happens after the parent lock; a wait may have
+				// crossed Beijing midnight since the administrator clicked reset.
+				now := time.Now()
+				if err := resetAdminDailyLedger(tc, c, contract, lots, now); err != nil {
 					return err
 				}
-				day = geilisub.DayStart(day)
+				day = geilisub.DayStart(now)
 			}
 		}
 		for i := range lots {

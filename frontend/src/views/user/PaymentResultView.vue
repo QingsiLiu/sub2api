@@ -140,6 +140,7 @@ interface ReturnInfo {
 const returnInfo = ref<ReturnInfo | null>(null)
 
 const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
+const resolvedOrderType = ref<'balance' | 'subscription' | ''>('')
 const PENDING_STATUSES = new Set(['PENDING', 'CREATED', 'WAITING', 'PROCESSING'])
 const STATUS_REFRESH_INTERVAL_MS = 2000
 const STATUS_REFRESH_MAX_ATTEMPTS = 15
@@ -204,6 +205,7 @@ function formatGatewayAmount(value: number): string {
 
 function setResolvedOrder(nextOrder: ResolvedOrder | null): void {
   order.value = nextOrder
+  if (nextOrder && 'order_type' in nextOrder && (nextOrder.order_type === 'balance' || nextOrder.order_type === 'subscription')) resolvedOrderType.value = nextOrder.order_type
   if (nextOrder && 'currency' in nextOrder && nextOrder.currency) {
     currency.value = normalizePaymentCurrency(nextOrder.currency)
   }
@@ -245,11 +247,13 @@ function displayOrderStatus(status: string): OrderStatus {
 }
 
 function isSuccessStatus(status: string | null | undefined): boolean {
-  return SUCCESS_STATUSES.has(normalizeOrderStatus(status))
+  const normalized = normalizeOrderStatus(status)
+  return normalized === 'COMPLETED' || (resolvedOrderType.value === 'balance' && SUCCESS_STATUSES.has(normalized))
 }
 
 function isPendingStatus(status: string | null | undefined): boolean {
-  return PENDING_STATUSES.has(normalizeOrderStatus(status))
+  const normalized = normalizeOrderStatus(status)
+  return PENDING_STATUSES.has(normalized) || (resolvedOrderType.value !== 'balance' && (normalized === 'PAID' || normalized === 'RECHARGING'))
 }
 
 function readRouteQueryString(key: string): string {
@@ -374,6 +378,7 @@ onMounted(async () => {
     routeOrderId,
     routeOutTradeNo: outTradeNo,
   })
+  if (restored?.orderType) resolvedOrderType.value = restored.orderType
   if (restored?.orderId) {
     orderId = restored.orderId
   }

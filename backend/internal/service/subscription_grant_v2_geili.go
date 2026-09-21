@@ -99,7 +99,7 @@ func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input 
 			if days != target.PeriodDays {
 				return errSubscriptionGrantManual
 			}
-			parent, err := c.UserSubscription.Query().Where(usersubscription.UserIDEQ(input.UserID), usersubscription.PlanIDEQ(target.ID)).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(tc)
+			parent, err := c.UserSubscription.Query().Where(usersubscription.UserIDEQ(input.UserID), usersubscription.PlanIDEQ(target.ID), usersubscription.StatusIn("active", "expired"), usersubscription.ExpiresAtLTE(now)).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(tc)
 			if err != nil && !dbent.IsNotFound(err) {
 				return err
 			}

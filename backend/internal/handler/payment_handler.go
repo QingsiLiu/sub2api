@@ -574,6 +574,7 @@ type PublicOrderResult struct {
 // PublicOrderVerifyResult is returned by the legacy anonymous out_trade_no
 // lookup. Keep this intentionally minimal because out_trade_no is not secret.
 type PublicOrderVerifyResult struct {
+	OrderType   string     `json:"order_type"`
 	OutTradeNo  string     `json:"out_trade_no"`
 	Status      string     `json:"status"`
 	Paid        bool       `json:"paid"`
@@ -612,9 +613,10 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 
 func buildPublicOrderVerifyResult(order *dbent.PaymentOrder) PublicOrderVerifyResult {
 	return PublicOrderVerifyResult{
+		OrderType:   order.OrderType,
 		OutTradeNo:  order.OutTradeNo,
 		Status:      order.Status,
-		Paid:        publicOrderStatusPaid(order.Status),
+		Paid:        order.PaidAt != nil || publicOrderStatusPaid(order.Status),
 		CreatedAt:   order.CreatedAt,
 		ExpiresAt:   order.ExpiresAt,
 		PaidAt:      order.PaidAt,

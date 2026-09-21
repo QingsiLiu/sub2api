@@ -65,7 +65,9 @@ func v2Order(t *testing.T, c *dbent.Client, s *dbent.UserSubscription) *dbent.Pa
 func TestContractStoreV2BaselineReplayAndOldWriterBridge(t *testing.T) {
 	c, db := v2Store(t)
 	ctx := context.Background()
-	now := time.Now().Truncate(time.Microsecond)
+	// SQLite compares datetime strings lexically; PostgreSQL cross-offset
+	// timestamptz behavior is verified in the real migration integration test.
+	now := time.Now().In(beijing).Truncate(time.Microsecond)
 	s, p := v2Parent(t, c, 45, 30, now)
 	lot := v2LegacyLot(t, c, s, p, 41.92257312, now)
 	old := uuid.NewString()

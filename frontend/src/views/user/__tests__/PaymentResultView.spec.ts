@@ -415,7 +415,7 @@ describe('PaymentResultView', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('payment.result.success')
+    expect(wrapper.text()).toContain('payment.result.processing')
     expect(wrapper.text()).toContain('legacy-minimal')
     expect(wrapper.text()).not.toContain('payment.orders.paymentMethod')
   })
@@ -546,6 +546,47 @@ describe('subscription result currency display', () => {
     expect(wrapper.text()).toContain(formatPaymentAmount(70, 'CNY'))
     expect(wrapper.text()).not.toContain('payment.orders.creditedAmount')
     expect(wrapper.text()).not.toContain(formatPaymentAmount(10, 'CNY'))
+    wrapper.unmount()
+  })
+})
+
+describe('subscription result fulfillment polling', () => {
+  beforeEach(() => { vi.useFakeTimers(); routeState.query = { order_id: '42' }; pollOrderStatus.mockReset(); window.localStorage.clear() })
+  afterEach(() => vi.useRealTimers())
+  it.each(['PAID', 'RECHARGING'])('keeps %s pending until a paid conflict is visible', async status => {
+    pollOrderStatus.mockResolvedValueOnce({ ...orderFactory(status), order_type: 'subscription' }).mockResolvedValue({ ...orderFactory('FAILED'), order_type: 'subscription', paid_at: '2026-09-21T12:00:00Z' })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.processing')
+    expect(wrapper.text()).not.toContain('payment.result.success')
+    await vi.advanceTimersByTimeAsync(3_001)
+    await flushPromises()
+    expect(wrapper.text()).toContain('subscriptionRights.paidReview')
+    expect(wrapper.text()).not.toContain('payment.result.success')
+    wrapper.unmount()
+  })
+})
+
+describe('anonymous subscription lifecycle projection', () => {
+  beforeEach(() => { vi.useFakeTimers(); window.localStorage.clear(); routeState.query = { out_trade_no: 'public-42', trade_status: 'TRADE_SUCCESS' }; verifyOrder.mockRejectedValue(new Error('unauthenticated')); verifyOrderPublic.mockReset() })
+  afterEach(() => vi.useRealTimers())
+  it('renders paid failure using the minimal public status identity', async () => {
+    verifyOrderPublic.mockResolvedValue({ data: { order_type: 'subscription', out_trade_no: 'public-42', status: 'FAILED', paid: true, paid_at: '2026-09-21', created_at: '2026-09-21', expires_at: '2099-01-01' } })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('subscriptionRights.paidReview')
+    expect(wrapper.text()).not.toContain('payment.result.success')
+    wrapper.unmount()
+  })
+  it('keeps an anonymous paid subscription processing and refreshes to completion', async () => {
+    const order = { order_type: 'subscription', out_trade_no: 'public-42', status: 'PAID', paid: true, created_at: '2026-09-21', expires_at: '2099-01-01' }
+    verifyOrderPublic.mockResolvedValueOnce({ data: order }).mockResolvedValue({ data: { ...order, status: 'COMPLETED' } })
+    const wrapper = mount(PaymentResultView, { global: { stubs: { OrderStatusBadge: true } } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.processing')
+    await vi.advanceTimersByTimeAsync(2_001)
+    await flushPromises()
+    expect(wrapper.text()).toContain('payment.result.success')
     wrapper.unmount()
   })
 })

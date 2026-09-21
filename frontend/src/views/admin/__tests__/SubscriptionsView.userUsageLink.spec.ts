@@ -146,6 +146,23 @@ describe('admin subscription users', () => {
     wrapper.unmount()
   })
 
+  it.each([
+    { mode: 'v2', count: 2, limit: 90, used: 87.04857312, unlimited: false },
+    { mode: 'legacy_daily', count: 2, limit: 90, used: 90.12, unlimited: false },
+    { mode: 'legacy_daily', count: 1, limit: null, used: 100, unlimited: true },
+    { mode: 'v2', count: 0, limit: 0, used: 0, unlimited: false },
+  ])('shows $mode ledger count $count consistently with user quota', async ({ mode, count, limit, used, unlimited }) => {
+    listSubscriptions.mockResolvedValue({ items: [{ id: 9, user_id: 42, status: 'active', daily_usage_usd: 999, contract: { mode, quantity: 2, unit_daily_usd: 45 }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }], total: 1, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('999.00')
+    expect(wrapper.text()).not.toContain('admin.subscriptions.weekly')
+    expect(wrapper.text()).not.toContain('admin.subscriptions.monthly')
+    if (limit) { expect(wrapper.text()).toContain(used.toFixed(2)); expect(wrapper.text()).toContain(limit.toFixed(2)) }
+    expect(wrapper.text().includes('admin.subscriptions.unlimited')).toBe(unlimited)
+    wrapper.unmount()
+  })
+
   it('searches current users when assigning a subscription', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const wrapper = mountView()

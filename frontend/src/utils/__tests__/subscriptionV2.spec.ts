@@ -67,3 +67,18 @@ describe('subscription V2 labels', () => {
     expect(isPaidSubscriptionReview({ order_type: 'balance', status: 'FAILED', paid_at: '2026-09-21' })).toBe(false)
   })
 })
+
+describe('complete active-plan eligibility matrix', () => {
+  const catalog = [[7, 90], [7, 180], [30, 45], [30, 90], [30, 180]].map(([days, daily], index) => ({ ...plan, id: index + 1, validity_days: days, daily_limit_usd: daily }))
+  it.each(catalog.flatMap(from => catalog.map(to => ({ from, to }))))('$from.validity_days-day $from.daily_limit_usd to $to.validity_days-day $to.daily_limit_usd', ({ from, to }) => {
+    const current = { ...sub, contract: { ...contract, period_days: from.validity_days, kind: from.validity_days === 7 ? 'week' as const : 'month' as const, unit_daily_usd: from.daily_limit_usd, plan_id: from.id } }
+    const result = subscriptionActions(to, [current], now)
+    if (from.id === to.id) expect(result.actions).toEqual(['stack', 'renew'])
+    else if (from.validity_days !== to.validity_days) expect(result.reason).toBe('subscriptionRights.sameTypeOnly')
+    else if (to.daily_limit_usd > from.daily_limit_usd) expect(result.actions).toEqual(['upgrade'])
+    else expect(result.reason).toBe('subscriptionRights.noDowngrade')
+  })
+  it.each(['active', 'expired', 'revoked', 'suspended'] as const)('allows a new type after %s historical rights expire', status => {
+    expect(subscriptionActions(catalog[0], [{ ...sub, status, expires_at: '2026-09-01', contract: { ...contract, mode: 'legacy_daily' } }], now).actions).toEqual(['purchase'])
+  })
+})

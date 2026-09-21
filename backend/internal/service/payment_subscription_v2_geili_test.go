@@ -14,14 +14,18 @@ import (
 	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func v2PaymentFixture(t *testing.T) (*PaymentService, *dbent.User, []*dbent.SubscriptionPlan) {
 	t.Helper()
+	return v2PaymentFixtureWithClient(t, newPaymentConfigServiceTestClient(t))
+}
+func v2PaymentFixtureWithClient(t *testing.T, c *dbent.Client) (*PaymentService, *dbent.User, []*dbent.SubscriptionPlan) {
+	t.Helper()
 	ctx := context.Background()
-	c := newPaymentConfigServiceTestClient(t)
-	owner, err := c.User.Create().SetEmail("v2@example.invalid").SetPasswordHash("synthetic").Save(ctx)
+	owner, err := c.User.Create().SetEmail("v2-" + uuid.NewString() + "@example.invalid").SetPasswordHash("synthetic").Save(ctx)
 	require.NoError(t, err)
 	var plans []*dbent.SubscriptionPlan
 	for i, v := range []struct {

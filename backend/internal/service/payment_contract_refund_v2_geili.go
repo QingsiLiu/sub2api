@@ -117,10 +117,7 @@ func (s *PaymentService) executeSubscriptionV2Refund(ctx context.Context, p *Ref
 	if assigned {
 		return s.finishSubscriptionV2Refund(ctx, p, resp, gwErr)
 	}
-	if gwErr != nil {
-		return s.markRefundPending(ctx, p, resp)
-	}
-	return s.finishRefund(ctx, p, resp)
+	return s.finishUnassignedSubscriptionV2Refund(ctx, p, resp, gwErr)
 }
 
 func (s *PaymentService) finishSubscriptionV2Refund(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse, cause error) (*RefundResult, error) {
@@ -198,5 +195,76 @@ func (s *PaymentService) finalizeSubscriptionV2Refund(ctx context.Context, p *Re
 		return nil, err
 	}
 	s.invalidateLotRefundCache(ctx, contract.SubscriptionID)
+	return result, nil
+}
+
+// Unfulfilled purchases have no subscription parent to freeze. The paid order
+// itself is their durable refund journal, locked through every finalization.
+func (s *PaymentService) finishUnassignedSubscriptionV2Refund(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse, cause error) (*RefundResult, error) {
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	tc := dbent.NewTxContext(ctx, tx)
+	c := tx.Client()
+	if _, err = c.User.Query().Unique(false).Where(user.IDEQ(p.Order.UserID), geilisub.LockRows).Only(tc); err != nil {
+		return nil, err
+	}
+	order, err := c.PaymentOrder.Query().Unique(false).Where(paymentorder.IDEQ(p.OrderID), geilisub.LockRows).Only(tc)
+	if err != nil {
+		return nil, err
+	}
+	if order.Status == OrderStatusRefunded {
+		return &RefundResult{Success: true}, nil
+	}
+	confirmedSuccess := cause == nil && resp != nil && (strings.TrimSpace(resp.Status) == payment.ProviderStatusSuccess || strings.TrimSpace(resp.Status) == payment.ProviderStatusRefunded)
+	if order.Status == OrderStatusRefundFailed && !confirmedSuccess {
+		return &RefundResult{Warning: "provider confirmed refund failure; payment remains awaiting review"}, nil
+	}
+	if order.Status != OrderStatusRefunding && order.Status != OrderStatusRefundPending && !(order.Status == OrderStatusRefundFailed && confirmedSuccess) {
+		return nil, infraerrors.Conflict("CONFLICT", "refund is not in progress")
+	}
+	assigned, err := hasPaymentSubscriptionAssignmentAudit(tc, c, order.ID)
+	if err != nil {
+		return nil, err
+	}
+	if assigned {
+		return nil, errLotRefundManual
+	}
+	copy := *p
+	copy.Order = order
+	copy.RefundAmount = order.RefundAmount
+	copy.BalanceToDeduct = 0
+	copy.SubDaysToDeduct = 0
+	copy.SubscriptionLots = nil
+	copy.DeductionType = payment.DeductionTypeNone
+	if copy.RefundAmount != order.Amount {
+		return nil, errLotRefundManual
+	}
+	status := ""
+	if resp != nil {
+		status = strings.TrimSpace(resp.Status)
+	}
+	var result *RefundResult
+	if cause == nil && (status == payment.ProviderStatusSuccess || status == payment.ProviderStatusRefunded) {
+		result, err = s.markRefundOkTx(tc, c, &copy)
+	} else if cause == nil && status == payment.ProviderStatusFailed {
+		err = c.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusRefundFailed).SetFailedAt(time.Now()).SetFailedReason("payment provider confirmed refund failure; paid subscription still awaits review").Exec(tc)
+		result = &RefundResult{Warning: "provider confirmed refund failure; payment remains awaiting review"}
+	} else {
+		err = c.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusRefundPending).Exec(tc)
+		if err == nil {
+			raw, _ := json.Marshal(map[string]any{"refundID": refundResponseID(resp), "deductionRollbackOK": false, "error": psErrMsg(cause), "unassignedSubscription": true})
+			err = c.PaymentAuditLog.Create().SetOrderID(geilisub.PurchaseReference(order.ID)).SetAction("REFUND_PENDING").SetOperator("system").SetDetail(string(raw)).Exec(tc)
+		}
+		result = &RefundResult{Warning: "refund outcome is pending confirmation"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }

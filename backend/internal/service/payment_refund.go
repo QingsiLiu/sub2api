@@ -493,6 +493,7 @@ func (s *PaymentService) finishRefund(ctx context.Context, p *RefundPlan, resp *
 		} else if has {
 			return s.finishSubscriptionV2Refund(ctx, p, resp, nil)
 		}
+		return s.finishUnassignedSubscriptionV2Refund(ctx, p, resp, nil)
 	}
 	if has, err := s.hasLotRefund(ctx, p.OrderID); err != nil {
 		return nil, err
@@ -532,7 +533,7 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	if journalErr != nil {
 		return nil, journalErr
 	}
-	if o.Status != OrderStatusRefundPending && (!hasJournal || o.Status != OrderStatusRefunding) {
+	if o.Status != OrderStatusRefundPending && (!(hasJournal || isSubscriptionV2Order(o) && o.PaidAt != nil && o.RefundAmount > 0) || o.Status != OrderStatusRefunding) {
 		return nil, infraerrors.BadRequest("INVALID_STATUS", "only pending or recoverable refunds can be finalized")
 	}
 
@@ -561,6 +562,10 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 		return nil, err
 	} else if has {
 		return s.finishRefund(ctx, s.refundFinalizePlan(o), resp)
+	}
+
+	if isSubscriptionV2Order(o) {
+		return s.finishUnassignedSubscriptionV2Refund(ctx, s.refundFinalizePlan(o), resp, nil)
 	}
 
 	if err := validateRefundProviderResponse(resp); err != nil {

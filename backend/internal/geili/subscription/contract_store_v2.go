@@ -76,7 +76,13 @@ func EnsureContract(ctx context.Context, c *dbent.Client, subID int64, now time.
 		return nil, err
 	}
 	active := []Lot{}
+	outstanding := 0
 	for _, lot := range lots {
+		// A future or frozen purchased lot must remain visible in compatibility
+		// mode; collapsing only today's active lot would discard that right.
+		if lot.ExpiresAt.After(now) && lot.Status != "refunded" && lot.Status != "revoked" {
+			outstanding++
+		}
 		if lot.Active(now) {
 			active = append(active, lot)
 		}
@@ -92,7 +98,7 @@ func EnsureContract(ctx context.Context, c *dbent.Client, subID int64, now time.
 	if parent.Edges.Plan != nil {
 		contract.PlanName = parent.Edges.Plan.Name
 	}
-	if liveCount == 1 && len(active) == 1 && parent.Status == "active" && parent.DeletedAt == nil {
+	if liveCount == 1 && len(active) == 1 && outstanding == 1 && parent.Status == "active" && !parent.StartsAt.After(now) && parent.DeletedAt == nil {
 		lot := active[0]
 		plan := parent.Edges.Plan
 		if lot.PlanID != nil && (plan == nil || *lot.PlanID != plan.ID) {
@@ -101,10 +107,20 @@ func EnsureContract(ctx context.Context, c *dbent.Client, subID int64, now time.
 				return nil, err
 			}
 		}
-		if lot.DailyLimitUSD != nil && plan != nil && !plan.IsLegacyCompat {
+		if lot.DailyLimitUSD != nil && plan != nil && !plan.IsLegacyCompat && plan.Price > 0 && plan.DailyLimitUsd != nil && *plan.DailyLimitUsd == *lot.DailyLimitUSD {
 			days := planDays(plan)
+			matchesPurchase := true
+			if lot.SourceOrderID != nil {
+				order, err := c.PaymentOrder.Get(ctx, *lot.SourceOrderID)
+				if err != nil {
+					return nil, err
+				}
+				if order.SubscriptionDays != nil && *order.SubscriptionDays > 0 && *order.SubscriptionDays != days {
+					matchesPurchase = false
+				}
+			}
 			kind := RecognizePlan(days, *lot.DailyLimitUSD)
-			if kind != "" {
+			if kind != "" && matchesPurchase {
 				contract.Mode, contract.Kind, contract.PlanID, contract.PlanName, contract.UnitDailyUSD, contract.Quantity, contract.PeriodDays = ContractModeV2, kind, plan.ID, plan.Name, *lot.DailyLimitUSD, 1, days
 				contract.ExpiresAt = lot.ExpiresAt
 			}

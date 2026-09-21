@@ -71,14 +71,21 @@ func resetAdminDailyLedger(ctx context.Context, c *dbent.Client, contract *geili
 	if err != nil {
 		return err
 	}
-	if _, err = c.ExecContext(ctx, `INSERT INTO subscription_daily_usage(subscription_id,term_id,usage_date,used_usd) VALUES($1,$2,$3,0) ON CONFLICT(subscription_id,term_id,usage_date) DO UPDATE SET used_usd=0`, contract.SubscriptionID, contract.TermID, geilisub.DayStart(now).Format("2006-01-02")); err != nil {
+	// A legacy pool projects out the usage of portions that expired today.
+	// Preserve that audit offset when resetting the remaining live quota.
+	offset := 0.0
+	if contract.Mode == geilisub.ContractModeLegacy {
+		offset = geilisub.RetiredDailyUsage(lots, now, contract.StartsAt)
+	}
+	effectiveBefore := geilisub.ContractSummary(contract, lots, before, now).DailyUsageUSD
+	if _, err = c.ExecContext(ctx, `INSERT INTO subscription_daily_usage(subscription_id,term_id,usage_date,used_usd) VALUES($1,$2,$3,$4) ON CONFLICT(subscription_id,term_id,usage_date) DO UPDATE SET used_usd=EXCLUDED.used_usd`, contract.SubscriptionID, contract.TermID, geilisub.DayStart(now).Format("2006-01-02"), offset); err != nil {
 		return err
 	}
 	if _, err = c.ExecContext(ctx, `UPDATE subscription_contracts SET revision=revision+1,updated_at=$2 WHERE subscription_id=$1`, contract.SubscriptionID, now); err != nil {
 		return err
 	}
 	if len(lots) > 0 {
-		return geilisub.RecordOperation(ctx, c, contract.SubscriptionID, lots[0].ID, "reset_daily", "admin", "", 0, map[string]any{"term_id": contract.TermID, "usage_date": geilisub.DayStart(now).Format("2006-01-02"), "before_daily_usage_usd": before, "after_daily_usage_usd": 0})
+		return geilisub.RecordOperation(ctx, c, contract.SubscriptionID, lots[0].ID, "reset_daily", "admin", "", 0, map[string]any{"term_id": contract.TermID, "usage_date": geilisub.DayStart(now).Format("2006-01-02"), "before_daily_usage_usd": effectiveBefore, "after_daily_usage_usd": 0, "before_ledger_usage_usd": before, "after_ledger_usage_usd": offset})
 	}
 	return nil
 }

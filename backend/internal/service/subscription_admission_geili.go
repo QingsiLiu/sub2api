@@ -28,11 +28,12 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	defer func() { _ = tx.Rollback() }()
 	c := tx.Client()
 	tc := dbent.NewTxContext(ctx, tx)
-	now := time.Now()
 	parent, err := geilisub.LockParent(tc, c, sub.ID)
 	if err != nil {
 		return nil, err
 	}
+	// Admission is serialized by the parent lock; waits may cross midnight or expiry.
+	now := time.Now()
 	if parent.Status != "active" || parent.StartsAt.After(now) || !parent.ExpiresAt.After(now) {
 		return nil, ErrSubscriptionInvalid
 	}

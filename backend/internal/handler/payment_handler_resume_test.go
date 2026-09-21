@@ -152,7 +152,6 @@ func TestVerifyOrderPublicReturnsLegacyOrderState(t *testing.T) {
 		"fee_rate",
 		"currency",
 		"payment_type",
-		"order_type",
 		"refund_amount",
 		"refund_reason",
 		"refund_requested_at",
@@ -162,6 +161,7 @@ func TestVerifyOrderPublicReturnsLegacyOrderState(t *testing.T) {
 	} {
 		require.NotContains(t, resp.Data, field)
 	}
+	require.Equal(t, payment.OrderTypeBalance, resp.Data["order_type"])
 	require.NotZero(t, order.ID)
 }
 

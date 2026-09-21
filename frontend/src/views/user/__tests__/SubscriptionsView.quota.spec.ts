@@ -52,3 +52,26 @@ describe('subscription entitlement display', () => {
   })
 
 })
+
+describe('V2 subscription user quota matrix', () => {
+  it.each([
+    { mode: 'v2', count: 2, limit: 90, used: 87.04857312, remaining: 2.95142688, status: 'active', unlimited: false },
+    { mode: 'v2', count: 2, limit: 90, used: 90.12, remaining: 0, status: 'active', unlimited: false },
+    { mode: 'v2', count: 0, limit: 0, used: 0, remaining: 0, status: 'expired', unlimited: false },
+    { mode: 'legacy_daily', count: 2, limit: 90, used: 87.04857312, remaining: 2.95142688, status: 'active', unlimited: false },
+    { mode: 'legacy_daily', count: 1, limit: null, used: 100, remaining: null, status: 'active', unlimited: true },
+  ])('$mode $status daily limit $limit uses the ledger and action gates', async ({ mode, count, limit, used, remaining, status, unlimited }) => {
+    getMySubscriptions.mockResolvedValue([{ id: 42, status, starts_at: '2026-09-01', expires_at: '2099-01-01', daily_usage_usd: 999, weekly_usage_usd: 315, monthly_usage_usd: 1000, contract: { mode, kind: 'month', quantity: 2, unit_daily_usd: 45, plan_id: 7 }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, remaining_usd: remaining, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }])
+    const wrapper = mount(SubscriptionsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('$999')
+    expect(wrapper.text()).not.toContain('userSubscriptions.weekly')
+    expect(wrapper.text()).not.toContain('userSubscriptions.monthly')
+    if (limit) expect(wrapper.text()).toContain(`$${used.toFixed(2)} / $${limit.toFixed(2)}`)
+    if (remaining !== null) expect(wrapper.text()).toContain(`$${remaining.toFixed(4)}`)
+    expect(wrapper.text().includes('userSubscriptions.unlimited')).toBe(unlimited)
+    expect(wrapper.findAll('button').filter(button => ['subscriptionRights.stack', 'subscriptionRights.renew', 'subscriptionRights.upgrade'].some(action => button.text().includes(action))).length).toBe(mode === 'v2' && status === 'active' ? 3 : 0)
+    if (mode === 'legacy_daily') expect(wrapper.text()).toContain('subscriptionRights.compatibilityHint')
+    wrapper.unmount()
+  })
+})

@@ -16,9 +16,12 @@ import type {
 import type { BasePaginationResponse } from '@/types'
 
 export interface PublicOrderVerifyResult {
+  order_type?: import('@/types/payment').OrderType
   out_trade_no: string
   status: string
   paid: boolean
+  paid_at?: string
+  completed_at?: string
   created_at: string
   expires_at: string
 }

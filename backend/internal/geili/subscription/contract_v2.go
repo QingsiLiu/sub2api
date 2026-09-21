@@ -122,7 +122,7 @@ func PreviewContract(current *Contract, currentPlan, target Plan, operation stri
 	}
 	active := current.Active(now)
 	if operation == "purchase" {
-		if active {
+		if current != nil && current.ExpiresAt.After(now) {
 			return out, ErrStateConflict
 		}
 		if units < 1 || units > 10 || periods != 0 {
@@ -131,6 +131,9 @@ func PreviewContract(current *Contract, currentPlan, target Plan, operation stri
 		out.After = Contract{Mode: ContractModeV2, Kind: target.Kind, PlanID: target.ID, PlanName: target.Name, UnitDailyUSD: target.DailyUSD, Quantity: units, PeriodDays: target.PeriodDays, StartsAt: now, ExpiresAt: now.Add(time.Duration(target.PeriodDays) * 24 * time.Hour), Status: "active", Revision: 1}
 		out.BillableDays = target.PeriodDays
 		out.Amount = target.Price.Mul(decimal.NewFromInt(int64(units))).Round(2)
+		if out.After.ExpiresAt.After(MaxExpiry) {
+			return out, ErrStateConflict
+		}
 		return out, nil
 	}
 	if !active || current.Mode != ContractModeV2 {
@@ -189,11 +192,7 @@ func PreviewContract(current *Contract, currentPlan, target Plan, operation stri
 // even when one of those lots expires part way through the day.
 func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summary {
 	if c != nil && c.Mode == ContractModeLegacy {
-		for _, lot := range lots {
-			if lot.Status != "refunded" && lot.Status != "revoked" && !lot.ExpiresAt.After(now) && lot.DailyWindowStart != nil && DayStart(*lot.DailyWindowStart).Equal(DayStart(now)) {
-				used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(lot.DailyUsageUSD)).Round(10).InexactFloat64()
-			}
-		}
+		used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(RetiredDailyUsage(lots, now, c.StartsAt))).Round(10).InexactFloat64()
 		used = math.Max(0, used)
 	}
 	s := Summary{DailyUsageUSD: used}
@@ -308,4 +307,20 @@ func AllocateContract(lots []Lot, cost float64, now time.Time) ([]Lot, error) {
 		charge(&out[last], remaining)
 	}
 	return out, nil
+}
+
+// RetiredDailyUsage is the audit offset retained when a compatibility lot
+// expires during the day. A manual reset must preserve this offset in the raw
+// day ledger, so subsequent active-lot consumption becomes visible immediately.
+func RetiredDailyUsage(lots []Lot, now time.Time, termStartsAt ...time.Time) float64 {
+	used := decimal.Zero
+	for _, lot := range lots {
+		if len(termStartsAt) > 0 && !lot.ExpiresAt.After(termStartsAt[0]) {
+			continue
+		}
+		if lot.Status != "refunded" && lot.Status != "revoked" && !lot.ExpiresAt.After(now) && lot.DailyWindowStart != nil && DayStart(*lot.DailyWindowStart).Equal(DayStart(now)) {
+			used = used.Add(decimal.NewFromFloat(lot.DailyUsageUSD))
+		}
+	}
+	return used.Round(10).InexactFloat64()
 }

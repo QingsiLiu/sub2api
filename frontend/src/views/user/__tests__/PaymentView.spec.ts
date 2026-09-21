@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, shallowMount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
 import subscriptionsAPI from '@/api/subscriptions'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
+import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import SubscriptionGroupRates from '@/components/payment/SubscriptionGroupRates.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
 import type { UserSubscription } from '@/types'
 import type { CheckoutInfoResponse, MethodLimit, SubscriptionPlan } from '@/types/payment'
 
+enableAutoUnmount(afterEach)
+
+const deviceState = vi.hoisted(() => ({ mobile: true }))
 const routeState = vi.hoisted(() => ({
   path: '/purchase',
   query: {} as Record<string, unknown>,
@@ -115,7 +119,7 @@ vi.mock('@/api/payment', () => ({
 }))
 
 vi.mock('@/utils/device', () => ({
-  isMobileDevice: () => true,
+  isMobileDevice: () => deviceState.mobile,
 }))
 
 function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
@@ -156,6 +160,7 @@ function checkoutInfoWithPlansFixture(options: {
   subscriptions?: UserSubscription[]
   query?: Record<string, unknown>
   useFakeClock?: boolean
+  mobile?: boolean
 } = {}) {
   const base = checkoutInfoFixture(options.checkout).data
   const plan: SubscriptionPlan = {
@@ -236,6 +241,7 @@ function oauthOrderFixture() {
 
 async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoWithPlansFixture>[0] = {}) {
   if (!options.useFakeClock) vi.useRealTimers()
+  deviceState.mobile = options.mobile ?? true
   routeState.path = '/purchase'
   routeState.query = {
     tab: 'subscription',
@@ -1121,5 +1127,175 @@ describe('V2 checkout natural expiry', () => {
       activeSubscriptionState.items = []
       vi.useRealTimers()
     }
+  })
+})
+
+describe('V2 five-plan operation matrix', () => {
+  const plans = [
+    { id: 71, validity_days: 7, daily_limit_usd: 90 },
+    { id: 72, validity_days: 7, daily_limit_usd: 180 },
+    { id: 73, validity_days: 30, daily_limit_usd: 45 },
+    { id: 74, validity_days: 30, daily_limit_usd: 90 },
+    { id: 75, validity_days: 30, daily_limit_usd: 180 },
+  ]
+  const current = (plan: typeof plans[number], count: number): UserSubscription => ({ id: 99, status: 'active', plan_id: plan.id, expires_at: '2099-01-01', contract: { mode: 'v2', kind: plan.validity_days === 7 ? 'week' : 'month', period_days: plan.validity_days, quantity: count, unit_daily_usd: plan.daily_limit_usd, plan_id: plan.id, expires_at: '2099-01-01' } }) as UserSubscription
+  const scenarios = plans.flatMap(plan => [
+    ...[1, 3, 10].map(count => ({ plan, operation: 'purchase', count, quantity: 0, subscriptions: [] as UserSubscription[] })),
+    ...[1, 3].flatMap(quantity => [1, 10].map(count => ({ plan, operation: 'stack', count, quantity, subscriptions: [current(plan, quantity)] }))),
+    ...[1, 3].flatMap(quantity => [1, 4, 10].map(count => ({ plan, operation: 'renew', count, quantity, subscriptions: [current(plan, quantity)] }))),
+  ])
+  afterEach(() => { activeSubscriptionState.items = [] })
+  it.each(scenarios)('$plan.validity_days-day $plan.daily_limit_usd tier $operation with $quantity current units and count $count uses the server quote', async ({ plan, operation, count, subscriptions }) => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: { quote_id: `quote-${plan.id}-${operation}-${count}`, expires_at: '2099-01-01', order_amount: 23.45, projected: { active_lot_count: 3, daily_limit_usd: 270, remaining_usd: 269, expires_at: '2099-02-01' } } })
+    const wrapper = await mountSubscriptionConfirm({ plan, subscriptions, query: { plan: String(plan.id), operation } })
+    await wrapper.get('select').setValue(String(count))
+    await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith({ plan_id: plan.id, operation, units: operation === 'renew' ? undefined : count, periods: operation === 'renew' ? count : undefined })
+    createOrder.mockResolvedValue({ order_id: 99, amount: 23.45, pay_amount: 23.45, fee_rate: 0, expires_at: '2099-01-01', qr_code: 'test' })
+    const pay = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(pay.text()).toContain('23.45')
+    await pay.trigger('click')
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ plan_id: plan.id, operation, quote_id: `quote-${plan.id}-${operation}-${count}`, amount: 23.45, ...(operation === 'renew' ? { periods: count } : { units: count }) }))
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty(operation === 'renew' ? 'units' : 'periods')
+    wrapper.unmount()
+  })
+
+  const upgrades = [[0, 1], [2, 3], [2, 4], [3, 4]].flatMap(([from, to]) => [1, 3].map(quantity => ({ from: plans[from], to: plans[to], quantity })))
+  it.each(upgrades)('upgrades $from.daily_limit_usd to $to.daily_limit_usd for all $quantity units without a quantity selector', async ({ from, to, quantity }) => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: { quote_id: 'upgrade-quote', expires_at: '2099-01-01', order_amount: 17.13, billable_days: 45, projected: { active_lot_count: quantity, daily_limit_usd: to.daily_limit_usd * quantity, expires_at: '2099-02-01' } } })
+    const wrapper = await mountSubscriptionConfirm({ plan: to, subscriptions: [current(from, quantity)], query: { plan: String(to.id), operation: 'upgrade' } })
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(wrapper.text()).toContain('subscriptionRights.billableDays')
+    expect(quoteSubscription).toHaveBeenLastCalledWith({ plan_id: to.id, operation: 'upgrade', units: undefined, periods: undefined })
+    createOrder.mockResolvedValue({ order_id: 99, amount: 17.13, pay_amount: 17.13, fee_rate: 0, expires_at: '2099-01-01', qr_code: 'test' })
+    await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ operation: 'upgrade', quote_id: 'upgrade-quote', amount: 17.13 }))
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('units')
+    expect(createOrder.mock.calls[0][0]).not.toHaveProperty('periods')
+    wrapper.unmount()
+  })
+})
+
+describe('V2 live quote and submission transitions', () => {
+  const quote = (id: string, amount = 10) => ({ data: { quote_id: id, expires_at: '2099-01-01', order_amount: amount, projected: { active_lot_count: 1, daily_limit_usd: 45, expires_at: '2099-02-01' } } })
+  afterEach(() => { activeSubscriptionState.items = []; vi.mocked(subscriptionsAPI.getMySubscriptions).mockImplementation(async () => activeSubscriptionState.items) })
+  it('locks one submitted snapshot against rapid double clicks and a concurrent quote refresh', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote('accepted', 12))
+    const wrapper = await mountSubscriptionConfirm()
+    let resolveOrder!: (value: ReturnType<typeof jsapiOrderFixture>) => void
+    createOrder.mockImplementation(() => new Promise(resolve => { resolveOrder = resolve }))
+    const pay = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    await pay.trigger('click')
+    await pay.trigger('click')
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('select').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(button => button.text() === 'subscriptionRights.purchase')!.attributes('disabled')).toBeDefined()
+    quoteSubscription.mockResolvedValue(quote('new-price', 30))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(createOrder.mock.calls[0][0]).toMatchObject({ amount: 12, quote_id: 'accepted', units: 1 })
+    resolveOrder({ ...jsapiOrderFixture(), result_type: 'order_created', qr_code: 'test', jsapi: undefined } as unknown as ReturnType<typeof jsapiOrderFixture>)
+    await flushPromises()
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+  it('disables submission immediately when a pending quote fails or becomes unavailable', async () => {
+    let rejectQuote!: (reason: Error) => void
+    quoteSubscription.mockReset().mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectQuote = reject }))
+    const wrapper = await mountSubscriptionConfirm()
+    const pay = () => wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!
+    expect(pay().attributes('disabled')).toBeDefined()
+    rejectQuote(new Error('network offline'))
+    await flushPromises()
+    expect(pay().attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[role="alert"]').text()).toContain('network offline')
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('invalidates an accepted quote when the server reports price or contract changes', async () => {
+    quoteSubscription.mockReset().mockResolvedValue(quote('stale'))
+    const wrapper = await mountSubscriptionConfirm()
+    createOrder.mockRejectedValue({ reason: 'SUBSCRIPTION_QUOTE_CHANGED', message: 'review new quote' })
+    await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('review new quote')
+    expect(wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.attributes('disabled')).toBeDefined()
+    quoteSubscription.mockResolvedValue(quote('reviewed', 20))
+    await wrapper.findAll('button').find(button => button.text().includes('subscriptionRights.retry'))!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.text()).toContain('20')
+    wrapper.unmount()
+  })
+  it('does not restore stale eligibility when an older refresh resolves after suspension', async () => {
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    quoteSubscription.mockReset().mockResolvedValue(quote('current'))
+    const wrapper = await mountSubscriptionConfirm()
+    let resolveOld!: (subscriptions: UserSubscription[]) => void
+    vi.mocked(subscriptionsAPI.getMySubscriptions).mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve })).mockResolvedValueOnce([{ id: 99, status: 'suspended', expires_at: '2099-01-01' } as UserSubscription])
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('subscriptionRights.suspendedHint')
+    resolveOld([])
+    await flushPromises()
+    visible.mockRestore()
+    expect(wrapper.text()).toContain('subscriptionRights.suspendedHint')
+    expect(wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+})
+
+describe('V2 checkout provider launch integration', () => {
+  const cases = [
+    { name: 'Alipay desktop QR', method: 'alipay', mobile: false, result: { qr_code: 'alipay-qr' }, expect: 'panel' },
+    { name: 'Alipay mobile QR', method: 'alipay', mobile: true, result: { qr_code: 'alipay-qr' }, expect: 'panel' },
+    { name: 'WeChat desktop QR', method: 'wxpay', mobile: false, result: { qr_code: 'wxpay-qr' }, expect: 'panel' },
+    { name: 'WeChat mobile QR', method: 'wxpay', mobile: true, result: { qr_code: 'wxpay-qr' }, expect: 'panel' },
+    { name: 'Alipay desktop redirect', method: 'alipay', mobile: false, result: { pay_url: 'https://pay.example/42', payment_mode: 'redirect' }, expect: 'popup' },
+    { name: 'Alipay mobile redirect', method: 'alipay', mobile: true, result: { pay_url: 'https://pay.example/42' }, expect: 'redirect' },
+    { name: 'Stripe desktop Alipay', method: 'alipay', mobile: false, result: { client_secret: 'cs-42' }, expect: 'popup' },
+    { name: 'Stripe mobile card', method: 'stripe', mobile: true, result: { client_secret: 'cs-42' }, expect: 'stripe' },
+    { name: 'Stripe desktop card', method: 'stripe', mobile: false, result: { client_secret: 'cs-42' }, expect: 'stripe' },
+    { name: 'Airwallex desktop', method: 'airwallex', mobile: false, result: { client_secret: 'secret-42', intent_id: 'intent-42' }, expect: 'airwallex' },
+    { name: 'Airwallex mobile', method: 'airwallex', mobile: true, result: { client_secret: 'secret-42', intent_id: 'intent-42' }, expect: 'airwallex' },
+    { name: 'WeChat JSAPI success', method: 'wxpay', mobile: true, result: { result_type: 'jsapi_ready', jsapi: { appId: 'app-42', nonceStr: 'nonce-42' } }, expect: 'success' },
+    { name: 'WeChat OAuth', method: 'wxpay', mobile: true, result: { result_type: 'oauth_required', oauth: { authorize_url: '/api/wechat/oauth?redirect=%2Fpurchase' } }, expect: 'oauth' },
+  ]
+  afterEach(() => { activeSubscriptionState.items = []; deviceState.mobile = true })
+  it.each(cases)('$name launches once with accepted quote identity', async scenario => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: { quote_id: 'quote-launch', expires_at: '2099-01-01', order_amount: 12.34, projected: { active_lot_count: 2, daily_limit_usd: 90, expires_at: '2099-02-01' } } })
+    const method = checkoutInfoFixture().data.methods.wxpay
+    const wrapper = await mountSubscriptionConfirm({ mobile: scenario.mobile, checkout: { methods: { wxpay: method, [scenario.method]: method } } })
+    wrapper.findComponent(PaymentMethodSelector).vm.$emit('select', scenario.method)
+    await flushPromises()
+    createOrder.mockResolvedValue({ order_id: 42, amount: 12.34, pay_amount: 12.34, fee_rate: 0, expires_at: '2099-01-01', out_trade_no: 'trade-42', resume_token: 'resume-42', ...scenario.result })
+    bridgeInvoke.mockImplementation((_action, _payload, callback) => callback({ err_msg: 'get_brand_wcpay_request:ok' }))
+    ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = { invoke: bridgeInvoke }
+    routerResolve.mockImplementation(route => ({ href: `${route.path}?order_id=42` }))
+    const originalLocation = window.location
+    const location = { href: 'http://localhost/purchase', origin: 'http://localhost' }
+    Object.defineProperty(window, 'location', { configurable: true, value: location })
+    const popup = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as Window)
+    try {
+      await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+      await flushPromises()
+      expect(createOrder).toHaveBeenCalledTimes(1)
+      expect(createOrder.mock.calls[0][0]).toMatchObject({ operation: 'purchase', units: 1, quote_id: 'quote-launch', amount: 12.34, payment_type: scenario.method, is_mobile: scenario.mobile })
+      if (scenario.expect === 'panel') expect(wrapper.html()).toContain('payment-status-panel-stub')
+      if (scenario.expect === 'popup') expect(popup).toHaveBeenCalledTimes(1)
+      if (scenario.expect === 'redirect') expect(location.href).toBe('https://pay.example/42')
+      if (scenario.expect === 'stripe' || scenario.expect === 'airwallex') expect(location.href).toContain(`/payment/${scenario.expect}?order_id=42`)
+      if (scenario.expect === 'success') expect(routerPush).toHaveBeenCalledWith(expect.objectContaining({ path: '/payment/result', query: expect.objectContaining({ order_id: '42', resume_token: 'resume-42' }) }))
+      else expect(JSON.parse(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)!)).toMatchObject({ orderId: 42, orderType: 'subscription', resumeToken: 'resume-42' })
+      if (scenario.expect === 'oauth') {
+        const redirect = new URL(location.href, 'http://localhost').searchParams.get('redirect')!
+        const query = new URL(redirect, 'http://localhost').searchParams
+        expect(query.get('quote_id')).toBe('quote-launch')
+        expect(query.get('operation')).toBe('purchase')
+        expect(query.get('units')).toBe('1')
+      }
+    } finally { popup.mockRestore(); Object.defineProperty(window, 'location', { configurable: true, value: originalLocation }); wrapper.unmount() }
   })
 })

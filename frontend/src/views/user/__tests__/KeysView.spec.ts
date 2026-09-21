@@ -699,6 +699,21 @@ describe('user KeysView column settings', () => {
       expect(wrapper.get('#key-subscription').text()).toContain(remaining === null ? 'payment.admin.unlimited' : '$' + remaining.toFixed(4))
       expect(wrapper.get('#key-subscription').text()).not.toContain('$895.0000')
     })
+    it.each([
+      { mode: 'v2', count: 2, limit: 90, used: 87.04857312, remaining: 2.95142688 },
+      { mode: 'legacy_daily', count: 2, limit: 90, used: 90.12, remaining: 0 },
+      { mode: 'legacy_daily', count: 1, limit: null, used: 100, remaining: null },
+      { mode: 'v2', count: 0, limit: 0, used: 0, remaining: 0 },
+    ])('uses the same $mode daily ledger remainder $remaining in Key selection', async ({ mode, count, limit, used, remaining }) => {
+      getActiveSubscriptions.mockResolvedValue([{ id: 42, status: 'active', starts_at: '2020-01-01', expires_at: '2099-01-01', daily_usage_usd: 999, contract: { mode, kind: 'month', quantity: 2, unit_daily_usd: 45 }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, remaining_usd: remaining, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }])
+      const wrapper = await openCreate()
+      await wrapper.get('#key-billing-source').setValue('subscription')
+      await flushPromises()
+      const text = wrapper.get('#key-subscription').text()
+      expect(text).toContain(remaining === null ? 'payment.admin.unlimited' : '$' + remaining.toFixed(4))
+      expect(text).not.toContain('999')
+      wrapper.unmount()
+    })
     it('requires selection when several subscriptions are effective', async () => {
       getActiveSubscriptions.mockResolvedValue([41,42].map(id => ({ id, plan: { name: `Plan ${id}` }, starts_at:'2020-01-01T00:00:00Z', expires_at:'2099-01-01T00:00:00Z',status:'active' })))
       const wrapper = await openCreate()

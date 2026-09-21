@@ -351,6 +351,7 @@ const eligibilitySubscriptions = ref<UserSubscription[]>([])
 const eligibilityNow = ref(Date.now())
 let eligibilityTimer: ReturnType<typeof setTimeout> | undefined
 let eligibilityUnmounted = false
+let eligibilityRevision = 0
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 
 function getDaysRemaining(expiresAt: string): number {
@@ -1278,16 +1279,17 @@ function scheduleEligibilityRefresh() {
 
 async function refreshEligibilitySubscriptions() {
   if (eligibilityUnmounted || !subscriptionEnabled.value) return
+  const revision = ++eligibilityRevision
   try {
     const subscriptions = await subscriptionsAPI.getMySubscriptions()
-    if (eligibilityUnmounted) return
+    if (eligibilityUnmounted || revision !== eligibilityRevision) return
     eligibilityNow.value = Date.now()
     eligibilitySubscriptions.value = [...subscriptions]
     subscriptionsReady.value = true
   } catch {
-    if (!eligibilityUnmounted && subscriptionRefreshDelay(eligibilitySubscriptions.value) === null) subscriptionsReady.value = false
+    if (!eligibilityUnmounted && revision === eligibilityRevision && subscriptionRefreshDelay(eligibilitySubscriptions.value) === null) subscriptionsReady.value = false
   } finally {
-    scheduleEligibilityRefresh()
+    if (revision === eligibilityRevision) scheduleEligibilityRefresh()
   }
 }
 

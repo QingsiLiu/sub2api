@@ -228,6 +228,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetSubscriptionSnapshot(snapshot).SetPlanID(plan.ID).SetSubscriptionDays(req.subscriptionQuote.Change.After.PeriodDays).SetSubscriptionMode(req.Operation).SetSubscriptionQuantity(req.SubscriptionQuantity)
 	}
 
+	if plan != nil {
+		if _, err := s.readSubscriptionV2Quote(req.QuoteID, req.UserID, time.Now()); err != nil {
+			return nil, err
+		}
+	}
 	order, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)

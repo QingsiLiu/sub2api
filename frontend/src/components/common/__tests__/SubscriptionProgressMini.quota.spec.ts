@@ -32,3 +32,23 @@ describe('subscription header quota', () => {
     wrapper.unmount()
   })
 })
+
+describe('V2 header ledger projection', () => {
+  it.each([
+    { mode: 'v2', count: 2, limit: 90, used: 87.04857312, remaining: 2.95142688 },
+    { mode: 'legacy_daily', count: 2, limit: 90, used: 90.12, remaining: 0 },
+    { mode: 'legacy_daily', count: 1, limit: null, used: 100, remaining: null },
+    { mode: 'v2', count: 0, limit: 0, used: 0, remaining: 0 },
+  ])('$mode count $count displays current daily values only', async ({ mode, count, limit, used, remaining }) => {
+    store.activeSubscriptions = [{ id: 42, status: 'active', daily_usage_usd: 999, contract: { mode, kind: 'month', quantity: 2, unit_daily_usd: 45 }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, remaining_usd: remaining, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }]
+    const wrapper = mount(SubscriptionProgressMini, { global: { stubs: { Icon: true, RouterLink: true } } })
+    await wrapper.get('button').trigger('click')
+    expect(wrapper.text()).not.toContain('$999')
+    expect(wrapper.text()).not.toContain('subscriptionProgress.weekly')
+    expect(wrapper.text()).not.toContain('subscriptionProgress.monthly')
+    if (limit) expect(wrapper.text()).toContain(`$${used.toFixed(2)}/$${limit.toFixed(2)}`)
+    if (remaining !== null) expect(wrapper.text()).toContain(`$${remaining.toFixed(4)}`)
+    expect(wrapper.text().includes('subscriptionProgress.unlimited')).toBe(count > 0 && limit === null)
+    wrapper.unmount()
+  })
+})

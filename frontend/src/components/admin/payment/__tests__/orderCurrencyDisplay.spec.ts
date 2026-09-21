@@ -151,3 +151,20 @@ describe('admin order currency display', () => {
     expect(text).toContain('$100.00')
   })
 })
+
+describe('V2 admin and user order lifecycle labels', () => {
+  const dataTable = { props: ['data'], template: '<div v-for="row in data" :key="row.id"><slot name="cell-status" :value="row.status" :row="row"/><slot name="cell-order_type" :value="row.order_type" :row="row"/><slot name="cell-actions" :row="row"/></div>' }
+  it.each(['purchase', 'stack', 'renew', 'upgrade'] as const)('identifies paid failure and %s operation in admin detail and list', operation => {
+    const order = orderFactory({ operation, status: 'FAILED', paid_at: '2026-09-21', refund_amount: 0 })
+    const detail = mount(AdminOrderDetail, { props: { show: true, order }, global: { stubs: { BaseDialog: BaseDialogStub, Icon: true } } })
+    expect(detail.text()).toContain('subscriptionRights.paidReview')
+    expect(detail.text()).toContain(`subscriptionRights.${operation}`)
+    expect(detail.findAll('button').some(button => button.text().includes('payment.admin.refund'))).toBe(true)
+    const table = mount(AdminOrderTable, { props: { orders: [order], loading: false }, global: { stubs: { DataTable: dataTable, Select: true, Icon: true, Pagination: true } } })
+    expect(table.text()).toContain('subscriptionRights.paidReview')
+    expect(table.text()).toContain(`subscriptionRights.${operation}`)
+    const user = mount(OrderTable, { props: { orders: [order], loading: false }, global: { stubs: { DataTable: dataTable } } })
+    expect(user.text()).toContain('subscriptionRights.paidReview')
+    detail.unmount(); table.unmount(); user.unmount()
+  })
+})

@@ -76,6 +76,12 @@
 
     <!-- ═══ Active States: QR or Popup waiting ═══ -->
 
+    <template v-else-if="fulfillmentPending">
+      <div class="card space-y-3 p-6 text-center" role="status">
+        <p class="text-lg font-bold text-gray-900 dark:text-white">{{ t('payment.result.processing') }}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.result.processingHint') }}</p>
+      </div>
+    </template>
     <!-- Mobile Alipay app handoff. The QR fallback stays hidden until launch timeout. -->
     <template v-else-if="isMobileAlipayDeepLink">
       <template v-if="!deepLinkFallbackVisible">
@@ -164,7 +170,8 @@
                 {{ t('payment.qr.saveQRCode') }}
               </button>
             </div>
-            <button class="btn btn-secondary w-full" @click="handleDone">
+            <a v-if="props.orderType === 'subscription'" href="/orders" class="btn btn-secondary w-full">{{ t('payment.result.viewOrders') }}</a>
+            <button v-else class="btn btn-secondary w-full" @click="handleDone">
               {{ t('payment.result.backToRecharge') }}
             </button>
           </div>
@@ -289,6 +296,7 @@ const localeCode = computed(() => {
 
 // Terminal outcome: null = still active, 'success' | 'cancelled' | 'expired' | 'review'
 const outcome = ref<PaymentOutcome | null>(null)
+const fulfillmentPending = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -348,7 +356,7 @@ function formatGatewayAmount(value: number, currency?: string | null): string {
 }
 
 function isSuccessStatus(status: string | null | undefined): boolean {
-  return status === 'COMPLETED' || status === 'PAID' || status === 'RECHARGING'
+  return status === 'COMPLETED' || (props.orderType !== 'subscription' && (status === 'PAID' || status === 'RECHARGING'))
 }
 
 function reopenPopup() {
@@ -439,6 +447,11 @@ async function pollStatus() {
       paidOrder.value = order
       setOutcome('success')
       emit('success')
+    } else if (props.orderType === 'subscription' && (order.status === 'PAID' || order.status === 'RECHARGING')) {
+      fulfillmentPending.value = true
+      alipayLauncher?.dispose()
+      alipayLauncher = null
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
     } else if (isPaidSubscriptionReview(order)) {
       cleanup()
       setOutcome('review')
@@ -477,7 +490,11 @@ async function handleCancel() {
   }
 }
 
-function handleDone() { cleanup(); emit('done') }
+function handleDone() {
+  if (props.orderType === 'subscription' && !outcome.value) return
+  cleanup()
+  emit('done')
+}
 
 function cleanup() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }

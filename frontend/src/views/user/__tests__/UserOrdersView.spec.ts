@@ -5,6 +5,7 @@ import type { PaymentOrder } from '@/types/payment'
 
 const getMyOrders = vi.hoisted(() => vi.fn())
 const getRefundEligibleProviders = vi.hoisted(() => vi.fn())
+const requestRefund = vi.hoisted(() => vi.fn())
 const showError = vi.hoisted(() => vi.fn())
 const downloadReceiptPdf = vi.hoisted(() => vi.fn())
 
@@ -30,7 +31,7 @@ vi.mock('@/api/payment', () => ({
     getMyOrders,
     getRefundEligibleProviders,
     cancelOrder: vi.fn(),
-    requestRefund: vi.fn(),
+    requestRefund,
   },
 }))
 
@@ -60,9 +61,9 @@ const completed: PaymentOrder = {
 
 const pending: PaymentOrder = { ...completed, id: 82, status: 'PENDING', out_trade_no: 'sub2_pending' }
 
-function mountOrders(items: PaymentOrder[]) {
+function mountOrders(items: PaymentOrder[], eligible: string[] = []) {
   getMyOrders.mockResolvedValue({ data: { items, total: items.length } })
-  getRefundEligibleProviders.mockResolvedValue({ data: { provider_instance_ids: [] } })
+  getRefundEligibleProviders.mockResolvedValue({ data: { provider_instance_ids: eligible } })
   const i18n = createI18n({ legacy: false, locale: 'zh', messages: { zh } })
   return mount(UserOrdersView, {
     global: {
@@ -124,5 +125,33 @@ describe('UserOrdersView receipt', () => {
     expect(downloadReceiptPdf).toHaveBeenCalledTimes(1)
     expect(downloadReceiptPdf.mock.calls[0][0].tradeNo).toBe(tradeNo)
     expect(downloadReceiptPdf.mock.calls[0][0].filename).toMatch(/^RCP-.*\.pdf$/)
+  })
+})
+
+describe('V2 paid review refunds', () => {
+  beforeEach(() => { requestRefund.mockReset().mockResolvedValue({}); showError.mockReset() })
+  it('offers a refund for a paid subscription fulfillment failure through an eligible provider', async () => {
+    const order = { ...completed, order_type: 'subscription' as const, status: 'FAILED' as const, provider_instance_id: 'wxpay-1', operation: 'upgrade' as const }
+    const wrapper = mountOrders([order], ['wxpay-1'])
+    await flushPromises()
+    const open = wrapper.findAll('button').find(button => button.text().includes('payment.orders.requestRefund'))!
+    expect(open).toBeTruthy()
+    await open.trigger('click')
+    expect(wrapper.text()).toContain('subscriptionRights.upgrade')
+    await wrapper.get('textarea').setValue('Please review the paid contract conflict')
+    await wrapper.findAll('button').filter(button => button.text().includes('payment.orders.requestRefund')).at(-1)!.trigger('click')
+    await flushPromises()
+    expect(requestRefund).toHaveBeenCalledWith(order.id, { reason: 'Please review the paid contract conflict' })
+    wrapper.unmount()
+  })
+  it.each([
+    { paid_at: undefined, provider_instance_id: 'wxpay-1' },
+    { paid_at: completed.paid_at, provider_instance_id: 'disabled-provider' },
+  ])('does not offer an unsupported refund for paid_at=$paid_at provider=$provider_instance_id', async override => {
+    const wrapper = mountOrders([{ ...completed, ...override, order_type: 'subscription', status: 'FAILED' }], ['wxpay-1'])
+    await flushPromises()
+    expect(wrapper.findAll('button').some(button => button.text().includes('payment.orders.requestRefund'))).toBe(false)
+    expect(requestRefund).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 })
