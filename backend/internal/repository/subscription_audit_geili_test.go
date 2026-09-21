@@ -13,6 +13,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/internal/testutil/subscriptionv2"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
@@ -27,6 +28,7 @@ func auditRepoFixture(t *testing.T) (*dbent.Client, *dbent.UserSubscriptionEntit
 	c := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = c.Close() })
 	ctx := context.Background()
+	require.NoError(t, subscriptionv2.CreateSQLiteSchema(ctx, db))
 	now := time.Now()
 	u, err := c.User.Create().SetEmail("audit@example.invalid").SetPasswordHash("synthetic-fixture").Save(ctx)
 	require.NoError(t, err)
@@ -85,6 +87,7 @@ func TestSubscriptionAuditLegacyBillingFallback(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 	mock.ExpectQuery("SELECT id FROM user_subscriptions").WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT .* FROM subscription_contracts").WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows([]string{"subscription_id"}))
 	mock.ExpectQuery("SELECT .* FROM user_subscription_entitlements").WithArgs(int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectExec("UPDATE user_subscriptions").WithArgs(2.0, int64(1)).WillReturnResult(sqlmock.NewResult(0, 1))
 	err = incrementUsageBillingSubscription(context.Background(), tx, 1, 2)

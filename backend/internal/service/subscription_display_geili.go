@@ -3,6 +3,8 @@ package service
 import (
 	"math"
 	"time"
+
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 )
 
 // entitlementSubscriptionProgress projects detached lot data only. Several lots
@@ -19,7 +21,14 @@ func entitlementSubscriptionProgress(sub *UserSubscription, group *Group, now ti
 	}
 	progress := &SubscriptionProgress{ID: sub.ID, GroupName: name, ExpiresAt: sub.ExpiresAt, ExpiresInDays: sub.daysRemainingAt(now)}
 	var starts [3]*time.Time
+	if sub.Contract != nil {
+		day := geilisub.DayStart(now)
+		starts[0] = &day
+	}
 	for _, lot := range sub.Entitlements {
+		if sub.Contract != nil {
+			break
+		}
 		if !lot.Active(now) {
 			continue
 		}

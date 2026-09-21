@@ -207,6 +207,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				_, err = subscriptionService.ValidateAndCheckLimits(subscription, limitGroup)
 			}
 			if err != nil {
+				// geili hook: same quota response for preflight and admission.
+				if abortSubscriptionQuotaGeili(c, err, true) {
+					return
+				}
 				status := 403
 				if errors.Is(err, service.ErrDailyLimitExceeded) ||
 					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
@@ -221,6 +225,9 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			if c.Request.Method == "POST" && !strings.Contains(c.Request.URL.Path, "count_tokens") && !strings.Contains(c.Request.URL.Path, "countTokens") {
 				admitted, admitErr := subscriptionService.AdmitConsumption(c.Request.Context(), subscription, apiKey.ID)
 				if admitErr != nil {
+					if abortSubscriptionQuotaGeili(c, admitErr, true) {
+						return
+					}
 					abortWithGoogleError(c, 403, admitErr.Error())
 					return
 				}

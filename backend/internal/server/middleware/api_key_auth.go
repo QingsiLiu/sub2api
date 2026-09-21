@@ -271,6 +271,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, limitGroup)
 				}
 				if validateErr != nil {
+					// geili hook: preserve quota reason and reset metadata.
+					if abortSubscriptionQuotaGeili(c, validateErr, false) {
+						return
+					}
 					code := "SUBSCRIPTION_INVALID"
 					status := 403
 					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
@@ -298,6 +302,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			if c.Request.Method == "POST" && !strings.Contains(c.Request.URL.Path, "count_tokens") && !strings.Contains(c.Request.URL.Path, "countTokens") {
 				admitted, admitErr := subscriptionService.AdmitConsumption(c.Request.Context(), subscription, apiKey.ID)
 				if admitErr != nil {
+					if abortSubscriptionQuotaGeili(c, admitErr, false) {
+						return
+					}
 					AbortWithError(c, 403, "SUBSCRIPTION_ADMISSION_FAILED", admitErr.Error())
 					return
 				}

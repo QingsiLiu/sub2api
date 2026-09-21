@@ -293,6 +293,9 @@ func LockRows(s *entsql.Selector) {
 
 func RefreshParentSnapshot(ctx context.Context, c *dbent.Client, parent *dbent.UserSubscription, lots []Lot, now time.Time) error {
 	a, expiry, status := ParentProjection(lots, now)
+	if err := projectContractDaily(ctx, c, parent.ID, lots, now, &a); err != nil {
+		return err
+	}
 	if parent.Status != "active" && parent.Status != "expired" {
 		status = parent.Status
 	}

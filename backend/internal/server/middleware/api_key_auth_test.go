@@ -266,7 +266,8 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusTooManyRequests, w.Code)
-		require.Contains(t, w.Body.String(), "USAGE_LIMIT_EXCEEDED")
+		require.Contains(t, w.Body.String(), "DAILY_LIMIT_EXCEEDED")
+		require.NotEmpty(t, w.Header().Get("Retry-After"))
 	})
 }
 

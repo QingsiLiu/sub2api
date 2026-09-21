@@ -2428,6 +2428,15 @@ func extractQuotaResetSeconds(err error) int {
 }
 
 func billingErrorDetails(err error) (status int, code, message string, retryAfter int) {
+	// geili hook: quota can be exhausted while a request waits for a slot.
+	if errors.Is(err, service.ErrDailyLimitExceeded) || errors.Is(err, service.ErrWeeklyLimitExceeded) || errors.Is(err, service.ErrMonthlyLimitExceeded) {
+		msg := pkgerrors.Message(err)
+		if reset := pkgerrors.FromError(err).Metadata["window_resets_at"]; reset != "" {
+			msg += "; resets at " + reset
+		}
+		return http.StatusTooManyRequests, pkgerrors.Reason(err), msg, extractQuotaResetSeconds(err)
+	}
+
 	if errors.Is(err, service.ErrBillingServiceUnavailable) {
 		msg := pkgerrors.Message(err)
 		if msg == "" {

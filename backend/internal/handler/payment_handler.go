@@ -242,6 +242,10 @@ func (h *PaymentHandler) GetLimits(c *gin.Context) {
 
 // CreateOrderRequest is the request body for creating a payment order.
 type CreateOrderRequest struct {
+	QuoteID              string  `json:"quote_id,omitempty"`
+	Operation            string  `json:"operation,omitempty"`
+	Units                int     `json:"units,omitempty"`
+	Periods              int     `json:"periods,omitempty"`
 	ExpectedPlanRevision string  `json:"expected_plan_revision,omitempty"`
 	Amount               float64 `json:"amount"`
 	PaymentType          string  `json:"payment_type" binding:"required"`
@@ -289,6 +293,7 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		mobile = *req.IsMobile
 	}
 	result, err := h.paymentService.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
+		QuoteID: req.QuoteID, Operation: req.Operation, Units: req.Units, Periods: req.Periods,
 		ExpectedPlanRevision: req.ExpectedPlanRevision,
 		UserID:               subject.UserID,
 		Amount:               req.Amount,
@@ -322,6 +327,9 @@ func (h *PaymentHandler) QuoteSubscription(c *gin.Context) {
 		return
 	}
 	var req struct {
+		Operation            string `json:"operation"`
+		Units                int    `json:"units"`
+		Periods              int    `json:"periods"`
 		PlanID               int64  `json:"plan_id"`
 		SubscriptionMode     string `json:"subscription_mode"`
 		SubscriptionQuantity int    `json:"subscription_quantity"`
@@ -330,7 +338,7 @@ func (h *PaymentHandler) QuoteSubscription(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	result, err := h.paymentService.QuoteSubscription(c.Request.Context(), service.SubscriptionQuoteRequest{UserID: subject.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity})
+	result, err := h.paymentService.QuoteSubscription(c.Request.Context(), service.SubscriptionQuoteRequest{Operation: req.Operation, Units: req.Units, Periods: req.Periods, UserID: subject.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -356,6 +364,18 @@ func applyWeChatPaymentResumeClaims(req *CreateOrderRequest, claims *service.WeC
 		if requestPaymentType != "" && requestPaymentType != paymentType {
 			return infraerrors.BadRequest("INVALID_WECHAT_PAYMENT_RESUME_TOKEN", "wechat payment resume token payment type mismatch")
 		}
+	}
+	if req.QuoteID == "" {
+		req.QuoteID = claims.QuoteID
+	}
+	if req.Operation == "" {
+		req.Operation = claims.Operation
+	}
+	if req.Units == 0 {
+		req.Units = claims.Units
+	}
+	if req.Periods == 0 {
+		req.Periods = claims.Periods
 	}
 	if req.SubscriptionMode == "" {
 		req.SubscriptionMode = claims.SubscriptionMode
@@ -539,6 +559,7 @@ type PublicOrderResult struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	ExpiresAt            time.Time  `json:"expires_at"`
 	PaidAt               *time.Time `json:"paid_at,omitempty"`
+	FailedReason         *string    `json:"failed_reason,omitempty"`
 	CompletedAt          *time.Time `json:"completed_at,omitempty"`
 	RefundAmount         float64    `json:"refund_amount"`
 	RefundReason         *string    `json:"refund_reason,omitempty"`
@@ -576,6 +597,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		CreatedAt:            order.CreatedAt,
 		ExpiresAt:            order.ExpiresAt,
 		PaidAt:               order.PaidAt,
+		FailedReason:         order.FailedReason,
 		CompletedAt:          order.CompletedAt,
 		RefundAmount:         order.RefundAmount,
 		RefundReason:         order.RefundReason,
@@ -688,6 +710,7 @@ type PaymentOrderResult struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	ExpiresAt            time.Time  `json:"expires_at"`
 	PaidAt               *time.Time `json:"paid_at,omitempty"`
+	FailedReason         *string    `json:"failed_reason,omitempty"`
 	CompletedAt          *time.Time `json:"completed_at,omitempty"`
 	RefundAmount         float64    `json:"refund_amount"`
 	RefundReason         *string    `json:"refund_reason,omitempty"`
@@ -729,6 +752,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		CreatedAt:            order.CreatedAt,
 		ExpiresAt:            order.ExpiresAt,
 		PaidAt:               order.PaidAt,
+		FailedReason:         order.FailedReason,
 		CompletedAt:          order.CompletedAt,
 		RefundAmount:         order.RefundAmount,
 		RefundReason:         order.RefundReason,

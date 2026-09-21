@@ -41,7 +41,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndEntitledGroupID(ctx con
 	if sub == nil || sub.Status != service.SubscriptionStatusActive || !sub.ExpiresAt.After(time.Now()) {
 		return nil, service.ErrSubscriptionNotFound
 	}
-	return userSubscriptionEntityToService(sub), nil
+	return r.projectContract(ctx, userSubscriptionEntityToService(sub))
 }
 
 func NewUserSubscriptionRepository(client *dbent.Client) service.UserSubscriptionRepository {
@@ -116,7 +116,7 @@ func (r *userSubscriptionRepository) GetByID(ctx context.Context, id int64) (*se
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	return r.projectContract(ctx, userSubscriptionEntityToService(m))
 }
 
 func (r *userSubscriptionRepository) GetByIDForUpdate(ctx context.Context, id int64) (*service.UserSubscription, error) {
@@ -145,7 +145,7 @@ func (r *userSubscriptionRepository) GetByIDIncludeDeleted(ctx context.Context, 
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToServicePreserveStatus(m), nil
+	return r.projectContract(ctx, userSubscriptionEntityToServicePreserveStatus(m))
 }
 
 func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
@@ -158,7 +158,7 @@ func (r *userSubscriptionRepository) GetByUserIDAndGroupID(ctx context.Context, 
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	return r.projectContract(ctx, userSubscriptionEntityToService(m))
 }
 
 func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
@@ -176,7 +176,7 @@ func (r *userSubscriptionRepository) GetActiveByUserIDAndGroupID(ctx context.Con
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 	}
-	return userSubscriptionEntityToService(m), nil
+	return r.projectContract(ctx, userSubscriptionEntityToService(m))
 }
 
 func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.UserSubscription) error {
@@ -216,7 +216,10 @@ func (r *userSubscriptionRepository) Delete(ctx context.Context, id int64) error
 			return err
 		}
 		_, err := c.UserSubscription.Delete().Where(usersubscription.IDEQ(id)).Exec(tc)
-		return err
+		if err != nil {
+			return err
+		}
+		return bumpAdminContractRevision(tc, c, id, time.Now())
 	})
 	if errors.Is(err, service.ErrSubscriptionNotFound) || dbent.IsNotFound(err) {
 		return nil
@@ -235,6 +238,21 @@ func (r *userSubscriptionRepository) Restore(ctx context.Context, subscriptionID
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionRestoreConflict)
 	}
+	contract, err := geilisub.LoadContract(ctx, client, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if contract != nil {
+		active := restoredStatus == service.SubscriptionStatusActive && contract.ExpiresAt.After(time.Now()) && contract.Mode == geilisub.ContractModeV2
+		if active {
+			if _, err = client.ExecContext(ctx, `UPDATE subscription_contracts SET is_current=FALSE WHERE user_id=$1 AND subscription_id<>$2`, contract.UserID, subscriptionID); err != nil {
+				return nil, err
+			}
+		}
+		if _, err = client.ExecContext(ctx, `UPDATE subscription_contracts SET revision=revision+1,is_current=$2,updated_at=$3 WHERE subscription_id=$1`, subscriptionID, active, time.Now()); err != nil {
+			return nil, err
+		}
+	}
 	return r.GetByID(ctx, subscriptionID)
 }
 
@@ -250,7 +268,7 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	return r.projectContracts(ctx, userSubscriptionEntitiesToService(subs))
 }
 
 func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
@@ -270,7 +288,7 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	return r.projectContracts(ctx, userSubscriptionEntitiesToService(subs))
 }
 
 func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
@@ -295,7 +313,11 @@ func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID 
 		return nil, nil, err
 	}
 
-	return userSubscriptionEntitiesToService(subs), paginationResultFromTotal(int64(total), params), nil
+	result, err := r.projectContracts(ctx, userSubscriptionEntitiesToService(subs))
+	if err != nil {
+		return nil, nil, err
+	}
+	return result, paginationResultFromTotal(int64(total), params), nil
 }
 
 func (r *userSubscriptionRepository) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
@@ -388,7 +410,10 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 		return nil, nil, err
 	}
 
-	result := userSubscriptionEntitiesToService(subs)
+	result, err := r.projectContracts(ctx, userSubscriptionEntitiesToService(subs))
+	if err != nil {
+		return nil, nil, err
+	}
 	if includeSoftDeleted {
 		if err := r.attachUserSubscriptionRelations(ctx, result); err != nil {
 			return nil, nil, err
@@ -411,14 +436,20 @@ func (r *userSubscriptionRepository) ExistsActiveByUserIDAndGroupID(ctx context.
 
 func (r *userSubscriptionRepository) ExtendExpiry(ctx context.Context, subscriptionID int64, newExpiresAt time.Time) error {
 	return r.withLotTx(ctx, subscriptionID, func(tc context.Context, c *dbent.Client, lots []geilisub.Lot) error {
+		contract, err := geilisub.LoadContract(tc, c, subscriptionID)
+		if err != nil {
+			return err
+		}
 		if len(lots) > 0 {
-			selected, err := geilisub.ValidateSelection(lots, nil, time.Now())
+			selected, err := selectContractLots(contract, lots, nil, time.Now())
 			if err != nil {
 				return err
 			}
-			selected[0].ExpiresAt = newExpiresAt
-			if selected[0].Status == "expired" && newExpiresAt.After(time.Now()) {
-				selected[0].Status = "active"
+			for i := range selected {
+				selected[i].ExpiresAt = newExpiresAt
+				if selected[i].Status == "expired" && newExpiresAt.After(time.Now()) {
+					selected[i].Status = "active"
+				}
 			}
 			if err := geilisub.PersistLots(tc, c, selected); err != nil {
 				return err
@@ -427,7 +458,10 @@ func (r *userSubscriptionRepository) ExtendExpiry(ctx context.Context, subscript
 		if err := c.UserSubscription.UpdateOneID(subscriptionID).SetExpiresAt(newExpiresAt).Exec(tc); err != nil {
 			return err
 		}
-		return geilisub.RefreshParent(tc, c, subscriptionID, time.Now())
+		if err := geilisub.RefreshParent(tc, c, subscriptionID, time.Now()); err != nil {
+			return err
+		}
+		return refreshAdminContractExpiry(tc, c, contract, newExpiresAt, time.Now())
 	})
 }
 
@@ -436,7 +470,17 @@ func (r *userSubscriptionRepository) UpdateStatus(ctx context.Context, subscript
 		if err := geilisub.CheckMutable(lots); err != nil {
 			return err
 		}
-		return c.UserSubscription.UpdateOneID(subscriptionID).SetStatus(status).Exec(tc)
+		contract, err := geilisub.LoadContract(tc, c, subscriptionID)
+		if err != nil {
+			return err
+		}
+		if contract != nil && status == service.SubscriptionStatusActive && !contract.ExpiresAt.After(time.Now()) {
+			return geilisub.ErrStateConflict
+		}
+		if err := c.UserSubscription.UpdateOneID(subscriptionID).SetStatus(status).Exec(tc); err != nil {
+			return err
+		}
+		return bumpAdminContractRevision(tc, c, subscriptionID, time.Now())
 	})
 }
 
@@ -565,7 +609,7 @@ func (r *userSubscriptionRepository) ListExpired(ctx context.Context) ([]service
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	return r.projectContracts(ctx, userSubscriptionEntitiesToService(subs))
 }
 
 func (r *userSubscriptionRepository) CountByGroupID(ctx context.Context, groupID int64) (int64, error) {

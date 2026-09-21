@@ -16,6 +16,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -184,7 +185,7 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 		})
 	}
 	s.writeAuditLog(ctx, o.ID, "ORDER_PAID", pk, map[string]any{"tradeNo": tradeNo, "paidAmount": paid})
-	return s.executeFulfillment(ctx, o.ID)
+	return s.fulfillPaymentWebhook(ctx, o.ID)
 }
 
 func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentOrder) error {
@@ -196,7 +197,7 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 	case OrderStatusCompleted, OrderStatusRefunded:
 		return nil
 	case OrderStatusFailed, OrderStatusPaid, OrderStatusRecharging:
-		return s.executeFulfillment(ctx, o.ID)
+		return s.fulfillPaymentWebhook(ctx, o.ID)
 	case OrderStatusExpired:
 		slog.Warn("webhook payment success for expired order beyond grace period",
 			"orderID", o.ID,
@@ -570,6 +571,10 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 	if s.subscriptionSvc == nil {
 		return errors.New("subscription service is unavailable")
 	}
+	// geili hook: V2 locks and applies the complete contract promise atomically.
+	if isSubscriptionV2Order(o) {
+		return s.ensureSubscriptionV2Assigned(ctx, o)
+	}
 
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
@@ -577,8 +582,11 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	txCtx := dbent.NewTxContext(ctx, tx)
+	txCtx := context.WithValue(dbent.NewTxContext(ctx, tx), legacySubscriptionPaymentKey{}, true)
 	txClient := tx.Client()
+	if _, err := txClient.User.Query().Unique(false).Where(user.IDEQ(o.UserID), geilisub.LockRows).Only(txCtx); err != nil {
+		return err
+	}
 	alreadyAssigned, err := hasPaymentSubscriptionAssignmentAudit(txCtx, txClient, o.ID)
 	if err != nil {
 		return fmt.Errorf("check subscription assignment audit: %w", err)
@@ -648,8 +656,16 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 					return err
 				}
 			}
+			if existing != nil {
+				if _, err := geilisub.EnsureContract(txCtx, txClient, parent.ID, time.Now()); err != nil {
+					return err
+				}
+			}
 			if err := geilisub.Purchase(txCtx, txClient, parent.ID, &planID, o.ID, planDays, o.SubscriptionQuantity, mode, daily, weekly, monthly, "payment", geilisub.PurchaseReference(o.ID), 0, time.Now()); err != nil {
 				return fmt.Errorf("apply subscription entitlement purchase: %w", err)
+			}
+			if _, err := geilisub.MarkLegacyContract(txCtx, txClient, parent.ID, time.Now()); err != nil {
+				return err
 			}
 		}
 
@@ -910,6 +926,9 @@ func (s *PaymentService) markFailed(ctx context.Context, oid int64, lease *payme
 	}
 	now := time.Now()
 	r := psErrMsg(cause)
+	if subscriptionV2Conflict(cause) {
+		r = "SUBSCRIPTION_PAID_REVIEW_REQUIRED: " + r
+	}
 	// The lease version prevents a stale worker from overwriting a newer owner.
 	c, e := s.entClient.PaymentOrder.Update().
 		Where(
@@ -948,6 +967,16 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 }
 
 func (s *PaymentService) invalidatePaymentSubscriptionCache(ctx context.Context, order *dbent.PaymentOrder, legacyGroupID int64) error {
+	if isSubscriptionV2Order(order) {
+		q, err := readSubscriptionV2Snapshot(order)
+		if err != nil {
+			return err
+		}
+		id := q.Change.After.SubscriptionID
+		if id > 0 {
+			return s.subscriptionSvc.invalidateSubscriptionCaches(order.UserID, 0, id)
+		}
+	}
 	if order.SubscriptionGroupID == nil && order.PlanID != nil {
 		sub, err := s.subscriptionSvc.FindByUserAndPlan(ctx, order.UserID, *order.PlanID)
 		if err != nil {

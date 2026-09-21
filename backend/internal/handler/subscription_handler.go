@@ -11,17 +11,19 @@ import (
 
 // SubscriptionSummaryItem represents a subscription item in summary
 type SubscriptionSummaryItem struct {
-	ID              int64   `json:"id"`
-	GroupID         int64   `json:"group_id"`
-	GroupName       string  `json:"group_name"`
-	Status          string  `json:"status"`
-	DailyUsedUSD    float64 `json:"daily_used_usd,omitempty"`
-	DailyLimitUSD   float64 `json:"daily_limit_usd,omitempty"`
-	WeeklyUsedUSD   float64 `json:"weekly_used_usd,omitempty"`
-	WeeklyLimitUSD  float64 `json:"weekly_limit_usd,omitempty"`
-	MonthlyUsedUSD  float64 `json:"monthly_used_usd,omitempty"`
-	MonthlyLimitUSD float64 `json:"monthly_limit_usd,omitempty"`
-	ExpiresAt       *string `json:"expires_at,omitempty"`
+	Contract        *service.SubscriptionContract     `json:"contract,omitempty"`
+	QuotaSummary    *service.SubscriptionQuotaSummary `json:"quota_summary,omitempty"`
+	ID              int64                             `json:"id"`
+	GroupID         int64                             `json:"group_id"`
+	GroupName       string                            `json:"group_name"`
+	Status          string                            `json:"status"`
+	DailyUsedUSD    float64                           `json:"daily_used_usd,omitempty"`
+	DailyLimitUSD   float64                           `json:"daily_limit_usd,omitempty"`
+	WeeklyUsedUSD   float64                           `json:"weekly_used_usd,omitempty"`
+	WeeklyLimitUSD  float64                           `json:"weekly_limit_usd,omitempty"`
+	MonthlyUsedUSD  float64                           `json:"monthly_used_usd,omitempty"`
+	MonthlyLimitUSD float64                           `json:"monthly_limit_usd,omitempty"`
+	ExpiresAt       *string                           `json:"expires_at,omitempty"`
 }
 
 // SubscriptionProgressInfo represents subscription with progress info
@@ -140,6 +142,8 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 
 	for _, sub := range subscriptions {
 		item := SubscriptionSummaryItem{
+			Contract:       sub.Contract,
+			QuotaSummary:   sub.AggregateQuotaSummary(),
 			ID:             sub.ID,
 			GroupID:        sub.GroupID,
 			Status:         sub.Status,
@@ -166,8 +170,12 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 			item.ExpiresAt = &formatted
 		}
 
-		// Track total usage (use monthly as the most comprehensive)
-		totalUsed += sub.MonthlyUsageUSD
+		// geili hook: daily contracts expose the same period in the headline and cards.
+		if sub.Contract != nil {
+			totalUsed += sub.DailyUsageUSD
+		} else {
+			totalUsed += sub.MonthlyUsageUSD
+		}
 
 		items = append(items, item)
 	}

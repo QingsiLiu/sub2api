@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -401,6 +403,7 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	createSubscriptionV2TestSchema(t, client)
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }
@@ -553,4 +556,34 @@ func TestUpdatePaymentConfig_PersistsExplicitEmptyAndFalseValues(t *testing.T) {
 
 func paymentConfigStrPtr(value string) *string {
 	return &value
+}
+
+// The production schema remains migration-owned; SQLite fixtures execute its
+// additive table definitions with only dialect-level type/default rewrites.
+func createSubscriptionV2TestSchema(t *testing.T, c *dbent.Client) {
+	t.Helper()
+	raw, err := os.ReadFile("../../migrations/253_subscription_contract_v2.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ddl := strings.Split(string(raw), "DO $$")[0]
+	ddl = regexp.MustCompile(`(?m)--.*$`).ReplaceAllString(ddl, "")
+	ddl = strings.NewReplacer("TIMESTAMPTZ", "DATETIME", "BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT", "NOW()", "CURRENT_TIMESTAMP").Replace(ddl)
+	for _, stmt := range strings.Split(ddl, ";") {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		if _, err := c.ExecContext(context.Background(), stmt); err != nil {
+			t.Fatalf("create V2 fixture schema: %v", err)
+		}
+	}
+	raw, err = os.ReadFile("../../migrations/251_subscription_entitlement_consistency.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allocation := regexp.MustCompile(`(?s)CREATE TABLE IF NOT EXISTS subscription_usage_allocations \(.*?;`).FindString(string(raw))
+	allocation = strings.NewReplacer("TIMESTAMPTZ", "DATETIME", "BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT", "NOW()", "CURRENT_TIMESTAMP").Replace(allocation)
+	if _, err = c.ExecContext(context.Background(), allocation); err != nil {
+		t.Fatalf("create allocation fixture: %v", err)
+	}
 }

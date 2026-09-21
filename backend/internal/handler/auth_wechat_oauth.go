@@ -91,6 +91,10 @@ type wechatPaymentOAuthContext struct {
 	Amount               string `json:"amount,omitempty"`
 	OrderType            string `json:"order_type,omitempty"`
 	PlanID               int64  `json:"plan_id,omitempty"`
+	QuoteID              string `json:"quote_id,omitempty"`
+	Operation            string `json:"operation,omitempty"`
+	Units                int    `json:"units,omitempty"`
+	Periods              int    `json:"periods,omitempty"`
 	SubscriptionMode     string `json:"subscription_mode,omitempty"`
 	SubscriptionQuantity int    `json:"subscription_quantity,omitempty"`
 }
@@ -366,9 +370,10 @@ func (h *AuthHandler) WeChatPaymentOAuthStart(c *gin.Context) {
 		redirectTo = wechatPaymentOAuthDefaultTo
 	}
 	rawContext, err := encodeWeChatPaymentOAuthContext(wechatPaymentOAuthContext{
-		PaymentType:          paymentType,
-		Amount:               strings.TrimSpace(c.Query("amount")),
-		OrderType:            strings.TrimSpace(c.Query("order_type")),
+		PaymentType: paymentType,
+		Amount:      strings.TrimSpace(c.Query("amount")),
+		OrderType:   strings.TrimSpace(c.Query("order_type")),
+		QuoteID:     c.Query("quote_id"), Operation: c.Query("operation"), Units: parsePositiveInt(c.Query("units")), Periods: parsePositiveInt(c.Query("periods")),
 		PlanID:               parseWeChatPaymentPlanID(c.Query("plan_id")),
 		SubscriptionMode:     strings.TrimSpace(c.Query("subscription_mode")),
 		SubscriptionQuantity: parsePositiveInt(c.Query("subscription_quantity")),
@@ -468,10 +473,11 @@ func (h *AuthHandler) WeChatPaymentOAuthCallback(c *gin.Context) {
 	}
 
 	resumeToken, err := h.wechatPaymentResumeService().CreateWeChatPaymentResumeToken(service.WeChatPaymentResumeClaims{
-		OpenID:               openid,
-		PaymentType:          paymentContext.PaymentType,
-		Amount:               paymentContext.Amount,
-		OrderType:            paymentContext.OrderType,
+		OpenID:      openid,
+		PaymentType: paymentContext.PaymentType,
+		Amount:      paymentContext.Amount,
+		OrderType:   paymentContext.OrderType,
+		QuoteID:     paymentContext.QuoteID, Operation: paymentContext.Operation, Units: paymentContext.Units, Periods: paymentContext.Periods,
 		PlanID:               paymentContext.PlanID,
 		SubscriptionMode:     paymentContext.SubscriptionMode,
 		SubscriptionQuantity: paymentContext.SubscriptionQuantity,

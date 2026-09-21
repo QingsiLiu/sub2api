@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
@@ -692,38 +693,54 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 
 // RestoreSubscription 恢复已撤销订阅
 func (s *SubscriptionService) RestoreSubscription(ctx context.Context, subscriptionID int64) (*UserSubscription, error) {
-	sub, err := s.userSubRepo.GetByIDIncludeDeleted(ctx, subscriptionID)
+	var restored *UserSubscription
+	err := s.withSubscriptionUpdateTx(ctx, func(tc context.Context) error {
+		sub, err := s.userSubRepo.GetByIDIncludeDeleted(tc, subscriptionID)
+		if err != nil {
+			return err
+		}
+		if sub.DeletedAt == nil {
+			return ErrSubscriptionNotRevoked
+		}
+		var client *dbent.Client
+		if tx := dbent.TxFromContext(tc); tx != nil {
+			client = tx.Client()
+			// geili hook: restoration competes with purchase for the one current contract.
+			if _, err = client.User.Query().Unique(false).Where(user.IDEQ(sub.UserID), geilisub.LockRows).Only(tc); err != nil {
+				return err
+			}
+			sub, err = s.userSubRepo.GetByIDIncludeDeleted(tc, subscriptionID)
+			if err != nil {
+				return err
+			}
+			if sub.DeletedAt == nil {
+				return ErrSubscriptionNotRevoked
+			}
+		}
+		var exists bool
+		if sub.Contract != nil && client != nil {
+			exists, err = client.UserSubscription.Query().Where(usersubscription.UserIDEQ(sub.UserID), usersubscription.IDNEQ(sub.ID), usersubscription.StatusIn(SubscriptionStatusActive, SubscriptionStatusSuspended), usersubscription.ExpiresAtGT(time.Now())).Exist(tc)
+		} else if sub.PlanID != nil && client != nil {
+			exists, err = client.UserSubscription.Query().Where(usersubscription.UserIDEQ(sub.UserID), usersubscription.PlanIDEQ(*sub.PlanID), usersubscription.IDNEQ(sub.ID)).Exist(tc)
+		} else {
+			exists, err = s.userSubRepo.ExistsActiveByUserIDAndGroupID(tc, sub.UserID, sub.GroupID)
+		}
+		if err != nil {
+			return err
+		}
+		if exists {
+			return ErrSubscriptionRestoreConflict
+		}
+		status := sub.Status
+		if status == SubscriptionStatusActive && !sub.ExpiresAt.After(time.Now()) {
+			status = SubscriptionStatusExpired
+		}
+		restored, err = s.userSubRepo.Restore(tc, subscriptionID, status)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	if sub.DeletedAt == nil {
-		return nil, ErrSubscriptionNotRevoked
-	}
-
-	var exists bool
-	if sub.PlanID != nil && s.entClient != nil {
-		exists, err = s.entClient.UserSubscription.Query().Where(usersubscription.UserIDEQ(sub.UserID), usersubscription.PlanIDEQ(*sub.PlanID), usersubscription.IDNEQ(sub.ID)).Exist(ctx)
-	} else {
-		exists, err = s.userSubRepo.ExistsActiveByUserIDAndGroupID(ctx, sub.UserID, sub.GroupID)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, ErrSubscriptionRestoreConflict
-	}
-
-	restoredStatus := sub.Status
-	now := time.Now()
-	if restoredStatus == SubscriptionStatusActive && !sub.ExpiresAt.After(now) {
-		restoredStatus = SubscriptionStatusExpired
-	}
-
-	restored, err := s.userSubRepo.Restore(ctx, subscriptionID, restoredStatus)
-	if err != nil {
-		return nil, err
-	}
-
 	if err := s.invalidateSubscriptionCaches(restored.UserID, restored.GroupID, restored.ID); err != nil {
 		return nil, err
 	}
@@ -865,6 +882,11 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	if s.subCacheL1 != nil {
 		if v, ok := s.subCacheL1.Get(key); ok {
 			if sub, ok := v.(*UserSubscription); ok {
+				// geili hook: contract quota is authoritative in the database.
+				// A stale L1 value must not reject a just-upgraded or reset user.
+				if sub.Contract != nil {
+					return s.userSubRepo.GetByID(ctx, sub.ID)
+				}
 				cp := *sub
 				return &cp, nil
 			}
@@ -959,7 +981,7 @@ func normalizeExpiredWindowsAt(subs []UserSubscription, now time.Time) {
 	for i := range subs {
 		sub := &subs[i]
 		// geili hook: parent windows are legacy snapshots; each lot owns its window.
-		if len(sub.Entitlements) > 0 {
+		if sub.Contract != nil || len(sub.Entitlements) > 0 {
 			effectiveSubscriptionSummary(sub, now)
 			continue
 		}
@@ -1124,7 +1146,7 @@ func (s *SubscriptionService) EnsureWindowMaintenance(ctx context.Context, sub *
 // 用于中间件的快速预检查，additionalCost 通常为 0
 func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSubscription, group *Group, additionalCost float64) error {
 	if !sub.CheckDailyLimit(group, additionalCost) {
-		return ErrDailyLimitExceeded
+		return DailyQuotaExceeded(sub, time.Now())
 	}
 	if !sub.CheckWeeklyLimit(group, additionalCost) {
 		return ErrWeeklyLimitExceeded
@@ -1158,13 +1180,13 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	}
 
 	// geili hook: quota comes from independently normalized lots.
-	if len(sub.Entitlements) > 0 {
-		a := geilisub.Aggregate(sub.Entitlements, now)
+	if sub.Contract != nil || len(sub.Entitlements) > 0 {
+		a := sub.QuotaSummaryAt(now)
 		if a.ActiveLotCount == 0 {
 			return false, ErrSubscriptionExpired
 		}
 		if a.AvailableUSD <= 0 {
-			return false, ErrDailyLimitExceeded
+			return false, DailyQuotaExceeded(sub, now)
 		}
 		return false, nil
 	}
@@ -1188,7 +1210,7 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 
 	// 3. 检查用量限额
 	if !sub.CheckDailyLimit(group, 0) {
-		return needsMaintenance, ErrDailyLimitExceeded
+		return needsMaintenance, DailyQuotaExceeded(sub, now)
 	}
 	if !sub.CheckWeeklyLimit(group, 0) {
 		return needsMaintenance, ErrWeeklyLimitExceeded
@@ -1290,7 +1312,7 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 // calculateProgress 根据已加载的订阅和分组数据计算使用进度（纯内存计算，无 DB 查询）
 func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
 	// geili hook: aggregate progress must not use stale or absent parent windows.
-	if len(sub.Entitlements) > 0 {
+	if sub.Contract != nil || len(sub.Entitlements) > 0 {
 		return entitlementSubscriptionProgress(sub, group, time.Now())
 	}
 	copy := *sub

@@ -614,13 +614,13 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 
 	shouldLoadSubscriptions := filters.IncludeSubscriptions == nil || *filters.IncludeSubscriptions
 	if shouldLoadSubscriptions {
-		// Batch load active subscriptions with groups to avoid N+1.
+		// geili hook: admin users need the same contract/ledger projection as subscriptions.
 		subs, err := r.client.UserSubscription.Query().
 			Where(
 				usersubscription.UserIDIn(userIDs...),
 				usersubscription.StatusEQ(service.SubscriptionStatusActive),
 			).
-			WithGroup().
+			WithGroup().WithPlan().WithEntitlements().
 			All(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -628,7 +628,11 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 
 		for i := range subs {
 			if u, ok := userMap[subs[i].UserID]; ok {
-				u.Subscriptions = append(u.Subscriptions, *userSubscriptionEntityToService(subs[i]))
+				subscription := userSubscriptionEntityToService(subs[i])
+				if err := attachSubscriptionContract(ctx, r.client, subscription, time.Now()); err != nil {
+					return nil, nil, err
+				}
+				u.Subscriptions = append(u.Subscriptions, *subscription)
 			}
 		}
 	}

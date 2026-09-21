@@ -173,7 +173,7 @@ func (s *PaymentService) RequestRefund(ctx context.Context, oid, uid int64, reas
 	nr := strings.TrimSpace(reason)
 	now := time.Now()
 	by := fmt.Sprintf("%d", uid)
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.UserIDEQ(uid), paymentorder.StatusEQ(OrderStatusCompleted)).SetStatus(OrderStatusRefundRequested).SetRefundRequestedAt(now).SetRefundRequestReason(nr).SetRefundRequestedBy(by).SetRefundAmount(o.Amount).Save(ctx)
+	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(oid), paymentorder.UserIDEQ(uid), paymentorder.StatusEQ(o.Status)).SetStatus(OrderStatusRefundRequested).SetRefundRequestedAt(now).SetRefundRequestReason(nr).SetRefundRequestedBy(by).SetRefundAmount(o.Amount).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
@@ -192,8 +192,8 @@ func (s *PaymentService) validateRefundRequest(ctx context.Context, oid, uid int
 	if o.UserID != uid {
 		return nil, infraerrors.Forbidden("FORBIDDEN", "no permission")
 	}
-	if o.Status != OrderStatusCompleted {
-		return nil, infraerrors.BadRequest("INVALID_STATUS", "only completed orders can request refund")
+	if o.Status != OrderStatusCompleted && !(isSubscriptionV2Order(o) && o.Status == OrderStatusFailed && o.PaidAt != nil) {
+		return nil, infraerrors.BadRequest("INVALID_STATUS", "only completed or paid subscription orders awaiting review can request refund")
 	}
 	// Check provider instance allows user refund
 	inst, err := s.getRefundOrderProviderInstance(ctx, o)
@@ -212,7 +212,7 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 		return nil, nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
 	ok := []string{OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed}
-	if !psSliceContains(ok, o.Status) {
+	if !psSliceContains(ok, o.Status) && !(isSubscriptionV2Order(o) && o.Status == OrderStatusFailed && o.PaidAt != nil) {
 		return nil, nil, infraerrors.BadRequest("INVALID_STATUS", "order status does not allow refund")
 	}
 	// Check provider instance allows admin refund
@@ -248,6 +248,9 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 	}
 	p := &RefundPlan{OrderID: oid, Order: o, RefundAmount: amt, GatewayAmount: ga, Reason: rr, Force: force, DeductBalance: deduct, DeductionType: payment.DeductionTypeNone}
 
+	if isSubscriptionV2Order(o) {
+		return s.prepareSubscriptionV2Refund(ctx, p)
+	}
 	if o.OrderType == payment.OrderTypeSubscription {
 		hasLines, err := s.entClient.SubscriptionEntitlementOrder.Query().Where(subscriptionentitlementorder.OrderIDEQ(o.ID)).Exist(ctx)
 		if err != nil {
@@ -366,6 +369,9 @@ func (s *PaymentService) deductAvailableBalance(ctx context.Context, userID int6
 }
 
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if p.SubscriptionV2 {
+		return s.executeSubscriptionV2Refund(ctx, p)
+	}
 	if len(p.SubscriptionLots) > 0 {
 		return s.executeLotRefund(ctx, p)
 	}
@@ -481,6 +487,13 @@ func validateRefundProviderResponse(resp *payment.RefundResponse) error {
 }
 
 func (s *PaymentService) finishRefund(ctx context.Context, p *RefundPlan, resp *payment.RefundResponse) (*RefundResult, error) {
+	if isSubscriptionV2Order(p.Order) {
+		if has, err := s.hasLotRefund(ctx, p.OrderID); err != nil {
+			return nil, err
+		} else if has {
+			return s.finishSubscriptionV2Refund(ctx, p, resp, nil)
+		}
+	}
 	if has, err := s.hasLotRefund(ctx, p.OrderID); err != nil {
 		return nil, err
 	} else if has {
@@ -555,10 +568,14 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	}
 
 	plan := s.refundFinalizePlan(o)
+	if isSubscriptionV2Order(o) {
+		plan.DeductionType = payment.DeductionTypeNone
+		plan.SubscriptionUnassigned = true
+	}
 	if !pendingDetail.DeductionRollbackOK {
 		plan.BalanceToDeduct = 0
 		plan.SubDaysToDeduct = 0
-	} else if o.OrderType == payment.OrderTypeSubscription {
+	} else if o.OrderType == payment.OrderTypeSubscription && !isSubscriptionV2Order(o) {
 		if early := s.prepDeduct(ctx, o, plan, true); early != nil {
 			return early, nil
 		}
@@ -862,6 +879,9 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 
 func (s *PaymentService) restoreStatus(ctx context.Context, p *RefundPlan) {
 	rs := OrderStatusCompleted
+	if p.SubscriptionUnassigned && isSubscriptionV2Order(p.Order) {
+		rs = OrderStatusFailed
+	}
 	if p.Order.Status == OrderStatusRefundRequested {
 		rs = OrderStatusRefundRequested
 	}

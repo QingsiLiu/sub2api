@@ -61,7 +61,11 @@ func (r *userSubscriptionRepository) AdjustEntitlements(ctx context.Context, id 
 				return err
 			}
 		}
-		chosen, err := geilisub.ValidateSelection(lots, ids, now)
+		contract, err := geilisub.LoadContract(tc, c, id)
+		if err != nil {
+			return err
+		}
+		chosen, err := selectContractLots(contract, lots, ids, now)
 		if err != nil {
 			return err
 		}
@@ -88,11 +92,25 @@ func (r *userSubscriptionRepository) AdjustEntitlements(ctx context.Context, id 
 				return err
 			}
 		}
-		return geilisub.RefreshParent(tc, c, id, now)
+		if err := geilisub.RefreshParent(tc, c, id, now); err != nil {
+			return err
+		}
+		parent, err := c.UserSubscription.Get(tc, id)
+		if err != nil {
+			return err
+		}
+		return refreshAdminContractExpiry(tc, c, contract, parent.ExpiresAt, now)
 	})
 }
 func (r *userSubscriptionRepository) incrementLots(ctx context.Context, id int64, cost float64) error {
 	return r.withLotTx(ctx, id, func(tc context.Context, c *dbent.Client, lots []geilisub.Lot) error {
+		contract, err := geilisub.LoadContract(tc, c, id)
+		if err != nil {
+			return err
+		}
+		if contract != nil {
+			return geilisub.ErrAdmissionRequired
+		}
 
 		if len(lots) == 0 {
 			parent, err := c.UserSubscription.Get(tc, id)
@@ -107,7 +125,7 @@ func (r *userSubscriptionRepository) incrementLots(ctx context.Context, id int64
 			return c.UserSubscription.UpdateOneID(id).AddDailyUsageUsd(cost).AddWeeklyUsageUsd(cost).AddMonthlyUsageUsd(cost).Exec(tc)
 		}
 
-		lots, err := geilisub.Allocate(lots, cost, time.Now())
+		lots, err = geilisub.Allocate(lots, cost, time.Now())
 		if err != nil {
 			return err
 		}
@@ -122,6 +140,19 @@ func (r *userSubscriptionRepository) resetLotWindows(ctx context.Context, id int
 		if err := geilisub.CheckMutable(lots); err != nil {
 			return err
 		}
+		contract, err := geilisub.LoadContract(tc, c, id)
+		if err != nil {
+			return err
+		}
+		if contract != nil {
+			weekly, monthly = false, false
+			if daily {
+				if err := resetAdminDailyLedger(tc, c, contract, lots, day); err != nil {
+					return err
+				}
+				day = geilisub.DayStart(day)
+			}
+		}
 		for i := range lots {
 			e := &lots[i]
 			if !e.Active(time.Now()) {
@@ -130,6 +161,9 @@ func (r *userSubscriptionRepository) resetLotWindows(ctx context.Context, id int
 			if daily {
 				e.DailyUsageUSD = 0
 				t := timezone.StartOfDay(day)
+				if contract != nil {
+					t = geilisub.DayStart(day)
+				}
 				e.DailyWindowStart = &t
 			}
 			if weekly {

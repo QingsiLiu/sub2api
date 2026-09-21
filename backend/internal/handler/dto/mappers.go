@@ -945,6 +945,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		User:               UserFromServiceShallow(sub.User),
 		Group:              GroupFromServiceShallow(sub.Group),
 		QuotaSummary:       sub.AggregateQuotaSummary(),
+		Contract:           sub.Contract,
 		Entitlements:       append([]service.SubscriptionEntitlement(nil), sub.Entitlements...),
 	}
 }

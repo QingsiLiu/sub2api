@@ -39,7 +39,14 @@ func newEntitlementFixture(t *testing.T) entitlementFixture {
 	require.NoError(t, err)
 	svc := service.NewSubscriptionService(NewGroupRepository(c, integrationDB), NewUserSubscriptionRepository(c), nil, c, nil)
 	t.Cleanup(svc.Stop)
-	sub, err := svc.AssignSubscription(ctx, &service.AssignSubscriptionInput{UserID: user.ID, PlanID: &plan.ID})
+	// Seed historical 200/day rights directly: new admin grants intentionally
+	// accept only the five V2 products, while these tests exercise old evidence.
+	now := time.Now()
+	parent, err := c.UserSubscription.Create().SetUserID(user.ID).SetPlanID(plan.ID).SetStartsAt(now).SetExpiresAt(now.AddDate(0, 0, 30)).SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	_, err = geilisub.EnsureLegacyLot(ctx, c, parent.ID)
+	require.NoError(t, err)
+	sub, err := NewUserSubscriptionRepository(c).GetByID(ctx, parent.ID)
 	require.NoError(t, err)
 	require.Len(t, sub.Entitlements, 1)
 	key := mustCreateApiKey(t, c, &service.APIKey{UserID: user.ID, GroupID: &group.ID, SubscriptionID: &sub.ID, BillingSource: "subscription", Key: "synthetic-" + suffix, Name: "lot-key"})

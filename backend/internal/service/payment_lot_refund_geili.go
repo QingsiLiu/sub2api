@@ -44,6 +44,19 @@ func validateLotRefund(ctx context.Context, c *dbent.Client, o *dbent.PaymentOrd
 			return nil, err
 		}
 		e := geilisub.FromEntity(row)
+		changes, err := c.QueryContext(ctx, `SELECT 1 FROM subscription_contract_changes WHERE subscription_id=$1 LIMIT 1`, e.UserSubscriptionID)
+		if err != nil {
+			return nil, err
+		}
+		hasChanges := changes.Next()
+		scanErr := changes.Err()
+		_ = changes.Close()
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		if hasChanges {
+			return nil, errLotRefundManual
+		}
 		if e.SourceType == "legacy" || line.ReversedAt != nil || !e.Active(now) || e.LifetimeUsageUSD > 0 || line.AfterExpiresAt == nil || !line.AfterExpiresAt.Equal(e.ExpiresAt) {
 			return nil, errLotRefundManual
 		}
@@ -82,6 +95,9 @@ func (s *PaymentService) freezeLotRefund(ctx context.Context, p *RefundPlan) err
 	c := tx.Client()
 	parent, err := geilisub.LockParent(tc, c, p.SubscriptionID)
 	if err != nil {
+		return err
+	}
+	if _, err := geilisub.EnsureContract(tc, c, p.SubscriptionID, time.Now()); err != nil {
 		return err
 	}
 	if parent.Status != "active" {
@@ -276,6 +292,9 @@ func (s *PaymentService) finalizeLotRefund(ctx context.Context, p *RefundPlan, s
 	if err := geilisub.RefreshParent(tc, c, journal.SubscriptionID, now); err != nil {
 		return nil, err
 	}
+	if _, err := geilisub.MarkLegacyContract(tc, c, journal.SubscriptionID, now); err != nil {
+		return nil, err
+	}
 	var result *RefundResult
 	if success {
 		copy := *p
@@ -298,11 +317,26 @@ func (s *PaymentService) invalidateLotRefundCache(ctx context.Context, id int64)
 	if s.subscriptionSvc == nil {
 		return
 	}
+	if s.entClient != nil {
+		row, err := s.entClient.UserSubscription.Get(ctx, id)
+		if err == nil {
+			gid := int64(0)
+			if row.GroupID != nil {
+				gid = *row.GroupID
+			}
+			_ = s.subscriptionSvc.invalidateSubscriptionCaches(row.UserID, gid, id)
+		}
+		return
+	}
+	if s.subscriptionSvc.userSubRepo == nil {
+		return
+	}
 	sub, err := s.subscriptionSvc.GetByID(ctx, id)
 	if err == nil {
 		_ = s.subscriptionSvc.invalidateSubscriptionCaches(sub.UserID, sub.GroupID, id)
 	}
 }
+
 func (s *PaymentService) hasLotRefund(ctx context.Context, id int64) (bool, error) {
 	return s.entClient.SubscriptionRefund.Query().Where(subscriptionrefund.OrderIDEQ(id)).Exist(ctx)
 }

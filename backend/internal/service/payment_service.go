@@ -14,6 +14,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 )
@@ -71,6 +72,11 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
+	QuoteID              string
+	Operation            string
+	Units                int
+	Periods              int
+	subscriptionQuote    *subscriptionV2Quote
 	ExpectedPlanRevision string
 	UserID               int64
 	Amount               float64
@@ -91,6 +97,9 @@ type CreateOrderRequest struct {
 }
 
 type SubscriptionQuoteRequest struct {
+	Operation            string
+	Units                int
+	Periods              int
 	UserID               int64
 	PlanID               int64
 	SubscriptionMode     string
@@ -98,6 +107,14 @@ type SubscriptionQuoteRequest struct {
 }
 
 type SubscriptionQuoteResponse struct {
+	QuoteID              string                    `json:"quote_id"`
+	ExpiresAt            time.Time                 `json:"expires_at"`
+	BillableDays         int                       `json:"billable_days"`
+	Operation            string                    `json:"operation"`
+	Units                int                       `json:"units"`
+	Periods              int                       `json:"periods"`
+	CurrentContract      *geilisub.Contract        `json:"current_contract,omitempty"`
+	ProjectedContract    *geilisub.Contract        `json:"projected_contract"`
 	PlanRevision         string                    `json:"plan_revision"`
 	PlanID               int64                     `json:"plan_id"`
 	SubscriptionMode     string                    `json:"subscription_mode"`
@@ -144,18 +161,20 @@ type OrderListParams struct {
 }
 
 type RefundPlan struct {
-	OrderID          int64
-	Order            *dbent.PaymentOrder
-	RefundAmount     float64
-	GatewayAmount    float64
-	Reason           string
-	Force            bool
-	DeductBalance    bool
-	DeductionType    string
-	BalanceToDeduct  float64
-	SubDaysToDeduct  int
-	SubscriptionID   int64
-	SubscriptionLots []SubscriptionLotAdjustment
+	SubscriptionV2         bool
+	SubscriptionUnassigned bool
+	OrderID                int64
+	Order                  *dbent.PaymentOrder
+	RefundAmount           float64
+	GatewayAmount          float64
+	Reason                 string
+	Force                  bool
+	DeductBalance          bool
+	DeductionType          string
+	BalanceToDeduct        float64
+	SubDaysToDeduct        int
+	SubscriptionID         int64
+	SubscriptionLots       []SubscriptionLotAdjustment
 }
 
 type SubscriptionLotAdjustment struct {

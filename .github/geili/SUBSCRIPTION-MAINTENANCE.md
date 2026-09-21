@@ -1,5 +1,7 @@
 # Geili 双分组订阅维护约束
 
+> 订阅 V2 的产品与迁移规则见 [subscription-v2.md](subscription-v2.md)。V2 采用统一合同与共享日额度；下文独立份额/周月窗口仅描述旧版兼容账本。
+
 双分组订阅是 Geili 扩展，不得把业务规则散落到上游订阅、鉴权和计费实现中。
 
 - 自定义规则优先放在 `backend/internal/geili/subscription/`；前端沿用官方组件和样式，不恢复已移除的主题覆盖。

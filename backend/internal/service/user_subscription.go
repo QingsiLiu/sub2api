@@ -53,6 +53,9 @@ type UserSubscription struct {
 	AdmissionKey          string // server-generated request identity; never serialized as a user field
 	Entitlements          []SubscriptionEntitlement
 	QuotaSummary          *geilisub.Summary
+	Contract              *geilisub.Contract
+	QuotaUsageDate        time.Time // date of the read-only authoritative daily ledger projection
+	LedgerDailyUsageUSD   *float64  // unprojected day spending; legacy expiry display must not subtract twice
 
 	User           *User
 	Group          *Group
@@ -228,6 +231,10 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 // QuotaLimits resolves plan-owned quotas; group limits exist only for old
 // subscriptions created before the decoupling migration or legacy test callers.
 func (s *UserSubscription) QuotaLimits(legacy *Group) (daily, weekly, monthly *float64) {
+	if s != nil && s.Contract != nil {
+		a := s.QuotaSummaryAt(time.Now())
+		return a.DailyLimitUSD, nil, nil
+	}
 	if s != nil && len(s.Entitlements) > 0 {
 		return aggregateEntitlementLimits(s.Entitlements)
 	}
@@ -241,11 +248,10 @@ func (s *UserSubscription) QuotaLimits(legacy *Group) (daily, weekly, monthly *f
 }
 
 func (s *UserSubscription) AggregateQuotaSummary() *geilisub.Summary {
-	if s == nil || len(s.Entitlements) == 0 {
+	if s == nil || (s.Contract == nil && len(s.Entitlements) == 0) {
 		return nil
 	}
-	summary := geilisub.Aggregate(s.Entitlements, time.Now())
-	return &summary
+	return s.QuotaSummaryAt(time.Now())
 }
 
 func aggregateEntitlementLimits(entitlements []SubscriptionEntitlement) (daily, weekly, monthly *float64) {
@@ -259,6 +265,9 @@ const SubscriptionEntitlementStatusRefunded = "refunded"
 const SubscriptionEntitlementStatusRefundPending = "refund_pending"
 
 func (s *UserSubscription) QuotaName() string {
+	if s != nil && s.Contract != nil && s.Contract.PlanName != "" {
+		return s.Contract.PlanName
+	}
 	if s != nil && s.Plan != nil {
 		return s.Plan.Name
 	}
@@ -268,6 +277,10 @@ func (s *UserSubscription) QuotaName() string {
 	return ""
 }
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
+	if s.Contract != nil {
+		a := s.QuotaSummaryAt(time.Now())
+		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
+	}
 	if len(s.Entitlements) > 0 {
 		a := geilisub.Aggregate(s.Entitlements, time.Now())
 		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
@@ -276,6 +289,9 @@ func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64)
 	return limit == nil || *limit <= 0 || s.DailyUsageUSD+additionalCost <= *limit
 }
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
+	if s.Contract != nil {
+		return true
+	}
 	if len(s.Entitlements) > 0 {
 		a := geilisub.Aggregate(s.Entitlements, time.Now())
 		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost
@@ -284,6 +300,9 @@ func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64
 	return limit == nil || *limit <= 0 || s.WeeklyUsageUSD+additionalCost <= *limit
 }
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
+	if s.Contract != nil {
+		return true
+	}
 	if len(s.Entitlements) > 0 {
 		a := geilisub.Aggregate(s.Entitlements, time.Now())
 		return a.ActiveLotCount > 0 && a.AvailableUSD > 0 && a.AvailableUSD >= additionalCost

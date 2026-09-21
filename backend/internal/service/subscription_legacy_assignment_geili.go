@@ -12,6 +12,10 @@ import (
 
 // Group-era grants use the same lot accounting while preserving the old target identity.
 func (s *SubscriptionService) assignLegacyEntitled(ctx context.Context, input *AssignSubscriptionInput, extend, deferred bool) (*UserSubscription, bool, error) {
+	// geili hook: group-era grants need explicit review; old paid orders keep their promise.
+	if ctx.Value(legacySubscriptionPaymentKey{}) != true {
+		return nil, false, errSubscriptionGrantManual
+	}
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
 		return nil, false, err
@@ -51,7 +55,13 @@ func (s *SubscriptionService) assignLegacyEntitled(ctx context.Context, input *A
 			if _, err := geilisub.EnsureLegacyLot(tc, c, row.ID); err != nil {
 				return err
 			}
+			if _, err := geilisub.EnsureContract(tc, c, row.ID, now); err != nil {
+				return err
+			}
 			if err := geilisub.Purchase(tc, c, row.ID, row.PlanID, 0, days, 1, "renew", group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD, grantSource(input), input.SourceReference, input.AssignedBy, now); err != nil {
+				return err
+			}
+			if _, err := geilisub.MarkLegacyContract(tc, c, row.ID, now); err != nil {
 				return err
 			}
 			if err := s.userSubRepo.UpdateNotes(tc, row.ID, appendSubscriptionNotes(sub.Notes, input.Notes)); err != nil {
@@ -71,6 +81,9 @@ func (s *SubscriptionService) assignLegacyEntitled(ctx context.Context, input *A
 			return err
 		}
 		if err := geilisub.Purchase(tc, c, sub.ID, nil, 0, days, 1, "stack", group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD, grantSource(input), input.SourceReference, input.AssignedBy, now); err != nil {
+			return err
+		}
+		if _, err := geilisub.MarkLegacyContract(tc, c, sub.ID, now); err != nil {
 			return err
 		}
 		result, err = s.userSubRepo.GetByID(tc, sub.ID)

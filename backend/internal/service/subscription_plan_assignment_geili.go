@@ -15,7 +15,7 @@ import (
 
 // assignPlanSubscription serializes creation/renewal by user, so concurrent
 // payments cannot create two pools for the same plan or lose renewal days.
-func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input *AssignSubscriptionInput, extend, deferInvalidation bool) (*UserSubscription, bool, error) {
+func (s *SubscriptionService) assignLegacyPlanSubscription(ctx context.Context, input *AssignSubscriptionInput, extend, deferInvalidation bool) (*UserSubscription, bool, error) {
 	if input == nil || input.PlanID == nil || *input.PlanID <= 0 {
 		return nil, false, ErrSubscriptionNilInput
 	}
@@ -47,7 +47,7 @@ func (s *SubscriptionService) assignPlanSubscription(ctx context.Context, input 
 			days = psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
 		}
 		days = normalizeAssignValidityDays(days)
-		existing, err := client.UserSubscription.Query().Where(usersubscription.UserIDEQ(input.UserID), usersubscription.PlanIDEQ(plan.ID)).Only(txCtx)
+		existing, err := client.UserSubscription.Query().Where(usersubscription.UserIDEQ(input.UserID), usersubscription.PlanIDEQ(plan.ID)).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(txCtx)
 		if dbent.IsNotFound(err) && plan.GroupID != nil {
 			// Preserve old group-based renewal only for unclassified/compatibility
 			// subscriptions. Other product subscriptions remain distinct quota pools.
@@ -134,7 +134,7 @@ func (s *SubscriptionService) FindByUserAndPlan(ctx context.Context, userID, pla
 	if tx := dbent.TxFromContext(ctx); tx != nil {
 		client = tx.Client()
 	}
-	row, err := client.UserSubscription.Query().Where(usersubscription.UserIDEQ(userID), usersubscription.PlanIDEQ(planID)).Only(ctx)
+	row, err := client.UserSubscription.Query().Where(usersubscription.UserIDEQ(userID), usersubscription.PlanIDEQ(planID)).Order(dbent.Desc(usersubscription.FieldExpiresAt), dbent.Desc(usersubscription.FieldID)).First(ctx)
 	if dbent.IsNotFound(err) {
 		plan, planErr := client.SubscriptionPlan.Get(ctx, planID)
 		if planErr != nil {

@@ -55,6 +55,10 @@ type ResumeTokenClaims struct {
 }
 
 type WeChatPaymentResumeClaims struct {
+	QuoteID              string `json:"qid,omitempty"`
+	Operation            string `json:"op,omitempty"`
+	Units                int    `json:"un,omitempty"`
+	Periods              int    `json:"pr,omitempty"`
 	TokenType            string `json:"tk,omitempty"`
 	OpenID               string `json:"openid"`
 	PaymentType          string `json:"pt,omitempty"`

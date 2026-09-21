@@ -928,13 +928,13 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 			if fresh.StartsAt.After(time.Now()) || (fresh.PlanID != nil && fresh.Plan == nil) {
 				return ErrSubscriptionInvalid
 			}
-			if len(fresh.Entitlements) > 0 {
+			if fresh.Contract != nil || len(fresh.Entitlements) > 0 {
 				a := fresh.AggregateQuotaSummary()
 				if fresh.Status != SubscriptionStatusActive || a.ActiveLotCount == 0 {
 					return ErrSubscriptionInvalid
 				}
 				if a.AvailableUSD <= 0 {
-					return ErrDailyLimitExceeded
+					return DailyQuotaExceeded(fresh, time.Now())
 				}
 				return nil
 			}

@@ -14,7 +14,6 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
-	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -30,6 +29,13 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	if normalized := NormalizeVisibleMethod(req.PaymentType); normalized != "" {
 		req.PaymentType = normalized
+	}
+	if req.OrderType == payment.OrderTypeSubscription {
+		var err error
+		req, err = s.prepareSubscriptionV2Order(req)
+		if err != nil {
+			return nil, err
+		}
 	}
 	cfg, err := s.configService.GetPaymentConfig(ctx)
 	if err != nil {
@@ -58,11 +64,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	orderAmount := req.Amount
 	limitAmount := req.Amount
 	if plan != nil {
-		quantity := req.SubscriptionQuantity
-		if quantity <= 0 {
-			quantity = 1
-		}
-		orderAmount = plan.Price * float64(quantity)
+		orderAmount, _ = req.subscriptionQuote.Change.Amount.Float64()
 		limitAmount = orderAmount
 	} else if req.OrderType == payment.OrderTypeBalance {
 		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
@@ -120,53 +122,6 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	return resp, nil
 }
 
-// QuoteSubscription previews the aggregate result without changing state.
-func (s *PaymentService) QuoteSubscription(ctx context.Context, req SubscriptionQuoteRequest) (*SubscriptionQuoteResponse, error) {
-	if req.PlanID <= 0 {
-		return nil, infraerrors.BadRequest("INVALID_INPUT", "subscription plan is required")
-	}
-	mode, requested, err := geilisub.PurchaseOptions(req.SubscriptionMode, req.SubscriptionQuantity)
-	if err != nil {
-		return nil, err
-	}
-	plan, err := s.configService.GetPlan(ctx, req.PlanID)
-	if err != nil {
-		return nil, err
-	}
-	if plan == nil || !plan.ForSale || plan.ArchivedAt != nil {
-		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
-	}
-	var current *SubscriptionQuotaSummary
-	var lots []SubscriptionEntitlement
-	if s.subscriptionSvc != nil {
-		sub, e := s.subscriptionSvc.FindByUserAndPlan(ctx, req.UserID, req.PlanID)
-		if e != nil && !errors.Is(e, ErrSubscriptionNotFound) {
-			return nil, e
-		}
-		if sub != nil {
-			if sub.Status != "active" && sub.Status != "expired" {
-				return nil, geilisub.ErrStateConflict
-			}
-			lots = append(lots, sub.Entitlements...)
-			if len(lots) == 0 {
-				daily, weekly, monthly := sub.QuotaLimits(sub.Group)
-				lots = append(lots, SubscriptionEntitlement{ID: sub.ID, PlanID: sub.PlanID, Status: sub.Status, StartsAt: sub.StartsAt, ExpiresAt: sub.ExpiresAt, DailyLimitUSD: daily, WeeklyLimitUSD: weekly, MonthlyLimitUSD: monthly, DailyUsageUSD: sub.DailyUsageUSD, WeeklyUsageUSD: sub.WeeklyUsageUSD, MonthlyUsageUSD: sub.MonthlyUsageUSD, DailyWindowStart: sub.DailyWindowStart, WeeklyWindowStart: sub.WeeklyWindowStart, MonthlyWindowStart: sub.MonthlyWindowStart})
-			}
-			summary := geilisub.Aggregate(lots, time.Now())
-			current = &summary
-		}
-	}
-	now := time.Now()
-	validityDays := psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)
-	projectedLots, canRenew, err := geilisub.PreviewPurchase(lots, mode, requested, validityDays, plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd, now)
-	if err != nil {
-		return nil, err
-	}
-	projected := geilisub.Aggregate(projectedLots, now)
-	return &SubscriptionQuoteResponse{PlanRevision: plan.UpdatedAt.UTC().Format(time.RFC3339Nano), PlanID: plan.ID, SubscriptionMode: mode, SubscriptionQuantity: requested, OrderAmount: plan.Price * float64(requested), ValidityDays: validityDays, CanRenewLots: canRenew, Current: current, Projected: &projected}, nil
-
-}
-
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
 		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
@@ -185,28 +140,16 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 }
 
 func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRequest) (*dbent.SubscriptionPlan, error) {
-	if req.PlanID == 0 {
-		return nil, infraerrors.BadRequest("INVALID_INPUT", "subscription order requires a plan")
+	quote, err := s.readSubscriptionV2Quote(req.QuoteID, req.UserID, time.Now())
+	if err != nil {
+		return nil, err
 	}
-	mode := strings.TrimSpace(req.SubscriptionMode)
-	if mode != "" && mode != "renew" && mode != "stack" {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_MODE", "subscription mode must be renew or stack")
-	}
-	if req.SubscriptionQuantity < 0 || req.SubscriptionQuantity > 10 {
-		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_QUANTITY", "subscription quantity must be between 1 and 10")
-	}
-	plan, err := s.configService.GetPlan(ctx, req.PlanID)
-	if err != nil || plan == nil || !plan.ForSale {
+	plan, err := s.configService.GetPlan(ctx, quote.Change.After.PlanID)
+	if err != nil || plan == nil || !plan.ForSale || plan.ArchivedAt != nil {
 		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan not found or not for sale")
 	}
-	if plan.ArchivedAt != nil {
-		return nil, infraerrors.NotFound("PLAN_NOT_AVAILABLE", "plan is archived")
-	}
-	if req.ExpectedPlanRevision != "" && req.ExpectedPlanRevision != plan.UpdatedAt.UTC().Format(time.RFC3339Nano) {
-		return nil, infraerrors.Conflict("SUBSCRIPTION_QUOTE_CHANGED", "plan changed; review the updated quote before paying")
-	}
-	if _, err := s.QuoteSubscription(ctx, SubscriptionQuoteRequest{UserID: req.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity}); err != nil {
-		return nil, err
+	if plan.UpdatedAt.UTC().Format(time.RFC3339Nano) != quote.PlanRevision {
+		return nil, errSubscriptionQuoteChanged
 	}
 	return plan, nil
 }
@@ -217,6 +160,11 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if plan != nil {
+		if err := s.validateSubscriptionV2OrderTx(ctx, tx.Client(), req); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
@@ -269,21 +217,17 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		b.SetProviderSnapshot(providerSnapshot)
 	}
 	if plan != nil {
-		quantity := req.SubscriptionQuantity
-		if quantity <= 0 {
-			quantity = 1
+		snapshot, err := subscriptionV2Snapshot(req.subscriptionQuote)
+		if err != nil {
+			return nil, err
 		}
-		mode := strings.TrimSpace(req.SubscriptionMode)
-		if mode == "" {
-			mode = "renew"
-		}
-		snapshotCurrency := payment.DefaultPaymentCurrency
+		snapshot["currency"] = payment.DefaultPaymentCurrency
 		if sel != nil {
-			snapshotCurrency = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
+			snapshot["currency"] = paymentProviderConfigCurrency(sel.ProviderKey, sel.Config)
 		}
-		b.SetSubscriptionSnapshot(map[string]any{"version": 1, "plan_id": plan.ID, "price": plan.Price, "currency": snapshotCurrency, "daily_limit_usd": plan.DailyLimitUsd, "weekly_limit_usd": plan.WeeklyLimitUsd, "monthly_limit_usd": plan.MonthlyLimitUsd, "validity_days": psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit), "mode": mode, "quantity": quantity})
-		b.SetPlanID(plan.ID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit)).SetSubscriptionMode(mode).SetSubscriptionQuantity(quantity)
+		b.SetSubscriptionSnapshot(snapshot).SetPlanID(plan.ID).SetSubscriptionDays(req.subscriptionQuote.Change.After.PeriodDays).SetSubscriptionMode(req.Operation).SetSubscriptionQuantity(req.SubscriptionQuantity)
 	}
+
 	order, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
@@ -836,6 +780,12 @@ func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (stri
 	}
 	q := u.Query()
 	q.Set("payment_type", strings.TrimSpace(req.PaymentType))
+	if req.QuoteID != "" {
+		q.Set("quote_id", req.QuoteID)
+		q.Set("operation", req.Operation)
+		q.Set("units", strconv.Itoa(req.Units))
+		q.Set("periods", strconv.Itoa(req.Periods))
+	}
 	if req.Amount > 0 {
 		q.Set("amount", strconv.FormatFloat(req.Amount, 'f', -1, 64))
 	}

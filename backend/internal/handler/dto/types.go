@@ -787,6 +787,7 @@ type UserSubscription struct {
 	User         *User                             `json:"user,omitempty"`
 	Group        *Group                            `json:"group,omitempty"`
 	QuotaSummary *service.SubscriptionQuotaSummary `json:"quota_summary,omitempty"`
+	Contract     *service.SubscriptionContract     `json:"contract,omitempty"`
 	Entitlements []service.SubscriptionEntitlement `json:"entitlements,omitempty"`
 }
 

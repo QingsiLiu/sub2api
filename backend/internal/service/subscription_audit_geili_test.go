@@ -42,8 +42,11 @@ func TestSubscriptionAuditQuoteHasNextExpiry(t *testing.T) {
 	c, _, _ := auditLotFixture(t)
 	plan, err := c.SubscriptionPlan.Create().SetName("audit plan").SetPrice(10).SetValidityDays(30).SetValidityUnit("day").SetForSale(true).SetDailyLimitUsd(45).Save(context.Background())
 	require.NoError(t, err)
-	svc := &PaymentService{configService: &PaymentConfigService{entClient: c}}
-	got, err := svc.QuoteSubscription(context.Background(), SubscriptionQuoteRequest{PlanID: plan.ID, SubscriptionMode: "stack", SubscriptionQuantity: 2})
+	svc := &PaymentService{entClient: c, configService: &PaymentConfigService{entClient: c}, resumeService: NewPaymentResumeService([]byte("synthetic-quote-signing-key"))}
+	// Use a new owner: an existing historical lot must remain compatibility-only.
+	newOwner, err := c.User.Create().SetEmail("quote@example.invalid").SetPasswordHash("test").Save(context.Background())
+	require.NoError(t, err)
+	got, err := svc.QuoteSubscription(context.Background(), SubscriptionQuoteRequest{UserID: newOwner.ID, PlanID: plan.ID, Operation: "purchase", Units: 2})
 	require.NoError(t, err)
 	require.NotNil(t, got.Projected.NextExpiryAt, "first purchase also has a next quota change")
 }
@@ -53,7 +56,7 @@ func TestSubscriptionAuditQuoteRejectsNegativeQuantity(t *testing.T) {
 	plan, err := c.SubscriptionPlan.Create().SetName("audit plan").SetPrice(10).SetValidityDays(30).SetValidityUnit("day").SetForSale(true).Save(context.Background())
 	require.NoError(t, err)
 	svc := &PaymentService{configService: &PaymentConfigService{entClient: c}}
-	_, err = svc.QuoteSubscription(context.Background(), SubscriptionQuoteRequest{PlanID: plan.ID, SubscriptionMode: "stack", SubscriptionQuantity: -2})
+	_, err = svc.QuoteSubscription(context.Background(), SubscriptionQuoteRequest{UserID: 1, PlanID: plan.ID, Operation: "purchase", Units: -2})
 	require.Error(t, err, "negative quantity must not silently become one")
 }
 

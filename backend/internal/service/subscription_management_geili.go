@@ -32,11 +32,11 @@ func (s *SubscriptionService) ExtendSelectedEntitlements(ctx context.Context, id
 	return s.ExtendSubscription(ctx, id, days)
 }
 func effectiveSubscriptionSummary(sub *UserSubscription, now time.Time) {
-	if len(sub.Entitlements) == 0 {
+	if sub.Contract == nil && len(sub.Entitlements) == 0 {
 		return
 	}
-	a := geilisub.Aggregate(sub.Entitlements, now)
-	sub.QuotaSummary = &a
+	a := sub.QuotaSummaryAt(now)
+	sub.QuotaSummary = a
 	sub.DailyUsageUSD = a.DailyUsageUSD
 	sub.WeeklyUsageUSD = a.WeeklyUsageUSD
 	sub.MonthlyUsageUSD = a.MonthlyUsageUSD

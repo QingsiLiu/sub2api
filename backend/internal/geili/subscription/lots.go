@@ -304,12 +304,23 @@ func SyncAggregate(ctx context.Context, q SQL, id int64, lots []Lot, now time.Ti
 		return nil
 	}
 	s, latest, status := ParentProjection(lots, now)
+	if err := projectContractDaily(ctx, q, id, lots, now, &s); err != nil {
+		return err
+	}
 	_, err := q.ExecContext(ctx, `UPDATE user_subscriptions SET expires_at=$2,status=CASE WHEN status IN ('suspended','revoked') THEN status ELSE $3 END,daily_usage_usd=$4,weekly_usage_usd=$5,monthly_usage_usd=$6,updated_at=NOW() WHERE id=$1`, id, latest, status, s.DailyUsageUSD, s.WeeklyUsageUSD, s.MonthlyUsageUSD)
 	return err
 }
 func Debit(ctx context.Context, q SQL, id int64, cost float64, now time.Time) (bool, error) {
 	if err := LockSubscription(ctx, q, id); err != nil {
 		return false, err
+	}
+	// geili hook: a migrated ledger must never infer a late request's term/date.
+	contract, err := LoadContract(ctx, q, id)
+	if err != nil {
+		return false, err
+	}
+	if contract != nil {
+		return true, ErrAdmissionRequired
 	}
 	lots, err := LoadLots(ctx, q, id, true)
 	if err != nil {

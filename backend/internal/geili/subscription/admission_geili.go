@@ -32,6 +32,10 @@ func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, sub
 	if err := json.Unmarshal(raw, &snapshot); err != nil {
 		return err
 	}
+	contract, err := LoadContract(ctx, tx, subID)
+	if err != nil {
+		return err
+	}
 	current, err := LoadLots(ctx, tx, subID, true)
 	if err != nil {
 		return err
@@ -53,7 +57,11 @@ func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, sub
 		if e.Status == "refunded" || e.Status == "refund_pending" {
 			return errors.New("admitted entitlement has conflicting refund state")
 		}
-		e.Normalize(now, false)
+		if contract != nil {
+			NormalizeContractLot(&e, now, false)
+		} else {
+			e.Normalize(now, false)
+		}
 		current[i] = e
 		old.LifetimeUsageUSD = e.LifetimeUsageUSD
 
@@ -89,7 +97,12 @@ func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, sub
 
 		basis = append(basis, old)
 	}
-	allocated, err := Allocate(basis, cost, admitted)
+	var allocated []Lot
+	if contract != nil {
+		allocated, err = AllocateContract(basis, cost, admitted)
+	} else {
+		allocated, err = Allocate(basis, cost, admitted)
+	}
 	if err != nil {
 		return err
 	}
@@ -128,6 +141,9 @@ func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, sub
 		return err
 	}
 	if err := SyncAggregate(ctx, tx, subID, current, now); err != nil {
+		return err
+	}
+	if err := SyncDailyLedger(ctx, tx, subID, now); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE subscription_requests SET status='settled',settled_at=$2,billing_request_id=$3,cost_usd=$4 WHERE request_key=$1`, key, now, billingID, cost)

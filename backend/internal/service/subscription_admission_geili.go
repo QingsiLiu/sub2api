@@ -40,23 +40,40 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	if err != nil {
 		return nil, err
 	}
+	contract, err := geilisub.EnsureContract(tc, c, sub.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := geilisub.SyncDailyLedger(tc, c, sub.ID, now); err != nil {
+		return nil, err
+	}
+	used, err := geilisub.ReadDailyUsage(tc, c, sub.ID, contract.TermID, now)
+	if err != nil {
+		return nil, err
+	}
 	var eligible, changed []geilisub.Lot
 	for _, e := range lots {
 		if e.Active(now) {
 			before := e
-			e.Normalize(now, true)
+			geilisub.NormalizeContractLot(&e, now, true)
 			if geilisub.UsageChanged(before, e) {
 				changed = append(changed, e)
 			}
 			eligible = append(eligible, e)
 		}
 	}
-	a := geilisub.Aggregate(eligible, now)
+	a := geilisub.ContractSummary(contract, lots, used, now)
 	if a.ActiveLotCount == 0 {
 		return nil, ErrSubscriptionExpired
 	}
 	if a.AvailableUSD <= 0 {
-		return nil, ErrDailyLimitExceeded
+		rejected := *sub
+		rejected.Contract = contract
+		rejected.Entitlements = lots
+		rejected.DailyUsageUSD = used
+		rejected.LedgerDailyUsageUSD = &used
+		rejected.QuotaUsageDate = geilisub.DayStart(now)
+		return nil, DailyQuotaExceeded(&rejected, now)
 	}
 	if err := geilisub.PersistLots(tc, c, changed); err != nil {
 		return nil, err
@@ -85,6 +102,9 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	if err := c.SubscriptionRequest.Create().SetRequestKey(key).SetSubscriptionID(sub.ID).SetAPIKeyID(keyID).SetLots(raw).SetAdmittedAt(now).Exec(tc); err != nil {
 		return nil, err
 	}
+	if err := geilisub.BindAdmission(tc, c, key, contract, now); err != nil {
+		return nil, err
+	}
 	if err := geilisub.RefreshParentSnapshot(tc, c, parent, eligible, now); err != nil {
 		return nil, err
 	}
@@ -93,9 +113,12 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	}
 	copy := *sub
 	copy.AdmissionKey = key
-	copy.Entitlements = eligible
-	copy.QuotaSummary = nil
+	copy.Entitlements = lots
+	copy.QuotaSummary = &a
+	copy.Contract = contract
+	copy.QuotaUsageDate = geilisub.DayStart(now)
 	copy.DailyUsageUSD = a.DailyUsageUSD
+	copy.LedgerDailyUsageUSD = &used
 	copy.WeeklyUsageUSD = a.WeeklyUsageUSD
 	copy.MonthlyUsageUSD = a.MonthlyUsageUSD
 	return &copy, nil
