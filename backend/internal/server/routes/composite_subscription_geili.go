@@ -2,15 +2,20 @@ package routes
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 func writeCompositeRouteError(c *gin.Context, err error) {
+	if infraerrors.Reason(err) == "MODEL_NOT_AVAILABLE" {
+		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+		middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
+	}
 	status := infraerrors.Code(err)
 	if status == 0 {
 		status = http.StatusInternalServerError

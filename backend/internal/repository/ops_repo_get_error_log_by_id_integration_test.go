@@ -60,3 +60,20 @@ func TestGetErrorLogByID_APIKeyPrefixAndUpstreamStatus(t *testing.T) {
 	require.NotNil(t, credentialFailure.UpstreamStatusCode)
 	require.Zero(t, *credentialFailure.UpstreamStatusCode)
 }
+
+func TestOpsCompositeGroupSnapshotRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	repo := NewOpsRepository(integrationDB).(*opsRepository)
+	id, err := repo.InsertErrorLog(ctx, &service.OpsInsertErrorLogInput{RequestID: "composite-groups-roundtrip", RequestedGroupIDs: []int64{22, 11}, Model: "gpt-unavailable", RequestedModel: "gpt-unavailable", ErrorPhase: "routing", ErrorType: "invalid_request_error", Severity: "P3", StatusCode: 400, CreatedAt: time.Now()})
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = integrationDB.ExecContext(ctx, "DELETE FROM ops_error_logs WHERE id=$1", id) })
+	detail, err := repo.GetErrorLogByID(ctx, id)
+	require.NoError(t, err)
+	require.Nil(t, detail.GroupID)
+	require.Equal(t, []int64{22, 11}, detail.RequestedGroupIDs)
+	require.Equal(t, "gpt-unavailable", detail.RequestedModel)
+	list, err := repo.ListErrorLogs(ctx, &service.OpsErrorLogFilter{RequestID: "composite-groups-roundtrip", View: "all"})
+	require.NoError(t, err)
+	require.Len(t, list.Errors, 1)
+	require.Equal(t, detail.RequestedGroupIDs, list.Errors[0].RequestedGroupIDs)
+}

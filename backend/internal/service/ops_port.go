@@ -62,8 +62,9 @@ type OpsRepository interface {
 }
 
 type OpsInsertErrorLogInput struct {
-	RequestID       string
-	ClientRequestID string
+	RequestedGroupIDs []int64 // configured key routes at request time; never an inferred target group
+	RequestID         string
+	ClientRequestID   string
 
 	UserID    *int64
 	APIKeyID  *int64

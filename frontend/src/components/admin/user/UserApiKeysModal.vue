@@ -20,7 +20,14 @@
           <div class="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
             <div class="flex items-center gap-1">
               <span>{{ t('admin.users.group') }}:</span>
+              <div v-if="key.routing_mode === 'composite'" class="flex flex-wrap items-center gap-1.5" data-testid="composite-key-groups">
+                <GroupBadge :name="t('keys.compositeKey')" platform="composite" :show-rate="false" />
+                <span v-for="id in key.group_ids || []" :key="id" class="rounded-md bg-gray-100 px-2 py-1 dark:bg-dark-700">
+                  {{ key.groups?.find(group => group.id === id)?.name || allGroups.find(group => group.id === id)?.name || `#${id}` }}
+                </span>
+              </div>
               <button
+                v-else
                 :ref="(el) => setGroupButtonRef(key.id, el)"
                 @click="openGroupSelector(key)"
                 class="-mx-1 -my-0.5 flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
@@ -180,6 +187,7 @@ const DROPDOWN_HEIGHT = 272 // max-h-64 = 16rem = 256px + padding
 const DROPDOWN_GAP = 4
 
 const openGroupSelector = (key: ApiKey) => {
+  if (key.routing_mode === 'composite') return
   if (groupSelectorKeyId.value === key.id) {
     closeGroupSelector()
   } else {

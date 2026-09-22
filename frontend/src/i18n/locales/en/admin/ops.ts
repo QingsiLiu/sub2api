@@ -307,6 +307,8 @@ export default {
       },
       // Error Detail Modal
       errorDetail: {
+        noGroupMatched: 'No target group selected',
+        requestedGroups: 'Configured groups: {groups}',
         title: 'Error Detail',
         titleWithId: 'Error #{id}',
         noErrorSelected: 'No error selected.',

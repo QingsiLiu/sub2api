@@ -61,6 +61,7 @@
           >
             {{ row.group_name || '#' + row.group_id }}
           </span>
+          <span v-else-if="row.requested_group_ids?.length" class="text-xs text-gray-500 dark:text-gray-400" :title="t('admin.ops.errorDetail.requestedGroups', { groups: row.requested_group_ids.map((id: number) => `#${id}`).join(' · ') })">{{ t('admin.ops.errorDetail.noGroupMatched') }}</span>
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 

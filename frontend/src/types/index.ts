@@ -739,6 +739,7 @@ export interface ApiKey {
   billing_source?: '' | 'balance' | 'subscription'
   routing_mode?: 'single' | 'composite'
   group_ids?: number[]
+  groups?: Group[]
   id: number
   user_id: number
   key: string

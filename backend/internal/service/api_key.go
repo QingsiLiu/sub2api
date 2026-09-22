@@ -52,7 +52,9 @@ type APIKey struct {
 	UpdatedAt           time.Time
 	User                *User
 	Group               *Group
-	CurrentConcurrency  int
+	// Groups contains the configured groups for composite keys when loaded by list endpoints.
+	Groups             []*Group
+	CurrentConcurrency int
 
 	// Quota fields
 	Quota     float64    // Quota limit in USD (0 = unlimited)

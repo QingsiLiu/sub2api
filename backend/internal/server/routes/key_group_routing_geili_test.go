@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,4 +72,79 @@ func TestExplicitKeyRoutingRejectsMissingOrConflictingModelsBeforeScheduling(t *
 			require.False(t, called)
 		})
 	}
+}
+
+func TestExplicitKeyRoutingCapturesModelBeforeResolverFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, stream := range []bool{false, true} {
+		router := gin.New()
+		var capturedModel string
+		var capturedStream bool
+		var capturedType int16
+		router.Use(func(c *gin.Context) {
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{BillingSource: "balance", RoutingMode: "composite", GroupIDs: []int64{22, 11}})
+			c.Next()
+			capturedModel = c.GetString("ops_model")
+			capturedStream = c.GetBool("ops_stream")
+			v, _ := c.Get("ops_request_type")
+			capturedType, _ = v.(int16)
+		})
+		router.Use(explicitKeyRouting(service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, nil), nil, &handler.Handlers{}, nil))
+		router.POST("/v1/responses", func(c *gin.Context) { t.Fatal("must reject before handler") })
+		body := `{"model":"gpt-unavailable","stream":false}`
+		if stream {
+			body = `{"model":"gpt-unavailable","stream":true}`
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		require.Equal(t, 503, out.Code)
+		require.Equal(t, "gpt-unavailable", capturedModel)
+		require.Equal(t, stream, capturedStream)
+		if stream {
+			require.Equal(t, int16(service.RequestTypeStream), capturedType)
+		} else {
+			require.Equal(t, int16(service.RequestTypeSync), capturedType)
+		}
+	}
+}
+
+type opsRouteUserRepo struct{ service.UserRepository }
+
+func (opsRouteUserRepo) GetByID(context.Context, int64) (*service.User, error) {
+	return &service.User{ID: 1}, nil
+}
+
+type opsRouteGroupRepo struct{ service.GroupRepository }
+
+func (opsRouteGroupRepo) GetByIDLite(context.Context, int64) (*service.Group, error) {
+	return &service.Group{ID: 22, Status: service.StatusActive, Platform: service.PlatformGemini}, nil
+}
+
+func TestCompositeModelEndpointRejectionCapturesIntentBeforeHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	groups := opsRouteGroupRepo{}
+	keys := service.NewAPIKeyService(nil, opsRouteUserRepo{}, groups, nil, nil, nil, nil)
+	resolver := service.NewCompositeRouteResolver(nil)
+	resolver.SetRouteValidation(groups, service.NewModelPricingResolver(nil, nil))
+	router := gin.New()
+	var model string
+	var isLocalModelError bool
+	router.Use(func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{UserID: 1, BillingSource: "balance", RoutingMode: "composite", GroupIDs: []int64{22}})
+		c.Next()
+		model = c.GetString("ops_model")
+		isLocalModelError = service.OpsClientBusinessLimitedReason(c) == service.OpsClientBusinessLimitedReasonLocalModelConfiguration
+	})
+	router.Use(explicitKeyRouting(keys, resolver, &handler.Handlers{}, nil))
+	router.POST("/v1/embeddings", func(c *gin.Context) { t.Fatal("must reject before dispatch") })
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", strings.NewReader(`{"model":"text-embedding-fixture","input":"test"}`))
+	req.Header.Set("Content-Type", "application/json")
+	out := httptest.NewRecorder()
+	router.ServeHTTP(out, req)
+	require.Equal(t, 400, out.Code)
+	require.Contains(t, out.Body.String(), "MODEL_NOT_AVAILABLE")
+	require.Equal(t, "text-embedding-fixture", model)
+	require.True(t, isLocalModelError)
 }

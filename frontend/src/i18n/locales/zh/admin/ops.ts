@@ -307,6 +307,8 @@ export default {
       },
       // Error Detail Modal
       errorDetail: {
+        noGroupMatched: '尚未选定目标分组',
+        requestedGroups: '候选分组：{groups}',
         title: '错误详情',
         titleWithId: '错误 #{id}',
         noErrorSelected: '未选择错误。',

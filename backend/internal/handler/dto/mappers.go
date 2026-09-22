@@ -112,6 +112,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Window7dStart:      k.Window7dStart,
 		User:               UserFromServiceShallow(k.User),
 		Group:              GroupFromServiceShallow(k.Group),
+		Groups:             groupsFromServiceShallow(k.Groups),
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
@@ -124,6 +125,19 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 	if k.Window7dStart != nil && !service.IsWindowExpired(k.Window7dStart, service.RateLimitWindow7d) {
 		t := k.Window7dStart.Add(service.RateLimitWindow7d)
 		out.Reset7dAt = &t
+	}
+	return out
+}
+
+func groupsFromServiceShallow(groups []*service.Group) []*Group {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]*Group, 0, len(groups))
+	for _, group := range groups {
+		if mapped := GroupFromServiceShallow(group); mapped != nil {
+			out = append(out, mapped)
+		}
 	}
 	return out
 }

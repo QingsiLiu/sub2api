@@ -159,6 +159,8 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 			c.Next()
 			return
 		}
+		// geili hook: routing rejections must retain client intent before handler dispatch.
+		service.SetOpsIngressRequestContext(c, model, gjson.GetBytes(body, "stream").Bool())
 		candidates, err := keys.ResolveExplicitKeyRoutes(c.Request.Context(), key, model, compositeRouteEndpointForPath(path), resolver)
 		if err != nil {
 			writeCompositeRouteError(c, err)

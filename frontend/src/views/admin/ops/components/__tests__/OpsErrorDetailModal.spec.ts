@@ -76,4 +76,21 @@ describe('OpsErrorDetailModal', () => {
     expect(wrapper.findAll('pre')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('admin.ops.errorDetail.payloads.upstream_detail')
   })
+  it('distinguishes configured composite groups from an unselected target', async () => {
+    mocks.getRequestErrorDetail.mockResolvedValue({
+      id: 2, created_at: '2026-09-22T00:00:00Z', phase: 'routing', status_code: 400,
+      model: 'gpt-unavailable', requested_model: 'gpt-unavailable', group_id: null,
+      requested_group_ids: [22, 11], message: 'MODEL_NOT_AVAILABLE', error_body: ''
+    })
+    const wrapper = shallowMount(OpsErrorDetailModal, {
+      props: { show: true, errorId: 2, errorType: 'request' },
+      global: { stubs: { BaseDialog: { template: '<div><slot /></div>' }, Icon: true } }
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('gpt-unavailable')
+    expect(wrapper.text()).toContain('admin.ops.errorDetail.noGroupMatched')
+    expect(wrapper.text()).toContain('admin.ops.errorDetail.requestedGroups')
+    wrapper.unmount()
+  })
+
 })

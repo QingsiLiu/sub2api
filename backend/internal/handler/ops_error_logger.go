@@ -404,7 +404,7 @@ func estimateOpsErrorLogJobBytes(entry *service.OpsInsertErrorLogInput) int64 {
 		len(entry.Platform) + len(entry.Model) + len(entry.RequestPath) +
 		len(entry.InboundEndpoint) + len(entry.UpstreamEndpoint) +
 		len(entry.RequestedModel) + len(entry.UpstreamModel) + len(entry.UserAgent) +
-		len(entry.ErrorPhase) + len(entry.ErrorType) + len(entry.Severity) +
+		len(entry.RequestedGroupIDs)*8 + len(entry.ErrorPhase) + len(entry.ErrorType) + len(entry.Severity) +
 		len(entry.ErrorMessage) + len(entry.ErrorBody) + len(entry.ErrorSource) +
 		len(entry.ErrorOwner) + len(entry.APIKeyPrefix)
 	if entry.UpstreamErrorMessage != nil {
@@ -1253,6 +1253,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 
 		if apiKey != nil {
 			entry.APIKeyID = &apiKey.ID
+			entry.RequestedGroupIDs = append([]int64(nil), apiKey.GroupIDs...)
 			// 有效 key 报错时快照前缀，key 之后被删也保留。
 			entry.APIKeyPrefix = keyPrefix(apiKey.Key, 8)
 			if apiKey.User != nil {
@@ -1374,6 +1375,7 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 	entry.UpstreamEndpoint = GetUpstreamEndpoint(c, entry.Platform)
 	if apiKey != nil {
 		entry.APIKeyID = &apiKey.ID
+		entry.RequestedGroupIDs = append([]int64(nil), apiKey.GroupIDs...)
 		entry.APIKeyPrefix = keyPrefix(apiKey.Key, 8)
 		if apiKey.User != nil {
 			entry.UserID = &apiKey.User.ID
@@ -1562,6 +1564,7 @@ func logOpsStreamErrorValue(c *gin.Context, ops *service.OpsService, wireStatus 
 
 	if apiKey != nil {
 		entry.APIKeyID = &apiKey.ID
+		entry.RequestedGroupIDs = append([]int64(nil), apiKey.GroupIDs...)
 		entry.APIKeyPrefix = keyPrefix(apiKey.Key, 8)
 		if apiKey.User != nil {
 			entry.UserID = &apiKey.User.ID

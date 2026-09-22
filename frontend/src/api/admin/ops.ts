@@ -892,6 +892,7 @@ export interface OpsSystemLogSinkHealth {
 }
 
 export interface OpsErrorLog {
+  requested_group_ids?: number[]
   id: number
   created_at: string
 
