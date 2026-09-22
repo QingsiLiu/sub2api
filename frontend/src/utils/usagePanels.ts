@@ -67,3 +67,23 @@ export function selectedUsagePanels(
   const { panels } = splitGroupIdsByPanel(ids, groups)
   return USAGE_PANEL_ORDER.filter(panel => panels[panel].length > 0)
 }
+
+/**
+ * Replace every group on the selected group's usage panel and keep the other
+ * panels. A single-group edit on a composite key is a panel replacement, not a
+ * conversion to a single-group key.
+ */
+export function replaceCompositeGroup(
+  existing: number[],
+  groups: Array<{ id: number; usage_panel?: string | null }>,
+  selectedId: number
+): number[] | null {
+  const selected = groups.find(group => group.id === selectedId)
+  if (!selected || !isUsagePanel(selected.usage_panel)) return null
+  const panel = selected.usage_panel
+  const kept = existing.filter(id => {
+    const group = groups.find(item => item.id === id)
+    return group?.usage_panel !== panel
+  })
+  return normalizeCompositeGroupIds([selectedId, ...kept], groups)
+}

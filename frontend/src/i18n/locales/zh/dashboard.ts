@@ -136,6 +136,7 @@ export default {
       ipHint: '每行一个 IP 或 CIDR；留空将清空所选密钥的此项名单。',
       invalidLimit: '请输入大于或等于 0 的有效金额。',
       invalidExpiration: '请选择有效的过期时间，或勾选永久有效。',
+      groupHint: '复合密钥会替换所选分组所在用量面板的分组，其它面板保持不变。',
       apply: '应用到 {count} 个密钥',
       success: '已更新 {count} 个密钥',
       partialFailure: '已更新 {success} 个密钥，{failed} 个失败',

@@ -136,6 +136,7 @@ export default {
       ipHint: 'One IP or CIDR per line. Leave empty to clear this list on the selected keys.',
       invalidLimit: 'Enter a valid amount greater than or equal to 0.',
       invalidExpiration: 'Choose a valid expiration date or select Never expires.',
+      groupHint: 'For a composite key, the selected group replaces groups on the same usage panel. Other panels stay unchanged.',
       apply: 'Apply to {count} keys',
       success: 'Updated {count} keys',
       partialFailure: 'Updated {success} keys; {failed} failed',

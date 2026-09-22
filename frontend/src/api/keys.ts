@@ -124,13 +124,18 @@ export interface BulkUpdateApiKeysResult {
 /** Reuse per-key validation and permissions, with at most five requests in flight. */
 export async function bulkUpdate(
   ids: number[],
-  updates: UpdateApiKeyRequest
+  updates: UpdateApiKeyRequest | ((id: number) => UpdateApiKeyRequest | null)
 ): Promise<BulkUpdateApiKeysResult> {
   const uniqueIds = [...new Set(ids)]
   const result: BulkUpdateApiKeysResult = { succeededIds: [], failures: [] }
+  const payloadFor = typeof updates === 'function' ? updates : () => updates
   for (let offset = 0; offset < uniqueIds.length; offset += 5) {
     const batch = uniqueIds.slice(offset, offset + 5)
-    const responses = await Promise.allSettled(batch.map((id) => update(id, updates)))
+    const responses = await Promise.allSettled(batch.map((id) => {
+      const payload = payloadFor(id)
+      if (!payload) return Promise.reject(new Error('missing key update'))
+      return update(id, payload)
+    }))
     responses.forEach((response, index) => {
       if (response.status === 'fulfilled') {
         result.succeededIds.push(batch[index])

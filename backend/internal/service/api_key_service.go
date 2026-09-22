@@ -941,7 +941,17 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 				ids = nil
 			}
 		}
-		if mode == KeyRoutingComposite && req.GroupID != nil {
+		if mode == KeyRoutingComposite && req.GroupID != nil && req.GroupIDs == nil {
+			loaded, err := s.loadExplicitGroups(ctx, append(ids, *req.GroupID))
+			if err != nil {
+				return nil, err
+			}
+			ids, err = replaceCompositeGroup(ids, loaded, *req.GroupID)
+			if err != nil {
+				return nil, err
+			}
+			gid = nil
+		} else if mode == KeyRoutingComposite && req.GroupID != nil {
 			return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "composite keys cannot set group_id")
 		}
 		if req.SubscriptionID != nil {

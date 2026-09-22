@@ -87,6 +87,48 @@ describe('BulkEditKeysModal', () => {
     expect(bulkUpdate).toHaveBeenCalledWith([1, 2], { group_id: 7 })
   })
 
+  it('replaces only the selected usage panel on composite keys', async () => {
+    const wrapper = mount(BulkEditKeysModal, {
+      props: {
+        show: true,
+        selectedKeys: [{
+          id: 9,
+          name: 'Composite',
+          billing_source: 'balance',
+          routing_mode: 'composite',
+          group_ids: [3, 4, 2]
+        }],
+        groups: [
+          { id: 1, name: 'GPT AZ', usage_panel: 'gpt' },
+          { id: 2, name: 'National', usage_panel: 'national' },
+          { id: 3, name: 'GPT official', usage_panel: 'gpt' },
+          { id: 4, name: 'Claude', usage_panel: 'claude' }
+        ] as Group[]
+      },
+      global: {
+        stubs: {
+          BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+          Select: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue'],
+            template: `<select data-test="group-input" :value="modelValue" @change="$emit('update:modelValue', Number($event.target.value))">
+              <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>`
+          }
+        }
+      }
+    })
+    await wrapper.get('[data-test="enable-group"]').setValue(true)
+    await wrapper.get('[data-test="group-input"]').setValue('1')
+    await wrapper.get('form').trigger('submit')
+    const payloadFor = bulkUpdate.mock.calls[0][1] as (id: number) => unknown
+    expect(payloadFor(9)).toEqual({
+      group_id: null,
+      routing_mode: 'composite',
+      group_ids: [1, 4, 2]
+    })
+  })
+
   it('clears only an explicitly selected IP list and expiration', async () => {
     const wrapper = mountModal()
     await wrapper.get('[data-test="enable-ip_whitelist"]').setValue(true)

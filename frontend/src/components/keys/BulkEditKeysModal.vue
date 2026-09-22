@@ -21,16 +21,18 @@
             <input v-model="enabled.group_id" type="checkbox" class="checkbox" data-test="enable-group" />
             {{ t('keys.groupLabel') }}
           </label>
-          <Select
-            v-if="enabled.group_id"
-            v-model="groupId"
-            :options="groupOptions"
-            :placeholder="t('keys.selectGroup')"
-            :disabled="submitting"
-            :aria-label="t('keys.groupLabel')"
-            searchable
-            data-test="group-input"
-          />
+          <div v-if="enabled.group_id" class="space-y-2">
+            <Select
+              v-model="groupId"
+              :options="groupOptions"
+              :placeholder="t('keys.selectGroup')"
+              :disabled="submitting"
+              :aria-label="t('keys.groupLabel')"
+              searchable
+              data-test="group-input"
+            />
+            <p class="input-hint">{{ t('keys.bulkEdit.groupHint') }}</p>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -156,8 +158,9 @@ import { useAppStore } from '@/stores/app'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import type { ApiKey, Group, UpdateApiKeyRequest } from '@/types'
+import { replaceCompositeGroup } from '@/utils/usagePanels'
 
-type SelectedKey = Pick<ApiKey, 'id' | 'name'>
+type SelectedKey = Pick<ApiKey, 'id' | 'name' | 'billing_source' | 'routing_mode' | 'group_ids' | 'groups'>
 type LimitField = 'quota' | 'rate_limit_5h' | 'rate_limit_1d' | 'rate_limit_7d'
 type IPField = 'ip_whitelist' | 'ip_blacklist'
 type EditableField = LimitField | IPField | 'group_id' | 'status' | 'expires_at'
@@ -188,7 +191,7 @@ const enabled = reactive<Record<EditableField, boolean>>({
   ip_whitelist: false,
   ip_blacklist: false
 })
-const groupId = ref<number | null>(null)
+const groupId = ref<number | string | null>(null)
 const status = ref<'active' | 'inactive'>('active')
 const limits = reactive<Record<LimitField, string | number>>({
   quota: '', rate_limit_5h: '', rate_limit_1d: '', rate_limit_7d: ''
@@ -213,7 +216,7 @@ const statusOptions = computed(() => [
 ])
 
 const validationError = computed(() => {
-  if (enabled.group_id && !props.groups.some((group) => group.id === groupId.value)) {
+  if (enabled.group_id && !props.groups.some((group) => group.id === Number(groupId.value))) {
     return t('keys.groupRequired')
   }
   for (const { key } of limitFields) {
@@ -235,7 +238,7 @@ const canSubmit = computed(() =>
 
 watch(() => props.show, (show) => {
   if (!show) return
-  pendingKeys.value = props.selectedKeys.map(({ id, name }) => ({ id, name }))
+  pendingKeys.value = props.selectedKeys.map((key) => ({ ...key }))
   failures.value = []
   for (const field of Object.keys(enabled) as EditableField[]) enabled[field] = false
   for (const { key } of limitFields) limits[key] = ''
@@ -258,7 +261,7 @@ const errorMessage = (error: unknown): string => {
 const submit = async () => {
   if (!canSubmit.value) return
   const updates: UpdateApiKeyRequest = {}
-  if (enabled.group_id) updates.group_id = groupId.value
+  if (enabled.group_id && groupId.value != null && groupId.value !== '') updates.group_id = Number(groupId.value)
   if (enabled.status) updates.status = status.value
   for (const { key } of limitFields) {
     if (enabled[key]) updates[key] = Number(limits[key])
@@ -272,7 +275,25 @@ const submit = async () => {
 
   submitting.value = true
   try {
-    const result = await keysAPI.bulkUpdate(pendingKeys.value.map((key) => key.id), updates)
+    const selectedGroup = groupId.value
+    const compositePayload = (key: SelectedKey): UpdateApiKeyRequest | null => {
+      if (!enabled.group_id || key.routing_mode !== 'composite' || !key.billing_source || selectedGroup == null || selectedGroup === '') {
+        return updates
+      }
+      const catalog = [
+        ...props.groups,
+        ...(key.groups ?? []).filter((group) => !props.groups.some((item) => item.id === group.id))
+      ]
+      const groupIds = replaceCompositeGroup(key.group_ids ?? [], catalog, Number(selectedGroup))
+      if (!groupIds?.length) return null
+      return { ...updates, group_id: null, routing_mode: 'composite', group_ids: groupIds }
+    }
+    const targets = pendingKeys.value.map((key) => ({ ...key }))
+    const perKey = enabled.group_id && targets.some((key) => key.routing_mode === 'composite' && key.billing_source)
+    const result = await keysAPI.bulkUpdate(
+      targets.map((key) => key.id),
+      perKey ? (id) => compositePayload(targets.find((key) => key.id === id) ?? { id, name: '' }) : updates
+    )
     failures.value = result.failures.map(({ id, error }) => ({
       id,
       name: pendingKeys.value.find((key) => key.id === id)?.name ?? '',

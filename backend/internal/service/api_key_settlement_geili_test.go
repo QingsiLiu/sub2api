@@ -101,6 +101,30 @@ func TestExplicitSettlementSeparatesQuotaOwnerFromGroup(t *testing.T) {
 	_, err = s.resolveExplicitSubscription(ctx, user.ID, &sid)
 	require.Error(t, err)
 }
+func TestCompositeGroupUpdateReplacesOnlyTheSelectedUsagePanel(t *testing.T) {
+	gid := int64(128)
+	s, repo := newUpdateFieldsAPIKeyService(&APIKey{
+		ID: 1, UserID: 7, Key: "sk-composite", Status: StatusActive,
+		BillingSource: BillingSourceBalance, RoutingMode: KeyRoutingComposite,
+		GroupIDs: []int64{131, 128, 129, 134, 135},
+	})
+	s.userRepo = &settlementUserRepo{user: &User{ID: 7}}
+	s.groupRepo = &explicitGroupRepo{groups: map[int64]*Group{
+		128: {ID: 128, Status: StatusActive, Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT},
+		129: {ID: 129, Status: StatusActive, Platform: PlatformAnthropic, UsagePanel: UsagePanelClaude},
+		131: {ID: 131, Status: StatusActive, Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT},
+		134: {ID: 134, Status: StatusActive, Platform: PlatformAnthropic, UsagePanel: UsagePanelClaude},
+		135: {ID: 135, Status: StatusActive, Platform: PlatformDeepseek, UsagePanel: UsagePanelNational},
+	}}
+
+	updated, err := s.Update(context.Background(), 1, 7, UpdateAPIKeyRequest{GroupID: &gid})
+	require.NoError(t, err)
+	require.Nil(t, updated.GroupID)
+	require.Equal(t, []int64{128, 129, 134, 135}, updated.GroupIDs)
+	require.True(t, repo.updateFields[0].SettlementRouting)
+	require.True(t, repo.updateFields[0].GroupID)
+}
+
 func TestExplicitKeyCanBeDisabledWithoutRevalidatingExpiredSubscription(t *testing.T) {
 	sid := int64(42)
 	inactive := "inactive"

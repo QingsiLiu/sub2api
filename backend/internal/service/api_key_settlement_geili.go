@@ -47,6 +47,21 @@ func (s *APIKeyService) resolveExplicitSubscription(ctx context.Context, userID 
 	return selected, nil
 }
 
+func (s *APIKeyService) loadExplicitGroups(ctx context.Context, ids []int64) (map[int64]*Group, error) {
+	loaded := make(map[int64]*Group, len(ids))
+	for _, id := range ids {
+		if id <= 0 || loaded[id] != nil {
+			continue
+		}
+		group, err := s.groupRepo.GetByIDLite(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		loaded[id] = group
+	}
+	return loaded, nil
+}
+
 func (s *APIKeyService) canBindExplicitGroup(ctx context.Context, user *User, group *Group) bool {
 	if group == nil || !group.IsActive() || group.Platform == PlatformComposite {
 		return false
@@ -56,6 +71,30 @@ func (s *APIKeyService) canBindExplicitGroup(ctx context.Context, user *User, gr
 	}
 	// Existing legacy subscriptions may already grant access to exclusive groups.
 	return group.IsSubscriptionType() && s.canUserBindGroup(ctx, user, group)
+}
+
+// replaceCompositeGroup swaps every group on the same usage panel for the selected
+// group and keeps the other panels untouched. A single-group edit on a composite
+// key means "use this group for this panel", not "discard the rest of the key".
+func replaceCompositeGroup(existing []int64, groups map[int64]*Group, selectedID int64) ([]int64, error) {
+	selected := groups[selectedID]
+	if selected == nil || !IsUsagePanel(selected.UsagePanel) {
+		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "composite keys can only replace a group that belongs to a usage panel")
+	}
+	replaced := []int64{selectedID}
+	seen := map[int64]bool{selectedID: true}
+	for _, id := range existing {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		group := groups[id]
+		if group != nil && group.UsagePanel == selected.UsagePanel {
+			continue
+		}
+		seen[id] = true
+		replaced = append(replaced, id)
+	}
+	return replaced, nil
 }
 
 func (s *APIKeyService) validateSettlementRouting(ctx context.Context, user *User, source, mode string, groupID *int64, groupIDs []int64, subscriptionID *int64) (*int64, error) {

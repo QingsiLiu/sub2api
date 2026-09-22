@@ -1271,7 +1271,7 @@ import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
 import { KEY_GROUP_PROVIDERS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
-import { normalizeCompositeGroupIds, selectedUsagePanels } from '@/utils/usagePanels'
+import { normalizeCompositeGroupIds, replaceCompositeGroup, selectedUsagePanels } from '@/utils/usagePanels'
 import {
   buildCcSwitchImportDeeplink,
   OPENAI_CODEX_DEFAULT_MODEL,
@@ -1946,7 +1946,19 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   if (key.group_id === newGroupId) return
 
   try {
-    await keysAPI.update(key.id, { group_id: newGroupId })
+    const catalog = [...groups.value, ...(key.groups ?? []).filter((group) => !groups.value.some((item) => item.id === group.id))]
+    const groupIds = key.billing_source && key.routing_mode === 'composite' && newGroupId != null
+      ? replaceCompositeGroup(key.group_ids ?? [], catalog, newGroupId)
+      : null
+    if (key.billing_source && key.routing_mode === 'composite') {
+      if (!groupIds?.length) {
+        appStore.showError(t('keys.failedToChangeGroup'))
+        return
+      }
+      await keysAPI.update(key.id, { group_id: null, routing_mode: 'composite', group_ids: groupIds })
+    } else {
+      await keysAPI.update(key.id, { group_id: newGroupId })
+    }
     appStore.showSuccess(t('keys.groupChangedSuccess'))
     loadApiKeys()
   } catch (error) {
