@@ -57,7 +57,7 @@
               </span>
             </div>
 
-            <p v-if="subscription.contract" class="mb-2 text-xs text-gray-500">{{ t('subscriptionRights.remaining') }}: {{ subscriptionQuota(subscription).remaining == null ? t('subscriptionRights.unlimited') : '$' + subscriptionQuota(subscription).remaining!.toFixed(4) }}</p>
+            <p v-if="subscription.contract" class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.remaining') }}: {{ subscriptionQuota(subscription).remaining == null ? t('subscriptionRights.unlimited') : '$' + subscriptionQuota(subscription).remaining!.toFixed(4) }}</p>
             <!-- Progress bars or Unlimited badge -->
             <div class="space-y-1.5">
               <!-- Unlimited subscription badge -->
