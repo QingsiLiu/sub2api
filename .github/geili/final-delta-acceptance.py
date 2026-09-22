@@ -106,7 +106,7 @@ def verify(f):
         if len(rows) == 2:
             break
         time.sleep(.1)
-    f.check('unpriced logs preserve intent', len(rows) == 2 and [x['request_type'] for x in rows] == [1, 2] and all(x['model'] == 'final-unpriced' and x['requested_group_ids'] == [new['id'], cl['id'], cn['id']] for x in rows))
+    f.check('unpriced logs preserve intent', len(rows) == 2 and sorted(x['request_type'] for x in rows) == [1, 2] and all(x['model'] == 'final-unpriced' and x['requested_group_ids'] == [new['id'], cl['id'], cn['id']] for x in rows))
     f.check('unpriced logs do not invent upstream dispatch', len(rows) == 2 and all(not x['upstream_endpoint'] and not x['upstream_model'] and x['account_id'] is None and x['group_id'] is None for x in rows))
     count = f.sql(f"SELECT json_build_object('n',count(*)) FROM usage_logs WHERE api_key_id={key['id']}")[0]['n']
     f.check('rejection does not charge', count == 0 and f.balance(user['id']) == 5)

@@ -4,7 +4,7 @@
 
 生产基线 `fa3ecfb1dc3b9a684afb5df2fc6682688c0195b2` / `0.2.7-geili.2`。
 本轮在原 `.6` 上补充全业务矩阵，发现并修复5项问题，候选升级为 `.7`。
-本地最终源码门禁通过；原 `.6` Stage全套241项通过。`.7`候选CI、镜像与Stage复验结果将在生成后补齐。
+本地最终源码门禁通过；原 `.6` Stage全套241项通过。`.7`候选CI（35735007268）通过，固定镜像已完成281项Stage检查；证据与后续`.8`视觉修复见文末。
 生产未切换；真实支付/供应商/微信支付宝真机SDK没有执行，`production_ready=false`。
 
 ## 修复内容与复现
@@ -53,7 +53,7 @@ Go计数含子测试，不同标签之间重复，不合并成独立用例总数
 - Codex默认gpt-6-astra，CC Switch预选Codex并保留Claude/Gemini；不触发真实外部导入。
 - 使用记录默认今天、重置后仍今天。
 
-最终`.7`嵌入式前端与镜像页面复验将随Stage结果补齐。
+`.7` Stage浏览器确认版本、管理页可加载。新建标签最初出现一次Auto-refresh user failed，未定位根因，不将其称为已修复；局部业务交互的零错误结果不代表全站无运行时错误。`.8`目标浮层的实际镜像深浅色复验见文末。
 
 ## 数据与发布约束
 
@@ -72,3 +72,15 @@ Go计数含子测试，不同标签之间重复，不合并成独立用例总数
 - `deploy/.secrets/final-acceptance-20260922/geili-verify.log`；SHA256 `d3374d3e5967e0122b3c5282e9cad31110cf3b9f12051f8e800c339e9cf7e645`。
 
 原`.6`Stage报告：`/opt/sub2api-subscription-lab/backups/v2-synthetic-20260922T124534Z-f90b66e2/report.json`；241项通过，配置恢复、夹具停用、生产指纹不变。
+
+## Stage最终结果与视觉收尾（2026-09-23归档）
+
+- `.7` revision `436768186247cb9ea487a3976ab7afe561daac2e`，digest `835362d5a5256f5526abefed976125e9f2b94ade47509b496ff1d8c5dc508267`；281项通过。报告`/opt/sub2api-subscription-lab/backups/v2-synthetic-20260922T142355Z-ca9442d3/report.json`，SHA256 `bf5197ab10fa93260e6b7943cb04deebbff5270befd62e300001050e5efe8f60`。
+- Stage异步错误日志的ID顺序可能不同于发起顺序。原断言要求[1,2]导致一次失败；实查两条记录的类型、模型、候选列表与无上游字段均正确。改为类型集合排序比较，仍严格要求恰好两条、同步/流式各一条。此测试脚本修订独立于镜像业务代码，在`.7`和`.8`验收中使用。
+- `.7`有一轮SSH断连导致恢复不完整（模拟provider 10残留启用）。已用最早快照`v2-synthetic-20260922T141322Z-4e321d15/snapshot.json`执行--restore。最终启用provider=0、未完成订单=0、生产指纹一致；运维适配器新增同revision有未恢复运行则拒绝开始下一轮的守卫及测试。
+- `.8` revision `f6f14f12aba420de3e926f630dadc21ca8d6ab87`，digest `f7e8238ec483132384c10b015d79f0deeca2f0f8bc4ffa708a158af98c89c8d8`。仅给顶部订阅浮层“今日剩余”增加dark:text-gray-400；无新增迁移、无业务变更。
+- `.8`候选CI 35746696212全绿，前端完整、Go默认/unit/integration、订阅race、PostgreSQL支付竞态通过；本地6项组件测试、typecheck、build通过。
+- `.8`canonical Stage备份`/opt/sub2api-subscription-lab/backups/20260922T155237Z-candidate`。Stage再次281项通过（241基础+40差异；本地41项含额外provider夹具保护，故不是同一计数）。报告`/opt/sub2api-subscription-lab/backups/v2-synthetic-20260922T155442Z-93997a04/report.json`，SHA256 `44a69f666ea1c786197414c6e79c62859de59a0009acf84ab19c2a7327851c5e`。
+- `.8`stage-result SHA256 `d8503281bcad41471e6ddf988e6082a0c2e6d835a5e2a0c39b108fca757c697b`，passed/restored均true；额外核对provider=0、未完成订单=0、cleanup_errors为空、生产app/PG/Redis指纹一致。
+- 实际Stage顶部浮层浅色rgb(107,114,128)、深色rgb(156,163,175)，字号同为12px，目标文字的x/y/宽/高完全相同；检查后恢复原浅色主题。视检证据位于`deploy/.secrets/final-acceptance-20260922/stage-v8-visual.json`。
+- Stage和生产health正常。生产仍为`.2`，未切换；真实支付/供应商/真机SDK没有由本轮覆盖，production_ready仍false。
