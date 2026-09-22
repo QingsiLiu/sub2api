@@ -10,4 +10,5 @@ alwaysApply: true
 - 唯一主干是 `geili/main`，不是 `main`，也不是已删除的 `codex/subscription-multi-group*`。
 - 默认直接在 `geili/main` 开发。不要覆盖或丢掉现网 0.2.5 线。
 - 不上生产除非用户当次授权。镜像发布走运维仓 `~/code/geili/subscription-lab-ops` 的 `bin/release-geili-sub2api.sh`。
+- 每次升 `backend/cmd/server/VERSION` 准备发布，必须把这个版本做了什么写进 [RELEASES.md](../../RELEASES.md) 顶部。没写不算完成发版。
 - `.stitch/` 不提交。密钥不入库。任务结束要提交并推送。
