@@ -237,7 +237,7 @@
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
                         <span v-if="!sub.plan && sub.group">{{ t('payment.planCard.rate') }}: ×{{ sub.group.subscription_rate_multiplier ?? sub.group.rate_multiplier ?? 1 }}</span>
                         <span v-if="!sub.plan && subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
-                        <span v-if="subscriptionQuota(sub).daily != null">{{ t('subscriptionRights.unitDaily') }} ${{ subscriptionQuota(sub).daily }}</span>
+                        <span v-if="subscriptionQuota(sub).daily != null" data-testid="current-subscription-daily">{{ t('subscriptionRights.daily') }} ${{ subscriptionQuota(sub).daily }}</span>
                         <span v-if="subscriptionQuota(sub).weekly != null">{{ t('payment.planCard.weeklyLimit') }} ${{ subscriptionQuota(sub).weekly }}</span>
                         <span v-if="subscriptionQuota(sub).monthly != null">{{ t('payment.planCard.monthlyLimit') }} ${{ subscriptionQuota(sub).monthly }}</span>
                         <span v-if="!subscriptionQuota(sub).daily && !subscriptionQuota(sub).weekly && !subscriptionQuota(sub).monthly">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>

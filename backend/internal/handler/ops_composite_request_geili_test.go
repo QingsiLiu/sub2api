@@ -43,3 +43,36 @@ func TestOpsCompositeRoutingRejectionKeepsClientIntent(t *testing.T) {
 	key.GroupIDs[0] = 99
 	require.Equal(t, []int64{22, 11}, job.entry.RequestedGroupIDs, "queue must own its snapshot")
 }
+
+func TestOpsCompositePricingRejectionHasNoUpstream(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(map[bool]string{false: "sync", true: "stream"}[stream], func(t *testing.T) {
+			setupOpsErrorLogTestQueue(t, 2)
+			gin.SetMode(gin.TestMode)
+			ops := service.NewOpsService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			router := gin.New()
+			router.Use(OpsErrorLoggerMiddleware(ops))
+			router.POST("/v1/responses", func(c *gin.Context) {
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{ID: 7, User: &service.User{ID: 3}, RoutingMode: "composite", GroupIDs: []int64{22, 11}})
+				service.SetOpsIngressRequestContext(c, "unpriced-fixture", stream)
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+				c.AbortWithStatusJSON(400, gin.H{"error": gin.H{"code": "MODEL_PRICE_NOT_CONFIGURED", "type": "invalid_request_error", "message": "selected model has no configured price"}})
+			})
+			out := httptest.NewRecorder()
+			router.ServeHTTP(out, httptest.NewRequest(http.MethodPost, "/v1/responses", nil))
+			require.Equal(t, 400, out.Code)
+			require.Equal(t, int64(1), OpsErrorLogQueueLength())
+			entry := (<-opsErrorLogQueue).entry
+			require.Equal(t, "unpriced-fixture", entry.RequestedModel)
+			require.Equal(t, stream, entry.Stream)
+			require.Equal(t, []int64{22, 11}, entry.RequestedGroupIDs)
+			require.Nil(t, entry.GroupID)
+			require.Nil(t, entry.AccountID)
+			require.Empty(t, entry.UpstreamEndpoint)
+			require.Empty(t, entry.UpstreamModel)
+			require.Nil(t, entry.UpstreamStatusCode)
+			require.Empty(t, entry.UpstreamErrors)
+			require.Equal(t, "routing", entry.ErrorPhase)
+		})
+	}
+}

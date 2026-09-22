@@ -195,11 +195,13 @@ func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userI
 }
 
 func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
-	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
+	// geili hook: nil clears an override; zero explicitly grants a free balance rate.
 	if input.GroupRates != nil {
-		for groupID, rate := range input.GroupRates {
-			if rate != nil && *rate <= 0 {
-				return nil, fmt.Errorf("rate_multiplier must be > 0 (group_id=%d)", groupID)
+		for _, rate := range input.GroupRates {
+			if rate != nil {
+				if err := validateBalanceRateGeili(*rate); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

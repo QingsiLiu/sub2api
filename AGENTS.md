@@ -20,7 +20,7 @@
 
 - 官方文件尽量只读。二开收拢到 `*_geili.go`、`.github/geili/`、带 `geili hook` 注释的最小挂钩。
 - 前端用官方组件和样式，不要恢复已删除的 `frontend/src/geili/` 主题覆盖。
-- 对外版本只改 `backend/cmd/server/VERSION`，形如 `0.2.7-geili.6`。候选 CI 必须注入这个文件，不要再写 `*.acceptance`。当前源码版本是 `0.2.7-geili.6`，下次热修是 `0.2.7-geili.7`。
+- 对外版本只改 `backend/cmd/server/VERSION`，形如 `0.2.7-geili.7`。候选 CI 必须注入这个文件，不要再写 `*.acceptance`。当前源码版本是 `0.2.7-geili.7`，下次热修是 `0.2.7-geili.8`。
 - **每次升版本准备发布，必须把这个版本做了什么写进 [RELEASES.md](RELEASES.md) 顶部。** 至少包括版本号、相对上一版的用户可见变化、revision、镜像 digest、部署到了测试环境还是生产。没写这条说明，不算完成发版。
 - `rate_multiplier` 是余额倍率，`subscription_rate_multiplier` 是订阅倍率；零是有效值。新 Key 必须有明确 `billing_source`。
 - 分组图/视频单价（`image_price_*` / `video_price_*`）也是有效定价，余额 Key 不能只认 token 价卡。

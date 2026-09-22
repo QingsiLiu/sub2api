@@ -148,3 +148,43 @@ func TestCompositeModelEndpointRejectionCapturesIntentBeforeHandler(t *testing.T
 	require.Equal(t, "text-embedding-fixture", model)
 	require.True(t, isLocalModelError)
 }
+
+func TestCompositeUnpricedModelIsLocalButStillLogged(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	out := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(out)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	service.SetOpsIngressRequestContext(c, "unpriced-fixture", true)
+	writeCompositeRouteError(c, service.ErrCompositeModelUnpriced)
+	require.Equal(t, http.StatusBadRequest, out.Code)
+	require.Contains(t, out.Body.String(), "MODEL_PRICE_NOT_CONFIGURED")
+	require.Equal(t, service.OpsClientBusinessLimitedReasonLocalModelConfiguration, service.OpsClientBusinessLimitedReason(c))
+	_, rejected := middleware.GetIngressRejectReason(c)
+	require.False(t, rejected, "pricing configuration errors must remain in detailed Ops logs")
+}
+
+func TestGeminiRoutingRejectionRetainsNativeStreamingType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, action := range []string{"generateContent", "streamGenerateContent"} {
+		t.Run(action, func(t *testing.T) {
+			router := gin.New()
+			var stream bool
+			var requestType any
+			router.Use(func(c *gin.Context) {
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{BillingSource: "balance", RoutingMode: "composite", GroupIDs: []int64{22}})
+				c.Next()
+				stream = c.GetBool("ops_stream")
+				requestType, _ = c.Get("ops_request_type")
+			})
+			router.Use(explicitKeyRouting(service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, nil), nil, &handler.Handlers{}, nil))
+			router.POST("/v1beta/models/*modelAction", func(c *gin.Context) { t.Fatal("must reject before dispatch") })
+			request := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-fixture:"+action, strings.NewReader(`{"contents":[]}`))
+			request.Header.Set("Content-Type", "application/json")
+			out := httptest.NewRecorder()
+			router.ServeHTTP(out, request)
+			require.Equal(t, 503, out.Code)
+			require.Equal(t, action == "streamGenerateContent", stream)
+			require.Equal(t, int16(service.RequestTypeFromLegacy(stream, false)), requestType)
+		})
+	}
+}

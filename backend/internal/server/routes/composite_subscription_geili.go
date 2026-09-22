@@ -12,8 +12,13 @@ import (
 )
 
 func writeCompositeRouteError(c *gin.Context, err error) {
-	if infraerrors.Reason(err) == "MODEL_NOT_AVAILABLE" {
+	reason := infraerrors.Reason(err)
+	// geili hook: both failures happen before dispatch; pricing failures stay in
+	// detailed Ops logs, while unsupported models use the ingress aggregation.
+	if reason == "MODEL_NOT_AVAILABLE" || reason == "MODEL_PRICE_NOT_CONFIGURED" {
 		service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+	}
+	if reason == "MODEL_NOT_AVAILABLE" {
 		middleware.MarkIngressRejected(c, middleware.IngressRejectModelNotAllowed)
 	}
 	status := infraerrors.Code(err)

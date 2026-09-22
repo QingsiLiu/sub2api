@@ -33,6 +33,11 @@ describe('usagePanels', () => {
     expect(selectedUsagePanels([2, 4, 1], groups)).toEqual(['gpt', 'claude', 'national'])
   })
 
+  it('keeps route priority consistent with the server when replacing another panel', () => {
+    expect(replaceCompositeGroup([2, 3, 1, 4, 5], groups, 4)).toEqual([4, 2, 3, 1, 5])
+    expect(replaceCompositeGroup([2, 3, 3, -1, 0, 4], groups, 4)).toEqual([4, 2, 3])
+  })
+
   it('replaces only the selected usage panel on a composite key', () => {
     expect(replaceCompositeGroup([3, 1, 4, 2], groups, 1)).toEqual([1, 4, 2])
     expect(replaceCompositeGroup([3, 1, 4, 2], groups, 5)).toBeNull()

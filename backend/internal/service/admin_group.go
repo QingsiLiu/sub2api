@@ -408,8 +408,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if err != nil {
 		return nil, err
 	}
-	if input.RateMultiplier <= 0 {
-		return nil, errors.New("rate_multiplier must be > 0")
+	if err := validateBalanceRateGeili(input.RateMultiplier); err != nil {
+		return nil, err
 	}
 	if input.SubscriptionRateMultiplier != nil && (math.IsNaN(*input.SubscriptionRateMultiplier) || math.IsInf(*input.SubscriptionRateMultiplier, 0) || *input.SubscriptionRateMultiplier < 0) {
 		return nil, errors.New("subscription_rate_multiplier must be >= 0")
@@ -813,8 +813,8 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.UsagePanel = usagePanel
 	}
 	if input.RateMultiplier != nil {
-		if *input.RateMultiplier <= 0 {
-			return nil, errors.New("rate_multiplier must be > 0")
+		if err := validateBalanceRateGeili(*input.RateMultiplier); err != nil {
+			return nil, err
 		}
 		group.RateMultiplier = *input.RateMultiplier
 	}
@@ -1317,8 +1317,8 @@ func (s *adminServiceImpl) BatchSetGroupRateMultipliers(ctx context.Context, gro
 		return nil
 	}
 	for _, e := range entries {
-		if e.RateMultiplier <= 0 {
-			return fmt.Errorf("rate_multiplier must be > 0 (user_id=%d)", e.UserID)
+		if err := validateBalanceRateGeili(e.RateMultiplier); err != nil {
+			return err
 		}
 	}
 	err := s.userGroupRateRepo.SyncGroupRateMultipliers(ctx, groupID, entries)

@@ -85,5 +85,6 @@ export function replaceCompositeGroup(
     const group = groups.find(item => item.id === id)
     return group?.usage_panel !== panel
   })
-  return normalizeCompositeGroupIds([selectedId, ...kept], groups)
+  // Match the server replacement path: retain the routing priority of other panels.
+  return [...new Set([selectedId, ...kept].filter(id => id > 0))]
 }

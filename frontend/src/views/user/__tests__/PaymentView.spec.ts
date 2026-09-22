@@ -1036,6 +1036,12 @@ describe('Subscription V2 purchase safety', () => {
     expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'stack', units: 1, periods: undefined }))
     wrapper.unmount()
   })
+  it('labels the shared daily quota as total rather than per-unit quota', async () => {
+    const subscription = { id: 9, status: 'active', expires_at: '2099-01-01', contract: { mode: 'v2', kind: 'month', unit_daily_usd: 45, quantity: 2, period_days: 30, plan_id: 7 }, quota_summary: { daily_limit_usd: 90 } } as UserSubscription
+    const wrapper = await mountSubscriptionConfirm({ subscriptions: [subscription], mobile: false, query: { tab: 'subscription', group: '' } })
+    expect(wrapper.get('[data-testid="current-subscription-daily"]').text()).toBe('subscriptionRights.daily $90')
+    wrapper.unmount()
+  })
   it('does not enter checkout for a legacy compatibility contract', async () => {
     quoteSubscription.mockReset().mockResolvedValue(quote())
     const wrapper = await mountSubscriptionConfirm({ subscriptions: [{ id: 9, status: 'active', expires_at: '2099-01-01', contract: { mode: 'legacy_daily' } } as UserSubscription] })
