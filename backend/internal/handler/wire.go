@@ -244,7 +244,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewModelPlazaHandler,
-	NewAsyncImageHandler,
+	NewAsyncImageHandlerWithAUAPI,
 	ProvideBatchImageHandler,
 
 	// Admin handlers

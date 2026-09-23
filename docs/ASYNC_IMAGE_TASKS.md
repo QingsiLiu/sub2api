@@ -16,6 +16,23 @@ The aliases are `/images/generations/async`, `/images/edits/async`, and `/images
 
 Only OpenAI and Grok groups are supported. Requests use the same JSON or multipart payload as the corresponding synchronous endpoint. Streaming image requests are rejected because a polled task returns one final JSON result.
 
+## AUAPI native upstream
+
+An OpenAI API-Key account can opt into AUAPI's native asynchronous GPT Image API by setting these credentials:
+
+```json
+{
+  "api_key": "auapi-...",
+  "base_url": "https://api.auapi.ai",
+  "image_provider": "auapi",
+  "model_mapping": {"gpt-image-2": "gpt-image-2"}
+}
+```
+
+When an eligible account is present in the selected OpenAI group, the existing async generation route translates the request to AUAPI's `pricing/estimate` and `images/tasks` endpoints. A PostgreSQL task snapshot stores the upstream task ID and idempotency key; the worker resumes polling after a process restart. AUAPI image tasks currently support JSON text-to-image only. Multipart edits, inline reference files, and streaming are rejected until a public HTTPS reference-media flow is added.
+
+If `security.url_allowlist.enabled` is enabled, add `api.auapi.ai` (or the configured AUAPI host) to the upstream host allowlist. The account marker is optional when `base_url` is an `auapi.ai` host, but setting `image_provider: auapi` is recommended for explicit routing.
+
 ## Enabling the feature (object storage)
 
 Asynchronous image tasks are **disabled by default** and gated on object storage. When the switch is off — or the S3 credentials are incomplete — the async endpoints return `404` and never create a task or write to Redis. This is deliberate: without offloading, large `b64_json` results (several MB each, e.g. `gpt-image-1`) would accumulate in Redis and exhaust its memory.

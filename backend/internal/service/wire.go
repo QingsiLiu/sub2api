@@ -688,6 +688,22 @@ func ProvideImageTaskService(store ImageTaskStore, settings *ImageStorageSetting
 	return NewImageTaskServiceWithResolver(store, settings.Resolver(), defaultImageTaskTTL, defaultImageTaskExecutionTimeout)
 }
 
+// ProvideAUAPIImageTaskService wires the durable AUAPI native image-task worker.
+func ProvideAUAPIImageTaskService(repo AUAPIImageTaskRepository, accounts AccountRepository, settings *ImageStorageSettingService, gateway *OpenAIGatewayService, logs UsageLogRepository, billing UsageBillingRepository, authCache APIKeyAuthCacheInvalidator, billingCache *BillingCacheService, cfg *config.Config) *AUAPIImageTaskService {
+	var resolver ImageStorageResolver
+	if settings != nil {
+		resolver = settings.Resolver()
+	}
+	svc := NewAUAPIImageTaskService(repo, accounts, resolver, cfg)
+	svc.gateway = gateway
+	svc.logs = logs
+	svc.billing = billing
+	svc.authCache = authCache
+	svc.billingCache = billingCache
+	svc.Start()
+	return svc
+}
+
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
 	settingRepo SettingRepository,
@@ -848,6 +864,7 @@ var ProviderSet = wire.NewSet(
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,
 	ProvideImageTaskService,
+	ProvideAUAPIImageTaskService,
 	ProvideBatchImageModelPricingResolver,
 	NewBatchImagePublicService,
 	NewBatchImageDownloadService,

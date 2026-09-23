@@ -1247,3 +1247,13 @@ image_storage:
   presign_expiry_hours: 24
   # 当上游返回的是图片 url 时，下载该图片再转存的字节上限（默认 32MB）
   max_download_bytes: 33554432
+
+# AUAPI 原生异步 GPT Image worker。为 OpenAI API-Key 账号的 credentials
+# 增加 image_provider: auapi，并配置 api_key/base_url 后才会选中该上游。
+auapi_image:
+  enabled: false
+  poll_interval_seconds: 3
+  request_timeout_seconds: 30
+  lease_seconds: 60
+  worker_count: 2
+  max_poll_seconds: 1800

@@ -23,6 +23,7 @@ import (
 type AsyncImageHandler struct {
 	tasks   *service.ImageTaskService
 	openAI  *OpenAIGatewayHandler
+	auapi   *service.AUAPIImageTaskService
 	execute func(platform string, c *gin.Context)
 }
 
@@ -32,18 +33,30 @@ func NewAsyncImageHandler(tasks *service.ImageTaskService, openAI *OpenAIGateway
 	return h
 }
 
+func NewAsyncImageHandlerWithAUAPI(tasks *service.ImageTaskService, openAI *OpenAIGatewayHandler, auapi *service.AUAPIImageTaskService) *AsyncImageHandler {
+	h := NewAsyncImageHandler(tasks, openAI)
+	h.auapi = auapi
+	return h
+}
+
+func (h *AsyncImageHandler) SetAUAPIImageTaskService(auapi *service.AUAPIImageTaskService) {
+	if h != nil {
+		h.auapi = auapi
+	}
+}
+
 // enabled reports whether the async image task feature is available. Object
 // storage is the enablement gate: without it the endpoints are fully disabled
 // so that large base64 results never land in Redis.
 func (h *AsyncImageHandler) enabled() bool {
-	return h != nil && h.tasks != nil && h.tasks.Enabled()
+	return h != nil && ((h.tasks != nil && h.tasks.Enabled()) || (h.auapi != nil && h.auapi.Enabled()))
 }
 
 // pollable reports whether task lookups can be served. It is deliberately weaker
 // than enabled(): results already written to Redis stay readable after the
 // feature is switched off, so an in-flight task is never stranded.
 func (h *AsyncImageHandler) pollable() bool {
-	return h != nil && h.tasks != nil && h.tasks.Pollable()
+	return h != nil && ((h.tasks != nil && h.tasks.Pollable()) || h.auapi != nil)
 }
 
 // Submit accepts the same payload as the synchronous Images endpoint and
@@ -70,7 +83,7 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 		imageTaskJSONError(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
 	}
-	if h == nil || h.tasks == nil || h.execute == nil {
+	if h == nil || (h.tasks == nil && h.auapi == nil) || h.execute == nil {
 		imageTaskError(c, service.ErrImageTaskUnavailable)
 		return
 	}
@@ -97,6 +110,43 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 		return
 	}
 	if !h.checkSecurityAuditBeforeSubmit(c, apiKey, platform, body) {
+		return
+	}
+	// geili hook: AUAPI exposes native tasks rather than a synchronous Images
+	// response. Keep its task ID in PostgreSQL so polling resumes after restart.
+	requestModel := ""
+	if h.openAI != nil && h.openAI.gatewayService != nil {
+		if parsed, parseErr := h.openAI.gatewayService.ParseOpenAIImagesRequest(c, body); parseErr == nil {
+			requestModel = parsed.Model
+		}
+	}
+	if h.auapi != nil && apiKey.GroupID != nil {
+		available, availabilityErr := h.auapi.Available(c.Request.Context(), *apiKey.GroupID, requestModel)
+		if availabilityErr != nil {
+			imageTaskError(c, availabilityErr)
+			return
+		}
+		if available {
+			if strings.Contains(c.Request.URL.Path, "/images/edits") {
+				imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", "AUAPI asynchronous image tasks currently support text-to-image generation only")
+				return
+			}
+			subscription, _ := middleware2.GetSubscriptionFromContext(c)
+			task, _, err := h.auapi.Submit(c.Request.Context(), apiKey, subscription, body, c.GetHeader("Idempotency-Key"))
+			if err != nil {
+				imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+				return
+			}
+			pollURL := imageTaskPollURL(c.Request.URL.Path, task.ID)
+			c.Header("Cache-Control", "no-store")
+			c.Header("Location", pollURL)
+			c.Header("Retry-After", "3")
+			c.JSON(http.StatusAccepted, gin.H{"id": task.ID, "task_id": task.TaskID, "object": task.Object, "status": task.Status, "created_at": task.CreatedAt, "expires_at": task.ExpiresAt, "poll_url": pollURL})
+			return
+		}
+	}
+	if h.tasks == nil {
+		imageTaskError(c, service.ErrImageTaskUnavailable)
 		return
 	}
 
@@ -173,6 +223,19 @@ func (h *AsyncImageHandler) Get(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok || apiKey == nil || apiKey.UserID <= 0 || apiKey.ID <= 0 {
 		imageTaskError(c, service.ErrImageTaskForbidden)
+		return
+	}
+	if h.auapi != nil && strings.HasPrefix(c.Param("task_id"), "auimgtask_") {
+		task, err := h.auapi.Get(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, c.Param("task_id"))
+		if err != nil {
+			imageTaskError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		if task.Status == service.ImageTaskStatusProcessing {
+			c.Header("Retry-After", "3")
+		}
+		c.JSON(http.StatusOK, task)
 		return
 	}
 	task, err := h.tasks.Get(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, c.Param("task_id"))

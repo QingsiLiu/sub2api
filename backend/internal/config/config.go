@@ -103,7 +103,20 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
+	AUAPIImage              AUAPIImageConfig              `mapstructure:"auapi_image"`
 	Plugins                 PluginConfig                  `mapstructure:"plugins"`
+}
+
+// AUAPIImageConfig controls the durable AUAPI native image-task worker.
+// The provider is selected per OpenAI API-key account; this block only controls
+// the local worker and its safety bounds.
+type AUAPIImageConfig struct {
+	Enabled               bool `mapstructure:"enabled"`
+	PollIntervalSeconds   int  `mapstructure:"poll_interval_seconds"`
+	RequestTimeoutSeconds int  `mapstructure:"request_timeout_seconds"`
+	LeaseSeconds          int  `mapstructure:"lease_seconds"`
+	WorkerCount           int  `mapstructure:"worker_count"`
+	MaxPollSeconds        int  `mapstructure:"max_poll_seconds"`
 }
 
 // PluginConfig 控制管理员手动上传的本地进程插件。
@@ -2250,6 +2263,14 @@ func setDefaults() {
 	viper.SetDefault("image_storage.access_key_id", "")
 	viper.SetDefault("image_storage.secret_access_key", "")
 	viper.SetDefault("image_storage.public_base_url", "")
+
+	// AUAPI native asynchronous GPT image tasks.
+	viper.SetDefault("auapi_image.enabled", false)
+	viper.SetDefault("auapi_image.poll_interval_seconds", 3)
+	viper.SetDefault("auapi_image.request_timeout_seconds", 30)
+	viper.SetDefault("auapi_image.lease_seconds", 60)
+	viper.SetDefault("auapi_image.worker_count", 2)
+	viper.SetDefault("auapi_image.max_poll_seconds", 1800)
 
 	// Ops (vNext)
 	viper.SetDefault("ops.enabled", true)
