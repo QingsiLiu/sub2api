@@ -9,7 +9,7 @@
 - 日期：2026-09-22
 - revision：`f6f14f12aba420de3e926f630dadc21ca8d6ab87`。
 - 镜像：`ghcr.io/qingsiliu/sub2api@sha256:f7e8238ec483132384c10b015d79f0deeca2f0f8bc4ffa708a158af98c89c8d8`。
-- 部署：2026-09-22 已上 Stage；281 项完整业务验收通过，配置已恢复，实际镜像深浅色浮层验证通过。生产未切换；真实支付、供应商及真机 SDK 联调仍待完成。
+- 部署：2026-09-23 已部署生产。Stage 281 项验收、真实支付/文本/图片/视频验收通过；生产 health 200、匿名 API 401，PG/Redis 指纹未变。生产备份见 `/root/backups/subscription-prod-image-bump-20260923T055507Z`。
 
 相对 `0.2.7-geili.7`：
 
