@@ -8,7 +8,7 @@
 
 - 日期：2026-09-24
 - 上游基线：`upstream/main` `a3eb7ef302961cba716dc78b39b93b60c467db0e`（远程 v0.2.8 版本同步提交）。
-- revision：合并提交生成后回填。
+- revision：`52b0f4af726073080ff0cb11360384f361d8bbf4`。
 - 镜像 digest：候选构建后回填。
 - 部署：仅源码，未部署 Stage 或生产。
 
