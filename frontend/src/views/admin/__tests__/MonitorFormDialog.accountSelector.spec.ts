@@ -170,6 +170,20 @@ describe('MonitorFormDialog linked account selector', () => {
     monitorUpdate.mockReset().mockResolvedValue({})
   })
 
+  it('offers a user ID field for NewAPI balance and clears credentials on mode switch', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="monitor-check-mode-newapi_balance"]').trigger('click')
+    await wrapper.get('[data-testid="newapi-user-id"]').setValue('42')
+    expect(wrapper.find('[data-testid="monitor-linked-account"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="monitor-primary-model"]').exists()).toBe(false)
+    const credential = wrapper.get('input[type="password"]')
+    await credential.setValue('test-personal-token')
+    await wrapper.get('[data-testid="monitor-check-mode-probe"]').trigger('click')
+    expect((wrapper.get('input[type="password"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.find('[data-testid="newapi-config"]').exists()).toBe(false)
+  })
+
   it('loads the first page of provider accounts when quota mode is enabled', async () => {
     accountsList.mockResolvedValue({ items: [{ id: 1, name: 'a', platform: 'anthropic' }] })
     const wrapper = mountDialog()

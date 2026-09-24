@@ -108,21 +108,27 @@
 
       <div v-if="usesCredentialPart">
         <label class="input-label">
-          {{ t('admin.channelMonitor.form.apiKey') }}<span v-if="!editing" class="text-red-500"> *</span>
+          {{ t(usesNewAPIBalanceMode ? 'admin.channelMonitor.form.newAPIToken' : 'admin.channelMonitor.form.apiKey') }}<span v-if="requiresCredential" class="text-red-500"> *</span>
         </label>
         <div class="flex gap-2">
           <input
             v-model="form.api_key"
             type="password"
-            :required="!editing"
+            :required="requiresCredential"
             class="input flex-1"
             :placeholder="editing ? t('admin.channelMonitor.form.apiKeyEditPlaceholder') : t('admin.channelMonitor.form.apiKeyPlaceholder')"
           />
-          <button type="button" @click="openMyKeyPicker" class="btn btn-secondary whitespace-nowrap">
+          <button v-if="!usesNewAPIBalanceMode" type="button" @click="openMyKeyPicker" class="btn btn-secondary whitespace-nowrap">
             {{ t('admin.channelMonitor.form.useMyKey') }}
           </button>
         </div>
         <p v-if="editing && editing.api_key_masked" class="mt-1 text-xs text-gray-400">{{ editing.api_key_masked }}</p>
+      </div>
+
+      <div v-if="usesNewAPIBalanceMode" class="space-y-2" data-testid="newapi-config">
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.channelMonitor.form.newAPIHint') }}</p>
+        <label class="input-label">{{ t('admin.channelMonitor.form.newAPIUserID') }}</label>
+        <input v-model="newAPIUserID" data-testid="newapi-user-id" type="number" min="1" step="1" class="input" />
       </div>
 
       <div v-if="usesProbePart">
@@ -365,6 +371,12 @@ const usesQuotaMode = computed(() => form.check_mode === CHECK_MODE_QUOTA || for
 const usesProbePart = computed(() => form.check_mode === CHECK_MODE_PROBE || form.check_mode === CHECK_MODE_QUOTA_PROBE)
 const usesNewAPIBalanceMode = computed(() => form.check_mode === CHECK_MODE_NEWAPI_BALANCE)
 const usesCredentialPart = computed(() => usesProbePart.value || usesNewAPIBalanceMode.value)
+const requiresCredential = computed(() => !editing.value || usesNewAPIBalanceMode.value !== (editing.value.check_mode === CHECK_MODE_NEWAPI_BALANCE) || (usesNewAPIBalanceMode.value && form.endpoint.trim() !== editing.value.endpoint))
+const newAPIUserID = computed({
+  get: () => Object.entries(form.extra_headers).find(([key]) => key.toLowerCase() === 'new-api-user')?.[1] || '',
+  set: (value: string) => { form.extra_headers = value ? { 'New-Api-User': String(value) } : {} },
+})
+
 
 // jitter 上限与后端校验一致：interval - jitter 不得低于最小检测间隔 15 秒。
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
@@ -539,7 +551,12 @@ function checkModeButtonClass(mode: CheckMode): string {
 
 function selectCheckMode(mode: CheckMode) {
   if (checkModeOptions.value.find((opt) => opt.value === mode)?.disabled) return
+  const wasBalance = usesNewAPIBalanceMode.value
   form.check_mode = mode
+  if (wasBalance !== usesNewAPIBalanceMode.value) {
+    form.api_key = ''
+    clearRequestSnapshot()
+  }
   if (!usesQuotaMode.value) form.account_id = null
 }
 
@@ -870,7 +887,7 @@ async function handleSubmit() {
       // Only send api_key if user typed a new value
       if (api_key) req.api_key = api_key
       // template_id=null 用 clear_template=true 明确告诉后端清空（pointer 语义）
-      if (usesProbePart.value && form.template_id == null) {
+      if (usesNewAPIBalanceMode.value || (usesProbePart.value && form.template_id == null)) {
         req.clear_template = true
         delete req.template_id
       }

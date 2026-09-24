@@ -261,7 +261,7 @@ func (r *ChannelMonitorRunner) runScheduled(ctx context.Context, task *scheduled
 func (r *ChannelMonitorRunner) fire(ctx context.Context, task *scheduledMonitor) {
 	if r.settingService != nil {
 		rt := r.settingService.GetChannelMonitorRuntime(ctx)
-		if !rt.ActiveProbesAllowed() && task.checkMode != MonitorCheckModeNewAPIBalance {
+		if !rt.Enabled || (!rt.ActiveProbesAllowed() && task.checkMode != MonitorCheckModeNewAPIBalance) {
 			return
 		}
 	}

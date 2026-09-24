@@ -432,6 +432,14 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err != nil {
 		return nil, err
 	}
+	// geili hook: require a fresh credential when switching between account
+	// balance and model probes, or moving an account token to another endpoint.
+	wasBalance := defaultCheckMode(existing.CheckMode) == MonitorCheckModeNewAPIBalance
+	changesMode := p.CheckMode != nil && wasBalance != (defaultCheckMode(*p.CheckMode) == MonitorCheckModeNewAPIBalance)
+	changesEndpoint := wasBalance && p.Endpoint != nil && normalizeEndpoint(*p.Endpoint) != existing.Endpoint
+	if (changesMode || changesEndpoint) && (p.APIKey == nil || strings.TrimSpace(*p.APIKey) == "") {
+		return nil, ErrChannelMonitorMissingAPIKey
+	}
 	if err := applyMonitorUpdate(existing, p); err != nil {
 		return nil, err
 	}
@@ -607,23 +615,18 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	if !rt.Enabled {
 		return nil, ErrChannelMonitorDisabled
 	}
-	if !rt.ActiveProbesAllowed() {
-		// NewAPI balance checks are passive account reads and remain available
-		// when V1 model probes are retired under the V2 monitor mode.
-		if s.repo == nil {
-			return nil, ErrChannelMonitorActiveProbesRetired
-		}
-		m, loadErr := s.Get(ctx, id)
-		if loadErr != nil || defaultCheckMode(m.CheckMode) != MonitorCheckModeNewAPIBalance {
-			return nil, ErrChannelMonitorActiveProbesRetired
-		}
-		return s.runNewAPIBalanceCheckAndPersist(ctx, m)
+	if s.repo == nil && !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
 	}
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
 		return nil, err
 	}
 	checkMode := defaultCheckMode(m.CheckMode)
+	// geili hook: allow balance reads in V2 without re-enabling model probes.
+	if !rt.ActiveProbesAllowed() && checkMode != MonitorCheckModeNewAPIBalance {
+		return nil, ErrChannelMonitorActiveProbesRetired
+	}
 	if checkMode != MonitorCheckModeQuota && m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
 	}
@@ -640,12 +643,6 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	default:
 		results = s.runChecksConcurrent(ctx, m)
 	}
-	s.persistCheckResults(ctx, m, results)
-	return results, nil
-}
-
-func (s *ChannelMonitorService) runNewAPIBalanceCheckAndPersist(ctx context.Context, m *ChannelMonitor) ([]*CheckResult, error) {
-	results := s.runNewAPIBalanceCheck(ctx, m)
 	s.persistCheckResults(ctx, m, results)
 	return results, nil
 }

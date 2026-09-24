@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -28,8 +29,11 @@ func fetchNewAPIBalanceSnapshot(ctx context.Context, endpoint, apiKey string, ex
 	if err != nil {
 		return quotaErrorSnapshot("newapi", "invalid NewAPI balance request", now)
 	}
+	// Only the non-secret user ID is relevant to the account API.
 	for name, value := range extraHeaders {
-		req.Header.Set(name, value)
+		if strings.EqualFold(name, "New-Api-User") {
+			req.Header.Set("New-Api-User", value)
+		}
 	}
 	// The encrypted monitor key is authoritative for this mode; an advanced
 	// header must not silently replace it with a different credential.
@@ -39,7 +43,10 @@ func fetchNewAPIBalanceSnapshot(ctx context.Context, endpoint, apiKey string, ex
 	} else {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
-	resp, err := monitorHTTPClient.Do(req)
+	// geili hook: management credentials must not follow redirects.
+	client := *monitorHTTPClient
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
 	if err != nil {
 		return quotaErrorSnapshot("newapi", "NewAPI balance request failed", now)
 	}
@@ -49,8 +56,8 @@ func fetchNewAPIBalanceSnapshot(ctx context.Context, endpoint, apiKey string, ex
 		snapshot.CredentialInvalid = resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
 		return snapshot
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes))
-	if err != nil {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes+1))
+	if err != nil || len(body) > monitorResponseMaxBytes {
 		return quotaErrorSnapshot("newapi", "NewAPI balance response unreadable", now)
 	}
 	var payload struct {
@@ -85,7 +92,7 @@ func newAPIQuotaNumber(raw json.RawMessage) (float64, bool) {
 		return typed, true
 	case string:
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-		return parsed, err == nil
+		return parsed, err == nil && !math.IsNaN(parsed) && !math.IsInf(parsed, 0)
 	default:
 		return 0, false
 	}
@@ -93,10 +100,10 @@ func newAPIQuotaNumber(raw json.RawMessage) (float64, bool) {
 
 func newAPISiteBase(endpoint string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(endpoint))
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.ForceQuery || u.RawQuery != "" || u.Fragment != "" {
 		return "", fmt.Errorf("invalid endpoint")
 	}
-	path := strings.TrimRight(u.Path, "/")
+	path := strings.TrimRight(u.EscapedPath(), "/")
 	if strings.HasSuffix(path, "/v1") {
 		path = strings.TrimSuffix(path, "/v1")
 	}

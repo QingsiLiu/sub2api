@@ -41,3 +41,41 @@ func TestFetchNewAPIBalanceSnapshotUnauthorized(t *testing.T) {
 	require.False(t, snapshot.Success)
 	require.True(t, snapshot.CredentialInvalid)
 }
+
+func TestNewAPIBalanceRejectsNonFiniteQuota(t *testing.T) {
+	for _, raw := range []string{`"NaN"`, `"+Inf"`, `"1e999"`, `null`, `{}`} {
+		_, ok := newAPIQuotaNumber(json.RawMessage(raw))
+		require.False(t, ok, raw)
+	}
+}
+
+func TestNewAPIBalanceDoesNotFollowRedirect(t *testing.T) {
+	swapMonitorHTTPClient(t)
+	calls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Redirect(w, r, "/other", http.StatusFound)
+	}))
+	defer server.Close()
+	monitorHTTPClient = server.Client()
+	snapshot := fetchNewAPIBalanceSnapshot(context.Background(), server.URL, "test-token", nil)
+	require.False(t, snapshot.Success)
+	require.Equal(t, 1, calls)
+}
+
+func TestNewAPIBalanceModeSwitchRequiresNewCredential(t *testing.T) {
+	repo := &quotaModeRepoStub{monitor: &ChannelMonitor{ID: 1, CheckMode: MonitorCheckModeNewAPIBalance}}
+	svc := newQuotaModeService(repo)
+	mode := MonitorCheckModeProbe
+	_, err := svc.Update(context.Background(), 1, ChannelMonitorUpdateParams{CheckMode: &mode})
+	require.ErrorIs(t, err, ErrChannelMonitorMissingAPIKey)
+}
+
+func TestNewAPIBalanceV2DecryptFailureDoesNotQuery(t *testing.T) {
+	repo := &quotaModeRepoStub{monitor: &ChannelMonitor{ID: 1, CheckMode: MonitorCheckModeNewAPIBalance, APIKeyDecryptFailed: true}}
+	svc := newQuotaModeService(repo)
+	svc.SetRuntimeReader(channelMonitorRuntimeStub{rt: ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV2}})
+	_, err := svc.RunCheck(context.Background(), 1)
+	require.ErrorIs(t, err, ErrChannelMonitorAPIKeyDecryptFailed)
+	require.Empty(t, repo.history)
+}
