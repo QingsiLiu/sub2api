@@ -562,7 +562,8 @@ export default {
     checkMode: {
       probe: 'Probe',
       quota: 'Quota',
-      quota_probe: 'Probe + Quota'
+      quota_probe: 'Probe + Quota',
+      newapi_balance: 'NewAPI Balance'
     },
     // Quota snapshot rendering (MonitorQuotaView, shared by admin + user views)
     quota: {

@@ -571,6 +571,8 @@ export default {
         checkModeQuotaHint: 'Only queries the linked account usage windows / balance without probe requests',
         checkModeQuotaProbe: 'Probe + Quota',
         checkModeQuotaProbeHint: 'Probes the channel and attaches the quota snapshot to the primary model result',
+        checkModeNewAPIBalance: 'NewAPI Balance',
+        checkModeNewAPIBalanceHint: 'Reads the NewAPI account balance without an LLM probe',
         linkedAccount: 'Linked Account',
         linkedAccountPlaceholder: 'Select an account',
         linkedAccountHint: 'Quota data comes from the selected account (reuses the account-side usage/balance queries)',

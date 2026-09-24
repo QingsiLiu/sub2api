@@ -608,7 +608,16 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 		return nil, ErrChannelMonitorDisabled
 	}
 	if !rt.ActiveProbesAllowed() {
-		return nil, ErrChannelMonitorActiveProbesRetired
+		// NewAPI balance checks are passive account reads and remain available
+		// when V1 model probes are retired under the V2 monitor mode.
+		if s.repo == nil {
+			return nil, ErrChannelMonitorActiveProbesRetired
+		}
+		m, loadErr := s.Get(ctx, id)
+		if loadErr != nil || defaultCheckMode(m.CheckMode) != MonitorCheckModeNewAPIBalance {
+			return nil, ErrChannelMonitorActiveProbesRetired
+		}
+		return s.runNewAPIBalanceCheckAndPersist(ctx, m)
 	}
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
@@ -626,11 +635,26 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	case MonitorCheckModeQuotaProbe:
 		results = s.runChecksConcurrent(ctx, m)
 		attachQuotaSnapshot(results, s.fetchQuotaSnapshot(ctx, m))
+	case MonitorCheckModeNewAPIBalance:
+		results = s.runNewAPIBalanceCheck(ctx, m)
 	default:
 		results = s.runChecksConcurrent(ctx, m)
 	}
 	s.persistCheckResults(ctx, m, results)
 	return results, nil
+}
+
+func (s *ChannelMonitorService) runNewAPIBalanceCheckAndPersist(ctx context.Context, m *ChannelMonitor) ([]*CheckResult, error) {
+	results := s.runNewAPIBalanceCheck(ctx, m)
+	s.persistCheckResults(ctx, m, results)
+	return results, nil
+}
+
+func (s *ChannelMonitorService) runNewAPIBalanceCheck(ctx context.Context, m *ChannelMonitor) []*CheckResult {
+	snapshot := fetchNewAPIBalanceSnapshot(ctx, m.Endpoint, m.APIKey, m.ExtraHeaders)
+	res := deriveQuotaCheckResult(snapshot, m.PrimaryModel, time.Now())
+	res.Quota = snapshot
+	return []*CheckResult{res}
 }
 
 // runQuotaOnlyCheck quota 模式：一次配额抓取 → 单条 CheckResult

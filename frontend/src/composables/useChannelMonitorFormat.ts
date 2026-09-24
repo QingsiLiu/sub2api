@@ -31,6 +31,7 @@ import {
   CHECK_MODE_PROBE,
   CHECK_MODE_QUOTA,
   CHECK_MODE_QUOTA_PROBE,
+  CHECK_MODE_NEWAPI_BALANCE,
 } from '@/constants/channelMonitor'
 
 const NEUTRAL_BADGE = 'bg-gray-100 text-gray-800 dark:bg-dark-700 dark:text-gray-300'
@@ -75,7 +76,7 @@ export function useChannelMonitorFormat() {
   }
 
   function checkModeLabel(m: CheckMode | string): string {
-    if (m === 'probe' || m === 'quota' || m === 'quota_probe') {
+    if (m === 'probe' || m === 'quota' || m === 'quota_probe' || m === CHECK_MODE_NEWAPI_BALANCE) {
       return t(`monitorCommon.checkMode.${m}`)
     }
     return m || '-'

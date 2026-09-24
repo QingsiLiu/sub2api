@@ -75,9 +75,10 @@ const (
 	//   probe       - LLM 探活（默认，原有行为）
 	//   quota       - 仅查关联账号用量/余额，零 LLM 成本
 	//   quota_probe - 探活 + 配额并存（配额快照挂到主模型历史行）
-	MonitorCheckModeProbe      = "probe"
-	MonitorCheckModeQuota      = "quota"
-	MonitorCheckModeQuotaProbe = "quota_probe"
+	MonitorCheckModeProbe         = "probe"
+	MonitorCheckModeQuota         = "quota"
+	MonitorCheckModeQuotaProbe    = "quota_probe"
+	MonitorCheckModeNewAPIBalance = "newapi_balance"
 
 	// MonitorDefaultQuotaModel 是 quota 模式监控未显式指定模型时占位的虚拟模型名
 	// （primary_model 列 NotEmpty，用 "quota" 让历史行/时间线机制无需特判）。
@@ -155,7 +156,7 @@ var (
 		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/antigravity/kimi/zhipu/deepseek/minimax",
 	)
 	ErrChannelMonitorInvalidCheckMode = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_CHECK_MODE", "check_mode must be one of probe/quota/quota_probe; antigravity only supports quota",
+		"CHANNEL_MONITOR_INVALID_CHECK_MODE", "check_mode must be one of probe/quota/quota_probe/newapi_balance; antigravity only supports quota",
 	)
 	ErrChannelMonitorAccountRequired = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_ACCOUNT_REQUIRED", "account_id is required for quota-based check_mode",

@@ -23,7 +23,7 @@ export type APIMode = 'chat_completions' | 'responses'
  * probe = LLM 探活（默认）；quota = 仅查关联账号用量（零 LLM 成本）；
  * quota_probe = 探活 + 配额快照挂主模型行。
  */
-export type CheckMode = 'probe' | 'quota' | 'quota_probe'
+export type CheckMode = 'probe' | 'quota' | 'quota_probe' | 'newapi_balance'
 
 /** 配额快照中的单个用量窗口（与后端 domain.MonitorQuotaTier 一致）。 */
 export interface MonitorQuotaTier {
@@ -45,7 +45,7 @@ export interface MonitorBalance {
 
 /** 归一化配额快照（与后端 domain.MonitorQuotaSnapshot 一致）。 */
 export interface MonitorQuotaSnapshot {
-  /** usage | cn_quota | cn_balance */
+  /** usage | cn_quota | cn_balance | newapi */
   source: string
   success: boolean
   tiers?: MonitorQuotaTier[]

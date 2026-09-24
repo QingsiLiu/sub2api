@@ -67,11 +67,12 @@ type ChannelMonitorRunner struct {
 
 // scheduledMonitor 单个监控的运行时上下文。
 type scheduledMonitor struct {
-	id       int64
-	name     string
-	interval time.Duration
-	jitter   time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
-	cancel   context.CancelFunc
+	id        int64
+	name      string
+	checkMode string
+	interval  time.Duration
+	jitter    time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
+	cancel    context.CancelFunc
 }
 
 // nextDelay 计算下一次触发的等待时长：interval ± [0, jitter] 的均匀随机偏移。
@@ -184,11 +185,12 @@ func (r *ChannelMonitorRunner) Schedule(m *ChannelMonitor) {
 	}
 	ctx, cancel := context.WithCancel(r.parentCtx)
 	task := &scheduledMonitor{
-		id:       m.ID,
-		name:     m.Name,
-		interval: interval,
-		jitter:   jitter,
-		cancel:   cancel,
+		id:        m.ID,
+		name:      m.Name,
+		checkMode: defaultCheckMode(m.CheckMode),
+		interval:  interval,
+		jitter:    jitter,
+		cancel:    cancel,
 	}
 	r.tasks[m.ID] = task
 	r.wg.Add(1)
@@ -259,7 +261,7 @@ func (r *ChannelMonitorRunner) runScheduled(ctx context.Context, task *scheduled
 func (r *ChannelMonitorRunner) fire(ctx context.Context, task *scheduledMonitor) {
 	if r.settingService != nil {
 		rt := r.settingService.GetChannelMonitorRuntime(ctx)
-		if !rt.ActiveProbesAllowed() {
+		if !rt.ActiveProbesAllowed() && task.checkMode != MonitorCheckModeNewAPIBalance {
 			return
 		}
 	}

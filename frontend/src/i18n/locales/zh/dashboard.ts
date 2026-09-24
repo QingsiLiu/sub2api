@@ -567,7 +567,8 @@ export default {
     checkMode: {
       probe: '探活',
       quota: '配额',
-      quota_probe: '探活 + 配额'
+      quota_probe: '探活 + 配额',
+      newapi_balance: 'NewAPI 余额'
     },
     // 配额快照展示（MonitorQuotaView，管理端与用户端共用）
     quota: {

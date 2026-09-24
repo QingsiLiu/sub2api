@@ -67,6 +67,10 @@ func monitorCheckModeUsesQuota(checkMode string) bool {
 	return checkMode == MonitorCheckModeQuota || checkMode == MonitorCheckModeQuotaProbe
 }
 
+func monitorCheckModeUsesProbe(checkMode string) bool {
+	return checkMode == MonitorCheckModeProbe || checkMode == MonitorCheckModeQuotaProbe
+}
+
 // validateCheckMode 校验 check_mode 与 provider 的组合矩阵：
 //
 //	provider                | probe | quota | quota_probe
@@ -76,11 +80,11 @@ func monitorCheckModeUsesQuota(checkMode string) bool {
 func validateCheckMode(provider, checkMode string) error {
 	checkMode = defaultCheckMode(checkMode)
 	switch checkMode {
-	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe:
+	case MonitorCheckModeProbe, MonitorCheckModeQuota, MonitorCheckModeQuotaProbe, MonitorCheckModeNewAPIBalance:
 	default:
 		return ErrChannelMonitorInvalidCheckMode
 	}
-	if checkMode != MonitorCheckModeQuota && !providerSupportsProbe(provider) {
+	if monitorCheckModeUsesProbe(checkMode) && !providerSupportsProbe(provider) {
 		return ErrChannelMonitorInvalidCheckMode
 	}
 	return nil
@@ -197,7 +201,7 @@ func normalizeModels(in []string) []string {
 //   - Grok probing (probe/quota_probe) defaults to the lightweight check model
 func normalizeMonitorPrimaryModel(provider, checkMode, model string) string {
 	model = strings.TrimSpace(model)
-	if model == "" && defaultCheckMode(checkMode) == MonitorCheckModeQuota {
+	if model == "" && (defaultCheckMode(checkMode) == MonitorCheckModeQuota || defaultCheckMode(checkMode) == MonitorCheckModeNewAPIBalance) {
 		return MonitorDefaultQuotaModel
 	}
 	if model == "" && provider == MonitorProviderGrok {

@@ -14,7 +14,7 @@
       <!-- 检测模式：probe（探活）/ quota（仅配额）/ quota_probe（探活+配额） -->
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.checkMode') }}</label>
-        <div class="grid gap-3 sm:grid-cols-3" data-testid="monitor-check-mode">
+        <div class="grid gap-3 sm:grid-cols-4" data-testid="monitor-check-mode">
           <button
             v-for="opt in checkModeOptions"
             :key="opt.value"
@@ -96,7 +96,7 @@
         </div>
       </div>
 
-      <div v-if="usesProbePart">
+      <div v-if="usesCredentialPart">
         <label class="input-label">{{ t('admin.channelMonitor.form.endpoint') }} <span class="text-red-500">*</span></label>
         <div class="flex gap-2">
           <input v-model="form.endpoint" data-testid="monitor-endpoint" type="text" required class="input flex-1" :placeholder="t('admin.channelMonitor.form.endpointPlaceholder')" />
@@ -106,7 +106,7 @@
         </div>
       </div>
 
-      <div v-if="usesProbePart">
+      <div v-if="usesCredentialPart">
         <label class="input-label">
           {{ t('admin.channelMonitor.form.apiKey') }}<span v-if="!editing" class="text-red-500"> *</span>
         </label>
@@ -276,6 +276,7 @@ import {
   CHECK_MODE_PROBE,
   CHECK_MODE_QUOTA,
   CHECK_MODE_QUOTA_PROBE,
+  CHECK_MODE_NEWAPI_BALANCE,
   DEFAULT_GROK_ENDPOINT,
   DEFAULT_GROK_MODEL,
   DEFAULT_KIMI_ENDPOINT,
@@ -359,9 +360,11 @@ const form = reactive<MonitorForm>({
   body_override: null,
 })
 
-// quota / quota_probe 需要关联账号；probe / quota_probe 需要探活字段。
-const usesQuotaMode = computed(() => form.check_mode !== CHECK_MODE_PROBE)
-const usesProbePart = computed(() => form.check_mode !== CHECK_MODE_QUOTA)
+// quota / quota_probe 需要关联账号；newapi_balance 使用监控自身 endpoint + key。
+const usesQuotaMode = computed(() => form.check_mode === CHECK_MODE_QUOTA || form.check_mode === CHECK_MODE_QUOTA_PROBE)
+const usesProbePart = computed(() => form.check_mode === CHECK_MODE_PROBE || form.check_mode === CHECK_MODE_QUOTA_PROBE)
+const usesNewAPIBalanceMode = computed(() => form.check_mode === CHECK_MODE_NEWAPI_BALANCE)
+const usesCredentialPart = computed(() => usesProbePart.value || usesNewAPIBalanceMode.value)
 
 // jitter 上限与后端校验一致：interval - jitter 不得低于最小检测间隔 15 秒。
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
@@ -517,6 +520,12 @@ const checkModeOptions = computed<CheckModeOption[]>(() => [
     hint: t('admin.channelMonitor.form.checkModeQuotaProbeHint'),
     // antigravity 无探活 adapter，只支持配额模式。
     disabled: form.provider === PROVIDER_ANTIGRAVITY,
+  },
+  {
+    value: CHECK_MODE_NEWAPI_BALANCE,
+    label: t('admin.channelMonitor.form.checkModeNewAPIBalance'),
+    hint: t('admin.channelMonitor.form.checkModeNewAPIBalanceHint'),
+    disabled: false,
   },
 ])
 
@@ -822,8 +831,8 @@ function buildPayload(): CreateParams {
     api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
     check_mode: form.check_mode,
     account_id: usesQuotaMode.value ? form.account_id : null,
-    endpoint: usesProbePart.value ? form.endpoint.trim() : '',
-    api_key: usesProbePart.value ? form.api_key.trim() : '',
+    endpoint: usesCredentialPart.value ? form.endpoint.trim() : '',
+    api_key: usesCredentialPart.value ? form.api_key.trim() : '',
     primary_model: usesProbePart.value ? form.primary_model.trim() : 'quota',
     extra_models: usesProbePart.value ? form.extra_models : [],
     group_name: form.group_name.trim(),
