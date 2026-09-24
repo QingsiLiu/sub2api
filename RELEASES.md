@@ -8,8 +8,8 @@
 
 - 日期：2026-09-24
 - revision：待本次候选构建绑定。
-- 镜像 digest：待候选 CI 产出。
-- 部署：仅源码，待 Stage 验收；生产尚未切换。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:bffed9aa18e37d8f27f1f92cd9b75770c49cb4bf2ee98178eeadbbc7cbb87f47`。
+- 部署：2026-09-24 已完成 Stage 验收并按用户授权完成生产 app-only 镜像切换；PostgreSQL/Redis 未变。
 
 相对 `0.2.8-geili.1`：
 
