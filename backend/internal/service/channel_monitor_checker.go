@@ -426,7 +426,7 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		return nil, fmt.Errorf("marshal default body: %w", err)
 	}
 	if mode != MonitorBodyOverrideModeMerge || opts == nil || len(opts.BodyOverride) == 0 {
-		return defaultBody, nil
+		return addMonitorReasoningDefault(provider, apiMode, model, defaultBody)
 	}
 
 	var defaultMap map[string]any
@@ -444,7 +444,50 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged body: %w", err)
 	}
-	return merged, nil
+	return addMonitorReasoningDefault(provider, apiMode, model, merged)
+}
+
+// addMonitorReasoningDefault keeps health probes for GPT-6 models cheap enough
+// to be useful as a liveness signal.  The gateway deliberately preserves an
+// omitted reasoning effort, so a non-streaming probe would otherwise inherit
+// the model's normal (and potentially much slower) default.  Only fill the
+// field when the request does not already specify an effort; custom monitor
+// templates and body overrides retain their explicit value.
+func addMonitorReasoningDefault(provider, apiMode, model string, body []byte) ([]byte, error) {
+	if provider != MonitorProviderOpenAI || !isOpenAIGPT6Model(model) || len(body) == 0 {
+		return body, nil
+	}
+
+	var request map[string]any
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, fmt.Errorf("unmarshal monitor body for reasoning default: %w", err)
+	}
+
+	if defaultAPIMode(apiMode) == MonitorAPIModeResponses {
+		reasoning, exists := request["reasoning"].(map[string]any)
+		if !exists {
+			reasoning = make(map[string]any)
+			request["reasoning"] = reasoning
+		}
+		if effort, ok := reasoning["effort"].(string); !ok || strings.TrimSpace(effort) == "" {
+			reasoning["effort"] = "low"
+		}
+	} else {
+		effort := strings.TrimSpace(stringFromAny(request["reasoning_effort"]))
+		nestedEffort := ""
+		if reasoning, ok := request["reasoning"].(map[string]any); ok {
+			nestedEffort = strings.TrimSpace(stringFromAny(reasoning["effort"]))
+		}
+		if effort == "" && nestedEffort == "" {
+			request["reasoning_effort"] = "low"
+		}
+	}
+
+	updated, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("marshal monitor body with reasoning default: %w", err)
+	}
+	return updated, nil
 }
 
 // bodyMergeKeyDenyList 在 merge 模式下，禁止用户覆盖这些 provider-specific 的关键字段。

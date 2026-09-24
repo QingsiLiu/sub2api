@@ -195,6 +195,72 @@ func TestRunCheckForModel_OpenAI_DefaultChatRequest(t *testing.T) {
 	}
 }
 
+func TestRunCheckForModel_OpenAIGPT6_DefaultChatReasoningToLow(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-6-astra", nil)
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("GPT-6 health probe should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastBody["reasoning_effort"] != "low" {
+		t.Errorf("GPT-6 health probe should default to low reasoning effort, got %v", h.lastBody["reasoning_effort"])
+	}
+}
+
+func TestRunCheckForModel_OpenAIResponses_DefaultsGPT6ReasoningToLow(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-6-astra", &CheckOptions{
+		APIMode: MonitorAPIModeResponses,
+	})
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("GPT-6 Responses probe should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	reasoning, ok := h.lastBody["reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("GPT-6 Responses probe should include reasoning object, got %#v", h.lastBody["reasoning"])
+	}
+	if reasoning["effort"] != "low" {
+		t.Errorf("GPT-6 Responses probe should default to low reasoning effort, got %v", reasoning["effort"])
+	}
+}
+
+func TestRunCheckForModel_OpenAIProbePreservesExplicitReasoningEffort(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-6-astra", &CheckOptions{
+		APIMode:          MonitorAPIModeChatCompletions,
+		BodyOverrideMode: MonitorBodyOverrideModeMerge,
+		BodyOverride: map[string]any{
+			"reasoning_effort": "medium",
+		},
+	})
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("explicit reasoning probe should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastBody["reasoning_effort"] != "medium" {
+		t.Errorf("explicit monitor reasoning effort must be preserved, got %v", h.lastBody["reasoning_effort"])
+	}
+}
+
+func TestRunCheckForModel_OpenAIProbeDoesNotAddGPT6ReasoningToOtherModels(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-5.5", nil)
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("non-GPT-6 probe should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if _, exists := h.lastBody["reasoning_effort"]; exists {
+		t.Fatalf("non-GPT-6 probe should not receive GPT-6 reasoning default: %#v", h.lastBody["reasoning_effort"])
+	}
+}
+
 func TestGrokMonitorConfiguration(t *testing.T) {
 	if err := validateProvider(MonitorProviderGrok); err != nil {
 		t.Fatalf("grok provider should be supported: %v", err)
