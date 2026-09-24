@@ -48,6 +48,7 @@ func RegisterAdminRoutes(
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
+		registerBenefitCampaignRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -130,6 +131,18 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerBenefitCampaignRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	campaigns := admin.Group("/benefit-campaigns")
+	{
+		campaigns.GET("", h.Admin.BenefitCampaign.List)
+		campaigns.POST("", h.Admin.BenefitCampaign.Create)
+		campaigns.PUT("/:id", h.Admin.BenefitCampaign.Update)
+		campaigns.POST("/:id/status", h.Admin.BenefitCampaign.SetStatus)
+		campaigns.POST("/:id/snapshot", h.Admin.BenefitCampaign.Snapshot)
+		campaigns.GET("/:id/stats", h.Admin.BenefitCampaign.Stats)
 	}
 }
 

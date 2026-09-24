@@ -200,11 +200,34 @@ func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summa
 		return s
 	}
 	if c.Mode == ContractModeV2 {
-		if c.Active(now) {
-			limit := decimal.NewFromFloat(c.UnitDailyUSD).Mul(decimal.NewFromInt(int64(c.Quantity))).InexactFloat64()
-			s.DailyLimitUSD, s.ActiveLotCount = &limit, c.Quantity
+		baseActive := c.Active(now)
+		limit := decimal.Zero
+		if baseActive {
+			limit = limit.Add(decimal.NewFromFloat(c.UnitDailyUSD).Mul(decimal.NewFromInt(int64(c.Quantity))))
+			s.ActiveLotCount += c.Quantity
 			expiry := c.ExpiresAt
 			s.ExpiresAt, s.NextExpiryAt = &expiry, &expiry
+		}
+		// Campaign lots are additive to the paid contract. They are deliberately
+		// excluded from the contract tier itself so renew/upgrade cannot mutate
+		// or price the promotional entitlement.
+		for _, lot := range lots {
+			if lot.SourceType != "campaign" || !lot.Active(now) {
+				continue
+			}
+			s.ActiveLotCount++
+			if finite(lot.DailyLimitUSD) {
+				limit = limit.Add(decimal.NewFromFloat(*lot.DailyLimitUSD))
+			}
+			if s.ExpiresAt == nil || lot.ExpiresAt.After(*s.ExpiresAt) {
+				expiry := lot.ExpiresAt
+				s.ExpiresAt = &expiry
+			}
+			earlier(&s.NextExpiryAt, lot.ExpiresAt)
+		}
+		if s.ActiveLotCount > 0 {
+			value := limit.InexactFloat64()
+			s.DailyLimitUSD = &value
 		}
 	} else {
 		total := decimal.Zero

@@ -120,6 +120,13 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		// 福利活动（用户可见，领取由服务端原子处理）
+		benefits := authenticated.Group("/benefit-campaigns")
+		{
+			benefits.GET("/current", h.BenefitCampaign.Current)
+			benefits.POST("/:slug/claim", h.BenefitCampaign.Claim)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

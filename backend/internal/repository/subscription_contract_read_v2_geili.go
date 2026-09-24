@@ -45,8 +45,12 @@ func attachSubscriptionContract(ctx context.Context, c *dbent.Client, sub *servi
 	sub.MonthlyWindowStart = nil
 	if contract.Mode == "v2" {
 		sub.StartsAt = contract.StartsAt
-		sub.ExpiresAt = contract.ExpiresAt
-		if sub.Status == "active" && !contract.ExpiresAt.After(now) {
+		if sub.QuotaSummary != nil && sub.QuotaSummary.ExpiresAt != nil {
+			sub.ExpiresAt = *sub.QuotaSummary.ExpiresAt
+		} else {
+			sub.ExpiresAt = contract.ExpiresAt
+		}
+		if sub.Status == "active" && sub.QuotaSummary != nil && sub.QuotaSummary.ActiveLotCount == 0 {
 			sub.Status = "expired"
 		}
 	}

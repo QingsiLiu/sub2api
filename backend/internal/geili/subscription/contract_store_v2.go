@@ -163,6 +163,17 @@ func CurrentContract(ctx context.Context, c *dbent.Client, userID int64, now tim
 			}
 			selected.Mode = ContractModeLegacy
 		}
+		// A campaign lot may keep the parent alive after the paid V2 term has
+		// expired. Keep the pool usable for admission, but block paid quote/change
+		// operations until the promotional lot also expires.
+		if contract.Mode == ContractModeV2 && !contract.ExpiresAt.After(now) {
+			var campaignID int64
+			if err = scalar(ctx, c, `SELECT id FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active' AND starts_at<= $2 AND expires_at>$2 LIMIT 1`, []any{parent.ID, now}, &campaignID); err == nil {
+				selected.Mode = ContractModeLegacy
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return nil, err
+			}
+		}
 	}
 	return selected, nil
 }
@@ -437,7 +448,7 @@ func ApplyContractChange(ctx context.Context, c *dbent.Client, change Change, or
 		}
 	} else if change.Operation == "renew" || change.Operation == "upgrade" {
 		for _, lot := range lots {
-			if !lot.Active(now) {
+			if lot.SourceType == "campaign" || !lot.Active(now) {
 				continue
 			}
 			b := c.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetExpiresAt(after.ExpiresAt)
@@ -466,7 +477,10 @@ func ApplyContractChange(ctx context.Context, c *dbent.Client, change Change, or
 	if err != nil {
 		return nil, err
 	}
-	if err = c.UserSubscription.UpdateOneID(parent.ID).SetPlanID(after.PlanID).SetStartsAt(after.StartsAt).SetExpiresAt(after.ExpiresAt).SetStatus("active").SetDailyUsageUsd(used).SetDailyWindowStart(DayStart(now)).Exec(ctx); err != nil {
+	// Contract changes must never truncate an independent campaign lot. The
+	// parent expiry is the effective pool expiry; the contract row keeps the
+	// paid term expiry used for quotation semantics.
+	if _, err = c.ExecContext(ctx, `UPDATE user_subscriptions SET plan_id=$2,starts_at=$3,expires_at=CASE WHEN COALESCE((SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active'),'') > $4 THEN (SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active') ELSE $4 END,status='active',daily_usage_usd=$5,daily_window_start=$6,updated_at=$7 WHERE id=$1`, parent.ID, after.PlanID, after.StartsAt, after.ExpiresAt, used, DayStart(now), now); err != nil {
 		return nil, err
 	}
 	newLots, err := ReadLots(ctx, c, parent.ID)
