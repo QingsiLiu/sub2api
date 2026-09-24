@@ -203,6 +203,11 @@ func Aggregate(lots []Lot, now time.Time) Summary {
 
 func SortLots(lots []Lot) {
 	sort.SliceStable(lots, func(i, j int) bool {
+		// Spend promotional quota before paid rights, regardless of expiry.
+		// Preserve expiry/ID ordering within each source class.
+		if (lots[i].SourceType == "campaign") != (lots[j].SourceType == "campaign") {
+			return lots[i].SourceType == "campaign"
+		}
 		if lots[i].ExpiresAt.Equal(lots[j].ExpiresAt) {
 			return lots[i].ID < lots[j].ID
 		}

@@ -35,3 +35,26 @@ func TestContractSummaryKeepsCampaignAfterPaidTermExpires(t *testing.T) {
 		t.Fatalf("unexpected promo-only summary: %+v", got)
 	}
 }
+
+func TestContractCampaignAllocationPrecedesEarlierPaidExpiry(t *testing.T) {
+	now := time.Date(2026, 9, 25, 10, 0, 0, 0, beijing)
+	paid, gift := 90.0, 45.0
+	lots := []Lot{
+		{ID: 1, SourceType: "payment", Status: "active", StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour), DailyLimitUSD: &paid},
+		{ID: 2, SourceType: "campaign", Status: "active", StartsAt: now, ExpiresAt: now.Add(7 * 24 * time.Hour), DailyLimitUSD: &gift},
+	}
+	for _, allocate := range []struct {
+		name string
+		fn   func([]Lot, float64, time.Time) ([]Lot, error)
+	}{{"v2", AllocateContract}, {"legacy", Allocate}} {
+		t.Run(allocate.name, func(t *testing.T) {
+			got, err := allocate.fn(lots, 50, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got[0].ID != 2 || got[0].DailyUsageUSD != 45 || got[1].DailyUsageUSD != 5 {
+				t.Fatalf("expected gift 45 then paid 5: %+v", got)
+			}
+		})
+	}
+}

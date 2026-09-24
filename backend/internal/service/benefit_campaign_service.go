@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -129,11 +130,16 @@ func (s *BenefitCampaignService) Create(ctx context.Context, input CreateBenefit
 	}
 	input.Slug = strings.TrimSpace(input.Slug)
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD < 0 || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
+	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
 		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_INVALID", "invalid benefit campaign definition")
 	}
 	if input.Status == "" {
 		input.Status = BenefitCampaignStatusDraft
+	}
+	switch input.Status {
+	case BenefitCampaignStatusDraft, BenefitCampaignStatusActive, BenefitCampaignStatusPaused, BenefitCampaignStatusClosed:
+	default:
+		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_STATUS_INVALID", "invalid benefit campaign status")
 	}
 	if input.ResetMode == "" {
 		input.ResetMode = BenefitCampaignResetBeijing
@@ -170,14 +176,22 @@ func (s *BenefitCampaignService) Update(ctx context.Context, id int64, input Cre
 	}
 	input.Slug = strings.TrimSpace(input.Slug)
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD < 0 || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
+	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
 		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_INVALID", "invalid benefit campaign definition")
 	}
 	if input.Status == "" {
 		input.Status = BenefitCampaignStatusDraft
 	}
+	switch input.Status {
+	case BenefitCampaignStatusDraft, BenefitCampaignStatusActive, BenefitCampaignStatusPaused, BenefitCampaignStatusClosed:
+	default:
+		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_STATUS_INVALID", "invalid benefit campaign status")
+	}
 	if input.ResetMode == "" {
 		input.ResetMode = BenefitCampaignResetBeijing
+	}
+	if input.ResetMode != BenefitCampaignResetBeijing {
+		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_RESET_INVALID", "only Beijing calendar-day reset is supported")
 	}
 	var out BenefitCampaign
 	var max sql.NullInt64
@@ -302,13 +316,9 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	if slug == "" {
 		return nil, ErrBenefitCampaignNotFound
 	}
-	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if idempotencyKey == "" {
-		idempotencyKey = fmt.Sprintf("benefit:%s:%d", slug, userID)
-	}
-	if len(idempotencyKey) > 200 {
-		idempotencyKey = idempotencyKey[:200]
-	}
+	// The campaign/user unique pair is the idempotency scope. A caller-supplied
+	// key must not collide across users or reserve another user's claim.
+	idempotencyKey = fmt.Sprintf("benefit:%s:%d", slug, userID)
 
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
@@ -320,6 +330,16 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	campaign, err := lockCampaign(tc, c, slug)
 	if err != nil {
 		return nil, err
+	}
+	// A committed claim is the durable idempotency result, even after the
+	// campaign pauses, ends, sells out, or the eligibility source changes.
+	if existing, e := loadCampaignClaim(tc, c, campaign.ID, userID); e != nil {
+		return nil, e
+	} else if existing != nil {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		return existing, nil
 	}
 	if campaign.Status != BenefitCampaignStatusActive || now.Before(campaign.StartsAt) || !now.Before(campaign.ClaimEndsAt) {
 		return nil, ErrBenefitCampaignClosed
@@ -343,16 +363,11 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 			return nil, ErrBenefitCampaignClosed
 		}
 	}
-	if err = scanCampaignOne(tc, c, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, []any{userID}, &eligible); err != nil {
-		return nil, err
-	}
-	if existing, e := loadCampaignClaim(tc, c, campaign.ID, userID); e != nil {
-		return nil, e
-	} else if existing != nil {
-		if err = tx.Commit(); err != nil {
-			return nil, err
+	if err = scanCampaignOne(tc, c, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL AND status='active' FOR UPDATE`, []any{userID}, &eligible); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrBenefitCampaignIneligible
 		}
-		return existing, nil
+		return nil, err
 	}
 
 	var subID int64
@@ -385,7 +400,7 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	claimAt := now
 	expiresAt := claimAt.AddDate(0, 0, campaign.DurationDays)
 	if activeCount != 1 {
-		if err = scanCampaignOne(tc, c, `INSERT INTO user_subscriptions(user_id,group_id,plan_id,starts_at,expires_at,status,assigned_at,notes) VALUES($1,NULL,NULL,$2,$3,'active',$2,$4) RETURNING id`, []any{userID, claimAt, expiresAt, "campaign:" + campaign.Slug}, &subID); err != nil {
+		if err = scanCampaignOne(tc, c, `INSERT INTO user_subscriptions(user_id,group_id,plan_id,starts_at,expires_at,status,assigned_at,notes,created_at,updated_at) VALUES($1,NULL,NULL,$2,$3,'active',$2,$4,NOW(),NOW()) RETURNING id`, []any{userID, claimAt, expiresAt, "campaign:" + campaign.Slug}, &subID); err != nil {
 			return nil, err
 		}
 		subStatus = SubscriptionStatusActive
@@ -399,7 +414,7 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	if marshalErr != nil {
 		return nil, marshalErr
 	}
-	if _, err = c.ExecContext(tc, `INSERT INTO subscription_operations(subscription_id,entitlement_id,operation,source_type,source_reference,actor_id,detail) VALUES($1,$2,'create','campaign',$3,0,$4::jsonb)`, subID, entitlementID, campaign.Slug, string(detail)); err != nil {
+	if _, err = c.ExecContext(tc, `INSERT INTO subscription_operations(subscription_id,entitlement_id,operation,source_type,source_reference,actor_id,detail,created_at) VALUES($1,$2,'create','campaign',$3,0,$4::jsonb,NOW())`, subID, entitlementID, campaign.Slug, string(detail)); err != nil {
 		return nil, err
 	}
 	if _, err = c.ExecContext(tc, `UPDATE user_subscriptions SET expires_at=GREATEST(expires_at,$2),status=CASE WHEN status='suspended' THEN status ELSE 'active' END,updated_at=NOW() WHERE id=$1`, subID, expiresAt); err != nil {
@@ -440,13 +455,24 @@ func (s *BenefitCampaignService) Snapshot(ctx context.Context, campaignID int64,
 	defer func() { _ = tx.Rollback() }()
 	c := tx.Client()
 	var start, end time.Time
-	if err = scanCampaignOne(tc, c, `SELECT eligibility_starts_at,eligibility_ends_at FROM benefit_campaigns WHERE id=$1 FOR UPDATE`, []any{campaignID}, &start, &end); err != nil {
+	var frozen sql.NullTime
+	if err = scanCampaignOne(tc, c, `SELECT eligibility_starts_at,eligibility_ends_at,eligibility_snapshot_at FROM benefit_campaigns WHERE id=$1 FOR UPDATE`, []any{campaignID}, &start, &end, &frozen); err != nil {
 		if err == sql.ErrNoRows {
 			return 0, ErrBenefitCampaignNotFound
 		}
 		return 0, err
 	}
-	if !end.After(start) {
+	if frozen.Valid {
+		var count int64
+		if err = scanCampaignOne(tc, c, `SELECT COUNT(*) FROM benefit_campaign_eligibility WHERE campaign_id=$1`, []any{campaignID}, &count); err != nil {
+			return 0, err
+		}
+		if err = tx.Commit(); err != nil {
+			return 0, err
+		}
+		return count, nil
+	}
+	if !end.After(start) || now.Before(end) {
 		return 0, ErrBenefitCampaignSnapshot
 	}
 	if _, err = c.ExecContext(tc, `DELETE FROM benefit_campaign_eligibility WHERE campaign_id=$1`, campaignID); err != nil {
