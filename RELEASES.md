@@ -4,6 +4,20 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.8-geili.1
+
+- 日期：2026-09-24
+- 上游基线：`upstream/main` `a3eb7ef302961cba716dc78b39b93b60c467db0e`（远程 v0.2.8 版本同步提交）。
+- revision：合并提交生成后回填。
+- 镜像 digest：候选构建后回填。
+- 部署：仅源码，未部署 Stage 或生产。
+
+相对 `0.2.7-geili.8`：
+
+- 合入上游 v0.2.8 的 GPT-6 Sol/Luna、Claude Opus 5.5、Grok 4.7、OpenCode Go 用量窗口、推理力度计费倍率、Claude Code 版本同步、简易模式 Key 消费窗口、备份归档、线下提现、日志保留、Codex 推荐积分、TypeSafe 内容审核和 HostService 结构化账号元数据。
+- 合入工具 Schema 清洗、Antigravity/Codex/OpenAI/Grok/Vertex/图片/流式连接修复及前后端交互修复，并保留 Geili 订阅 V2、权益份额、复合 Key、billing_source 和在线更新禁用守卫。
+- 兑换订阅冲突保留 Geili 多权益人工复核边界，同时加入 legacy 负数兑换的并发加锁和不足一天余量修复；AUAPI 图片请求继续保留 resolution 映射。
+
 ## 0.2.7-geili.8
 
 - 日期：2026-09-22

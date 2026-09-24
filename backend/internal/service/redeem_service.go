@@ -543,7 +543,15 @@ func (s *RedeemService) redeem(ctx context.Context, userID int64, code string, r
 		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
-			return nil, errSubscriptionGrantManual
+			if redeemCode.PlanID != nil {
+				return nil, errSubscriptionGrantManual
+			}
+			if redeemCode.GroupID == nil {
+				return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid legacy subscription redeem code: missing group_id")
+			}
+			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
+				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
+			}
 		} else {
 			if validityDays == 0 && redeemCode.PlanID == nil {
 				validityDays = 30
@@ -738,18 +746,26 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		return ErrSubscriptionNotFound
 	}
 
-	now := time.Now()
-	remaining := int(sub.ExpiresAt.Sub(now).Hours() / 24)
-	if remaining < 0 {
-		remaining = 0
+	// Redemption already owns a transaction. Lock and reread the subscription
+	// before computing changes: the redeem-code lock cannot serialize different
+	// codes (or an administrator renewal) targeting the same subscription.
+	sub, err = s.subscriptionService.userSubRepo.GetByIDForUpdate(ctx, sub.ID)
+	if err != nil {
+		return fmt.Errorf("lock subscription for reduction: %w", err)
 	}
 
 	if len(sub.Entitlements) > 1 {
 		return ErrSubscriptionAssignConflict.WithMetadata(map[string]string{"conflict_reason": "select entitlements for negative redemption"})
 	}
+	now := time.Now()
+	if s.subscriptionService.now != nil {
+		now = s.subscriptionService.now()
+	}
+	// Preserve calendar-day semantics without rounding away the remaining hours.
+	newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
 	notes := fmt.Sprintf("通过兑换码 %s 退款扣减 %d 天", code, reduceDays)
 
-	if remaining <= reduceDays {
+	if !newExpiresAt.After(now) {
 		// 剩余天数不足，直接取消订阅
 		if err := s.subscriptionService.userSubRepo.UpdateStatus(ctx, sub.ID, SubscriptionStatusExpired); err != nil {
 			return fmt.Errorf("cancel subscription: %w", err)
@@ -760,7 +776,6 @@ func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, 
 		}
 	} else {
 		// 缩短天数
-		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
 		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, newExpiresAt); err != nil {
 			return fmt.Errorf("reduce subscription: %w", err)
 		}

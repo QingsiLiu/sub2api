@@ -107,6 +107,7 @@ func buildAUAPIImagePayload(body []byte) (auapiImageRequest, string, error) {
 		case "1024x1024", "1024x1536", "1536x1024":
 			r.Parameters.Size = in.Size
 			tier = NormalizeImageBillingTierOrDefault(in.Size)
+			r.Parameters.Resolution = strings.ToLower(tier)
 		default:
 			return r, "", errors.New("AUAPI size must be 1024x1024, 1024x1536 or 1536x1024; use resolution for 2k/4k")
 		}
