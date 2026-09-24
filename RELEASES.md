@@ -8,7 +8,7 @@
 
 - 日期：2026-09-24
 - 上游基线：`upstream/main` `a3eb7ef302961cba716dc78b39b93b60c467db0e`（远程 v0.2.8 版本同步提交）。
-- revision：`52b0f4af726073080ff0cb11360384f361d8bbf4`。
+- revision：`1c73de09d`。
 - 镜像 digest：候选构建后回填。
 - 部署：仅源码，未部署 Stage 或生产。
 
@@ -17,6 +17,7 @@
 - 合入上游 v0.2.8 的 GPT-6 Sol/Luna、Claude Opus 5.5、Grok 4.7、OpenCode Go 用量窗口、推理力度计费倍率、Claude Code 版本同步、简易模式 Key 消费窗口、备份归档、线下提现、日志保留、Codex 推荐积分、TypeSafe 内容审核和 HostService 结构化账号元数据。
 - 合入工具 Schema 清洗、Antigravity/Codex/OpenAI/Grok/Vertex/图片/流式连接修复及前后端交互修复，并保留 Geili 订阅 V2、权益份额、复合 Key、billing_source 和在线更新禁用守卫。
 - 兑换订阅冲突保留 Geili 多权益人工复核边界，同时加入 legacy 负数兑换的并发加锁和不足一天余量修复；AUAPI 图片请求继续保留 resolution 映射。
+- OpenAI 管理员同步目录扩展 GPT-6 Sol/Luna，移除过时的“恢复默认 7 个”按钮；已有自定义目录不会被自动覆盖。
 
 ## 0.2.7-geili.8
 
