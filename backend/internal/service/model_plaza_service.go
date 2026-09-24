@@ -59,9 +59,11 @@ type PlazaGroup struct {
 
 // ModelPlazaService 聚合模型广场数据。
 //
-// 模型枚举来自渠道配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
-// 查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用渠道/分组档位价。
+// 模型枚举来自实时分组账号目录；token 模型的展示单价与阶梯由 BillingService
+// 的阶梯表查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用
+// 渠道/分组档位价。
 type ModelPlazaService struct {
+	catalog        *GroupModelCatalog
 	channelRepo    ChannelRepository
 	groupRepo      GroupRepository
 	pricingService *PricingService
@@ -69,8 +71,14 @@ type ModelPlazaService struct {
 	resolver       *ModelPricingResolver
 }
 
+type modelKey struct {
+	platform string
+	name     string
+}
+
 // NewModelPlazaService 创建模型广场服务。
 func NewModelPlazaService(
+	catalog *GroupModelCatalog,
 	channelRepo ChannelRepository,
 	groupRepo GroupRepository,
 	pricingService *PricingService,
@@ -78,6 +86,7 @@ func NewModelPlazaService(
 	resolver *ModelPricingResolver,
 ) *ModelPlazaService {
 	return &ModelPlazaService{
+		catalog:        catalog,
 		channelRepo:    channelRepo,
 		groupRepo:      groupRepo,
 		pricingService: pricingService,
@@ -138,10 +147,6 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		order = append(order, g.ID)
 	}
 
-	type modelKey struct {
-		platform string
-		name     string
-	}
 	// modelIdx[groupID][platform+modelName] = index into byGroup[groupID].Models
 	modelIdx := make(map[int64]map[modelKey]int, len(groups))
 	for i := range channels {
@@ -187,6 +192,41 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 					Pricing:  m.Pricing,
 				})
 			}
+		}
+	}
+	// geili hook: live group catalogs replace channel metadata as model source.
+	if s.catalog != nil {
+		for i := range groups {
+			g := &groups[i]
+			catalog, err := s.catalog.List(ctx, g)
+			if err != nil {
+				return nil, fmt.Errorf("group %d catalog: %w", g.ID, err)
+			}
+			pg := byGroup[g.ID]
+			pg.Models = nil
+			for _, m := range catalog {
+				pg.Models = append(pg.Models, PlazaModel{Name: m.Name, Platform: m.Platform})
+			}
+		}
+	}
+	for gid, pg := range byGroup {
+		if cfg := groupEnt[gid].ModelPlazaConfig; strings.EqualFold(cfg.Mode, GroupModelPlazaModeSelected) {
+			modelNames := make([]string, 0, len(pg.Models))
+			for _, model := range pg.Models {
+				modelNames = append(modelNames, model.Name)
+			}
+			selected := FilterModelPlazaModels(cfg, modelNames)
+			keep := make(map[string]struct{}, len(selected))
+			for _, model := range selected {
+				keep[strings.ToLower(model)] = struct{}{}
+			}
+			filtered := pg.Models[:0]
+			for _, model := range pg.Models {
+				if _, ok := keep[strings.ToLower(model.Name)]; ok {
+					filtered = append(filtered, model)
+				}
+			}
+			pg.Models = filtered
 		}
 	}
 
@@ -367,4 +407,33 @@ func (s *ModelPlazaService) lookupOfficialPricing(ctx context.Context, modelName
 	}
 	memo[modelName] = result
 	return result
+}
+
+// ModelCandidates returns the uncurated catalog for admin selection. ID zero
+// supports creating a group before accounts can be bound.
+func (s *ModelPlazaService) ModelCandidates(ctx context.Context, id int64, platform string) ([]string, error) {
+	if id == 0 {
+		return defaultModelsListCandidateIDs(platform), nil
+	}
+	g, err := s.groupRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if platform != "" && platform != g.Platform {
+		copy := *g
+		copy.Platform = platform
+		g = &copy
+	}
+	if s.catalog == nil {
+		return defaultModelsListCandidateIDs(g.Platform), nil
+	}
+	models, err := s.catalog.List(ctx, g)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(models))
+	for _, m := range models {
+		names = append(names, m.Name)
+	}
+	return dedupeAndSortModelIDs(names), nil
 }

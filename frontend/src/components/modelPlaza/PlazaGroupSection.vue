@@ -63,6 +63,7 @@
         :image-rate-multiplier="group.image_rate_multiplier"
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
+        :prices-include-rate="props.pricesIncludeRate"
       />
       <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
@@ -85,6 +86,7 @@ import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{
   group: ModelPlazaGroup
+  pricesIncludeRate?: boolean
 }>()
 
 const { t } = useI18n()

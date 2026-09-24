@@ -1169,6 +1169,16 @@ export default {
           duplicate: '该条目已存在'
         }
       },
+      modelPlaza: {
+        title: '模型广场展示',
+        hint: '默认展示分组全部可用模型；选择精选后只展示勾选模型，不影响实际调用权限。',
+        all: '自动展示全部模型',
+        selected: '手动精选模型',
+        loading: '正在加载候选模型...',
+        empty: '暂无候选模型',
+        loadFailed: '加载模型广场候选模型失败',
+        emptySelectionError: '模型广场精选模式至少选择一个模型'
+      },
       codexModelsManifest: {
         title: '固定账号获取模型列表',
         hint: '开启后，普通模型列表与 Codex Model Manifest 均优先从选定账号获取并合并，再应用账号映射和分组列表过滤；限流/过载中的选定账号仍会被使用。',

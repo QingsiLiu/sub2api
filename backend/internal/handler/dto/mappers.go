@@ -177,6 +177,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		DefaultMappedModel:          g.DefaultMappedModel,
 		MessagesDispatchModelConfig: g.MessagesDispatchModelConfig,
 		ModelAllowlist:              g.ModelAllowlist,
+		ModelPlazaConfig:            g.ModelPlazaConfig,
 		CodexModelsManifestConfig:   g.CodexModelsManifestConfig,
 		SupportedModelScopes:        g.SupportedModelScopes,
 		AccountCount:                g.AccountCount,

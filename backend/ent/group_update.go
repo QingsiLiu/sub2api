@@ -1138,6 +1138,20 @@ func (_u *GroupUpdate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) 
 	return _u
 }
 
+// SetModelPlazaConfig sets the "model_plaza_config" field.
+func (_u *GroupUpdate) SetModelPlazaConfig(v domain.GroupModelPlazaConfig) *GroupUpdate {
+	_u.mutation.SetModelPlazaConfig(v)
+	return _u
+}
+
+// SetNillableModelPlazaConfig sets the "model_plaza_config" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableModelPlazaConfig(v *domain.GroupModelPlazaConfig) *GroupUpdate {
+	if v != nil {
+		_u.SetModelPlazaConfig(*v)
+	}
+	return _u
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (_u *GroupUpdate) SetCodexModelsManifestConfig(v domain.GroupCodexModelsManifestConfig) *GroupUpdate {
 	_u.mutation.SetCodexModelsManifestConfig(v)
@@ -2018,6 +2032,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(group.FieldModelAllowlist, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelPlazaConfig(); ok {
+		_spec.SetField(group.FieldModelPlazaConfig, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.CodexModelsManifestConfig(); ok {
 		_spec.SetField(group.FieldCodexModelsManifestConfig, field.TypeJSON, value)
@@ -3560,6 +3577,20 @@ func (_u *GroupUpdateOne) SetNillableModelAllowlist(v *domain.GroupModelAllowlis
 	return _u
 }
 
+// SetModelPlazaConfig sets the "model_plaza_config" field.
+func (_u *GroupUpdateOne) SetModelPlazaConfig(v domain.GroupModelPlazaConfig) *GroupUpdateOne {
+	_u.mutation.SetModelPlazaConfig(v)
+	return _u
+}
+
+// SetNillableModelPlazaConfig sets the "model_plaza_config" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableModelPlazaConfig(v *domain.GroupModelPlazaConfig) *GroupUpdateOne {
+	if v != nil {
+		_u.SetModelPlazaConfig(*v)
+	}
+	return _u
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (_u *GroupUpdateOne) SetCodexModelsManifestConfig(v domain.GroupCodexModelsManifestConfig) *GroupUpdateOne {
 	_u.mutation.SetCodexModelsManifestConfig(v)
@@ -4470,6 +4501,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.ModelAllowlist(); ok {
 		_spec.SetField(group.FieldModelAllowlist, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.ModelPlazaConfig(); ok {
+		_spec.SetField(group.FieldModelPlazaConfig, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.CodexModelsManifestConfig(); ok {
 		_spec.SetField(group.FieldCodexModelsManifestConfig, field.TypeJSON, value)

@@ -1172,6 +1172,16 @@ export default {
           duplicate: 'This entry already exists'
         }
       },
+      modelPlaza: {
+        title: 'Model plaza display',
+        hint: 'Show all available models by default. Curated mode only changes presentation, not access.',
+        all: 'Show all models automatically',
+        selected: 'Curate selected models',
+        loading: 'Loading candidate models...',
+        empty: 'No candidate models',
+        loadFailed: 'Failed to load model plaza candidates',
+        emptySelectionError: 'Select at least one model in curated mode'
+      },
       codexModelsManifest: {
         title: 'Pinned Accounts for Model Lists',
         hint: 'When enabled, ordinary model lists and Codex Model Manifest are discovered from the pinned accounts first, then merged and filtered using account mappings and the group model list. Rate-limited or overloaded pinned accounts are still used.',

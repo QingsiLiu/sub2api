@@ -119,6 +119,18 @@ export async function getModelAllowlistCandidates(
   return data.models || []
 }
 
+/** Same live catalog for presentation-only model plaza curation. */
+export async function getModelPlazaCandidates(
+  id: number,
+  platform?: GroupPlatform
+): Promise<string[]> {
+  const { data } = await apiClient.get<{ models: string[] }>(
+    `/admin/groups/${id}/model-plaza-candidates`,
+    { params: platform ? { platform } : undefined }
+  )
+  return data.models || []
+}
+
 /**
  * Create new group
  * @param groupData - Group data
@@ -478,6 +490,7 @@ export const groupsAPI = {
   getLiveCapability,
   getById,
   getModelAllowlistCandidates,
+  getModelPlazaCandidates,
   create,
   duplicate,
   update,

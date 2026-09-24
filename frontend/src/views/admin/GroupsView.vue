@@ -890,6 +890,25 @@
           </div>
         </div>
 
+        <div class="border-t pt-4">
+          <div class="mb-3">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPlaza.title") }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPlaza.hint") }}</p>
+          </div>
+          <select v-model="createModelPlazaConfig.mode" class="input mb-3 max-w-xs">
+            <option value="all">{{ t("admin.groups.modelPlaza.all") }}</option>
+            <option value="selected">{{ t("admin.groups.modelPlaza.selected") }}</option>
+          </select>
+          <div v-if="createModelPlazaConfig.mode === 'selected'" class="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-dark-600">
+            <p v-if="createModelPlazaLoading" class="text-xs text-gray-500">{{ t("admin.groups.modelPlaza.loading") }}</p>
+            <label v-for="model in createModelPlazaCandidates" :key="model" class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-gray-50 dark:hover:bg-dark-700">
+              <input v-model="createModelPlazaConfig.models" type="checkbox" :value="model" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+              <span class="break-all">{{ model }}</span>
+            </label>
+            <p v-if="!createModelPlazaLoading && createModelPlazaCandidates.length === 0" class="text-xs text-gray-500">{{ t("admin.groups.modelPlaza.empty") }}</p>
+          </div>
+        </div>
+
         <!-- 图片生成计费配置 -->
         <div
           v-if="supportsImagePricingPlatform(createForm.platform)"
@@ -2528,6 +2547,25 @@
                 {{ t(editAllowlistCustomErrorKey) }}
               </p>
             </div>
+          </div>
+        </div>
+
+        <div class="border-t pt-4">
+          <div class="mb-3">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPlaza.title") }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.groups.modelPlaza.hint") }}</p>
+          </div>
+          <select v-model="editModelPlazaConfig.mode" class="input mb-3 max-w-xs">
+            <option value="all">{{ t("admin.groups.modelPlaza.all") }}</option>
+            <option value="selected">{{ t("admin.groups.modelPlaza.selected") }}</option>
+          </select>
+          <div v-if="editModelPlazaConfig.mode === 'selected'" class="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-dark-600">
+            <p v-if="editModelPlazaLoading" class="text-xs text-gray-500">{{ t("admin.groups.modelPlaza.loading") }}</p>
+            <label v-for="model in editModelPlazaCandidates" :key="model" class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-gray-50 dark:hover:bg-dark-700">
+              <input v-model="editModelPlazaConfig.models" type="checkbox" :value="model" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+              <span class="break-all">{{ model }}</span>
+            </label>
+            <p v-if="!editModelPlazaLoading && editModelPlazaCandidates.length === 0" class="text-xs text-gray-500">{{ t("admin.groups.modelPlaza.empty") }}</p>
           </div>
         </div>
 
@@ -4296,6 +4334,7 @@ import type {
   CompositeRouteEndpoint,
   CompositeRouteMatchType,
   GroupPlatform,
+  ModelPlazaConfig,
   SubscriptionType,
   UsagePanel,
 } from "@/types";
@@ -4943,6 +4982,12 @@ const createModelAllowlistState = reactive(createInitialModelAllowlistState());
 const editModelAllowlistState = reactive(createInitialModelAllowlistState());
 const createModelAllowlistLoading = ref(false);
 const editModelAllowlistLoading = ref(false);
+const createModelPlazaConfig = reactive<ModelPlazaConfig>({ mode: "all", models: [] });
+const editModelPlazaConfig = reactive<ModelPlazaConfig>({ mode: "all", models: [] });
+const createModelPlazaCandidates = ref<string[]>([]);
+const editModelPlazaCandidates = ref<string[]>([]);
+const createModelPlazaLoading = ref(false);
+const editModelPlazaLoading = ref(false);
 type ReasoningEffortPolicyFieldsExpose = {
   validate: () => boolean;
   resetValidation: () => void;
@@ -4974,6 +5019,28 @@ const createAllowlistCustomEntry = ref("");
 const editAllowlistCustomEntry = ref("");
 const createAllowlistCustomErrorKey = ref<string | null>(null);
 const editAllowlistCustomErrorKey = ref<string | null>(null);
+
+const plazaCandidateRequests = { create: 0, edit: 0 };
+const loadModelPlazaCandidates = async (mode: "create" | "edit", groupID: number, platform: GroupPlatform) => {
+  const request = ++plazaCandidateRequests[mode];
+  const loadingRef = mode === "create" ? createModelPlazaLoading : editModelPlazaLoading;
+  const candidates = mode === "create" ? createModelPlazaCandidates : editModelPlazaCandidates;
+  candidates.value = [];
+  loadingRef.value = true;
+  try {
+    const models = await adminAPI.groups.getModelPlazaCandidates(groupID, platform);
+    if (request === plazaCandidateRequests[mode]) candidates.value = models;
+  } catch {
+    if (request === plazaCandidateRequests[mode]) appStore.showError(t("admin.groups.modelPlaza.loadFailed"));
+  } finally {
+    if (request === plazaCandidateRequests[mode]) loadingRef.value = false;
+  }
+};
+
+const normalizeModelPlazaConfig = (config?: ModelPlazaConfig): ModelPlazaConfig => ({
+  mode: config?.mode === "selected" ? "selected" : "all",
+  models: [...(config?.models ?? [])],
+});
 const submitCreateAllowlistCustomEntry = () => {
   const error = addCustomModelAllowlistItem(
     createModelAllowlistState,
@@ -5824,6 +5891,7 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const openCreateModal = () => {
   showCreateModal.value = true;
+  void loadModelPlazaCandidates("create", 0, createForm.platform);
   loadModelAllowlistCandidates("create", 0, createForm.platform);
 };
 
@@ -5891,6 +5959,7 @@ const closeCreateModal = () => {
   createForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   createForm.reasoning_effort_mappings = [];
   createReasoningEffortPolicyRef.value?.resetValidation();
+  Object.assign(createModelPlazaConfig, { mode: "all", models: [] });
   resetModelAllowlistState(createModelAllowlistState);
   createModelRoutingRules.value = [];
 };
@@ -5965,6 +6034,10 @@ const handleCreateGroup = async () => {
   }
   if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
+  if (createModelPlazaConfig.mode === "selected" && createModelPlazaConfig.models.length === 0) {
+    appStore.showError(t("admin.groups.modelPlaza.emptySelectionError"));
+    return;
+  }
   if (
     createModelAllowlistState.enabled &&
     createModelAllowlistSelectedCount.value === 0
@@ -6012,6 +6085,7 @@ const handleCreateGroup = async () => {
         createModelRoutingRules.value,
       ),
       model_allowlist: buildModelAllowlistConfig(createModelAllowlistState),
+      model_plaza_config: normalizeModelPlazaConfig(createModelPlazaConfig),
       // 创建时固定账号 manifest 固定发送关闭状态（后端创建路径禁止开启）
       codex_models_manifest_config: createCodexManifestDefaults(),
       supported_model_scopes: normalizeSupportedModelScopesForPlatform(
@@ -6209,6 +6283,8 @@ const handleEdit = async (group: AdminGroup) => {
     group.platform,
   );
   resetModelAllowlistState(editModelAllowlistState, group.model_allowlist);
+  Object.assign(editModelPlazaConfig, normalizeModelPlazaConfig(group.model_plaza_config));
+  void loadModelPlazaCandidates("edit", group.id, group.platform);
   // 固定账号 manifest 配置：回显配置并异步解析已存账号名称（失败显示 #<id>）
   const savedCodexManifestConfig =
     group.codex_models_manifest_config ?? createCodexManifestDefaults();
@@ -6300,6 +6376,10 @@ const handleUpdateGroup = async () => {
   }
   if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
+  if (editModelPlazaConfig.mode === "selected" && editModelPlazaConfig.models.length === 0) {
+    appStore.showError(t("admin.groups.modelPlaza.emptySelectionError"));
+    return;
+  }
   if (
     editModelAllowlistState.enabled &&
     editModelAllowlistSelectedCount.value === 0
@@ -6357,6 +6437,7 @@ const handleUpdateGroup = async () => {
         editModelRoutingRules.value,
       ),
       model_allowlist: buildModelAllowlistConfig(editModelAllowlistState),
+      model_plaza_config: normalizeModelPlazaConfig(editModelPlazaConfig),
       // 非 openai 平台提交关闭状态，与后端归一化一致
       codex_models_manifest_config:
         editForm.platform === "openai"
@@ -6775,7 +6856,10 @@ watch(
       createForm.require_privacy_set = false;
     }
     resetDisabledBatchImagePricing(createForm);
-    resetModelAllowlistState(createModelAllowlistState);
+    Object.assign(createModelPlazaConfig, { mode: "all", models: [] });
+    Object.assign(createModelPlazaConfig, { mode: "all", models: [] });
+  resetModelAllowlistState(createModelAllowlistState);
+    void loadModelPlazaCandidates("create", 0, newVal);
     loadModelAllowlistCandidates("create", 0, newVal);
   },
 );
@@ -6833,7 +6917,9 @@ watch(
     }
     resetDisabledBatchImagePricing(editForm);
     if (editingGroup.value) {
+      Object.assign(editModelPlazaConfig, { mode: "all", models: [] });
       resetModelAllowlistState(editModelAllowlistState, editForm.platform === editingGroup.value.platform ? editingGroup.value.model_allowlist : undefined);
+      void loadModelPlazaCandidates("edit", editingGroup.value.id, newVal);
       loadModelAllowlistCandidates("edit", editingGroup.value.id, newVal);
     }
   },
@@ -6931,7 +7017,8 @@ onMounted(() => {
   loadGroups();
   if (!authStore.isSimpleMode) {
     void loadLiveCapability();
-    loadModelAllowlistCandidates("create", 0, createForm.platform);
+    void loadModelPlazaCandidates("create", 0, createForm.platform);
+  loadModelAllowlistCandidates("create", 0, createForm.platform);
   }
   document.addEventListener("click", handleClickOutside);
 });

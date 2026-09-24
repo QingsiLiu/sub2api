@@ -66,6 +66,12 @@
           <td class="border-r border-gray-100 py-2.5 pl-5 pr-4 align-middle dark:border-dark-700/60">
             <div class="flex flex-wrap items-center gap-1.5">
               <span class="font-medium text-gray-900 dark:text-white">{{ m.name }}</span>
+              <span
+                v-if="m.pricing_status === 'unavailable'"
+                class="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+              >
+                {{ t('modelPlaza.table.priceUnavailable') }}
+              </span>
               <!-- 时段徽章紧跟模型名,其余徽章排在后面,空间不足时先换行的是它们 -->
               <span
                 v-if="period"
@@ -291,7 +297,7 @@
             <span
               v-else-if="usesIndependentImageRate(m)"
               class="font-bold text-gray-700 dark:text-gray-300"
-              >{{ requestRate(m) }}x</span
+              >{{ requestDisplayRate(m) }}x</span
             >
             <template v-else-if="hasCustomRate">
               <span class="mr-1 text-gray-400 line-through dark:text-dark-500">{{ rateMultiplier }}x</span>
@@ -347,6 +353,8 @@ const props = defineProps<{
    */
   peakWindow?: string
   peakRateMultiplier?: number | null
+  /** Backend may return prices with the effective balance multiplier applied. */
+  pricesIncludeRate?: boolean
 }>()
 
 const { t } = useI18n()
@@ -377,6 +385,7 @@ const sortedModels = computed(() => {
 })
 
 const effectiveRate = computed(() => props.userRateMultiplier ?? props.rateMultiplier)
+const priceRate = computed(() => (props.pricesIncludeRate ? 1 : effectiveRate.value))
 const hasCustomRate = computed(
   () => props.userRateMultiplier != null && props.userRateMultiplier !== props.rateMultiplier
 )
@@ -415,13 +424,13 @@ const rows = computed<PlazaRow[]>(() =>
 
 /** 时段行的生效倍率 = 生效倍率 × 时段倍率(去掉浮点噪声)。 */
 function periodRate(period: PlazaTimePricingPeriod): number {
-  return Math.round(effectiveRate.value * period.multiplier * 1000) / 1000
+  return Math.round(priceRate.value * period.multiplier * 1000) / 1000
 }
 
 /** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。 */
 function paidPerMillion(value: number | null | undefined, period: PlazaTimePricingPeriod | null = null): string {
   if (value == null) return '-'
-  const rate = period ? periodRate(period) : effectiveRate.value
+  const rate = period ? periodRate(period) : priceRate.value
   return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS)
 }
 
@@ -432,7 +441,15 @@ function usesIndependentImageRate(m: PlazaModel): boolean {
 
 /** 按次/按图片行的生效倍率。 */
 function requestRate(m: PlazaModel): number {
-  return usesIndependentImageRate(m) ? (props.imageRateMultiplier ?? 1) : effectiveRate.value
+  return usesIndependentImageRate(m)
+    ? (props.pricesIncludeRate ? 1 : (props.imageRateMultiplier ?? 1))
+    : priceRate.value
+}
+
+function requestDisplayRate(m: PlazaModel): number {
+  return usesIndependentImageRate(m)
+    ? (props.imageRateMultiplier ?? 1)
+    : effectiveRate.value
 }
 
 /** 按次 / 按图片单价(乘该行生效倍率,不换算 1M)。 */

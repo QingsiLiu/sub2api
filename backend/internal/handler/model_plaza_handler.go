@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log/slog"
+	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -67,6 +68,7 @@ type modelPlazaModel struct {
 	Name            string                     `json:"name"`
 	Platform        string                     `json:"platform"`
 	Pricing         *userSupportedModelPricing `json:"pricing"`
+	PricingStatus   string                     `json:"pricing_status"`
 	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
@@ -99,8 +101,57 @@ type modelPlazaGroup struct {
 
 // modelPlazaResponse 广场页响应。
 type modelPlazaResponse struct {
-	Description string            `json:"description"`
-	Groups      []modelPlazaGroup `json:"groups"`
+	Description       string            `json:"description"`
+	PricesIncludeRate bool              `json:"prices_include_rate"`
+	Groups            []modelPlazaGroup `json:"groups"`
+}
+
+func scaleUserPricing(p *userSupportedModelPricing, multiplier float64) *userSupportedModelPricing {
+	if p == nil {
+		return nil
+	}
+	scale := func(v *float64) *float64 {
+		if v == nil {
+			return nil
+		}
+		out := *v * multiplier
+		return &out
+	}
+	p.InputPrice = scale(p.InputPrice)
+	p.OutputPrice = scale(p.OutputPrice)
+	p.CacheWritePrice = scale(p.CacheWritePrice)
+	p.CacheWrite1hPrice = scale(p.CacheWrite1hPrice)
+	p.CacheReadPrice = scale(p.CacheReadPrice)
+	p.ImageInputPrice = scale(p.ImageInputPrice)
+	p.ImageOutputPrice = scale(p.ImageOutputPrice)
+	p.PerRequestPrice = scale(p.PerRequestPrice)
+	for i := range p.Intervals {
+		p.Intervals[i].InputPrice = scale(p.Intervals[i].InputPrice)
+		p.Intervals[i].OutputPrice = scale(p.Intervals[i].OutputPrice)
+		p.Intervals[i].CacheWritePrice = scale(p.Intervals[i].CacheWritePrice)
+		p.Intervals[i].CacheWrite1hPrice = scale(p.Intervals[i].CacheWrite1hPrice)
+		p.Intervals[i].CacheReadPrice = scale(p.Intervals[i].CacheReadPrice)
+		p.Intervals[i].PerRequestPrice = scale(p.Intervals[i].PerRequestPrice)
+	}
+	return p
+}
+
+func userPricingConfigured(p *userSupportedModelPricing) bool {
+	if p == nil {
+		return false
+	}
+	if p.InputPrice != nil || p.OutputPrice != nil || p.CacheWritePrice != nil ||
+		p.CacheWrite1hPrice != nil || p.CacheReadPrice != nil ||
+		p.ImageInputPrice != nil || p.ImageOutputPrice != nil || p.PerRequestPrice != nil {
+		return true
+	}
+	for _, interval := range p.Intervals {
+		if interval.InputPrice != nil || interval.OutputPrice != nil || interval.CacheWritePrice != nil ||
+			interval.CacheWrite1hPrice != nil || interval.CacheReadPrice != nil || interval.PerRequestPrice != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // Get 返回模型广场数据。
@@ -154,8 +205,9 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		out = append(out, toModelPlazaGroupDTO(&visible[i], userRates))
 	}
 	response.Success(c, modelPlazaResponse{
-		Description: rt.Description,
-		Groups:      out,
+		Description:       rt.Description,
+		PricesIncludeRate: true,
+		Groups:            out,
 	})
 }
 
@@ -188,10 +240,27 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 	models := make([]modelPlazaModel, 0, len(g.Models))
 	for i := range g.Models {
 		m := &g.Models[i]
+		rate := g.RateMultiplier
+		if userRate, ok := userRates[g.ID]; ok {
+			rate = userRate
+		}
+		pricing := toUserPricing(m.Pricing)
+		pricingStatus := "unavailable"
+		if userPricingConfigured(pricing) {
+			pricingStatus = "configured"
+			pricingRate := rate
+			if m.Pricing.BillingMode == service.BillingModeImage && g.ImageRateIndependent {
+				pricingRate = g.ImageRateMultiplier
+			}
+			pricing = scaleUserPricing(pricing, pricingRate)
+		} else {
+			pricing = nil
+		}
 		models = append(models, modelPlazaModel{
 			Name:             m.Name,
 			Platform:         m.Platform,
-			Pricing:          toUserPricing(m.Pricing),
+			Pricing:          pricing,
+			PricingStatus:    pricingStatus,
 			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
 			LongContextBasis: string(m.LongContextBasis),
 			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
@@ -249,4 +318,19 @@ func toModelPlazaOfficialPricing(p *service.PlazaOfficialPricing) *modelPlazaOff
 		CacheReadPrice:    p.CacheReadPrice,
 		Intervals:         toUserPricingIntervals(p.Intervals),
 	}
+}
+
+// Candidates is registered behind the admin authentication middleware.
+func (h *ModelPlazaHandler) Candidates(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id < 0 {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+	models, err := h.plazaService.ModelCandidates(c.Request.Context(), id, c.Query("platform"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"models": models})
 }

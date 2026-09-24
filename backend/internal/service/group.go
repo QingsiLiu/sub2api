@@ -14,6 +14,12 @@ import (
 type OpenAIMessagesDispatchModelConfig = domain.OpenAIMessagesDispatchModelConfig
 type GroupCodexModelsManifestConfig = domain.GroupCodexModelsManifestConfig
 type ReasoningEffortMapping = domain.ReasoningEffortMapping
+type GroupModelPlazaConfig = domain.GroupModelPlazaConfig
+
+const (
+	GroupModelPlazaModeAll      = domain.GroupModelPlazaModeAll
+	GroupModelPlazaModeSelected = domain.GroupModelPlazaModeSelected
+)
 
 type Group struct {
 	SubscriptionEnabled        bool
@@ -110,6 +116,9 @@ type Group struct {
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
 	ModelAllowlist              GroupModelAllowlist
+	// ModelPlazaConfig controls presentation only; it never changes gateway
+	// model admission or the /models response.
+	ModelPlazaConfig GroupModelPlazaConfig
 	// CodexModelsManifestConfig 开启后，普通模型列表与 Codex manifest 优先使用
 	// 固定账号列表拉取并合并，不经过调度器（仅 openai 平台）。
 	CodexModelsManifestConfig GroupCodexModelsManifestConfig

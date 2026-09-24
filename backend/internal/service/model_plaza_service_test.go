@@ -16,7 +16,7 @@ func newPlazaService(channels []Channel, groups []Group, pricing *PricingService
 	repo := &mockChannelRepository{
 		listAllFn: func(ctx context.Context) ([]Channel, error) { return channels, nil },
 	}
-	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, pricing, nil, nil)
+	return NewModelPlazaService(nil, repo, &stubGroupRepoForAvailable{activeGroups: groups}, pricing, nil, nil)
 }
 
 func plazaPricedChannel(id int64, name string, groupIDs []int64, platform string, models ...string) Channel {
@@ -326,12 +326,13 @@ func TestListPlazaGroups_RepoErrorsPropagate(t *testing.T) {
 	repo := &mockChannelRepository{
 		listAllFn: func(ctx context.Context) ([]Channel, error) { return nil, sentinel },
 	}
-	svc := NewModelPlazaService(repo, &stubGroupRepoForAvailable{}, nil, nil, nil)
+	svc := NewModelPlazaService(nil, repo, &stubGroupRepoForAvailable{}, nil, nil, nil)
 	out, err := svc.ListGroups(context.Background())
 	require.Nil(t, out)
 	require.ErrorIs(t, err, sentinel)
 
 	svc2 := NewModelPlazaService(
+		nil,
 		&mockChannelRepository{listAllFn: func(ctx context.Context) ([]Channel, error) { return nil, nil }},
 		&stubGroupRepoForAvailable{listActiveErr: sentinel},
 		nil, nil, nil,
@@ -351,7 +352,7 @@ func newPlazaServiceWithBilling(channels []Channel, groups []Group, groupPlatfor
 	}
 	cs := NewChannelService(repo, nil, nil, nil, nil)
 	bs := NewBillingService(&config.Config{}, catalog)
-	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, catalog, bs, NewModelPricingResolver(cs, bs))
+	return NewModelPlazaService(nil, repo, &stubGroupRepoForAvailable{activeGroups: groups}, catalog, bs, NewModelPricingResolver(cs, bs))
 }
 
 func plazaModelsByName(models []PlazaModel) map[string]PlazaModel {

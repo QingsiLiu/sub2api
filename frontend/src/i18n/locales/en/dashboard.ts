@@ -746,7 +746,8 @@ export default {
       perUnitRequest: '/ request',
       perUnitImage: '/ image',
       perRequest: 'Per request',
-      perImage: 'Per image'
+      perImage: 'Per image',
+      priceUnavailable: 'Pricing pending'
     },
     nav: {
       login: 'Sign In',

@@ -1410,13 +1410,8 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 // 与平台默认列表（fallbackModels）。账号映射为空时回落默认列表；Anthropic
 // 平台两者取并集，其余平台以账号映射键为准。
 func modelListingSource(platform string, availableModels, fallbackModels []string) []string {
-	if len(availableModels) == 0 {
-		return fallbackModels
-	}
-	if platform == service.PlatformAnthropic {
-		return mergeModelIDs(availableModels, fallbackModels)
-	}
-	return availableModels
+	// geili hook: shared with the native model plaza.
+	return service.ModelListingSource(platform, availableModels, fallbackModels)
 }
 
 func defaultCodexModelIDsForPlatform(platform string) []string {

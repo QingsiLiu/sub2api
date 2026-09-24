@@ -48,6 +48,7 @@ export interface PlazaModel {
   platform: string
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
+  pricing_status: 'configured' | 'unavailable'
   official_pricing: PlazaOfficialPricing | null
   /** 仅多档模型返回。 */
   long_context_basis?: PlazaLongContextBasis
@@ -81,6 +82,8 @@ export interface ModelPlazaGroup {
 export interface ModelPlazaResponse {
   /** 管理员配置的全局价格说明（Markdown）。 */
   description: string
+  /** pricing values already include the effective balance multiplier. */
+  prices_include_rate?: boolean
   groups: ModelPlazaGroup[]
 }
 

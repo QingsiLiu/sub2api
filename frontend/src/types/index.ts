@@ -656,6 +656,7 @@ export interface AdminGroup extends Group {
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   model_allowlist?: ModelAllowlist
+  model_plaza_config?: ModelPlazaConfig
   codex_models_manifest_config?: CodexModelsManifestConfig
 
   // 分组排序
@@ -664,6 +665,11 @@ export interface AdminGroup extends Group {
 
 export interface ModelAllowlist {
   enabled: boolean
+  models: string[]
+}
+
+export interface ModelPlazaConfig {
+  mode: 'all' | 'selected'
   models: string[]
 }
 
@@ -862,6 +868,7 @@ export interface CreateGroupRequest {
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
+  model_plaza_config?: ModelPlazaConfig
   codex_models_manifest_config?: CodexModelsManifestConfig
   allow_messages_dispatch?: boolean
   allow_live?: boolean
@@ -931,6 +938,7 @@ export interface UpdateGroupRequest {
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
+  model_plaza_config?: ModelPlazaConfig
   codex_models_manifest_config?: CodexModelsManifestConfig
   allow_messages_dispatch?: boolean
   allow_live?: boolean
