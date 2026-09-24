@@ -70,7 +70,7 @@ INSERT INTO benefit_campaigns(
 ) VALUES(
     'double-festival',
     '中秋国庆双节赠礼',
-    'active',
+    'draft',
     '2026-09-25 00:00:00+08',
     '2026-10-09 00:00:00+08',
     '2026-09-11 00:00:00+08',
@@ -79,19 +79,3 @@ INSERT INTO benefit_campaigns(
     '{"source":"settled_usage","display":"activities"}'::jsonb
 ) ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO benefit_campaign_eligibility(campaign_id,user_id,reason,snapshot_at)
-SELECT c.id,u.id,'settled_usage','2026-09-25 00:00:00+08'
-FROM benefit_campaigns c
-JOIN users u ON u.deleted_at IS NULL AND u.status='active'
-WHERE c.slug='double-festival'
-  AND EXISTS (
-      SELECT 1 FROM usage_logs l
-      WHERE l.user_id=u.id
-        AND l.created_at >= c.eligibility_starts_at
-        AND l.created_at < c.eligibility_ends_at
-  )
-ON CONFLICT (campaign_id,user_id) DO NOTHING;
-
-UPDATE benefit_campaigns
-SET eligibility_snapshot_at='2026-09-25 00:00:00+08', updated_at=NOW()
-WHERE slug='double-festival' AND eligibility_snapshot_at IS NULL;

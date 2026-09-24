@@ -146,6 +146,16 @@ func CurrentContract(ctx context.Context, c *dbent.Client, userID int64, now tim
 		return nil, nil
 	}
 	var selected *Contract
+	paidParents := 0
+	for _, parent := range parents {
+		lots, e := ReadLots(ctx, c, parent.ID)
+		if e != nil {
+			return nil, e
+		}
+		if !CampaignOnly(lots) {
+			paidParents++
+		}
+	}
 	for _, parent := range parents {
 		if _, err = LockParent(ctx, c, parent.ID); err != nil {
 			return nil, err
@@ -154,26 +164,30 @@ func CurrentContract(ctx context.Context, c *dbent.Client, userID int64, now tim
 		if e != nil {
 			return nil, e
 		}
+		lots, e := ReadLots(ctx, c, parent.ID)
+		if e != nil {
+			return nil, e
+		}
 		if selected == nil {
 			selected = contract
 		}
-		if len(parents) > 1 || contract.Mode == ContractModeLegacy {
+		// A paid V2 term that has ended while a campaign lot remains usable is
+		// compatibility-only for quotes: the gift can be consumed, but a paid
+		// purchase/renewal must wait until the gift pool ends.
+		campaignActive := false
+		for _, lot := range lots {
+			if lot.SourceType == "campaign" && lot.Active(now) {
+				campaignActive = true
+				break
+			}
+		}
+		if paidParents > 1 || contract.Mode == ContractModeLegacy || (contract.Mode == ContractModeV2 && !contract.ExpiresAt.After(now) && campaignActive) {
 			if _, err = c.ExecContext(ctx, `UPDATE subscription_contracts SET mode='legacy_daily',is_current=FALSE,updated_at=$2 WHERE subscription_id=$1`, parent.ID, now); err != nil {
 				return nil, err
 			}
 			selected.Mode = ContractModeLegacy
 		}
-		// A campaign lot may keep the parent alive after the paid V2 term has
-		// expired. Keep the pool usable for admission, but block paid quote/change
-		// operations until the promotional lot also expires.
-		if contract.Mode == ContractModeV2 && !contract.ExpiresAt.After(now) {
-			var campaignID int64
-			if err = scalar(ctx, c, `SELECT id FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active' AND starts_at<= $2 AND expires_at>$2 LIMIT 1`, []any{parent.ID, now}, &campaignID); err == nil {
-				selected.Mode = ContractModeLegacy
-			} else if !errors.Is(err, sql.ErrNoRows) {
-				return nil, err
-			}
-		}
+
 	}
 	return selected, nil
 }

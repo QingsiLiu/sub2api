@@ -65,6 +65,13 @@ func validateContractRefund(ctx context.Context, c *dbent.Client, orderID int64,
 	if !allowFrozen && record.Status == "frozen" {
 		return nil, nil, ErrContractRefund
 	}
+	lots, err := ReadLots(ctx, c, record.SubscriptionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if hasCampaignLots(lots) {
+		return nil, nil, ErrContractRefund
+	}
 	var spent decimal.Decimal
 	var admitted int
 	if err = scalar(ctx, c, `SELECT COALESCE(SUM(lifetime_usage_usd),0) FROM user_subscription_entitlements WHERE user_subscription_id=$1`, []any{record.SubscriptionID}, &spent); err != nil {

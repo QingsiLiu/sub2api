@@ -257,7 +257,7 @@ type SQL interface {
 }
 
 func LoadLots(ctx context.Context, q SQL, id int64, lock bool) ([]Lot, error) {
-	query := `SELECT id,user_subscription_id,plan_id,source_order_id,lot_index,purchase_mode,status,starts_at,expires_at,daily_limit_usd,weekly_limit_usd,monthly_limit_usd,daily_window_start,weekly_window_start,monthly_window_start,daily_usage_usd,weekly_usage_usd,monthly_usage_usd,lifetime_usage_usd,refunded_at,created_at FROM user_subscription_entitlements WHERE user_subscription_id=$1 ORDER BY expires_at,id`
+	query := `SELECT id,user_subscription_id,plan_id,source_order_id,lot_index,purchase_mode,status,starts_at,expires_at,daily_limit_usd,weekly_limit_usd,monthly_limit_usd,daily_window_start,weekly_window_start,monthly_window_start,daily_usage_usd,weekly_usage_usd,monthly_usage_usd,lifetime_usage_usd,refunded_at,created_at,source_type,source_reference FROM user_subscription_entitlements WHERE user_subscription_id=$1 ORDER BY expires_at,id`
 	if lock {
 		query += " FOR UPDATE"
 	}
@@ -269,7 +269,7 @@ func LoadLots(ctx context.Context, q SQL, id int64, lock bool) ([]Lot, error) {
 	var result []Lot
 	for rows.Next() {
 		var e Lot
-		if err := rows.Scan(&e.ID, &e.UserSubscriptionID, &e.PlanID, &e.SourceOrderID, &e.LotIndex, &e.PurchaseMode, &e.Status, &e.StartsAt, &e.ExpiresAt, &e.DailyLimitUSD, &e.WeeklyLimitUSD, &e.MonthlyLimitUSD, &e.DailyWindowStart, &e.WeeklyWindowStart, &e.MonthlyWindowStart, &e.DailyUsageUSD, &e.WeeklyUsageUSD, &e.MonthlyUsageUSD, &e.LifetimeUsageUSD, &e.RefundedAt, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserSubscriptionID, &e.PlanID, &e.SourceOrderID, &e.LotIndex, &e.PurchaseMode, &e.Status, &e.StartsAt, &e.ExpiresAt, &e.DailyLimitUSD, &e.WeeklyLimitUSD, &e.MonthlyLimitUSD, &e.DailyWindowStart, &e.WeeklyWindowStart, &e.MonthlyWindowStart, &e.DailyUsageUSD, &e.WeeklyUsageUSD, &e.MonthlyUsageUSD, &e.LifetimeUsageUSD, &e.RefundedAt, &e.CreatedAt, &e.SourceType, &e.SourceReference); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

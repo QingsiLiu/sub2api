@@ -191,7 +191,7 @@ func PreviewContract(current *Contract, currentPlan, target Plan, operation stri
 // Legacy lots keep their individual expiry; the day ledger keeps all day usage
 // even when one of those lots expires part way through the day.
 func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summary {
-	if c != nil && c.Mode == ContractModeLegacy {
+	if c != nil && (c.Mode == ContractModeLegacy || hasCampaignLots(lots)) {
 		used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(RetiredDailyUsage(lots, now, c.StartsAt))).Round(10).InexactFloat64()
 		used = math.Max(0, used)
 	}
@@ -212,7 +212,7 @@ func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summa
 		// excluded from the contract tier itself so renew/upgrade cannot mutate
 		// or price the promotional entitlement.
 		for _, lot := range lots {
-			if lot.SourceType != "campaign" || !lot.Active(now) {
+			if c.Status != "active" || lot.SourceType != "campaign" || !lot.Active(now) {
 				continue
 			}
 			s.ActiveLotCount++
@@ -346,4 +346,26 @@ func RetiredDailyUsage(lots []Lot, now time.Time, termStartsAt ...time.Time) flo
 		}
 	}
 	return used.Round(10).InexactFloat64()
+}
+
+// Campaign metadata survives even after expiry so retired promotional usage
+// does not consume the paid capacity which remains available that day.
+func hasCampaignLots(lots []Lot) bool {
+	for _, lot := range lots {
+		if lot.SourceType == "campaign" {
+			return true
+		}
+	}
+	return false
+}
+func CampaignOnly(lots []Lot) bool {
+	if len(lots) == 0 {
+		return false
+	}
+	for _, lot := range lots {
+		if lot.SourceType != "campaign" {
+			return false
+		}
+	}
+	return true
 }
