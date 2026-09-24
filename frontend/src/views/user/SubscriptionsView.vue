@@ -122,7 +122,7 @@
 
             <div v-if="subscription.contract" class="space-y-1 text-sm">
               <p class="font-medium text-gray-900 dark:text-white">{{ t('subscriptionRights.remaining') }}: {{ subscriptionQuota(subscription).remaining == null ? t('subscriptionRights.unlimited') : '$' + subscriptionQuota(subscription).remaining!.toFixed(4) }}</p>
-              <p class="text-xs text-gray-500">{{ t('subscriptionRights.dailyReset') }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.dailyReset') }}</p>
             </div>
             <!-- Daily Usage -->
             <div v-if="subscriptionQuota(subscription).daily" class="space-y-2">
