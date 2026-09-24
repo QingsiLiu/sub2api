@@ -123,6 +123,8 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 		return nil, err
 	}
 	var summary *SubscriptionQuotaSummary
+	var projectedLots []geilisub.Lot
+	var ledgerUsage float64
 	if current != nil && current.SubscriptionID > 0 {
 		if err = geilisub.SyncDailyLedger(ctx, c, current.SubscriptionID, now); err != nil {
 			return nil, err
@@ -135,10 +137,14 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 		if err != nil {
 			return nil, err
 		}
+		projectedLots, ledgerUsage = lots, used
 		a := geilisub.ContractSummary(current, lots, used, now)
 		summary = &a
 	}
 	projected := contractQuoteSummary(change.After, summary, now)
+	if current != nil {
+		projected = geilisub.ContractSummary(&change.After, projectedLots, ledgerUsage, now)
+	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}

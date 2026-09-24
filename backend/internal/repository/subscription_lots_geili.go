@@ -99,7 +99,14 @@ func (r *userSubscriptionRepository) AdjustEntitlements(ctx context.Context, id 
 		if err != nil {
 			return err
 		}
-		return refreshAdminContractExpiry(tc, c, contract, parent.ExpiresAt, now)
+		expiry := parent.ExpiresAt
+		if contract != nil && contract.Mode == geilisub.ContractModeV2 {
+			expiry = contract.ExpiresAt.AddDate(0, 0, days)
+			if expiry.After(geilisub.MaxExpiry) {
+				expiry = geilisub.MaxExpiry
+			}
+		}
+		return refreshAdminContractExpiry(tc, c, contract, expiry, now)
 	})
 }
 func (r *userSubscriptionRepository) incrementLots(ctx context.Context, id int64, cost float64) error {

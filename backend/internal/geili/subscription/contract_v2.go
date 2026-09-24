@@ -191,7 +191,7 @@ func PreviewContract(current *Contract, currentPlan, target Plan, operation stri
 // Legacy lots keep their individual expiry; the day ledger keeps all day usage
 // even when one of those lots expires part way through the day.
 func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summary {
-	if c != nil && (c.Mode == ContractModeLegacy || hasCampaignLots(lots)) {
+	if UsesRetiredDailyUsage(c, lots) {
 		used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(RetiredDailyUsage(lots, now, c.StartsAt))).Round(10).InexactFloat64()
 		used = math.Max(0, used)
 	}
@@ -306,7 +306,7 @@ func AllocateContract(lots []Lot, cost float64, now time.Time) ([]Lot, error) {
 		return nil, errors.New("invalid subscription cost")
 	}
 	out := append([]Lot(nil), lots...)
-	SortLots(out)
+	sortConsumptionLots(out)
 	remaining := cost
 	last := -1
 	for i := range out {
@@ -368,4 +368,9 @@ func CampaignOnly(lots []Lot) bool {
 		}
 	}
 	return true
+}
+
+// UsesRetiredDailyUsage is shared by projection and administrative resets.
+func UsesRetiredDailyUsage(c *Contract, lots []Lot) bool {
+	return c != nil && (c.Mode == ContractModeLegacy || hasCampaignLots(lots))
 }

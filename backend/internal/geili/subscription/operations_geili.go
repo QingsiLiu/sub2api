@@ -143,7 +143,7 @@ func PreviewPurchase(lots []Lot, mode string, quantity, days int, daily, weekly,
 		if e.Status == "refund_pending" || e.Status == "suspended" || e.Status == "revoked" {
 			return nil, 0, ErrStateConflict
 		}
-		if e.Active(now) {
+		if e.SourceType != "campaign" && e.Active(now) {
 			active++
 		}
 	}
@@ -153,7 +153,7 @@ func PreviewPurchase(lots []Lot, mode string, quantity, days int, daily, weekly,
 		}
 		left := quantity
 		for i := range out {
-			if left > 0 && out[i].Active(now) {
+			if left > 0 && out[i].SourceType != "campaign" && out[i].Active(now) {
 				out[i].ExpiresAt = out[i].ExpiresAt.AddDate(0, 0, days)
 				if out[i].ExpiresAt.After(MaxExpiry) {
 					return nil, active, ErrStateConflict

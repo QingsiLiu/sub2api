@@ -61,7 +61,7 @@ describe('V2 subscription user quota matrix', () => {
     { mode: 'legacy_daily', count: 2, limit: 90, used: 87.04857312, remaining: 2.95142688, status: 'active', unlimited: false },
     { mode: 'legacy_daily', count: 1, limit: null, used: 100, remaining: null, status: 'active', unlimited: true },
   ])('$mode $status daily limit $limit uses the ledger and action gates', async ({ mode, count, limit, used, remaining, status, unlimited }) => {
-    getMySubscriptions.mockResolvedValue([{ id: 42, status, starts_at: '2026-09-01', expires_at: '2099-01-01', daily_usage_usd: 999, weekly_usage_usd: 315, monthly_usage_usd: 1000, contract: { mode, kind: 'month', quantity: 2, unit_daily_usd: 45, plan_id: 7 }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, remaining_usd: remaining, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }])
+    getMySubscriptions.mockResolvedValue([{ id: 42, status, starts_at: '2026-09-01', expires_at: '2099-01-01', daily_usage_usd: 999, weekly_usage_usd: 315, monthly_usage_usd: 1000, contract: { mode, kind: 'month', quantity: 2, unit_daily_usd: 45, plan_id: 7, expires_at: '2099-01-01' }, quota_summary: { active_lot_count: count, daily_limit_usd: limit, daily_usage_usd: used, remaining_usd: remaining, weekly_limit_usd: 315, monthly_limit_usd: 1350 } }])
     const wrapper = mount(SubscriptionsView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
     await flushPromises()
     expect(wrapper.text()).not.toContain('$999')
@@ -72,6 +72,17 @@ describe('V2 subscription user quota matrix', () => {
     expect(wrapper.text().includes('userSubscriptions.unlimited')).toBe(unlimited)
     expect(wrapper.findAll('button').filter(button => ['subscriptionRights.stack', 'subscriptionRights.renew', 'subscriptionRights.upgrade'].some(action => button.text().includes(action))).length).toBe(mode === 'v2' && status === 'active' ? 3 : 0)
     if (mode === 'legacy_daily') expect(wrapper.text()).toContain('subscriptionRights.compatibilityHint')
+    wrapper.unmount()
+  })
+})
+
+
+describe('expired paid contract with live gift', () => {
+  it('does not offer paid renewal actions against the extended parent expiry', async () => {
+    getMySubscriptions.mockResolvedValue([{id:1,status:'active',starts_at:'2026-01-01',expires_at:'2099-01-01',contract:{mode:'v2',kind:'month',quantity:1,unit_daily_usd:90,plan_id:7,expires_at:'2026-01-02'},quota_summary:{active_lot_count:1,daily_limit_usd:45,daily_usage_usd:0,remaining_usd:45}}])
+    const wrapper=mount(SubscriptionsView,{global:{stubs:{AppLayout:{template:'<div><slot /></div>'},Icon:true}}})
+    await flushPromises()
+    expect(wrapper.findAll('button').some(b=>b.text().includes('subscriptionRights.renew'))).toBe(false)
     wrapper.unmount()
   })
 })

@@ -22,7 +22,7 @@ func selectContractLots(contract *geilisub.Contract, lots []geilisub.Lot, ids []
 	}
 	selected := make([]geilisub.Lot, 0, contract.Quantity)
 	for _, lot := range lots {
-		if lot.Active(now) {
+		if lot.SourceType != "campaign" && lot.Active(now) {
 			selected = append(selected, lot)
 		}
 	}
@@ -74,7 +74,7 @@ func resetAdminDailyLedger(ctx context.Context, c *dbent.Client, contract *geili
 	// A legacy pool projects out the usage of portions that expired today.
 	// Preserve that audit offset when resetting the remaining live quota.
 	offset := 0.0
-	if contract.Mode == geilisub.ContractModeLegacy {
+	if geilisub.UsesRetiredDailyUsage(contract, lots) {
 		offset = geilisub.RetiredDailyUsage(lots, now, contract.StartsAt)
 	}
 	effectiveBefore := geilisub.ContractSummary(contract, lots, before, now).DailyUsageUSD

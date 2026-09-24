@@ -1,4 +1,5 @@
 export default { subscriptionRights: {
+  "campaignCompatibilityHint": "赠礼权益仍在生效；当前不支持在独立赠礼池上自助续购。若需新增付费套餐，请联系客服，或待赠礼到期后购买。",
   "campaignGift": "活动赠礼",
   "campaignPriority": "优先消耗，不改变已购订阅",
   "existingPaymentHint": "当前订阅订单已创建，尚未确认付款结果。请在此查看状态，或到订单列表处理；需要重新下单时，请先明确取消原订单。",

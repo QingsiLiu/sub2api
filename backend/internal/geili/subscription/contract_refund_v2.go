@@ -69,8 +69,10 @@ func validateContractRefund(ctx context.Context, c *dbent.Client, orderID int64,
 	if err != nil {
 		return nil, nil, err
 	}
-	if hasCampaignLots(lots) {
-		return nil, nil, ErrContractRefund
+	for _, lot := range lots {
+		if lot.SourceType == "campaign" && lot.ExpiresAt.After(current.StartsAt) {
+			return nil, nil, ErrContractRefund
+		}
 	}
 	var spent decimal.Decimal
 	var admitted int

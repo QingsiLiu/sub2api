@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 )
@@ -63,7 +64,9 @@ type PlazaGroup struct {
 // 的阶梯表查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用
 // 渠道/分组档位价。
 type ModelPlazaService struct {
-	catalog        *GroupModelCatalog
+	catalog interface {
+		List(context.Context, *Group) ([]GroupCatalogModel, error)
+	}
 	channelRepo    ChannelRepository
 	groupRepo      GroupRepository
 	pricingService *PricingService
@@ -85,8 +88,14 @@ func NewModelPlazaService(
 	billingService *BillingService,
 	resolver *ModelPricingResolver,
 ) *ModelPlazaService {
+	var liveCatalog interface {
+		List(context.Context, *Group) ([]GroupCatalogModel, error)
+	}
+	if catalog != nil {
+		liveCatalog = catalog
+	}
 	return &ModelPlazaService{
-		catalog:        catalog,
+		catalog:        liveCatalog,
 		channelRepo:    channelRepo,
 		groupRepo:      groupRepo,
 		pricingService: pricingService,
@@ -109,6 +118,22 @@ func NewModelPlazaService(
 //
 // 可见性过滤（专属分组）不在此层做，由 handler 按登录态裁剪。
 func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error) {
+	return s.listGroups(ctx, nil)
+}
+
+// ListVisibleGroups filters before any upstream discovery. A hidden group must
+// not be contacted or influence a visitor's public response.
+func (s *ModelPlazaService) ListVisibleGroups(ctx context.Context, allowed map[int64]struct{}, restrict bool) ([]PlazaGroup, error) {
+	return s.listGroups(ctx, func(g *Group) bool {
+		if g.IsExclusive || (restrict && allowed != nil) {
+			_, ok := allowed[g.ID]
+			return ok
+		}
+		return true
+	})
+}
+
+func (s *ModelPlazaService) listGroups(ctx context.Context, visible func(*Group) bool) ([]PlazaGroup, error) {
 	channels, err := s.channelRepo.ListAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
@@ -116,6 +141,16 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	groups, err := s.groupRepo.ListActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list active groups: %w", err)
+	}
+
+	if visible != nil {
+		filtered := make([]Group, 0, len(groups))
+		for _, g := range groups {
+			if visible(&g) {
+				filtered = append(filtered, g)
+			}
+		}
+		groups = filtered
 	}
 
 	sort.SliceStable(channels, func(i, j int) bool {
@@ -199,13 +234,21 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		for i := range groups {
 			g := &groups[i]
 			catalog, err := s.catalog.List(ctx, g)
-			if err != nil {
-				return nil, fmt.Errorf("group %d catalog: %w", g.ID, err)
-			}
 			pg := byGroup[g.ID]
+			if err != nil {
+				// Fail only this group closed. Never disclose raw upstream errors
+				// (which may contain account information) to the plaza visitor.
+				slog.Warn("model_plaza_catalog_unavailable", "group_id", g.ID)
+				pg.Models = nil
+				continue
+			}
+			pricing := make(map[modelKey]*ChannelModelPricing, len(pg.Models))
+			for _, model := range pg.Models {
+				pricing[modelKey{platform: model.Platform, name: model.Name}] = model.Pricing
+			}
 			pg.Models = nil
 			for _, m := range catalog {
-				pg.Models = append(pg.Models, PlazaModel{Name: m.Name, Platform: m.Platform})
+				pg.Models = append(pg.Models, PlazaModel{Name: m.Name, Platform: m.Platform, Pricing: pricing[modelKey{platform: m.Platform, name: m.Name}]})
 			}
 		}
 	}
@@ -266,6 +309,13 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
 	if groupPricing := matchGroupModelPricing(g, m.Name); groupPricing != nil {
 		m.Pricing = groupPricing
+	}
+	if s.resolver != nil {
+		pricingCtx := WithResolvedTargetPlatform(ctx, m.Platform)
+		resolved := s.resolver.Resolve(pricingCtx, PricingInput{Model: m.Name, Group: g, GroupID: &g.ID})
+		if resolved != nil && resolved.channelPricing != nil {
+			m.Pricing = resolved.channelPricing
+		}
 	}
 	if s.billingService != nil && s.resolver != nil {
 		sched, err := s.billingService.ResolveContextPricingSchedule(ctx, s.resolver, ContextPricingScheduleInput{

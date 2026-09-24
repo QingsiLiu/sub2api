@@ -186,3 +186,37 @@ func TestSubscriptionBillingV2AdminWholeExpiryAndReset(t *testing.T) {
 	require.Equal(t, 5.0, total, "admin resets retain financial evidence")
 	require.Greater(t, final.Contract.Revision, adjusted.Contract.Revision)
 }
+
+func TestSubscriptionBillingV2CampaignAdminAdjustAndReset(t *testing.T) {
+	f := newEntitlementFixture(t)
+	ctx := context.Background()
+	now := time.Now()
+	day := geilisub.DayStart(now)
+	require.NoError(t, f.c.SubscriptionPlan.UpdateOneID(f.plan.ID).SetDailyLimitUsd(90).Exec(ctx))
+	require.NoError(t, f.c.UserSubscriptionEntitlement.UpdateOneID(f.sub.Entitlements[0].ID).SetDailyLimitUsd(90).SetExpiresAt(now.Add(24*time.Hour)).Exec(ctx))
+	c := ensureBillingV2Contract(t, f, now)
+	require.Equal(t, "v2", c.Mode)
+	gift, err := f.c.UserSubscriptionEntitlement.Create().SetUserSubscriptionID(f.sub.ID).SetSourceType("campaign").SetStatus("active").SetStartsAt(now.Add(-time.Hour)).SetExpiresAt(now.Add(7 * 24 * time.Hour)).SetDailyLimitUsd(45).SetDailyWindowStart(day).Save(ctx)
+	require.NoError(t, err)
+	require.NoError(t, geilisub.RefreshParent(ctx, f.c, f.sub.ID, now))
+	repo := NewUserSubscriptionRepository(f.c).(*userSubscriptionRepository)
+	require.NoError(t, repo.AdjustEntitlements(ctx, f.sub.ID, nil, 1, 1))
+	fresh, err := repo.GetByID(ctx, f.sub.ID)
+	require.NoError(t, err)
+	for _, lot := range fresh.Entitlements {
+		if lot.ID == gift.ID {
+			require.True(t, lot.ExpiresAt.Equal(gift.ExpiresAt), "gift unchanged")
+		}
+	}
+	require.True(t, fresh.Contract.ExpiresAt.Equal(c.ExpiresAt.AddDate(0, 0, 1)), "paid contract adds one day only")
+	require.NoError(t, f.c.UserSubscriptionEntitlement.UpdateOneID(gift.ID).SetExpiresAt(now.Add(-time.Second)).SetDailyUsageUsd(45).SetLifetimeUsageUsd(45).Exec(ctx))
+	_, err = integrationDB.ExecContext(ctx, `UPDATE subscription_daily_usage SET used_usd=45 WHERE subscription_id=$1`, f.sub.ID)
+	require.NoError(t, err)
+	require.NoError(t, repo.ResetUsageWindows(ctx, f.sub.ID, true, false, false, now, now))
+	_, err = integrationDB.ExecContext(ctx, `UPDATE subscription_daily_usage SET used_usd=used_usd+10 WHERE subscription_id=$1`, f.sub.ID)
+	require.NoError(t, err)
+	fresh, err = repo.GetByID(ctx, f.sub.ID)
+	require.NoError(t, err)
+	require.Equal(t, 10.0, fresh.QuotaSummary.DailyUsageUSD, "reset cannot subtract retired gift twice")
+	require.Equal(t, 80.0, *fresh.QuotaSummary.RemainingUSD)
+}

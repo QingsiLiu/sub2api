@@ -58,3 +58,24 @@ func TestContractCampaignAllocationPrecedesEarlierPaidExpiry(t *testing.T) {
 		})
 	}
 }
+
+func TestContractCampaignLegacyRenewDoesNotExtendGift(t *testing.T) {
+	now := time.Now()
+	paid, gift := 90.0, 45.0
+	lots := []Lot{{ID: 1, SourceType: "payment", Status: "active", StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(24 * time.Hour), DailyLimitUSD: &paid}, {ID: 2, SourceType: "campaign", Status: "active", StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(7 * 24 * time.Hour), DailyLimitUSD: &gift}}
+	got, active, err := PreviewPurchase(lots, "renew", 1, 30, &paid, nil, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active != 1 {
+		t.Fatalf("paid renewable count %d; want 1", active)
+	}
+	for _, lot := range got {
+		if lot.ID == 2 && !lot.ExpiresAt.Equal(lots[1].ExpiresAt) {
+			t.Fatal("paid renewal extended gift")
+		}
+		if lot.ID == 1 && !lot.ExpiresAt.Equal(lots[0].ExpiresAt.AddDate(0, 0, 30)) {
+			t.Fatal("paid lot not renewed")
+		}
+	}
+}

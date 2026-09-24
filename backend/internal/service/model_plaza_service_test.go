@@ -506,3 +506,61 @@ func TestListGroups_TimePricingPassthrough(t *testing.T) {
 	// 展示单价为标准时段价
 	require.InDelta(t, 0.28e-6, *m.Pricing.InputPrice, 1e-15)
 }
+
+type plazaLiveCatalogStub struct {
+	calls    []int64
+	models   map[int64][]GroupCatalogModel
+	failures map[int64]error
+}
+
+func (s *plazaLiveCatalogStub) List(_ context.Context, g *Group) ([]GroupCatalogModel, error) {
+	s.calls = append(s.calls, g.ID)
+	return s.models[g.ID], s.failures[g.ID]
+}
+
+func TestListPlazaLiveCatalogPreservesNonTokenPricingAndVisibility(t *testing.T) {
+	price := .12
+	ch := Channel{ID: 1, Name: "media", Status: StatusActive, GroupIDs: []int64{10}, ModelPricing: []ChannelModelPricing{{Platform: PlatformOpenAI, Models: []string{"fixture-image"}, BillingMode: BillingModeImage, PerRequestPrice: &price}, {Platform: PlatformOpenAI, Models: []string{"fixture-request"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}}
+	groups := []Group{{ID: 10, Name: "public", Platform: PlatformOpenAI}, {ID: 20, Name: "hidden", Platform: PlatformOpenAI, IsExclusive: true}, {ID: 30, Name: "broken-public", Platform: PlatformOpenAI}}
+	svc := newPlazaService([]Channel{ch}, groups, nil)
+	catalog := &plazaLiveCatalogStub{models: map[int64][]GroupCatalogModel{10: {{Name: "fixture-image", Platform: PlatformOpenAI}, {Name: "fixture-request", Platform: PlatformOpenAI}}}, failures: map[int64]error{20: errors.New("PRIVATE-UPSTREAM-CANARY"), 30: errors.New("SECRET-ERROR")}}
+	svc.catalog = catalog
+	out, err := svc.ListVisibleGroups(context.Background(), nil, false)
+	require.NoError(t, err)
+	require.Equal(t, []int64{10, 30}, catalog.calls, "private group must never be contacted")
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 2)
+	for _, m := range out[0].Models {
+		require.NotNil(t, m.Pricing)
+		require.Equal(t, .12, *m.Pricing.PerRequestPrice)
+	}
+	catalog.calls = nil
+	out, err = svc.ListVisibleGroups(context.Background(), map[int64]struct{}{10: {}}, true)
+	require.NoError(t, err)
+	require.Equal(t, []int64{10}, catalog.calls)
+	require.Len(t, out, 1)
+}
+
+func TestListPlazaLiveCatalogWildcardMediaPricing(t *testing.T) {
+	for _, mode := range []BillingMode{BillingModeImage, BillingModePerRequest, BillingModeVideo} {
+		t.Run(string(mode), func(t *testing.T) {
+			price := .12
+			imagePrice := .04
+			ch := Channel{ID: 1, Name: "media", Status: StatusActive, GroupIDs: []int64{10}, ModelPricing: []ChannelModelPricing{{Platform: PlatformOpenAI, Models: []string{"fixture-*"}, BillingMode: mode, PerRequestPrice: &price}}}
+			svc := newPlazaServiceWithBilling([]Channel{ch}, []Group{{ID: 10, Platform: PlatformOpenAI, ImagePrice1K: &imagePrice}}, map[int64]string{10: PlatformOpenAI}, nil)
+			svc.catalog = &plazaLiveCatalogStub{models: map[int64][]GroupCatalogModel{10: {{Name: "fixture-image", Platform: PlatformOpenAI}}}}
+			out, err := svc.ListGroups(context.Background())
+			require.NoError(t, err)
+			require.Len(t, out, 1)
+			require.NotNil(t, out[0].Models[0].Pricing)
+			p := out[0].Models[0].Pricing
+			require.Equal(t, mode, p.BillingMode)
+			if mode == BillingModeImage {
+				require.NotEmpty(t, p.Intervals)
+				require.Equal(t, .04, *p.Intervals[0].PerRequestPrice)
+			} else {
+				require.Equal(t, .12, *p.PerRequestPrice)
+			}
+		})
+	}
+}

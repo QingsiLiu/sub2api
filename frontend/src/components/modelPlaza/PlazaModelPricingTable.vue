@@ -424,13 +424,13 @@ const rows = computed<PlazaRow[]>(() =>
 
 /** 时段行的生效倍率 = 生效倍率 × 时段倍率(去掉浮点噪声)。 */
 function periodRate(period: PlazaTimePricingPeriod): number {
-  return Math.round(priceRate.value * period.multiplier * 1000) / 1000
+  return Math.round(effectiveRate.value * period.multiplier * 1000) / 1000
 }
 
 /** 实付价 = 渠道单价 × 生效倍率(时段行再乘时段倍率),按 $/1M token 展示。 */
 function paidPerMillion(value: number | null | undefined, period: PlazaTimePricingPeriod | null = null): string {
   if (value == null) return '-'
-  const rate = period ? periodRate(period) : priceRate.value
+  const rate = priceRate.value * (period?.multiplier ?? 1)
   return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS)
 }
 

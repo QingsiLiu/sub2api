@@ -712,3 +712,14 @@ describe('PlazaModelPricingTable 分时计价', () => {
     expect(wrapper.find('[title*="modelPlaza.table.timePricingRowHint"]').exists()).toBe(false)
   })
 })
+
+describe('prices include balance rate', () => {
+  it('keeps displayed effective period multiplier but never multiplies prices twice', () => {
+    const model = tokenModel({pricing:{...tokenModel().pricing!,input_price:.6e-6},time_pricing:{timezone:'Asia/Shanghai',periods:[{start_time:'00:00',end_time:'08:00',multiplier:.5}]}})
+    const wrapper = mount(PlazaModelPricingTable,{props:{models:[model],rateMultiplier:.2,pricesIncludeRate:true}})
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows[0].text()).toContain('$0.60')
+    expect(rows[1].text()).toContain('$0.30')
+    expect(rows[1].text()).toContain('0.1x')
+  })
+})

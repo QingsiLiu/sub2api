@@ -1,4 +1,5 @@
 export default { subscriptionRights: {
+  "campaignCompatibilityHint": "Gift rights are still active. Self-service purchases on an independent gift pool are not supported. Contact support to add a paid plan, or purchase after the gift expires.",
   "campaignGift": "Campaign gift",
   "campaignPriority": "Used first; purchased rights stay unchanged",
   "existingPaymentHint": "Your subscription order already exists and its payment result is not confirmed. Check its status here or in your orders. To place a new order, explicitly cancel the existing order first.",

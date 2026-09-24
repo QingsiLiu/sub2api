@@ -6917,7 +6917,7 @@ watch(
     }
     resetDisabledBatchImagePricing(editForm);
     if (editingGroup.value) {
-      Object.assign(editModelPlazaConfig, { mode: "all", models: [] });
+      Object.assign(editModelPlazaConfig, normalizeModelPlazaConfig(newVal === editingGroup.value.platform ? editingGroup.value.model_plaza_config : undefined));
       resetModelAllowlistState(editModelAllowlistState, editForm.platform === editingGroup.value.platform ? editingGroup.value.model_allowlist : undefined);
       void loadModelPlazaCandidates("edit", editingGroup.value.id, newVal);
       loadModelAllowlistCandidates("edit", editingGroup.value.id, newVal);

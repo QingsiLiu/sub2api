@@ -15,8 +15,10 @@ export function subscriptionActions(plan: SubscriptionPlan, subscriptions: UserS
   if (plan.is_legacy_compat || !supportedTier) return { actions: [], reason: 'subscriptionRights.unavailablePlan' }
   if (!active.length) return { actions: ['purchase'] }
   if (active.some(sub => sub.status === 'suspended')) return { actions: [], reason: 'subscriptionRights.suspendedHint' }
+  if (active.some(campaignOnly)) return { actions: [], reason: 'subscriptionRights.campaignCompatibilityHint' }
   if (active.length !== 1 || active[0].contract?.mode !== 'v2') return { actions: [], reason: 'subscriptionRights.compatibilityHint' }
   const contract = active[0].contract
+  if (Date.parse(contract.expires_at) <= now) return { actions: [], reason: 'subscriptionRights.campaignCompatibilityHint' }
   if (contract.period_days !== days) return { actions: [], reason: 'subscriptionRights.sameTypeOnly' }
   if (plan.id === contract.plan_id) return { actions: ['stack', 'renew'] }
   if ((plan.daily_limit_usd ?? 0) > contract.unit_daily_usd) return { actions: ['upgrade'] }

@@ -255,3 +255,30 @@ func TestContractStoreV2PendingRequestsNeverAgeIntoRefundability(t *testing.T) {
 	_, err = ValidateContractRefund(ctx, c, order.ID, now)
 	require.ErrorIs(t, err, ErrContractRefund)
 }
+
+func TestContractStoreV2HistoricalCampaignDoesNotBlockNewTermRefund(t *testing.T) {
+	c, _ := v2Store(t)
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Microsecond)
+	s, p := v2Parent(t, c, 45, 30, now)
+	v2LegacyLot(t, c, s, p, 0, now)
+	_, err := EnsureContract(ctx, c, s.ID, now)
+	require.NoError(t, err)
+	_, err = c.UserSubscriptionEntitlement.Create().SetUserSubscriptionID(s.ID).SetSourceType("campaign").SetStatus("active").SetStartsAt(now.Add(-24 * time.Hour)).SetExpiresAt(now.Add(time.Hour)).SetDailyLimitUsd(45).Save(ctx)
+	require.NoError(t, err)
+	future := s.ExpiresAt.Add(time.Hour)
+	plan := PlanFromEntity(p)
+	change, err := PreviewContract(nil, plan, plan, "purchase", 1, 0, future)
+	require.NoError(t, err)
+	change.After.SubscriptionID = s.ID
+	change.After.UserID = s.UserID
+	order := v2Order(t, c, s)
+	_, err = ApplyContractChange(ctx, c, change, order.ID, "payment", fmt.Sprint(order.ID), 0, future)
+	require.NoError(t, err)
+	_, err = ValidateContractRefund(ctx, c, order.ID, future)
+	require.NoError(t, err, "historical gift is outside new term")
+	_, err = FreezeContractRefund(ctx, c, order.ID, future)
+	require.NoError(t, err)
+	_, err = RevertContractChange(ctx, c, order.ID, future)
+	require.NoError(t, err)
+}

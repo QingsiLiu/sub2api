@@ -171,17 +171,19 @@ func CurrentContract(ctx context.Context, c *dbent.Client, userID int64, now tim
 		if selected == nil {
 			selected = contract
 		}
-		// A paid V2 term that has ended while a campaign lot remains usable is
-		// compatibility-only for quotes: the gift can be consumed, but a paid
-		// purchase/renewal must wait until the gift pool ends.
-		campaignActive := false
-		for _, lot := range lots {
-			if lot.SourceType == "campaign" && lot.Active(now) {
-				campaignActive = true
-				break
+		// A gift may keep the pool alive beyond the paid term. Return a
+		// compatibility projection with the effective expiry, never rewrite the
+		// persisted paid contract during a quote.
+		if contract.Mode == ContractModeV2 && !contract.ExpiresAt.After(now) {
+			for _, lot := range lots {
+				if lot.SourceType == "campaign" && lot.Active(now) {
+					projection := *contract
+					projection.Mode, projection.ExpiresAt = ContractModeLegacy, parent.ExpiresAt
+					return &projection, nil
+				}
 			}
 		}
-		if paidParents > 1 || contract.Mode == ContractModeLegacy || (contract.Mode == ContractModeV2 && !contract.ExpiresAt.After(now) && campaignActive) {
+		if paidParents > 1 || contract.Mode == ContractModeLegacy {
 			if _, err = c.ExecContext(ctx, `UPDATE subscription_contracts SET mode='legacy_daily',is_current=FALSE,updated_at=$2 WHERE subscription_id=$1`, parent.ID, now); err != nil {
 				return nil, err
 			}

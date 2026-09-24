@@ -97,3 +97,10 @@ describe('campaign gift labels', () => {
     expect(subscriptionLabel(value, t)).toBe('subscriptionRights.contractLabel')
   })
 })
+
+describe('gift and expired paid term action boundaries', () => {
+  it('does not offer renewal for an expired paid term kept alive by gift', () => {
+    const value = { ...sub, expires_at:'2026-10-08T00:00:00Z', contract:{...contract,expires_at:'2026-09-20T00:00:00Z'} }
+    expect(subscriptionActions(plan,[value],now)).toEqual({actions:[],reason:'subscriptionRights.campaignCompatibilityHint'})
+  })
+})

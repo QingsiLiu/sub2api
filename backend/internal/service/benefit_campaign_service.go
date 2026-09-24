@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +22,8 @@ const (
 	BenefitCampaignStatusClosed = "closed"
 	BenefitCampaignResetBeijing = "beijing_day"
 )
+
+var benefitCampaignSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,119}$`)
 
 var (
 	ErrBenefitCampaignNotFound   = infraerrors.NotFound("BENEFIT_CAMPAIGN_NOT_FOUND", "benefit campaign not found")
@@ -99,6 +102,7 @@ type BenefitCampaignClaimView struct {
 type BenefitCampaignService struct {
 	entClient           *dbent.Client
 	subscriptionService *SubscriptionService
+	now                 func() time.Time
 }
 
 type campaignSQL interface {
@@ -130,7 +134,7 @@ func (s *BenefitCampaignService) Create(ctx context.Context, input CreateBenefit
 	}
 	input.Slug = strings.TrimSpace(input.Slug)
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
+	if !benefitCampaignSlug.MatchString(input.Slug) || input.Title == "" || len([]rune(input.Title)) > 200 || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
 		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_INVALID", "invalid benefit campaign definition")
 	}
 	if input.Status == "" {
@@ -176,7 +180,7 @@ func (s *BenefitCampaignService) Update(ctx context.Context, id int64, input Cre
 	}
 	input.Slug = strings.TrimSpace(input.Slug)
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Slug == "" || input.Title == "" || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
+	if !benefitCampaignSlug.MatchString(input.Slug) || input.Title == "" || len([]rune(input.Title)) > 200 || input.DurationDays <= 0 || input.DurationDays > 365 || input.DailyLimitUSD <= 0 || math.IsNaN(input.DailyLimitUSD) || math.IsInf(input.DailyLimitUSD, 0) || (input.MaxClaims != nil && *input.MaxClaims <= 0) || !input.ClaimEndsAt.After(input.StartsAt) || !input.EligibilityEndsAt.After(input.EligibilityStartsAt) {
 		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_INVALID", "invalid benefit campaign definition")
 	}
 	if input.Status == "" {
@@ -193,10 +197,26 @@ func (s *BenefitCampaignService) Update(ctx context.Context, id int64, input Cre
 	if input.ResetMode != BenefitCampaignResetBeijing {
 		return nil, infraerrors.BadRequest("BENEFIT_CAMPAIGN_RESET_INVALID", "only Beijing calendar-day reset is supported")
 	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	c := tx.Client()
+	var frozen sql.NullTime
+	if err = scanCampaignOne(ctx, c, `SELECT eligibility_snapshot_at FROM benefit_campaigns WHERE id=$1 FOR UPDATE`, []any{id}, &frozen); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrBenefitCampaignNotFound
+		}
+		return nil, err
+	}
+	if frozen.Valid {
+		return nil, infraerrors.Conflict("BENEFIT_CAMPAIGN_FROZEN", "frozen campaign terms cannot change; use the status endpoint or create a new campaign")
+	}
 	var out BenefitCampaign
 	var max sql.NullInt64
 	var snapshot sql.NullTime
-	err := scanCampaignOne(ctx, s.entClient, `UPDATE benefit_campaigns SET slug=$2,title=$3,status=$4,starts_at=$5,claim_ends_at=$6,eligibility_starts_at=$7,eligibility_ends_at=$8,duration_days=$9,daily_limit_usd=$10,reset_mode=$11,max_claims=$12,updated_by=$13,updated_at=NOW() WHERE id=$1 RETURNING id,slug,title,status,starts_at,claim_ends_at,eligibility_starts_at,eligibility_ends_at,duration_days,daily_limit_usd,reset_mode,max_claims,eligibility_snapshot_at`, []any{id, input.Slug, input.Title, input.Status, input.StartsAt, input.ClaimEndsAt, input.EligibilityStartsAt, input.EligibilityEndsAt, input.DurationDays, input.DailyLimitUSD, input.ResetMode, input.MaxClaims, actorID}, &out.ID, &out.Slug, &out.Title, &out.Status, &out.StartsAt, &out.ClaimEndsAt, &out.EligibilityStartsAt, &out.EligibilityEndsAt, &out.DurationDays, &out.DailyLimitUSD, &out.ResetMode, &max, &snapshot)
+	err = scanCampaignOne(ctx, c, `UPDATE benefit_campaigns SET slug=$2,title=$3,status=$4,starts_at=$5,claim_ends_at=$6,eligibility_starts_at=$7,eligibility_ends_at=$8,duration_days=$9,daily_limit_usd=$10,reset_mode=$11,max_claims=$12,updated_by=$13,updated_at=NOW() WHERE id=$1 RETURNING id,slug,title,status,starts_at,claim_ends_at,eligibility_starts_at,eligibility_ends_at,duration_days,daily_limit_usd,reset_mode,max_claims,eligibility_snapshot_at`, []any{id, input.Slug, input.Title, input.Status, input.StartsAt, input.ClaimEndsAt, input.EligibilityStartsAt, input.EligibilityEndsAt, input.DurationDays, input.DailyLimitUSD, input.ResetMode, input.MaxClaims, actorID}, &out.ID, &out.Slug, &out.Title, &out.Status, &out.StartsAt, &out.ClaimEndsAt, &out.EligibilityStartsAt, &out.EligibilityEndsAt, &out.DurationDays, &out.DailyLimitUSD, &out.ResetMode, &max, &snapshot)
 	if err == sql.ErrNoRows {
 		return nil, ErrBenefitCampaignNotFound
 	}
@@ -208,6 +228,9 @@ func (s *BenefitCampaignService) Update(ctx context.Context, id int64, input Cre
 	}
 	if snapshot.Valid {
 		out.EligibilitySnapshotAt = &snapshot.Time
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -274,11 +297,11 @@ func (s *BenefitCampaignService) SetStatus(ctx context.Context, id int64, status
 	return nil
 }
 
-func (s *BenefitCampaignService) Current(ctx context.Context, userID int64, now time.Time) (*BenefitCampaignView, error) {
+func (s *BenefitCampaignService) Current(ctx context.Context, userID int64, now time.Time, slugs ...string) (*BenefitCampaignView, error) {
 	if s == nil || s.entClient == nil {
 		return nil, infraerrors.ServiceUnavailable("BENEFIT_CAMPAIGN_UNAVAILABLE", "benefit campaigns are unavailable")
 	}
-	campaign, err := s.findCurrent(ctx, now)
+	campaign, err := s.findCurrent(ctx, now, slugs...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +341,6 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	}
 	// The campaign/user unique pair is the idempotency scope. A caller-supplied
 	// key must not collide across users or reserve another user's claim.
-	idempotencyKey = fmt.Sprintf("benefit:%s:%d", slug, userID)
 
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
@@ -341,6 +363,8 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 		}
 		return existing, nil
 	}
+	now = s.claimTime()
+	idempotencyKey = fmt.Sprintf("benefit:id:%d:%d", campaign.ID, userID)
 	if campaign.Status != BenefitCampaignStatusActive || now.Before(campaign.StartsAt) || !now.Before(campaign.ClaimEndsAt) {
 		return nil, ErrBenefitCampaignClosed
 	}
@@ -373,7 +397,7 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	var subID int64
 	var subStatus string
 	var activeCount int
-	rows, err := c.QueryContext(tc, `SELECT id,status FROM user_subscriptions WHERE user_id=$1 AND deleted_at IS NULL AND status='active' AND starts_at<=NOW() AND expires_at>NOW() ORDER BY id FOR UPDATE`, userID)
+	rows, err := c.QueryContext(tc, `SELECT id,status FROM user_subscriptions WHERE user_id=$1 AND deleted_at IS NULL AND status='active' AND starts_at<=clock_timestamp() AND expires_at>clock_timestamp() ORDER BY id FOR UPDATE`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +421,19 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 		return nil, err
 	}
 	_ = rows.Close()
+	now = s.claimTime()
+	if now.Before(campaign.StartsAt) || !now.Before(campaign.ClaimEndsAt) {
+		return nil, ErrBenefitCampaignClosed
+	}
+	if activeCount == 1 {
+		var valid bool
+		if err = scanCampaignOne(tc, c, `SELECT status='active' AND starts_at<=$2 AND expires_at>$2 FROM user_subscriptions WHERE id=$1`, []any{subID, now}, &valid); err != nil {
+			return nil, err
+		}
+		if !valid {
+			activeCount = 0
+		}
+	}
 	claimAt := now
 	expiresAt := claimAt.AddDate(0, 0, campaign.DurationDays)
 	if activeCount != 1 {
@@ -492,11 +529,15 @@ func (s *BenefitCampaignService) Snapshot(ctx context.Context, campaignID int64,
 	return count, err
 }
 
-func (s *BenefitCampaignService) findCurrent(ctx context.Context, now time.Time) (*BenefitCampaign, error) {
+func (s *BenefitCampaignService) findCurrent(ctx context.Context, now time.Time, slugs ...string) (*BenefitCampaign, error) {
 	var c BenefitCampaign
 	var max sql.NullInt64
 	var snapshot sql.NullTime
-	err := scanCampaignOne(ctx, s.entClient, `SELECT id,slug,title,status,starts_at,claim_ends_at,eligibility_starts_at,eligibility_ends_at,duration_days,daily_limit_usd,reset_mode,max_claims,eligibility_snapshot_at FROM benefit_campaigns WHERE status IN ('active','paused') AND claim_ends_at>$1 ORDER BY starts_at DESC,id DESC LIMIT 1`, []any{now}, &c.ID, &c.Slug, &c.Title, &c.Status, &c.StartsAt, &c.ClaimEndsAt, &c.EligibilityStartsAt, &c.EligibilityEndsAt, &c.DurationDays, &c.DailyLimitUSD, &c.ResetMode, &max, &snapshot)
+	slug := ""
+	if len(slugs) > 0 {
+		slug = strings.TrimSpace(slugs[0])
+	}
+	err := scanCampaignOne(ctx, s.entClient, `SELECT id,slug,title,status,starts_at,claim_ends_at,eligibility_starts_at,eligibility_ends_at,duration_days,daily_limit_usd,reset_mode,max_claims,eligibility_snapshot_at FROM benefit_campaigns WHERE (($2<>'' AND slug=$2 AND status<>'draft') OR ($2='' AND status IN ('active','paused') AND claim_ends_at>$1)) ORDER BY starts_at DESC,id DESC LIMIT 1`, []any{now, slug}, &c.ID, &c.Slug, &c.Title, &c.Status, &c.StartsAt, &c.ClaimEndsAt, &c.EligibilityStartsAt, &c.EligibilityEndsAt, &c.DurationDays, &c.DailyLimitUSD, &c.ResetMode, &max, &snapshot)
 	if err == sql.ErrNoRows {
 		return nil, ErrBenefitCampaignNotFound
 	}
@@ -549,4 +590,11 @@ func loadCampaignClaim(ctx context.Context, q campaignSQL, campaignID, userID in
 		return nil, err
 	}
 	return &c, nil
+}
+
+func (s *BenefitCampaignService) claimTime() time.Time {
+	if s.now != nil {
+		return s.now().UTC().Truncate(time.Microsecond)
+	}
+	return time.Now().UTC().Truncate(time.Microsecond)
 }

@@ -203,15 +203,17 @@ func Aggregate(lots []Lot, now time.Time) Summary {
 
 func SortLots(lots []Lot) {
 	sort.SliceStable(lots, func(i, j int) bool {
-		// Spend promotional quota before paid rights, regardless of expiry.
-		// Preserve expiry/ID ordering within each source class.
-		if (lots[i].SourceType == "campaign") != (lots[j].SourceType == "campaign") {
-			return lots[i].SourceType == "campaign"
-		}
 		if lots[i].ExpiresAt.Equal(lots[j].ExpiresAt) {
 			return lots[i].ID < lots[j].ID
 		}
 		return lots[i].ExpiresAt.Before(lots[j].ExpiresAt)
+	})
+}
+
+func sortConsumptionLots(lots []Lot) {
+	SortLots(lots)
+	sort.SliceStable(lots, func(i, j int) bool {
+		return lots[i].SourceType == "campaign" && lots[j].SourceType != "campaign"
 	})
 }
 
@@ -223,7 +225,7 @@ func Allocate(lots []Lot, cost float64, now time.Time) ([]Lot, error) {
 		return nil, errors.New("invalid subscription cost")
 	}
 	out := append([]Lot(nil), lots...)
-	SortLots(out)
+	sortConsumptionLots(out)
 	remaining := cost
 	last := -1
 	for i := range out {

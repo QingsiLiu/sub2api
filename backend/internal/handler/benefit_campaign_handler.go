@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -20,18 +20,30 @@ func NewBenefitCampaignHandler(campaigns *service.BenefitCampaignService) *Benef
 
 func (h *BenefitCampaignHandler) Current(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
-	if !ok { response.Unauthorized(c, "User not found in context"); return }
-	view, err := h.service.Current(c.Request.Context(), subject.UserID, time.Now().UTC())
-	if err != nil { response.ErrorFrom(c, err); return }
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
+	view, err := h.service.Current(c.Request.Context(), subject.UserID, time.Now().UTC(), strings.TrimSpace(c.Query("slug")))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, view)
 }
 
 func (h *BenefitCampaignHandler) Claim(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
-	if !ok { response.Unauthorized(c, "User not found in context"); return }
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
 	slug := strings.TrimSpace(c.Param("slug"))
 	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 	claim, err := h.service.Claim(c.Request.Context(), subject.UserID, slug, key, time.Now().UTC())
-	if err != nil { response.ErrorFrom(c, err); return }
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, claim)
 }

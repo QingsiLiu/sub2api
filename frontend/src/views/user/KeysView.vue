@@ -1238,7 +1238,7 @@
 </template>
 
 <script setup lang="ts">
-import { subscriptionQuota, contractLabel } from '@/utils/subscriptionV2'
+import { subscriptionQuota, subscriptionLabel } from '@/utils/subscriptionV2'
 	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
@@ -1622,7 +1622,7 @@ const compositeKeySummary = (key: ApiKey) => {
 const subscriptionOptionLabel = (sub: import('@/types').UserSubscription) => {
   const effectiveRemaining = subscriptionQuota(sub).remaining
   const remaining = effectiveRemaining === null ? t('payment.admin.unlimited') : '$' + effectiveRemaining.toFixed(4)
-  return `${sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel')} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
+  return `${subscriptionLabel(sub, t)} · ${t('keys.remainingQuota')}: ${remaining} · ${t('keys.expiresLabel')}: ${sub.expires_at ? formatDateTime(sub.expires_at) : '-'}`
 }
 
 const subscriptionOptions = computed(() => [
