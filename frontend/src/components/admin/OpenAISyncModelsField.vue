@@ -19,7 +19,6 @@
       <div class="flex flex-wrap items-center gap-2">
         <Select v-model="draft" class="w-full sm:w-72" :options="options" searchable :disabled="disabled" :placeholder="t('admin.settings.openaiSyncModels.addPlaceholder')" :aria-label="t('admin.settings.openaiSyncModels.addPlaceholder')" />
         <button type="button" class="btn btn-secondary btn-sm" :disabled="disabled || !options.some(option => option.value === draft)" @click="add">{{ t('admin.settings.openaiSyncModels.add') }}</button>
-        <button type="button" class="btn btn-secondary btn-sm" :disabled="disabled" @click="emit('update:modelValue', [...DEFAULT_OPENAI_SYNC_MODEL_IDS])">{{ t('admin.settings.openaiSyncModels.reset') }}</button>
       </div>
       <p v-if="disabled" class="text-sm text-amber-600 dark:text-amber-400">{{ t('admin.settings.openaiSyncModels.loadFailed') }}</p>
       <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.openaiSyncModels.hint') }}</p>
@@ -32,7 +31,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { DEFAULT_OPENAI_SYNC_MODEL_IDS } from '@/constants/openaiSyncModels'
 
 const props = defineProps<{ modelValue: string[]; candidates: string[]; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [models: string[]] }>()

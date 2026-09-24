@@ -727,7 +727,7 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockResolvedValue(undefined);
   });
 
-  it("edits, reorders, restores and saves the curated OpenAI catalog using backend candidates", async () => {
+  it("edits, reorders and saves the curated OpenAI catalog using backend candidates", async () => {
     getSettings.mockResolvedValue({
       ...baseSettingsResponse,
       openai_sync_model_ids: ['gpt-reserve', 'gpt-6-astra'],
@@ -754,8 +754,7 @@ describe("admin SettingsView payment visible method controls", () => {
     await flushPromises();
     expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({ openai_sync_model_ids: ['gpt-6-astra', 'gpt-image-2'] }));
     expect(updateSettings.mock.calls.at(-1)![0]).not.toHaveProperty('openai_sync_model_candidates');
-    await editor.findAll('button').find(b => b.text() === 'admin.settings.openaiSyncModels.reset')!.trigger('click');
-    expect(models()).toEqual(DEFAULT_OPENAI_SYNC_MODEL_IDS);
+    expect(editor.findAll('button').some(b => b.text() === 'admin.settings.openaiSyncModels.reset')).toBe(false);
     wrapper.unmount();
   });
 

@@ -1123,7 +1123,6 @@ export default {
         description: "“Sync latest supported models” only adds models from this catalog and never removes existing account models.",
         addPlaceholder: "Select a registered OpenAI model",
         add: "Add model",
-        reset: "Reset to 7 defaults",
         emptyError: 'Keep at least one OpenAI sync model.',
         unknownError: 'Unknown OpenAI model: {model}',
         loadFailed: 'Failed to load the OpenAI sync model catalog. Please try again.',

@@ -7,4 +7,6 @@ export const DEFAULT_OPENAI_SYNC_MODEL_IDS = [
   'gpt-6-astra',
   'gpt-reserve',
   'gpt-5.6-luna',
+  'gpt-6-sol',
+  'gpt-6-luna',
 ] as const

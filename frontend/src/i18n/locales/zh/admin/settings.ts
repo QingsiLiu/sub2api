@@ -1117,7 +1117,6 @@ export default {
         description: "“同步最新支持模型”只会追加此目录中的模型，不会删除账号已有模型。",
         addPlaceholder: "选择已登记的 OpenAI 模型",
         add: "添加模型",
-        reset: "恢复默认 7 个",
         emptyError: '至少保留一个 OpenAI 同步模型。',
         unknownError: '未知的 OpenAI 模型：{model}',
         loadFailed: '获取 OpenAI 同步模型目录失败，请稍后重试。',
