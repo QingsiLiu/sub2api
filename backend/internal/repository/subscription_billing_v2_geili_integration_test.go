@@ -190,7 +190,7 @@ func TestSubscriptionBillingV2AdminWholeExpiryAndReset(t *testing.T) {
 func TestSubscriptionBillingV2CampaignAdminAdjustAndReset(t *testing.T) {
 	f := newEntitlementFixture(t)
 	ctx := context.Background()
-	now := time.Now()
+	now := time.Now().Truncate(time.Microsecond)
 	day := geilisub.DayStart(now)
 	require.NoError(t, f.c.SubscriptionPlan.UpdateOneID(f.plan.ID).SetDailyLimitUsd(90).Exec(ctx))
 	require.NoError(t, f.c.UserSubscriptionEntitlement.UpdateOneID(f.sub.Entitlements[0].ID).SetDailyLimitUsd(90).SetExpiresAt(now.Add(24*time.Hour)).Exec(ctx))
