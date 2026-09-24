@@ -480,7 +480,7 @@ func ApplyContractChange(ctx context.Context, c *dbent.Client, change Change, or
 	// Contract changes must never truncate an independent campaign lot. The
 	// parent expiry is the effective pool expiry; the contract row keeps the
 	// paid term expiry used for quotation semantics.
-	if _, err = c.ExecContext(ctx, `UPDATE user_subscriptions SET plan_id=$2,starts_at=$3,expires_at=CASE WHEN COALESCE((SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active'),'') > $4 THEN (SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active') ELSE $4 END,status='active',daily_usage_usd=$5,daily_window_start=$6,updated_at=$7 WHERE id=$1`, parent.ID, after.PlanID, after.StartsAt, after.ExpiresAt, used, DayStart(now), now); err != nil {
+	if _, err = c.ExecContext(ctx, `UPDATE user_subscriptions SET plan_id=$2,starts_at=$3,expires_at=CASE WHEN COALESCE((SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active'),$4) > $4 THEN (SELECT MAX(expires_at) FROM user_subscription_entitlements WHERE user_subscription_id=$1 AND source_type='campaign' AND status='active') ELSE $4 END,status='active',daily_usage_usd=$5,daily_window_start=$6,updated_at=$7 WHERE id=$1`, parent.ID, after.PlanID, after.StartsAt, after.ExpiresAt, used, DayStart(now), now); err != nil {
 		return nil, err
 	}
 	newLots, err := ReadLots(ctx, c, parent.ID)
