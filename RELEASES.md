@@ -8,9 +8,9 @@
 
 - 日期：2026-09-24
 - 上游基线：`upstream/main` `a3eb7ef302961cba716dc78b39b93b60c467db0e`（远程 v0.2.8 版本同步提交）。
-- revision：`1c73de09d`。
-- 镜像 digest：候选构建后回填。
-- 部署：仅源码，未部署 Stage 或生产。
+- revision：`ebe7dba0d44d28c9fe8d8833b226c559eac6ee77`。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:2974fe88f0c6eaff44fcbe61cf876cefff428ff49454ccce9f8b296e29d8ddc6`。
+- 部署：Stage 281 项综合验收、真实支付/文本/图片/视频验收通过；2026-09-24 已按同一 digest 部署生产，生产 health 200，PG/Redis 指纹未变。
 
 相对 `0.2.7-geili.8`：
 
