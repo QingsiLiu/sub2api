@@ -1303,7 +1303,8 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 	}
 
 	group := sub.Group
-	if group == nil && sub.Plan == nil {
+	// geili hook: independent campaign lots have neither a plan nor a group.
+	if group == nil && sub.Plan == nil && sub.Contract == nil && len(sub.Entitlements) == 0 {
 		group, err = s.groupRepo.GetByID(ctx, sub.GroupID)
 		if err != nil {
 			return nil, err

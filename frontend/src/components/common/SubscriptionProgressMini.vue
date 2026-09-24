@@ -46,7 +46,7 @@
           >
             <div class="mb-2 flex items-center justify-between">
               <span class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ subscription.contract ? contractLabel(subscription.contract, t) : subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
+                {{ subscriptionLabel(subscription, t) }}
               </span>
               <span
                 v-if="subscription.expires_at"
@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { subscriptionQuota, contractLabel } from '@/utils/subscriptionV2'
+import { subscriptionQuota, subscriptionLabel } from '@/utils/subscriptionV2'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'

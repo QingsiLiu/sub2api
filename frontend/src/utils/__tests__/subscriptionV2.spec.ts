@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { UserSubscription, SubscriptionContract } from '@/types'
 import type { PaymentOrder, SubscriptionPlan } from '@/types/payment'
-import { contractLabel, isPaidSubscriptionReview, subscriptionActions, subscriptionOrderLabel, subscriptionQuota } from '../subscriptionV2'
+import { campaignOnly, subscriptionLabel, contractLabel, isPaidSubscriptionReview, subscriptionActions, subscriptionOrderLabel, subscriptionQuota } from '../subscriptionV2'
 
 const contract: SubscriptionContract = { mode: 'v2', kind: 'month', unit_daily_usd: 45, quantity: 2, period_days: 30, term_id: 'term-1', revision: 4, plan_id: 1, plan_name: 'Monthly 45', status: 'active', user_id: 382, subscription_id: 9, starts_at: '2026-09-01T00:00:00Z', expires_at: '2026-10-01T00:00:00Z' }
 const now = Date.parse('2026-09-21T00:00:00Z')
@@ -80,5 +80,20 @@ describe('complete active-plan eligibility matrix', () => {
   })
   it.each(['active', 'expired', 'revoked', 'suspended'] as const)('allows a new type after %s historical rights expire', status => {
     expect(subscriptionActions(catalog[0], [{ ...sub, status, expires_at: '2026-09-01', contract: { ...contract, mode: 'legacy_daily' } }], now).actions).toEqual(['purchase'])
+  })
+})
+
+describe('campaign gift labels', () => {
+  const t = (key: string) => key
+  const gift = { source_type: 'campaign' } as NonNullable<UserSubscription['entitlements']>[number]
+  it('labels standalone gift without requiring a paid plan', () => {
+    const value = { ...sub, contract: undefined, entitlements: [gift] }
+    expect(campaignOnly(value)).toBe(true)
+    expect(subscriptionLabel(value, t)).toBe('subscriptionRights.campaignGift')
+  })
+  it('retains purchased contract identity for mixed rights', () => {
+    const value = { ...sub, entitlements: [gift, { ...gift, source_type: 'payment' }] }
+    expect(campaignOnly(value)).toBe(false)
+    expect(subscriptionLabel(value, t)).toBe('subscriptionRights.contractLabel')
   })
 })

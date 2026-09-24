@@ -1,4 +1,6 @@
 export default { subscriptionRights: {
+  "campaignGift": "活动赠礼",
+  "campaignPriority": "优先消耗，不改变已购订阅",
   "existingPaymentHint": "当前订阅订单已创建，尚未确认付款结果。请在此查看状态，或到订单列表处理；需要重新下单时，请先明确取消原订单。",
   "suspendedHint": "当前订阅已暂停，请联系客服处理后再变更或购买。",
   "operation": "订阅操作",

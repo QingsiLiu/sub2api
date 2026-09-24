@@ -265,6 +265,12 @@ const SubscriptionEntitlementStatusRefunded = "refunded"
 const SubscriptionEntitlementStatusRefundPending = "refund_pending"
 
 func (s *UserSubscription) QuotaName() string {
+	if s == nil {
+		return ""
+	}
+	if geilisub.CampaignOnly(s.Entitlements) {
+		return "活动赠礼"
+	}
 	if s != nil && s.Contract != nil && s.Contract.PlanName != "" {
 		return s.Contract.PlanName
 	}

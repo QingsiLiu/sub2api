@@ -40,7 +40,7 @@
               <div class="min-w-0 flex-1 break-words">
                 <div class="flex items-center gap-2">
                   <h3 class="font-semibold text-gray-900 dark:text-white">
-                    {{ subscription.contract ? contractLabel(subscription.contract, t) : subscription.plan?.name || subscription.group?.name || `Group #${subscription.group_id}` }}
+                    {{ subscriptionLabel(subscription, t) }}
                   </h3>
                   <span v-if="!subscription.plan" :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
                     {{ platformLabel(subscription.group?.platform || '') }}
@@ -58,7 +58,7 @@
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
                   </span>
                 </div>
-                <p v-if="subscription.contract?.mode === 'legacy_daily'" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
+                <p v-if="subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription)" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
                 <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
                   <span>{{ t('subscriptionRights.active', { count: subscription.quota_summary.active_lot_count }) }}</span>
                   <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }) }}</span>
@@ -66,6 +66,7 @@
                     <summary class="cursor-pointer font-medium">{{ t('subscriptionRights.details', { count: subscription.entitlements.length }) }}</summary>
                     <ul class="mt-2 space-y-2">
                       <li v-for="lot in subscription.entitlements" :key="lot.id" class="rounded border border-gray-200 p-2 dark:border-dark-600">
+                        <p v-if="lot.source_type === 'campaign'" class="font-medium">{{ t('subscriptionRights.campaignGift') }} · {{ t('subscriptionRights.campaignPriority') }}</p>
                         <p>#{{ lot.id }} · {{ t('subscriptionRights.status') }}: {{ t(`subscriptionRights.status_${lot.status}`) }}</p>
                         <p>{{ t('subscriptionRights.created') }}: {{ formatDateTimeToMinute(lot.created_at) }}</p>
                         <p>{{ formatDateTimeToMinute(lot.starts_at) }} → {{ formatDateTimeToMinute(lot.expires_at) }}</p>
@@ -271,7 +272,7 @@
 </template>
 
 <script setup lang="ts">
-import { subscriptionQuota, contractLabel, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
+import { subscriptionQuota, subscriptionLabel, campaignOnly, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

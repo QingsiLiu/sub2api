@@ -61,3 +61,12 @@ export function subscriptionRefreshDelay(subscriptions: UserSubscription[], now 
     .map(Date.parse).filter(at => Number.isFinite(at) && at > now)
   return boundaries.length ? Math.min(2_147_483_647, Math.max(100, Math.min(...boundaries) - now + 100)) : null
 }
+
+export function campaignOnly(sub: Pick<UserSubscription, 'entitlements'>): boolean {
+  return !!sub.entitlements?.length && sub.entitlements.every(lot => lot.source_type === 'campaign')
+}
+
+export function subscriptionLabel(sub: Pick<UserSubscription, 'entitlements' | 'contract' | 'plan' | 'group' | 'group_id'>, t: Translate): string {
+  if (campaignOnly(sub)) return t('subscriptionRights.campaignGift')
+  return sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || `Group #${sub.group_id}`
+}

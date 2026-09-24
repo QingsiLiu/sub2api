@@ -1,4 +1,6 @@
 export default { subscriptionRights: {
+  "campaignGift": "Campaign gift",
+  "campaignPriority": "Used first; purchased rights stay unchanged",
   "existingPaymentHint": "Your subscription order already exists and its payment result is not confirmed. Check its status here or in your orders. To place a new order, explicitly cancel the existing order first.",
   "suspendedHint": "Your current subscription is suspended. Contact support before changing or purchasing a subscription.",
   "operation": "Subscription action",
