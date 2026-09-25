@@ -3,6 +3,7 @@
     <template #cell-id="{ value, row }">
       <span class="font-mono text-sm">#{{ value }}</span>
       <p v-if="row.order_type === 'subscription'" class="text-xs text-gray-500">{{ subscriptionOrderLabel(row, t) }}</p>
+      <details v-if="row.entitlement_changes?.length" class="mt-2 min-w-48 text-xs"><summary class="cursor-pointer">{{ t('subscriptionRights.legacyChanges') }}</summary><LegacyEntitlementChanges :lines="row.entitlement_changes" /></details>
     </template>
     <template #cell-out_trade_no="{ value }">
       <span class="text-sm text-gray-900 [overflow-wrap:anywhere] dark:text-white md:[overflow-wrap:normal]">{{ value }}</span>
@@ -42,6 +43,7 @@
 
 <script setup lang="ts">
 import { subscriptionOrderLabel, isPaidSubscriptionReview } from '@/utils/subscriptionV2'
+import LegacyEntitlementChanges from '@/components/payment/LegacyEntitlementChanges.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PaymentOrder } from '@/types/payment'

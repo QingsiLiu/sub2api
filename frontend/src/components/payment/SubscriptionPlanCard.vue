@@ -101,6 +101,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SubscriptionPlan } from '@/types/payment'
 import type { UserSubscription } from '@/types'
+import { legacyPlanAvailable } from '@/utils/legacySubscription'
+import type { LegacyManagementOptions } from '@/types/payment'
 import { subscriptionActions } from '@/utils/subscriptionV2'
 import SubscriptionActionHelp from './SubscriptionActionHelp.vue'
 import { planValiditySuffix } from './validity'
@@ -116,11 +118,11 @@ import {
   platformLabel,
 } from '@/utils/platformColors'
 
-const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[]; loading?: boolean; contactInfo?: string }>()
+const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[]; loading?: boolean; contactInfo?: string; legacyOptions?: LegacyManagementOptions }>()
 const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
 
-const eligibility = computed(() => subscriptionActions(props.plan, props.activeSubscriptions ?? []))
+const eligibility = computed(() => legacyPlanAvailable(props.plan, props.legacyOptions) ? { actions: ['purchase'] as import('@/types/payment').SubscriptionOperation[], reason: undefined } : subscriptionActions(props.plan, props.activeSubscriptions ?? []))
 const canSelect = computed(() => !props.loading && eligibility.value.actions.length > 0)
 function selectPlan() {
   if (canSelect.value) emit('select', props.plan)

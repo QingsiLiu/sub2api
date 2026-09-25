@@ -34,6 +34,8 @@ func RegisterPaymentRoutes(
 		authenticated.GET("/plans", paymentHandler.GetPlans)
 		authenticated.GET("/limits", paymentHandler.GetLimits)
 		authenticated.POST("/subscription-quote", paymentHandler.QuoteSubscription)
+		// geili hook: server-owned per-lot eligibility for historical subscriptions.
+		authenticated.GET("/legacy-subscription-options", paymentHandler.LegacySubscriptionOptions)
 
 		orders := authenticated.Group("/orders")
 		{

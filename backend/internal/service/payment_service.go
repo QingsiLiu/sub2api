@@ -97,16 +97,21 @@ type CreateOrderRequest struct {
 }
 
 type SubscriptionQuoteRequest struct {
-	Operation            string
-	Units                int
-	Periods              int
-	UserID               int64
-	PlanID               int64
-	SubscriptionMode     string
-	SubscriptionQuantity int
+	SubscriptionID            int64
+	EntitlementIDs            []int64
+	ExpiryAnchorEntitlementID int64
+	Operation                 string
+	Units                     int
+	Periods                   int
+	UserID                    int64
+	PlanID                    int64
+	SubscriptionMode          string
+	SubscriptionQuantity      int
 }
 
 type SubscriptionQuoteResponse struct {
+	ManagementMode       string                    `json:"management_mode,omitempty"`
+	EntitlementChanges   []geilisub.LegacyLine     `json:"entitlement_changes,omitempty"`
 	QuoteID              string                    `json:"quote_id"`
 	ExpiresAt            time.Time                 `json:"expires_at"`
 	BillableDays         int                       `json:"billable_days"`

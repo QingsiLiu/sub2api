@@ -7,6 +7,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	geilisub "github.com/Wei-Shaw/sub2api/internal/geili/subscription"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -327,18 +328,21 @@ func (h *PaymentHandler) QuoteSubscription(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Operation            string `json:"operation"`
-		Units                int    `json:"units"`
-		Periods              int    `json:"periods"`
-		PlanID               int64  `json:"plan_id"`
-		SubscriptionMode     string `json:"subscription_mode"`
-		SubscriptionQuantity int    `json:"subscription_quantity"`
+		SubscriptionID            int64   `json:"subscription_id"`
+		EntitlementIDs            []int64 `json:"entitlement_ids"`
+		ExpiryAnchorEntitlementID int64   `json:"expiry_anchor_entitlement_id"`
+		Operation                 string  `json:"operation"`
+		Units                     int     `json:"units"`
+		Periods                   int     `json:"periods"`
+		PlanID                    int64   `json:"plan_id"`
+		SubscriptionMode          string  `json:"subscription_mode"`
+		SubscriptionQuantity      int     `json:"subscription_quantity"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	result, err := h.paymentService.QuoteSubscription(c.Request.Context(), service.SubscriptionQuoteRequest{Operation: req.Operation, Units: req.Units, Periods: req.Periods, UserID: subject.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity})
+	result, err := h.paymentService.QuoteSubscription(c.Request.Context(), service.SubscriptionQuoteRequest{SubscriptionID: req.SubscriptionID, EntitlementIDs: req.EntitlementIDs, ExpiryAnchorEntitlementID: req.ExpiryAnchorEntitlementID, Operation: req.Operation, Units: req.Units, Periods: req.Periods, UserID: subject.UserID, PlanID: req.PlanID, SubscriptionMode: req.SubscriptionMode, SubscriptionQuantity: req.SubscriptionQuantity})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -698,31 +702,32 @@ func isMobile(c *gin.Context) bool {
 }
 
 type PaymentOrderResult struct {
-	ID                   int64      `json:"id"`
-	UserID               int64      `json:"user_id"`
-	Amount               float64    `json:"amount"`
-	PayAmount            float64    `json:"pay_amount"`
-	FeeRate              float64    `json:"fee_rate"`
-	Currency             string     `json:"currency"`
-	PaymentType          string     `json:"payment_type"`
-	OutTradeNo           string     `json:"out_trade_no"`
-	PaymentTradeNo       string     `json:"payment_trade_no,omitempty"`
-	Status               string     `json:"status"`
-	OrderType            string     `json:"order_type"`
-	CreatedAt            time.Time  `json:"created_at"`
-	ExpiresAt            time.Time  `json:"expires_at"`
-	PaidAt               *time.Time `json:"paid_at,omitempty"`
-	FailedReason         *string    `json:"failed_reason,omitempty"`
-	CompletedAt          *time.Time `json:"completed_at,omitempty"`
-	RefundAmount         float64    `json:"refund_amount"`
-	RefundReason         *string    `json:"refund_reason,omitempty"`
-	RefundRequestedAt    *time.Time `json:"refund_requested_at,omitempty"`
-	RefundRequestedBy    *string    `json:"refund_requested_by,omitempty"`
-	RefundRequestReason  *string    `json:"refund_request_reason,omitempty"`
-	PlanID               *int64     `json:"plan_id,omitempty"`
-	SubscriptionMode     string     `json:"subscription_mode,omitempty"`
-	SubscriptionQuantity int        `json:"subscription_quantity,omitempty"`
-	ProviderInstanceID   *string    `json:"provider_instance_id,omitempty"`
+	EntitlementChanges   []geilisub.LegacyLine `json:"entitlement_changes,omitempty"`
+	ID                   int64                 `json:"id"`
+	UserID               int64                 `json:"user_id"`
+	Amount               float64               `json:"amount"`
+	PayAmount            float64               `json:"pay_amount"`
+	FeeRate              float64               `json:"fee_rate"`
+	Currency             string                `json:"currency"`
+	PaymentType          string                `json:"payment_type"`
+	OutTradeNo           string                `json:"out_trade_no"`
+	PaymentTradeNo       string                `json:"payment_trade_no,omitempty"`
+	Status               string                `json:"status"`
+	OrderType            string                `json:"order_type"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ExpiresAt            time.Time             `json:"expires_at"`
+	PaidAt               *time.Time            `json:"paid_at,omitempty"`
+	FailedReason         *string               `json:"failed_reason,omitempty"`
+	CompletedAt          *time.Time            `json:"completed_at,omitempty"`
+	RefundAmount         float64               `json:"refund_amount"`
+	RefundReason         *string               `json:"refund_reason,omitempty"`
+	RefundRequestedAt    *time.Time            `json:"refund_requested_at,omitempty"`
+	RefundRequestedBy    *string               `json:"refund_requested_by,omitempty"`
+	RefundRequestReason  *string               `json:"refund_request_reason,omitempty"`
+	PlanID               *int64                `json:"plan_id,omitempty"`
+	SubscriptionMode     string                `json:"subscription_mode,omitempty"`
+	SubscriptionQuantity int                   `json:"subscription_quantity,omitempty"`
+	ProviderInstanceID   *string               `json:"provider_instance_id,omitempty"`
 }
 
 func sanitizePaymentOrdersForResponse(orders []*dbent.PaymentOrder) []PaymentOrderResult {
@@ -740,6 +745,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		return nil
 	}
 	return &PaymentOrderResult{
+		EntitlementChanges:   service.PaymentLegacyLines(order),
 		ID:                   order.ID,
 		UserID:               order.UserID,
 		Amount:               order.Amount,

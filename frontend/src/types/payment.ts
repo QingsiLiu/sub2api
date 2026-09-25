@@ -94,6 +94,7 @@ export interface CheckoutInfoResponse {
 // ==================== Orders ====================
 
 export interface PaymentOrder {
+  entitlement_changes?: LegacyEntitlementChange[]
   id: number
   user_id: number
   amount: number
@@ -209,6 +210,9 @@ export interface CreateOrderRequest {
 }
 
 export interface SubscriptionQuoteRequest {
+  subscription_id?: number
+  entitlement_ids?: number[]
+  expiry_anchor_entitlement_id?: number
   plan_id: number
   operation: SubscriptionOperation
   units?: number
@@ -216,6 +220,8 @@ export interface SubscriptionQuoteRequest {
 }
 
 export interface SubscriptionQuoteResponse {
+  management_mode?: string
+  entitlement_changes?: LegacyEntitlementChange[]
   quote_id: string
   expires_at: string
   billable_days: number
@@ -308,4 +314,30 @@ export interface DashboardStats {
   daily_series: DailyPaymentStats[]
   payment_methods: PaymentMethodStats[]
   top_users: Record<string, TopUserPaymentStats[]>
+}
+
+export interface LegacyManagedLot {
+  id: number
+  expires_at: string
+  daily_limit_usd: number | null
+  status: string
+  plan_id?: number
+  kind?: 'week' | 'month'
+  period_days?: number
+  upgrade_plan_ids: number[]
+  reason?: string
+}
+export interface LegacyManagedPool {
+  subscription_id: number
+  management_mode: 'legacy_lots'
+  lots: LegacyManagedLot[]
+}
+export interface LegacyManagementOptions { enabled: boolean; pools: LegacyManagedPool[] }
+export interface LegacyEntitlementRight { plan_id?: number; starts_at: string; expires_at: string; daily_limit_usd: number | null }
+export interface LegacyEntitlementChange {
+  entitlement_id: number
+  before?: LegacyEntitlementRight
+  after: LegacyEntitlementRight
+  billable_days: number
+  amount: string
 }

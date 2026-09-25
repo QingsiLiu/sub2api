@@ -127,8 +127,28 @@
                 </p>
                 <div class="mt-4 rounded-lg bg-gray-50 p-3 dark:bg-dark-700/50">
                   <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('subscriptionRights.operation') }}</div>
-                  <div class="flex gap-2">
-                    <button v-for="operation in availableOperations" :key="operation" type="button" class="btn flex-1 py-2 text-xs" :disabled="submitting" :class="subscriptionMode === operation ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = operation">{{ t(`subscriptionRights.${operation}`) }}</button>
+                  <div class="flex flex-wrap gap-2">
+                    <button v-for="operation in availableOperations" :key="operation" type="button" class="btn flex-1 py-2 text-xs" :disabled="submitting" :class="subscriptionMode === operation ? 'btn-primary' : 'btn-secondary'" @click="subscriptionMode = operation">{{ legacyPool && operation === 'purchase' ? t('subscriptionRights.legacyPurchase') : t(`subscriptionRights.${operation}`) }}</button>
+                  </div>
+                  <div v-if="legacyPool" class="mt-3 space-y-3">
+                    <label class="block text-xs">{{ t('subscriptionRights.legacyPool') }}
+                      <select v-model.number="legacyPoolID" class="input mt-1 w-full" :disabled="submitting"><option v-for="pool in legacyOptions.pools" :key="pool.subscription_id" :value="pool.subscription_id">#{{ pool.subscription_id }}</option></select>
+                    </label>
+                    <template v-if="subscriptionMode === 'renew' || subscriptionMode === 'upgrade'">
+                      <label v-if="legacySourcePlans.length > 1" class="block text-xs">{{ t('subscriptionRights.legacySourceTier') }}
+                        <select v-model.number="legacySourcePlanID" class="input mt-1 w-full" :disabled="submitting"><option v-for="id in legacySourcePlans" :key="id" :value="id">{{ checkout.plans.find(plan => plan.id === id)?.name || '#' + id }}</option></select>
+                      </label>
+                      <p class="text-xs font-medium">{{ t('subscriptionRights.selectLots') }}</p>
+                      <label v-for="lot in legacySelectableLots" :key="lot.id" class="flex min-h-11 items-center gap-2 text-xs">
+                        <input v-model="legacySelectedIDs" type="checkbox" :value="lot.id" :disabled="submitting" />
+                        <span>#{{ lot.id }} · ${{ lot.daily_limit_usd }} · {{ formatDateTimeToMinute(lot.expires_at) }}</span>
+                      </label>
+                    </template>
+                    <label v-if="subscriptionMode === 'stack'" class="block text-xs">{{ t('subscriptionRights.legacyAnchor') }}
+                      <select v-model.number="legacyAnchorID" class="input mt-1 w-full" :disabled="submitting"><option v-for="lot in legacyCandidates" :key="lot.id" :value="lot.id">#{{ lot.id }} · {{ formatDateTimeToMinute(lot.expires_at) }}</option></select>
+                    </label>
+                    <p class="text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.legacyUnchanged') }}</p>
+                    <p v-for="lot in legacyPool.lots.filter(lot => lot.reason)" :key="lot.id" class="text-xs text-gray-500">#{{ lot.id }} · {{ t(`subscriptionRights.legacyReason_${lot.reason}`) }}</p>
                   </div>
                   <label v-if="subscriptionMode === 'purchase' || subscriptionMode === 'stack'" class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
                     <span>{{ t('subscriptionRights.quantity') }}</span>
@@ -138,7 +158,7 @@
                     <span>{{ t('subscriptionRights.periodCount') }}</span>
                     <select v-model.number="subscriptionPeriods" :disabled="submitting" class="input w-28 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ t('subscriptionRights.periods', { count: n }) }}</option></select>
                   </label>
-                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(`subscriptionRights.${subscriptionMode}Hint`) }}</p>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(legacyPool ? `subscriptionRights.legacyHint_${subscriptionMode}` : `subscriptionRights.${subscriptionMode}Hint`) }}</p>
                   <p v-if="subscriptionBlockedReason" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t(subscriptionBlockedReason) }}</p>
                   <p v-if="quoteExpired" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.quoteExpired') }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button></p>
                   <p v-if="quoteLoading" role="status" class="mt-2 text-xs">{{ t('subscriptionRights.loading') }}</p>
@@ -149,9 +169,10 @@
                     <p v-if="subscriptionQuote.current_contract">{{ t('subscriptionRights.before') }}: {{ contractLabel(subscriptionQuote.current_contract, t) }} · {{ formatDateTimeToMinute(subscriptionQuote.current_contract.expires_at) }}</p>
                     <p v-if="subscriptionQuote.projected_contract">{{ t('subscriptionRights.after') }}: {{ contractLabel(subscriptionQuote.projected_contract, t) }}</p>
                     <p>{{ t('subscriptionRights.daily') }}: ${{ subscriptionQuote.projected.daily_limit_usd }} · {{ t('subscriptionRights.remaining') }}: {{ subscriptionQuote.projected.remaining_usd == null ? '—' : '$' + subscriptionQuote.projected.remaining_usd.toFixed(4) }}</p>
-                    <p>{{ t('subscriptionRights.expiry', { time: formatDateTimeToMinute(subscriptionQuote.projected_contract?.expires_at || subscriptionQuote.projected.expires_at || '') }) }}</p>
-                    <p v-if="subscriptionMode === 'stack' || subscriptionMode === 'upgrade'">{{ t('subscriptionRights.billableDays', { days: subscriptionQuote.billable_days }) }}</p>
+                    <p v-if="!legacyPool">{{ t('subscriptionRights.expiry', { time: formatDateTimeToMinute(subscriptionQuote.projected_contract?.expires_at || subscriptionQuote.projected.expires_at || '') }) }}</p>
+                    <p v-if="!legacyPool && (subscriptionMode === 'stack' || subscriptionMode === 'upgrade')">{{ t('subscriptionRights.billableDays', { days: subscriptionQuote.billable_days }) }}</p>
                     <p v-if="subscriptionQuote.expires_at">{{ t('subscriptionRights.quoteExpires', { time: formatDateTimeToMinute(subscriptionQuote.expires_at) }) }}</p>
+                    <LegacyEntitlementChanges v-if="subscriptionQuote.entitlement_changes" :lines="subscriptionQuote.entitlement_changes" />
                     <p>{{ t('subscriptionRights.dailyReset') }}</p>
                   </div>
                 </div>
@@ -214,13 +235,13 @@
             </template>
             <!-- Plan list -->
             <template v-else>
-              <p v-if="hasLegacySubscription" role="status" class="card p-4 text-sm text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
+              <p v-if="hasLegacySubscription && !legacyOptions.enabled" role="status" class="card p-4 text-sm text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
               <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
                 <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :legacy-options="legacyOptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
@@ -274,7 +295,7 @@
             </button>
             <h3 class="mb-4 shrink-0 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="min-h-0 space-y-4 overflow-y-auto">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :legacy-options="legacyOptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -306,6 +327,9 @@ import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { paymentAPI } from '@/api/payment'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
+import { legacyActions, legacyPlanAvailable } from '@/utils/legacySubscription'
+import type { LegacyManagementOptions } from '@/types/payment'
+import LegacyEntitlementChanges from '@/components/payment/LegacyEntitlementChanges.vue'
 import { subscriptionActions, subscriptionQuota, contractLabel, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
@@ -385,8 +409,46 @@ const subscriptionQuote = ref<SubscriptionQuoteResponse | null>(null)
 const quoteLoading = ref(false)
 const quoteError = ref('')
 let quoteRevision = 0
-const availableOperations = computed(() => selectedPlan.value ? subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).actions : [])
-const subscriptionBlockedReason = computed(() => !subscriptionsReady.value ? 'subscriptionRights.loading' : selectedPlan.value ? subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).reason : undefined)
+const legacyOptions = ref<LegacyManagementOptions>({ enabled: false, pools: [] })
+const legacyPoolID = ref(0)
+const legacySelectedIDs = ref<number[]>([])
+const legacySourcePlanID = ref(0)
+const legacyAnchorID = ref(0)
+const legacyPool = computed(() => legacyOptions.value.enabled ? legacyOptions.value.pools.find(pool => pool.subscription_id === legacyPoolID.value) : undefined)
+const legacyCandidates = computed(() => !selectedPlan.value || !legacyPool.value ? [] : legacyPool.value.lots.filter(lot => !lot.reason && lot.status === 'active' && Date.parse(lot.expires_at) > eligibilityNow.value && (subscriptionMode.value === 'upgrade' ? lot.upgrade_plan_ids.includes(selectedPlan.value!.id) : lot.plan_id === selectedPlan.value!.id)))
+const legacySourcePlans = computed(() => [...new Set(legacyCandidates.value.map(lot => lot.plan_id!))])
+const legacySelectableLots = computed(() => legacyCandidates.value.filter(lot => lot.plan_id === legacySourcePlanID.value))
+watch([legacyPoolID, () => selectedPlan.value?.id, subscriptionMode], () => {
+  legacySourcePlanID.value = legacySourcePlans.value[0] ?? 0
+  legacySelectedIDs.value = legacySelectableLots.value.map(lot => lot.id)
+  legacyAnchorID.value = legacyCandidates.value[0]?.id ?? 0
+})
+watch(legacySourcePlanID, () => { legacySelectedIDs.value = legacySelectableLots.value.map(lot => lot.id) })
+watch(legacyOptions, () => {
+  // Refreshes must never silently reselect units the customer deselected.
+  const ids = new Set(legacySelectableLots.value.map(lot => lot.id))
+  legacySelectedIDs.value = legacySelectedIDs.value.filter(id => ids.has(id))
+  if (!legacyCandidates.value.some(lot => lot.id === legacyAnchorID.value)) legacyAnchorID.value = 0
+  if (legacyPoolID.value && !eligibilitySubscriptions.value.some(sub => sub.id === legacyPoolID.value && (sub.status === 'active' || sub.status === 'suspended') && (!sub.expires_at || Date.parse(sub.expires_at) > eligibilityNow.value))) legacyPoolID.value = 0
+})
+async function refreshLegacyOptions() {
+  try { legacyOptions.value = (await paymentAPI.legacySubscriptionOptions()).data }
+  catch { legacyOptions.value = { enabled: false, pools: [] } }
+}
+const availableOperations = computed(() => {
+  if (!selectedPlan.value) return []
+  if (legacyPoolID.value) return legacyActions(selectedPlan.value, legacyPool.value, eligibilityNow.value)
+  return subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).actions
+})
+const subscriptionBlockedReason = computed(() => {
+  if (!subscriptionsReady.value) return 'subscriptionRights.loading'
+  if (!selectedPlan.value) return undefined
+  if (!legacyPoolID.value) return subscriptionActions(selectedPlan.value, eligibilitySubscriptions.value, eligibilityNow.value).reason
+  if (!legacyPool.value || !availableOperations.value.length) return 'subscriptionRights.compatibilityHint'
+  const needsSelection = subscriptionMode.value === 'renew' || subscriptionMode.value === 'upgrade'
+  if ((needsSelection && !legacySelectedIDs.value.length) || (subscriptionMode.value === 'stack' && !legacyAnchorID.value)) return 'subscriptionRights.selectionRequired'
+  return undefined
+})
 watch(availableOperations, operations => {
   if (selectedPlan.value && operations.length && !operations.includes(subscriptionMode.value)) {
     subscriptionMode.value = operations.includes('renew') ? 'renew' : operations[0]
@@ -398,9 +460,9 @@ async function refreshSubscriptionQuote() {
   const revision = ++quoteRevision
   subscriptionQuote.value = null
   quoteError.value = ''
-  if (!selectedPlan.value || !subscriptionsReady.value || !availableOperations.value.includes(subscriptionMode.value)) { quoteLoading.value = false; return }
+  if (!selectedPlan.value || !subscriptionsReady.value || !availableOperations.value.includes(subscriptionMode.value) || subscriptionBlockedReason.value) { quoteLoading.value = false; return }
   quoteLoading.value = true
-  const request = { plan_id: selectedPlan.value.id, operation: subscriptionMode.value, units: subscriptionMode.value === 'purchase' || subscriptionMode.value === 'stack' ? subscriptionQuantity.value : undefined, periods: subscriptionMode.value === 'renew' ? subscriptionPeriods.value : undefined }
+  const request = { ...(legacyPool.value ? { subscription_id: legacyPoolID.value, entitlement_ids: subscriptionMode.value === 'renew' || subscriptionMode.value === 'upgrade' ? [...legacySelectedIDs.value] : undefined, expiry_anchor_entitlement_id: subscriptionMode.value === 'stack' ? legacyAnchorID.value : undefined } : {}), plan_id: selectedPlan.value.id, operation: subscriptionMode.value, units: subscriptionMode.value === 'purchase' || subscriptionMode.value === 'stack' ? subscriptionQuantity.value : undefined, periods: subscriptionMode.value === 'renew' ? subscriptionPeriods.value : undefined }
   try {
     const response = await paymentAPI.quoteSubscription(request)
     if (revision === quoteRevision) { subscriptionQuote.value = response.data; quoteNow.value = Date.now() }
@@ -410,7 +472,7 @@ async function refreshSubscriptionQuote() {
     if (revision === quoteRevision) quoteLoading.value = false
   }
 }
-watch([() => selectedPlan.value?.id, subscriptionMode, subscriptionQuantity, subscriptionPeriods, subscriptionsReady, () => eligibilitySubscriptions.value], refreshSubscriptionQuote)
+watch([() => selectedPlan.value?.id, subscriptionMode, subscriptionQuantity, subscriptionPeriods, subscriptionsReady, () => eligibilitySubscriptions.value, legacyPoolID, () => legacySelectedIDs.value.join(','), legacyAnchorID, legacyOptions], refreshSubscriptionQuote)
 
 const previewImage = ref('')
 
@@ -820,6 +882,19 @@ function selectPlan(plan: SubscriptionPlan) {
     appStore.showInfo(t('subscriptionRights.loading'))
     return
   }
+  if (legacyPlanAvailable(plan, legacyOptions.value, eligibilityNow.value)) {
+    const preferred = Number(route.query.subscription)
+    const pools = legacyOptions.value.pools.filter(pool => legacyActions(plan, pool, eligibilityNow.value).length)
+    legacyPoolID.value = (pools.find(pool => pool.subscription_id === preferred) ?? pools[0]).subscription_id
+    selectedPlan.value = plan
+    const actions = legacyActions(plan, legacyPool.value, eligibilityNow.value)
+    subscriptionMode.value = actions.includes('renew') ? 'renew' : actions[0]
+    subscriptionPeriods.value = 1
+    subscriptionQuantity.value = 1
+    errorMessage.value = ''
+    return
+  }
+  legacyPoolID.value = 0
   const { actions, reason } = subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value)
   if (!actions.length) {
     appStore.showInfo(t(reason ?? 'subscriptionRights.unavailablePlan'))
@@ -1292,6 +1367,8 @@ async function refreshEligibilitySubscriptions() {
     if (eligibilityUnmounted || revision !== eligibilityRevision) return
     eligibilityNow.value = Date.now()
     eligibilitySubscriptions.value = [...subscriptions]
+    await refreshLegacyOptions()
+    if (eligibilityUnmounted || revision !== eligibilityRevision) return
     subscriptionsReady.value = true
   } catch {
     if (!eligibilityUnmounted && revision === eligibilityRevision && subscriptionRefreshDelay(eligibilitySubscriptions.value) === null) subscriptionsReady.value = false
@@ -1313,6 +1390,7 @@ onMounted(async () => {
     if (subscriptionEnabled.value) {
       const [subscriptions] = await Promise.all([subscriptionsAPI.getMySubscriptions(), subscriptionStore.fetchActiveSubscriptions()])
       eligibilitySubscriptions.value = subscriptions
+      await refreshLegacyOptions()
       eligibilityNow.value = Date.now()
       scheduleEligibilityRefresh()
     }

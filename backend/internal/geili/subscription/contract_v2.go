@@ -195,6 +195,16 @@ func ContractSummary(c *Contract, lots []Lot, used float64, now time.Time) Summa
 		used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(RetiredDailyUsage(lots, now, c.StartsAt))).Round(10).InexactFloat64()
 		used = math.Max(0, used)
 	}
+	// geili hook: pending legacy refunds reserve only their changed units.
+	// Their earlier consumption must not consume unrelated live sibling capacity.
+	if c != nil && c.Mode == ContractModeLegacy {
+		for _, lot := range lots {
+			if lot.Status == "refund_pending" && lot.ExpiresAt.After(now) && lot.DailyWindowStart != nil && DayStart(*lot.DailyWindowStart).Equal(DayStart(now)) {
+				used = decimal.NewFromFloat(used).Sub(decimal.NewFromFloat(lot.DailyUsageUSD)).Round(10).InexactFloat64()
+			}
+		}
+		used = math.Max(0, used)
+	}
 	s := Summary{DailyUsageUSD: used}
 	if c == nil {
 		return s

@@ -59,7 +59,7 @@
                   </span>
                 </div>
                 <p v-if="campaignOnly(subscription) || (subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) <= Date.now())" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.campaignCompatibilityHint') }}</p>
-                <p v-if="subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription)" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.compatibilityHint') }}</p>
+                <p v-if="subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription)" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ legacyOptions.enabled ? t('subscriptionRights.legacyManageHint') : t('subscriptionRights.compatibilityHint') }}</p>
                 <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
                   <span>{{ t('subscriptionRights.active', { count: subscription.quota_summary.active_lot_count }) }}</span>
                   <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }) }}</span>
@@ -68,7 +68,7 @@
                     <ul class="mt-2 space-y-2">
                       <li v-for="lot in subscription.entitlements" :key="lot.id" class="rounded border border-gray-200 p-2 dark:border-dark-600">
                         <p v-if="lot.source_type === 'campaign'" class="font-medium">{{ t('subscriptionRights.campaignGift') }} · {{ t('subscriptionRights.campaignPriority') }}</p>
-                        <p>#{{ lot.id }} · {{ t('subscriptionRights.status') }}: {{ t(`subscriptionRights.status_${lot.status}`) }}</p>
+                        <p>#{{ lot.id }} · {{ t('subscriptionRights.status') }}: {{ t(`subscriptionRights.status_${lot.status === 'active' && Date.parse(lot.expires_at) <= Date.now() ? 'expired' : lot.status}`) }}</p>
                         <p>{{ t('subscriptionRights.created') }}: {{ formatDateTimeToMinute(lot.created_at) }}</p>
                         <p>{{ formatDateTimeToMinute(lot.starts_at) }} → {{ formatDateTimeToMinute(lot.expires_at) }}</p>
                         <p v-if="lot.source_order_id">{{ t('subscriptionRights.sourceOrder') }} #{{ lot.source_order_id }}</p>
@@ -97,6 +97,7 @@
               <template v-if="subscription.status === 'active' && subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) > Date.now()">
                 <button v-for="operation in (subscription.contract.unit_daily_usd < 180 ? ['stack', 'renew', 'upgrade'] as const : ['stack', 'renew'] as const)" :key="operation" class="btn btn-primary px-3 py-1.5 text-xs" @click="router.push({ path: '/purchase', query: { tab: 'subscription', ...(operation === 'upgrade' ? {} : { plan: String(subscription.contract.plan_id) }), operation } })">{{ t(`subscriptionRights.${operation}`) }}</button>
               </template>
+              <button v-else-if="legacyOptions.enabled && legacyOptions.pools.some(pool => pool.subscription_id === subscription.id && pool.lots.some(lot => !lot.reason))" type="button" class="btn btn-primary min-h-11 px-3 py-2 text-xs" @click="router.push({path:'/purchase',query:{tab:'subscription',subscription:String(subscription.id)}})">{{ t('subscriptionRights.legacyManage') }}</button>
               <SubscriptionActionHelp
                 v-else-if="subscription.status === 'active' && subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription) && (!subscription.expires_at || Date.parse(subscription.expires_at) > Date.now())"
                 reason="subscriptionRights.compatibilityHint"
@@ -285,6 +286,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
+import { paymentAPI } from '@/api/payment'
+import type { LegacyManagementOptions } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SubscriptionActionHelp from '@/components/payment/SubscriptionActionHelp.vue'
@@ -316,6 +319,7 @@ const router = useRouter()
 const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
+const legacyOptions = ref<LegacyManagementOptions>({enabled:false,pools:[]})
 const loading = ref(true)
 let refreshTimeout: ReturnType<typeof setTimeout> | undefined
 let unmounted = false
@@ -332,6 +336,7 @@ async function loadSubscriptions(showSpinner = true) {
   try {
     if (showSpinner) loading.value = true
     subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    try { legacyOptions.value = (await paymentAPI.legacySubscriptionOptions()).data } catch { legacyOptions.value = {enabled:false,pools:[]} }
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))

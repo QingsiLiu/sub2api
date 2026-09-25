@@ -31,6 +31,7 @@ const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(unde
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
 const showWarning = vi.hoisted(() => vi.fn())
+const legacyOptionsState = vi.hoisted(() => ({value:{enabled:false,pools:[]} as import('@/types/payment').LegacyManagementOptions}))
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const quoteSubscription = vi.hoisted(() => vi.fn(async (request: { plan_id: number; units?: number; periods?: number }) => {
   const checkout = await getCheckoutInfo.mock.results.at(-1)?.value
@@ -115,6 +116,7 @@ vi.mock('@/api/payment', () => ({
   paymentAPI: {
     getCheckoutInfo,
     quoteSubscription,
+    legacySubscriptionOptions: vi.fn(async () => ({data:legacyOptionsState.value})),
   },
 }))
 
@@ -1311,5 +1313,70 @@ describe('V2 checkout provider launch integration', () => {
         expect(query.get('units')).toBe('1')
       }
     } finally { popup.mockRestore(); Object.defineProperty(window, 'location', { configurable: true, value: originalLocation }); wrapper.unmount() }
+  })
+})
+
+
+describe('legacy selected-unit checkout', () => {
+  afterEach(() => { legacyOptionsState.value = {enabled:false,pools:[]}; activeSubscriptionState.items = [] })
+  const subscriptions = [{id:277,status:'active',expires_at:'2099-09-27',contract:{mode:'legacy_daily'}}] as UserSubscription[]
+  function enableLegacy() {
+    legacyOptionsState.value = {enabled:true,pools:[{subscription_id:277,management_mode:'legacy_lots',lots:[
+      {id:288,status:'active',expires_at:'2099-09-26T19:10:00+08:00',daily_limit_usd:45,plan_id:7,kind:'month',period_days:30,upgrade_plan_ids:[8]},
+      {id:295,status:'active',expires_at:'2099-09-27T13:15:00+08:00',daily_limit_usd:45,plan_id:7,kind:'month',period_days:30,upgrade_plan_ids:[8]},
+      {id:4,status:'expired',expires_at:'2000-01-01',daily_limit_usd:45,reason:'inactive',upgrade_plan_ids:[]}
+    ]}]}
+  }
+  it('quotes selected lots and sends only the signed accepted price to payment', async () => {
+    enableLegacy()
+    quoteSubscription.mockResolvedValue({data:{quote_id:'legacy-signed',expires_at:'2099-01-01',order_amount:15,projected:{daily_limit_usd:90,remaining_usd:70,active_lot_count:2}}})
+    const wrapper=await mountSubscriptionConfirm({subscriptions})
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({subscription_id:277,operation:'renew',entitlement_ids:[288,295],periods:1}))
+    const checks=wrapper.findAll('input[type="checkbox"]')
+    expect(checks).toHaveLength(2)
+    await checks[1].setValue(false);await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({entitlement_ids:[288]}))
+    await checks[0].setValue(false);await flushPromises()
+    expect(wrapper.text()).toContain('subscriptionRights.selectionRequired')
+    expect(wrapper.findAll('button').find(b=>b.text().includes('payment.createOrder'))!.attributes('disabled')).toBeDefined()
+    await checks[0].setValue(true);await flushPromises()
+    createOrder.mockResolvedValue({order_id:123,amount:15,pay_amount:15,expires_at:'2099-01-01',qr_code:'synthetic',fee_rate:0})
+    await wrapper.findAll('button').find(b=>b.text().includes('payment.createOrder'))!.trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({quote_id:'legacy-signed',operation:'renew',plan_id:7}))
+    wrapper.unmount()
+  })
+  it('distinguishes full-cycle additions from expiry-aligned stacking', async () => {
+    enableLegacy()
+    const wrapper=await mountSubscriptionConfirm({subscriptions})
+    await wrapper.findAll('button').find(b=>b.text()==='subscriptionRights.legacyPurchase')!.trigger('click');await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({subscription_id:277,operation:'purchase',units:1,entitlement_ids:undefined,expiry_anchor_entitlement_id:undefined}))
+    await wrapper.findAll('button').find(b=>b.text()==='subscriptionRights.stack')!.trigger('click');await flushPromises()
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({operation:'stack',expiry_anchor_entitlement_id:288}))
+    wrapper.unmount()
+  })
+  it('fails closed if the rollout switch is disabled during checkout', async () => {
+    enableLegacy()
+    const wrapper=await mountSubscriptionConfirm({subscriptions})
+    legacyOptionsState.value={enabled:false,pools:[]}
+    document.dispatchEvent(new Event('visibilitychange'));await flushPromises();await flushPromises()
+    const pay=wrapper.findAll('button').find(b=>b.text().includes('payment.createOrder'))
+    expect(pay?.attributes('disabled')).toBeDefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+})
+
+describe('legacy refresh preserves an explicit subset', () => {
+  afterEach(() => {legacyOptionsState.value={enabled:false,pools:[]};activeSubscriptionState.items=[]})
+  it('does not reselect excluded units when the page becomes visible', async () => {
+    const lots=[288,295].map(id=>({id,status:'active',expires_at:'2099-01-01',daily_limit_usd:45,plan_id:7,kind:'month' as const,period_days:30,upgrade_plan_ids:[]}))
+    legacyOptionsState.value={enabled:true,pools:[{subscription_id:277,management_mode:'legacy_lots',lots}]}
+    const wrapper=await mountSubscriptionConfirm({subscriptions:[{id:277,status:'active',expires_at:'2099-01-01',contract:{mode:'legacy_daily'}} as UserSubscription]})
+    await wrapper.findAll('input[type="checkbox"]')[1].setValue(false);await flushPromises()
+    legacyOptionsState.value=JSON.parse(JSON.stringify(legacyOptionsState.value))
+    document.dispatchEvent(new Event('visibilitychange'));await flushPromises();await flushPromises()
+    expect((wrapper.findAll('input[type="checkbox"]')[1].element as HTMLInputElement).checked).toBe(false)
+    expect(quoteSubscription).toHaveBeenLastCalledWith(expect.objectContaining({entitlement_ids:[288]}))
+    wrapper.unmount()
   })
 })

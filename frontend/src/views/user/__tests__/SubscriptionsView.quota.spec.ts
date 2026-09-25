@@ -4,6 +4,7 @@ import SubscriptionsView from '../SubscriptionsView.vue'
 import SubscriptionActionHelp from '@/components/payment/SubscriptionActionHelp.vue'
 
 const { getMySubscriptions } = vi.hoisted(() => ({ getMySubscriptions: vi.fn() }))
+vi.mock('@/api/payment', () => ({ paymentAPI: { legacySubscriptionOptions: vi.fn(async () => ({data:{enabled:false,pools:[]}})) } }))
 vi.mock('@/api/subscriptions', () => ({ default: { getMySubscriptions } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: vi.fn() }) }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))

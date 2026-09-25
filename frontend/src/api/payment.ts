@@ -56,6 +56,10 @@ export const paymentAPI = {
 		return apiClient.post<import('@/types/payment').SubscriptionQuoteResponse>('/payment/subscription-quote', data)
 	},
 
+  legacySubscriptionOptions() {
+    return apiClient.get<import('@/types/payment').LegacyManagementOptions>('/payment/legacy-subscription-options')
+  },
+
   /** Get current user's orders */
   getMyOrders(params?: { page?: number; page_size?: number; status?: string }) {
     return apiClient.get<BasePaginationResponse<PaymentOrder>>('/payment/orders/my', { params })

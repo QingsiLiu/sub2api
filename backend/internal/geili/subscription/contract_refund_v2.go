@@ -59,6 +59,13 @@ func validateContractRefund(ctx context.Context, c *dbent.Client, orderID int64,
 	if current == nil || record.ReversedAt != nil || current.TermID != record.After.TermID || current.Revision != record.After.Revision {
 		return nil, nil, ErrContractRefund
 	}
+	// geili hook: legacy refunds freeze only this order's changed lots.
+	if record.After.Mode == ContractModeLegacy {
+		if err := validateLegacyRefund(ctx, c, current, record, allowFrozen); err != nil {
+			return nil, nil, err
+		}
+		return current, record, nil
+	}
 	if current.Status != "active" && !(allowFrozen && record.Status == "frozen" && current.Status == "suspended") {
 		return nil, nil, ErrContractRefund
 	}
@@ -116,12 +123,15 @@ func FreezeContractRefund(ctx context.Context, c *dbent.Client, orderID int64, n
 	if _, err = c.ExecContext(ctx, `UPDATE subscription_contract_changes SET refund_status='frozen',frozen_parent_status=$2 WHERE order_id=$1`, orderID, current.Status); err != nil {
 		return nil, err
 	}
-	for _, lot := range record.AfterLots {
+	for _, lot := range refundAffectedLots(record) {
 		if lot.Status == "active" {
 			if err = c.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetStatus("refund_pending").Exec(ctx); err != nil {
 				return nil, err
 			}
 		}
+	}
+	if record.After.Mode == ContractModeLegacy {
+		return current, RefreshParent(ctx, c, current.SubscriptionID, now)
 	}
 	if err = c.UserSubscription.UpdateOneID(current.SubscriptionID).SetStatus("suspended").Exec(ctx); err != nil {
 		return nil, err
@@ -142,12 +152,19 @@ func RestoreContractRefund(ctx context.Context, c *dbent.Client, orderID int64, 
 	if !current.ExpiresAt.After(now) {
 		status = "expired"
 	}
-	for _, lot := range record.AfterLots {
+	for _, lot := range refundAffectedLots(record) {
 		if lot.Status == "active" {
 			if err = c.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetStatus(lot.Status).Exec(ctx); err != nil {
 				return nil, err
 			}
 		}
+	}
+	if record.After.Mode == ContractModeLegacy {
+		if err = RefreshParent(ctx, c, current.SubscriptionID, now); err != nil {
+			return nil, err
+		}
+		_, err = c.ExecContext(ctx, `UPDATE subscription_contract_changes SET refund_status='failed' WHERE order_id=$1`, orderID)
+		return loadContractAfterLegacyRefund(ctx, c, current.SubscriptionID, err)
 	}
 	if err = c.UserSubscription.UpdateOneID(current.SubscriptionID).SetStatus(status).Exec(ctx); err != nil {
 		return nil, err
@@ -178,7 +195,7 @@ func RevertContractChange(ctx context.Context, c *dbent.Client, orderID int64, n
 	for _, lot := range record.BeforeLots {
 		originals[lot.ID] = lot
 	}
-	for _, lot := range record.AfterLots {
+	for _, lot := range refundAffectedLots(record) {
 		previous, ok := originals[lot.ID]
 		if !ok {
 			if err = c.UserSubscriptionEntitlement.UpdateOneID(lot.ID).SetStatus("refunded").SetRefundedAt(now).Exec(ctx); err != nil {
@@ -226,6 +243,15 @@ func RevertContractChange(ctx context.Context, c *dbent.Client, orderID int64, n
 	}
 	if err = saveContract(ctx, c, &restored); err != nil {
 		return nil, err
+	}
+	if record.After.Mode == ContractModeLegacy {
+		if err = RefreshParent(ctx, c, restored.SubscriptionID, now); err != nil {
+			return nil, err
+		}
+		if _, err = c.ExecContext(ctx, `UPDATE subscription_contract_changes SET refund_status='reversed',reversed_at=$2 WHERE order_id=$1`, orderID, now); err != nil {
+			return nil, err
+		}
+		return LoadContract(ctx, c, restored.SubscriptionID)
 	}
 	used, err := ReadDailyUsage(ctx, c, restored.SubscriptionID, restored.TermID, now)
 	if err != nil {

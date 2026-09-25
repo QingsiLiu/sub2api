@@ -43,8 +43,8 @@ jobs:
           go test ./...
           go test -tags=unit ./...
           CI=true go test -tags=integration ./...
-          CI=true go test -race -tags=unit,integration ./internal/service -run TestSubscriptionV2Postgres -count=1
-          go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch|Contract|SubscriptionBillingV2|SubscriptionV2|SubscriptionQuotaGeili' -count=1
+          CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres' -count=1
+          go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch|Contract|SubscriptionBillingV2|SubscriptionV2|SubscriptionQuotaGeili|LegacyManagement|LegacyPreview|LegacyStore|LegacyRejects|LegacyCommercial' -count=1
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${CANDIDATE_SHA} -X main.BuildType=release" -o ../sub2api ./cmd/server
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3

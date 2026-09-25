@@ -28,14 +28,16 @@ var errSubscriptionPending = infraerrors.Conflict("SUBSCRIPTION_ORDER_PENDING", 
 // The signed quote is user-bound and domain-separated from payment resume tokens.
 // Only its immutable snapshot is persisted on the payment order.
 type subscriptionV2Quote struct {
-	Version             int             `json:"version"`
-	TokenType           string          `json:"token_type"`
-	UserID              int64           `json:"user_id"`
-	IssuedAt            time.Time       `json:"issued_at"`
-	ExpiresAt           time.Time       `json:"expires_at"`
-	PlanRevision        string          `json:"plan_revision"`
-	CurrentPlanRevision string          `json:"current_plan_revision,omitempty"`
-	Change              geilisub.Change `json:"change"`
+	Legacy              *geilisub.LegacyChange `json:"legacy,omitempty"`
+	LegacyPlanRevisions map[string]string      `json:"legacy_plan_revisions,omitempty"`
+	Version             int                    `json:"version"`
+	TokenType           string                 `json:"token_type"`
+	UserID              int64                  `json:"user_id"`
+	IssuedAt            time.Time              `json:"issued_at"`
+	ExpiresAt           time.Time              `json:"expires_at"`
+	PlanRevision        string                 `json:"plan_revision"`
+	CurrentPlanRevision string                 `json:"current_plan_revision,omitempty"`
+	Change              geilisub.Change        `json:"change"`
 }
 
 func paymentContractPlan(p *dbent.SubscriptionPlan) (geilisub.Plan, error) {
@@ -50,7 +52,7 @@ func paymentContractPlan(p *dbent.SubscriptionPlan) (geilisub.Plan, error) {
 }
 
 func (s *PaymentService) QuoteSubscription(ctx context.Context, req SubscriptionQuoteRequest) (*SubscriptionQuoteResponse, error) {
-	if req.UserID <= 0 || req.PlanID <= 0 {
+	if req.UserID <= 0 || req.PlanID <= 0 || req.SubscriptionID < 0 || (req.SubscriptionID == 0 && (len(req.EntitlementIDs) > 0 || req.ExpiryAnchorEntitlementID != 0)) {
 		return nil, errSubscriptionQuoteInvalid
 	}
 	signer := s.paymentResume()
@@ -68,6 +70,17 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 	c := tx.Client()
 	if _, err = c.User.Query().Unique(false).Where(user.IDEQ(req.UserID), geilisub.LockRows).Only(ctx); err != nil {
 		return nil, err
+	}
+	// geili hook: explicit legacy pool selection never changes V2 eligibility.
+	if req.SubscriptionID > 0 {
+		result, e := s.quoteLegacySubscriptionTx(ctx, c, req)
+		if e != nil {
+			return nil, e
+		}
+		if e = tx.Commit(); e != nil {
+			return nil, e
+		}
+		return result, nil
 	}
 	now := time.Now().Truncate(time.Microsecond)
 	current, err := geilisub.CurrentContract(ctx, c, req.UserID, now)
@@ -181,7 +194,7 @@ func (s *PaymentService) readSubscriptionV2Quote(token string, userID int64, now
 	if err := signer.parseSignedToken(token, &q); err != nil {
 		return nil, errSubscriptionQuoteInvalid
 	}
-	if q.Version != 2 || q.TokenType != "subscription_quote_v2" || q.UserID != userID || q.Change.After.UserID != userID || q.Change.After.PlanID <= 0 || !q.Change.Amount.IsPositive() {
+	if !validSubscriptionQuoteVersion(&q) || q.UserID != userID || q.Change.After.UserID != userID || q.Change.After.PlanID <= 0 || !q.Change.Amount.IsPositive() {
 		return nil, errSubscriptionQuoteInvalid
 	}
 	if !now.Before(q.ExpiresAt) || q.IssuedAt.After(now.Add(time.Second)) || q.ExpiresAt.Sub(q.IssuedAt) > 5*time.Minute {
@@ -221,6 +234,10 @@ func (s *PaymentService) validateSubscriptionV2OrderTx(ctx context.Context, c *d
 	}
 	if err = checkSubscriptionPending(ctx, c, req.UserID); err != nil {
 		return err
+	}
+	// geili hook: V3 quotes retain exact selected legacy lots.
+	if q.Version == 3 {
+		return s.validateLegacyOrderTx(ctx, c, q)
 	}
 	current, err := geilisub.CurrentContract(ctx, c, req.UserID, time.Now())
 	if err != nil {
@@ -326,11 +343,11 @@ func isSubscriptionV2Order(o *dbent.PaymentOrder) bool {
 	}
 	switch v := v.(type) {
 	case int:
-		return v == 2
+		return v == 2 || v == 3
 	case float64:
-		return v == 2
+		return v == 2 || v == 3
 	case json.Number:
-		return v == "2"
+		return v == "2" || v == "3"
 	}
 	return false
 }
@@ -346,7 +363,7 @@ func readSubscriptionV2Snapshot(o *dbent.PaymentOrder) (*subscriptionV2Quote, er
 	if err = json.Unmarshal(raw, &q); err != nil {
 		return nil, err
 	}
-	if q.UserID != o.UserID || q.Version != 2 || q.Change.After.PlanID <= 0 {
+	if q.UserID != o.UserID || !validSubscriptionQuoteVersion(&q) || q.Change.After.PlanID <= 0 {
 		return nil, errSubscriptionQuoteInvalid
 	}
 	return &q, nil
@@ -361,6 +378,9 @@ func (s *PaymentService) applySubscriptionV2Payment(ctx context.Context, c *dben
 		return nil, err
 	}
 	change := q.Change
+	if q.Version == 3 {
+		return geilisub.ApplyLegacyChange(ctx, c, change, q.Legacy, o.ID, time.Now())
+	}
 	if change.Before == nil {
 		current, err := geilisub.CurrentContract(ctx, c, o.UserID, time.Now())
 		if err != nil {
@@ -444,7 +464,11 @@ func (s *PaymentService) ensureSubscriptionV2Assigned(ctx context.Context, o *db
 			return err
 		}
 		subscriptionID = contract.SubscriptionID
-		detail, err := json.Marshal(map[string]any{"subscription_id": subscriptionID, "term_id": contract.TermID, "revision": contract.Revision, "version": 2})
+		version := 2
+		if snapshot, e := readSubscriptionV2Snapshot(o); e == nil {
+			version = snapshot.Version
+		}
+		detail, err := json.Marshal(map[string]any{"subscription_id": subscriptionID, "term_id": contract.TermID, "revision": contract.Revision, "version": version})
 		if err != nil {
 			return err
 		}
@@ -482,4 +506,10 @@ func (s *PaymentService) fulfillPaymentWebhook(ctx context.Context, id int64) er
 		}
 	}
 	return err
+}
+
+// Versioned legacy orders use the same idempotent paid-review/refund lifecycle,
+// never the pre-migration order fallback.
+func validSubscriptionQuoteVersion(q *subscriptionV2Quote) bool {
+	return q != nil && (q.Version == 2 && q.TokenType == "subscription_quote_v2" && q.Legacy == nil || q.Version == 3 && q.TokenType == "subscription_quote_legacy_v3" && q.Legacy != nil && q.Change.Before != nil && q.Change.Before.Mode == geilisub.ContractModeLegacy && q.Change.After.SubscriptionID == q.Change.Before.SubscriptionID && q.Legacy.Target.ID == q.Change.After.PlanID && len(q.Legacy.Lines) > 0)
 }
