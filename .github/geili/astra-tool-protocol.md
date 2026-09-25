@@ -33,6 +33,6 @@ HTTP 回归覆盖三个入口 × 流式/非流式 × 真实模型名/渠道别�
 
 ## 发布与恢复
 
-版本、revision、不可变镜像 digest 和部署状态以 `RELEASES.md` 为准。本候选 revision `9d51db957954ddc01c25f4eca5ab3b19e8167f25`、镜像 `ghcr.io/qingsiliu/sub2api@sha256:22187d5bb250ab20b36a7814ceefe612d028faa697af7f9adbebc993ab12b750` 已通过前端、Go 默认/单元/集成、订阅竞态和 PostgreSQL 支付门禁；2026-09-25 17:05 已部署 Stage，55项 Astra 真实HTTP模拟验收和281项通用业务全部通过：三个入口的原名/账号别名、流式/非流式均跳过高优先级 Chat-only 账号，保留工具和 high 推理；无兼容账号503且零上游请求，纯文本保持兼容。配置已恢复、合成夹具停用、生产指纹未变。候选仍标记 `production_ready=false`，待本候选双实例缓存复验、外部沙箱/限额联调和生产授权；详细记录在运维仓 `docs/reports/astra-tool-protocol-stage-20260925.md`。生产目前仍靠账号暂停止血；永久保护须走候选 CI → Stage 验收 → 当次用户授权后同一 digest 上生产。
+版本、revision、不可变镜像 digest 和部署状态以 `RELEASES.md` 为准。本候选 revision `9d51db957954ddc01c25f4eca5ab3b19e8167f25`、镜像 `ghcr.io/qingsiliu/sub2api@sha256:22187d5bb250ab20b36a7814ceefe612d028faa697af7f9adbebc993ab12b750` 已通过前端、Go 默认/单元/集成、订阅竞态和 PostgreSQL 支付门禁；2026-09-25 17:05 已部署 Stage，55项 Astra 真实HTTP模拟验收和281项通用业务全部通过：三个入口的原名/账号别名、流式/非流式均跳过高优先级 Chat-only 账号，保留工具和 high 推理；无兼容账号503且零上游请求，纯文本保持兼容。配置已恢复、合成夹具停用、生产指纹未变。候选仍标记 `production_ready=false`，本候选源码新编译的本地双实例/Redis故障恢复15项也全部通过，待外部沙箱/限额联调和生产授权；详细记录在运维仓 `docs/reports/astra-tool-protocol-stage-20260925.md`。生产目前仍靠账号暂停止血；永久保护须走候选 CI → Stage 验收 → 当次用户授权后同一 digest 上生产。
 
 不自动恢复账号 6098。先验证其 Astra Responses 工具与推理组合，再按运维仓的变更记录及用户授权恢复调度。历史其他模型的 Responses 成功记录不足以证明 Astra 兼容性。
