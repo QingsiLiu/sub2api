@@ -1138,15 +1138,17 @@ func TestBuildChatStreamErrorSSE(t *testing.T) {
 }
 
 func TestGPT6RawChatRejectsReasoningToolCalls(t *testing.T) {
-	for _, model := range []string{"gpt-6-sol", "gpt-6-luna"} {
+	for _, model := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"} {
 		rec := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(rec)
 		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-		account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"public": model}}}
-		svc := &OpenAIGatewayService{}
+		account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "fixture-key", "model_mapping": map[string]any{"public": model}}}
+		svc := &OpenAIGatewayService{cfg: &config.Config{}}
 		_, err := svc.forwardAsRawChatCompletions(context.Background(), c, account, []byte(`{"model":"public","messages":[{"role":"user","content":"hello"}],"tools":[{"type":"function","function":{"name":"lookup"}}]}`), "")
-		require.ErrorContains(t, err, "requires Responses")
-		require.Equal(t, 400, rec.Code)
+		var failover *UpstreamFailoverError
+		require.ErrorAs(t, err, &failover)
+		require.Contains(t, string(failover.ResponseBody), "requires Responses")
+		require.False(t, c.Writer.Written(), "protocol mismatch should switch accounts instead of returning 400")
 	}
 }
 

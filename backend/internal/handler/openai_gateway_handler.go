@@ -634,6 +634,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	needsResponses := nativeV2 || legacyCompact
 	requiredCapability := openAIResponsesRequiredCapabilityForRequest(imageIntent, needsResponses, requestPlatform)
 
+	// geili hook: retain tool requirements across model mapping, sticky routing and failover.
+	c.Request = c.Request.WithContext(service.WithOpenAIToolProtocolRequirement(c.Request.Context(), body))
+
 	// 分组利润控制：请求级装配定价上下文——pricingAt 固定本请求的
 	// D 与计费高峰因子，选号、槽位终检与全部 failover 重入共用同一门与阈值。
 	// 生图意图只影响能力路由与图片计费，不关门：混合 /v1/responses 请求的
@@ -1257,6 +1260,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	var lastFailoverErr *service.UpstreamFailoverError
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 	effectiveMappedModel := preferredMappedModel
+
+	// geili hook: retain tool requirements across model mapping, sticky routing and failover.
+	c.Request = c.Request.WithContext(service.WithOpenAIMessagesToolProtocolRequirement(
+		c.Request.Context(), body, openAIChannelForwardModel(channelMappingMsg, reqModel), effectiveMappedModel,
+	))
 
 	// 分组利润控制：Messages 文本入口同样请求级装门并固定 pricingAt。
 	msgPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)

@@ -437,6 +437,10 @@ func openAICompatibleAccountEligibilityFailureReasonBeforeProfit(ctx context.Con
 	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
 		return "model_not_supported"
 	}
+	// geili hook: mapped GPT-6 tool requests cannot use a Chat-only account.
+	if !openAIAccountSupportsToolProtocol(ctx, account, requestedModel) {
+		return "responses_required_for_tools"
+	}
 	if !account.SupportsOpenAIEndpointCapability(requiredCapability) {
 		if account.IsGrok() && requiredCapability == OpenAIEndpointCapabilityGrokMediaGeneration {
 			_, reason := account.GrokMediaGenerationEligibility()

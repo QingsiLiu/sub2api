@@ -1815,6 +1815,10 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 		s.service.isUpstreamModelRestrictedByChannel(ctx, *req.GroupID, account, req.RequestedModel, req.RequireCompact) {
 		return false, "channel_upstream_restricted"
 	}
+	// geili hook: apply the same tool protocol gate before TopK and sticky selection.
+	if !openAIAccountSupportsToolProtocol(ctx, account, req.RequestedModel) {
+		return false, "responses_required_for_tools"
+	}
 	if !accountSupportsOpenAICapabilities(account, req.RequiredCapability, req.RequiredImageCapability) {
 		return false, "capability_mismatch"
 	}
