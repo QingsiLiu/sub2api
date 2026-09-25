@@ -97,6 +97,12 @@
               <template v-if="subscription.status === 'active' && subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) > Date.now()">
                 <button v-for="operation in (subscription.contract.unit_daily_usd < 180 ? ['stack', 'renew', 'upgrade'] as const : ['stack', 'renew'] as const)" :key="operation" class="btn btn-primary px-3 py-1.5 text-xs" @click="router.push({ path: '/purchase', query: { tab: 'subscription', ...(operation === 'upgrade' ? {} : { plan: String(subscription.contract.plan_id) }), operation } })">{{ t(`subscriptionRights.${operation}`) }}</button>
               </template>
+              <SubscriptionActionHelp
+                v-else-if="subscription.status === 'active' && subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription) && (!subscription.expires_at || Date.parse(subscription.expires_at) > Date.now())"
+                reason="subscriptionRights.compatibilityHint"
+                :subscriptions="subscriptions"
+                :contact-info="appStore.contactInfo"
+              />
             </div>
           </div>
 
@@ -281,6 +287,7 @@ import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import SubscriptionActionHelp from '@/components/payment/SubscriptionActionHelp.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'

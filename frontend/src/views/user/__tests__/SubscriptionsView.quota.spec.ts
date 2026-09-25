@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import SubscriptionsView from '../SubscriptionsView.vue'
+import SubscriptionActionHelp from '@/components/payment/SubscriptionActionHelp.vue'
 
 const { getMySubscriptions } = vi.hoisted(() => ({ getMySubscriptions: vi.fn() }))
 vi.mock('@/api/subscriptions', () => ({ default: { getMySubscriptions } }))
@@ -71,7 +72,11 @@ describe('V2 subscription user quota matrix', () => {
     if (remaining !== null) expect(wrapper.text()).toContain(`$${remaining.toFixed(4)}`)
     expect(wrapper.text().includes('userSubscriptions.unlimited')).toBe(unlimited)
     expect(wrapper.findAll('button').filter(button => ['subscriptionRights.stack', 'subscriptionRights.renew', 'subscriptionRights.upgrade'].some(action => button.text().includes(action))).length).toBe(mode === 'v2' && status === 'active' ? 3 : 0)
-    if (mode === 'legacy_daily') expect(wrapper.text()).toContain('subscriptionRights.compatibilityHint')
+    expect(wrapper.findComponent(SubscriptionActionHelp).exists()).toBe(mode === 'legacy_daily' && status === 'active')
+    if (mode === 'legacy_daily') {
+      expect(wrapper.text()).toContain('subscriptionRights.compatibilityHint')
+      expect(wrapper.findComponent(SubscriptionActionHelp).props('subscriptions')).toHaveLength(1)
+    }
     wrapper.unmount()
   })
 })

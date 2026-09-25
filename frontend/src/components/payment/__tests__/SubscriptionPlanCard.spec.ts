@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
+import type { UserSubscription } from "@/types";
 import type { SubscriptionPlan } from "@/types/payment";
 import SubscriptionPlanCard from "../SubscriptionPlanCard.vue";
 
@@ -41,6 +42,7 @@ const mountPlanCard = (groupPlatform: string, overrides: Partial<SubscriptionPla
         amount: 1000,
         features: [],
         rate_multiplier: 1,
+        daily_limit_usd: 45,
         validity_days: 30,
         validity_unit: "day",
         supported_model_scopes: ["claude", "gemini_text", "gemini_image"],
@@ -48,7 +50,7 @@ const mountPlanCard = (groupPlatform: string, overrides: Partial<SubscriptionPla
         ...overrides,
       },
     },
-    global: { plugins: [i18n, createPinia()] },
+    global: { plugins: [i18n, createPinia()], stubs: { Teleport: true, Transition: false } },
   });
 
 describe("SubscriptionPlanCard", () => {
@@ -147,5 +149,57 @@ describe("SubscriptionPlanCard", () => {
       "justify-end",
     ]));
     expect(badge?.element.parentElement?.textContent).toContain("/ 30payment.days");
+  });
+});
+
+
+describe("SubscriptionPlanCard eligibility feedback", () => {
+  it("explains legacy restrictions without emitting a purchase or changing rights", async () => {
+    const wrapper = mountPlanCard("openai");
+    const subscription = { id: 277, status: "active", expires_at: "2099-09-27T13:15:51+08:00", contract: { mode: "legacy_daily" } } as UserSubscription;
+    await wrapper.setProps({ activeSubscriptions: [subscription], contactInfo: "Support: example" });
+    const buy = wrapper.get("button");
+    expect(buy.attributes("disabled")).toBeDefined();
+    expect(buy.text()).toBe("subscriptionRights.selfServiceUnavailable");
+    expect(buy.classes()).toContain("disabled:cursor-not-allowed");
+    expect(wrapper.classes()).not.toContain("hover:-translate-y-0.5");
+    await buy.trigger("click");
+    expect(wrapper.emitted("select")).toBeUndefined();
+    await wrapper.findAll("button").find(button => button.text() === "subscriptionRights.actionHelp")!.trigger("click");
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.text()).toContain("subscriptionRights.compatibilityHint");
+    expect(dialog.text()).toContain("subscriptionRights.resubscribeAt");
+    expect(dialog.text()).toContain("Support: example");
+    expect(subscription.contract?.mode).toBe("legacy_daily");
+    expect(wrapper.emitted("select")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("distinguishes a pending eligibility check from an unavailable purchase", async () => {
+    const wrapper = mountPlanCard("openai");
+    await wrapper.setProps({ loading: true });
+    expect(wrapper.get("button").text()).toBe("subscriptionRights.loading");
+    expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+    await wrapper.get("button").trigger("click");
+    expect(wrapper.emitted("select")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("subscriptionRights.actionHelp");
+    await wrapper.setProps({ loading: false });
+    expect(wrapper.get("button").attributes("disabled")).toBeUndefined();
+    await wrapper.get("button").trigger("click");
+    expect(wrapper.emitted("select")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("restores purchasing when refreshed legacy rights have expired", async () => {
+    const wrapper = mountPlanCard("openai");
+    const subscription = { id: 277, status: "active", expires_at: "2099-09-27T13:15:51+08:00", contract: { mode: "legacy_daily" } } as UserSubscription;
+    await wrapper.setProps({ activeSubscriptions: [subscription] });
+    expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+    await wrapper.setProps({ activeSubscriptions: [{ ...subscription, expires_at: "2000-01-01T00:00:00Z" }] });
+    expect(wrapper.get("button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("subscriptionRights.actionHelp");
+    await wrapper.get("button").trigger("click");
+    expect(wrapper.emitted("select")).toHaveLength(1);
+    wrapper.unmount();
   });
 });

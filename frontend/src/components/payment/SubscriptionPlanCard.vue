@@ -2,7 +2,7 @@
   <div
     :class="[
       'group relative flex flex-col overflow-hidden rounded-2xl border transition-all',
-      'hover:shadow-xl hover:-translate-y-0.5',
+      canSelect && 'hover:shadow-xl hover:-translate-y-0.5',
       borderClass,
       'bg-white dark:bg-dark-800',
     ]"
@@ -80,13 +80,18 @@
       <!-- Subscribe Button -->
       <button
         type="button"
-        :class="['w-full rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.98]', btnClass]"
-        :disabled="loading || !eligibility.actions.length"
-        @click="emit('select', plan)"
+        :class="['min-h-11 w-full rounded-xl py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50', canSelect && 'active:scale-[0.98]', btnClass]"
+        :disabled="!canSelect"
+        @click="selectPlan"
       >
-        {{ eligibility.actions.includes('upgrade') ? t('subscriptionRights.upgrade') : isRenewal ? t('subscriptionRights.manage') : t('payment.subscribeNow') }}
+        {{ loading ? t('subscriptionRights.loading') : !eligibility.actions.length ? t('subscriptionRights.selfServiceUnavailable') : eligibility.actions.includes('upgrade') ? t('subscriptionRights.upgrade') : isRenewal ? t('subscriptionRights.manage') : t('payment.subscribeNow') }}
       </button>
-      <p v-if="eligibility.reason" class="mt-2 text-xs text-gray-500 dark:text-dark-400">{{ t(eligibility.reason) }}</p>
+      <template v-if="!loading && eligibility.reason">
+        <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">{{ t(eligibility.reason) }}</p>
+        <div class="mt-2">
+          <SubscriptionActionHelp :reason="eligibility.reason" :subscriptions="activeSubscriptions ?? []" :contact-info="contactInfo" />
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -97,6 +102,7 @@ import { useI18n } from 'vue-i18n'
 import type { SubscriptionPlan } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import { subscriptionActions } from '@/utils/subscriptionV2'
+import SubscriptionActionHelp from './SubscriptionActionHelp.vue'
 import { planValiditySuffix } from './validity'
 import { currencySymbol } from '@/components/payment/currency'
 import {
@@ -110,11 +116,16 @@ import {
   platformLabel,
 } from '@/utils/platformColors'
 
-const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[]; loading?: boolean }>()
+const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[]; loading?: boolean; contactInfo?: string }>()
 const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
 
 const eligibility = computed(() => subscriptionActions(props.plan, props.activeSubscriptions ?? []))
+const canSelect = computed(() => !props.loading && eligibility.value.actions.length > 0)
+function selectPlan() {
+  if (canSelect.value) emit('select', props.plan)
+}
+
 const platform = computed(() => props.plan.group_platform || '')
 const isRenewal = computed(() =>
   props.activeSubscriptions?.some(s =>

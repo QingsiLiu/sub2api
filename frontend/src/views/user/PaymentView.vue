@@ -220,7 +220,7 @@
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" @select="selectPlan" />
+                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlan" />
               </div>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
@@ -274,7 +274,7 @@
             </button>
             <h3 class="mb-4 shrink-0 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
             <div class="min-h-0 space-y-4 overflow-y-auto">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" @select="selectPlanFromModal" />
+              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="eligibilitySubscriptions" :loading="!subscriptionsReady" :contact-info="appStore.contactInfo" @select="selectPlanFromModal" />
             </div>
           </div>
         </div>
@@ -816,9 +816,16 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
 }
 
 function selectPlan(plan: SubscriptionPlan) {
-  if (!subscriptionsReady.value || !subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value).actions.length) return
+  if (!subscriptionsReady.value) {
+    appStore.showInfo(t('subscriptionRights.loading'))
+    return
+  }
+  const { actions, reason } = subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value)
+  if (!actions.length) {
+    appStore.showInfo(t(reason ?? 'subscriptionRights.unavailablePlan'))
+    return
+  }
   selectedPlan.value = plan
-  const actions = subscriptionActions(plan, eligibilitySubscriptions.value, eligibilityNow.value).actions
   subscriptionMode.value = actions.includes('renew') ? 'renew' : actions[0] ?? 'purchase'
   subscriptionPeriods.value = 1
   subscriptionQuantity.value = 1
