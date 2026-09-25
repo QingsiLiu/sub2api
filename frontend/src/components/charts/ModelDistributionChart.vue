@@ -1,5 +1,6 @@
 <template>
   <div class="card p-4">
+    <p v-if="displayModelStats.some(row => row.token_counts_complete === false || row.standard_cost_complete === false || row.unknown_amount_count)" class="mb-3 text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('financial.partialTotal') }}</p>
     <div class="mb-4 flex items-center justify-between gap-3">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
         {{ !enableRankingView || activeView === 'model_distribution'
@@ -104,7 +105,8 @@
       class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6"
     >
       <div class="h-48 w-48 shrink-0">
-        <Doughnut :data="chartData" :options="doughnutOptions" />
+        <Doughnut v-if="metric !== 'tokens' || !displayModelStats.some(row => row.token_counts_complete === false)" :data="chartData" :options="doughnutOptions" />
+        <p v-else class="flex h-full items-center text-center text-xs text-amber-700 dark:text-amber-300">{{ t('financial.partialTotal') }}</p>
       </div>
       <div class="max-h-48 w-full min-w-0 flex-1 overflow-auto">
         <table class="w-full text-xs">
@@ -133,23 +135,23 @@
                   <span class="inline-flex items-center gap-1">
                     <svg v-if="enableBreakdown && expandedKey === `model-${model.model}`" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     <svg v-else-if="enableBreakdown" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    {{ model.model }}
+                    {{ model.model || t('financial.unknown') }}
                   </span>
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
                   {{ formatNumber(model.requests) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
-                  {{ formatTokens(model.total_tokens) }}
+                  {{ model.token_counts_complete === false ? t('financial.unknown') : formatTokens(model.total_tokens) }}
                 </td>
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
-                  ${{ formatCost(model.actual_cost) }}
+                  ${{ formatCost(model.actual_cost) }}<span v-if="model.unknown_amount_count" class="ml-1 text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
                 </td>
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
-                  ${{ formatCost(model.account_cost) }}
+                  {{ model.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(model.account_cost) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
-                  ${{ formatCost(model.cost) }}
+                  {{ model.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(model.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === `model-${model.model}`">

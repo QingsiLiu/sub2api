@@ -1,5 +1,5 @@
 <template>
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-4">
     <div class="card p-4 flex items-center gap-3">
       <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30 text-blue-600">
         <Icon name="document" size="md" />
@@ -63,18 +63,22 @@
         <Icon name="dollar" size="md" />
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-medium text-gray-500">{{ t('usage.totalCost') }}</p>
+        <p class="text-xs font-medium text-gray-500">{{ stats?.unknown_amount_count ? t('financial.knownAmount') : t('financial.actualSpending') }}</p>
         <p class="text-xl font-bold text-green-600">
-          ${{ (stats?.total_actual_cost || 0).toFixed(4) }}
+          {{ financialMoney(stats?.total_actual_cost, t('financial.unknown')) }}
         </p>
+        <div v-if="stats?.balance_actual_cost != null || stats?.subscription_actual_cost != null" class="mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-300" data-testid="financial-spending-split">
+          <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.balance_actual_cost, t('financial.unknown')) }}</p>
+          <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.subscription_actual_cost, t('financial.unknown')) }}</p>
+        </div>
         <p class="text-xs text-gray-400">
           <template v-if="showAccountCost && totalAccountCost != null">
-            <span class="text-orange-500">{{ t('usage.accountCost') }} ${{ totalAccountCost.toFixed(4) }}</span>
+            <span class="text-orange-500">{{ t('usage.accountCost') }} {{ stats?.standard_cost_complete === false ? t('financial.unknown') : financialMoney(totalAccountCost, t('financial.unknown')) }}</span>
             <span> · </span>
           </template>
           <span>
             {{ t('usage.standardCost') }}
-            <span :class="{ 'line-through': strikeStandardCost }">${{ (stats?.total_cost || 0).toFixed(4) }}</span>
+            <span :class="{ 'line-through': strikeStandardCost }">{{ stats?.standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats?.total_cost, t('financial.unknown')) }}</span>
           </span>
         </p>
       </div>
@@ -86,6 +90,7 @@
       <div><p class="text-xs font-medium text-gray-500">{{ t('usage.avgDuration') }}</p><p class="text-xl font-bold">{{ formatDuration(stats?.average_duration_ms || 0) }}</p></div>
     </div>
   </div>
+  <FinancialUsageNotice v-if="stats" :stats="stats" class="mt-3" />
 </template>
 
 <script setup lang="ts">
@@ -93,6 +98,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import type { UsageStatsResponse } from '@/types'
+import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
+import { financialMoney } from '@/utils/financialUsage'
 import Icon from '@/components/icons/Icon.vue'
 
 const props = withDefaults(defineProps<{
@@ -117,6 +124,7 @@ const formatDuration = (ms: number) =>
   ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
 
 const formatTokens = (value: number) => {
+  if (props.stats?.token_counts_complete === false) return t('financial.unknown')
   if (value >= 1e9) return (value / 1e9).toFixed(2) + 'B'
   if (value >= 1e6) return (value / 1e6).toFixed(2) + 'M'
   if (value >= 1e3) return (value / 1e3).toFixed(2) + 'K'

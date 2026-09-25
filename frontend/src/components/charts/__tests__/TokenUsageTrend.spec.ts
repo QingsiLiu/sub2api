@@ -118,3 +118,13 @@ describe('TokenUsageTrend', () => {
     expect(hitRateDataset.data[0]).toBe(50)
   })
 })
+
+it('leaves gaps for unknown historical tokens instead of plotting an exact zero', () => {
+  const wrapper = mount(TokenUsageTrend, {
+    props: { trendData: [{ date: '2026-09-25', requests: 1, input_tokens: 0, output_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0, total_tokens: 0, cost: 0, actual_cost: 10.84225728, token_counts_complete: false }] },
+    global: { stubs: { LoadingSpinner: true } },
+  })
+  const chartData = JSON.parse(wrapper.get('.chart-data').text())
+  expect(chartData.datasets.every((dataset: { data: unknown[] }) => dataset.data[0] === null)).toBe(true)
+  expect(wrapper.text()).toContain('financial.partialTotal')
+})

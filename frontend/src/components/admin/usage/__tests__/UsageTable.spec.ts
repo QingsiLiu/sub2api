@@ -306,7 +306,7 @@ describe('admin UsageTable tooltip', () => {
     wrapper.unmount()
   })
 
-  it('uses eight decimal places for missing cost values', async () => {
+  it('shows unknown rather than zero for missing cost evidence', async () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{ ...baseImageRow, billing_mode: 'per_request', image_count: 0, total_cost: undefined, actual_cost: undefined }],
@@ -318,7 +318,8 @@ describe('admin UsageTable tooltip', () => {
     const triggers = wrapper.findAll('.group.relative')
     await triggers[triggers.length - 1].trigger('mouseenter')
     const amounts = wrapper.get('.fixed').findAll('span').map(span => span.text()).filter(text => text.startsWith('$'))
-    expect(amounts).toEqual(['$0.00000000', '$0.00000000', '$0.00000000', '$0.00000000'])
+    expect(amounts).toEqual([])
+    expect(wrapper.get('.fixed').text()).toContain('financial.unknown')
     wrapper.unmount()
   })
 
@@ -852,5 +853,29 @@ describe('admin UsageTable deleted-user badge', () => {
 
     expect(wrapper.text()).not.toContain('Deleted')
     expect(wrapper.text()).toContain('active@test.com')
+  })
+})
+
+
+describe('financial recovery evidence', () => {
+  it('renders recovered money while preserving unknown model, tokens and rates', () => {
+    const wrapper = mount(UsageTable, {
+      props: { data: [{ ...baseImageRow, model: null, input_tokens: null, output_tokens: null, total_cost: null, actual_cost: 10.84225728, rate_multiplier: null, image_count: null, billing_mode: null, record_source: 'historical_recovery', record_completeness: 'partial', unknown_fields: ['model', 'input_tokens', 'billing_mode'] }], columns: [] },
+      global: { stubs: { DataTable: DataTableStub, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.text()).toContain('$10.842257')
+    expect(wrapper.text()).toContain('financial.unknown')
+    expect(wrapper.text()).toContain('financial.sourceRecovery')
+    expect(wrapper.text()).toContain('financial.partial')
+    wrapper.unmount()
+  })
+  it('does not present unverified historical amounts as free calls', () => {
+    const wrapper = mount(UsageTable, {
+      props: { data: [{ ...baseImageRow, actual_cost: null, total_cost: null, record_source: 'historical_recovery', record_completeness: 'amount_unknown' }], columns: [] },
+      global: { stubs: { DataTable: DataTableStub, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.text()).toContain('financial.amountPending')
+    expect(wrapper.text()).not.toContain('$0.000000')
+    wrapper.unmount()
   })
 })

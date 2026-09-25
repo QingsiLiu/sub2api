@@ -6,6 +6,8 @@
 import { apiClient } from './client'
 import type {
   UsageLog,
+  UsageDateBasis,
+  FinancialDashboardMetadata,
   UsageQueryParams,
   UsageStatsResponse,
   PaginatedResponse,
@@ -30,7 +32,7 @@ export interface PlatformDashboardStats {
   today_actual_cost: number
 }
 
-export interface UserDashboardStats {
+export interface UserDashboardStats extends FinancialDashboardMetadata {
   total_api_keys: number
   active_api_keys: number
   total_requests: number
@@ -56,6 +58,7 @@ export interface UserDashboardStats {
 }
 
 export interface TrendParams {
+  date_basis?: UsageDateBasis
   subscription_id?: number | null
   start_date?: string
   end_date?: string
@@ -258,8 +261,8 @@ export async function getById(id: number): Promise<UsageLog> {
  * Get user dashboard statistics
  * @returns Dashboard statistics for current user
  */
-export async function getDashboardStats(): Promise<UserDashboardStats> {
-  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard/stats')
+export async function getDashboardStats(params?: { date_basis?: UsageDateBasis; timezone?: string }): Promise<UserDashboardStats> {
+  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard/stats', { params })
   return data
 }
 
@@ -284,6 +287,7 @@ export async function getDashboardModels(params?: {
   api_key_id?: number
   model?: string
   model_source?: 'requested'
+  date_basis?: UsageDateBasis
   group_id?: number
   request_type?: UsageRequestType
   stream?: boolean

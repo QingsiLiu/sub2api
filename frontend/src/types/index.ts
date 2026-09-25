@@ -1773,7 +1773,47 @@ export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber'
 export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
+// geili hook: financial evidence may be complete, recovered, or still unknown.
+export type UsageDateBasis = 'accounting' | 'completed'
+export type UsageRecordSource = 'live' | 'legacy_log' | 'historical_recovery'
+export type UsageRecordCompleteness = 'complete' | 'partial' | 'amount_unknown'
+export interface FinancialStatsMetadata {
+  balance_actual_cost?: number
+  subscription_actual_cost?: number
+  detail_pending_count?: number
+  unknown_amount_count?: number
+  incomplete_record_count?: number
+  standard_cost_complete?: boolean
+  token_counts_complete?: boolean
+  date_basis?: UsageDateBasis
+}
+export interface FinancialDashboardMetadata {
+  total_balance_actual_cost?: number
+  total_subscription_actual_cost?: number
+  total_detail_pending_count?: number
+  total_unknown_amount_count?: number
+  total_incomplete_record_count?: number
+  total_standard_cost_complete?: boolean
+  total_token_counts_complete?: boolean
+  today_balance_actual_cost?: number
+  today_subscription_actual_cost?: number
+  today_detail_pending_count?: number
+  today_unknown_amount_count?: number
+  today_incomplete_record_count?: number
+  today_standard_cost_complete?: boolean
+  today_token_counts_complete?: boolean
+  date_basis?: UsageDateBasis
+}
+
 export interface UsageLog {
+  record_source?: UsageRecordSource
+  record_completeness?: UsageRecordCompleteness
+  accounting_date?: string | null
+  settled_at?: string | null
+  completed_at?: string | null
+  detail_pending?: boolean
+  unknown_fields?: string[]
+
   billing_source?: 'balance' | 'subscription'
   subscription_name?: string
   target_group_name?: string
@@ -1782,7 +1822,7 @@ export interface UsageLog {
   api_key_id: number
   account_id: number | null
   request_id: string
-  model: string
+  model: string | null
   service_tier?: string | null
   reasoning_effort?: string | null
   inbound_endpoint?: string | null
@@ -1791,53 +1831,53 @@ export interface UsageLog {
   group_id: number | null
   subscription_id: number | null
 
-  input_tokens: number
-  output_tokens: number
-  cache_creation_tokens: number
-  cache_read_tokens: number
-  cache_creation_5m_tokens: number
-  cache_creation_1h_tokens: number
+  input_tokens: number | null
+  output_tokens: number | null
+  cache_creation_tokens: number | null
+  cache_read_tokens: number | null
+  cache_creation_5m_tokens: number | null
+  cache_creation_1h_tokens: number | null
 
-  input_cost: number
-  output_cost: number
-  cache_creation_cost: number
-  cache_read_cost: number
-  total_cost: number
-  actual_cost: number
-  rate_multiplier: number
-  long_context_billing_applied: boolean
+  input_cost: number | null
+  output_cost: number | null
+  cache_creation_cost: number | null
+  cache_read_cost: number | null
+  total_cost: number | null
+  actual_cost: number | null
+  rate_multiplier: number | null
+  long_context_billing_applied: boolean | null
   billing_type: number
 
-  request_type?: UsageRequestType
-  stream: boolean
-  openai_ws_mode?: boolean
-  native_compaction_v2: boolean
+  request_type?: UsageRequestType | null
+  stream: boolean | null
+  openai_ws_mode?: boolean | null
+  native_compaction_v2: boolean | null
   duration_ms: number | null
   first_token_ms: number | null
 
   // 图片生成字段
-  image_count: number
+  image_count: number | null
   image_size: string | null
   image_input_size: string | null
   image_output_size: string | null
   image_size_source: ImageSizeSource | null
   image_size_breakdown: ImageSizeBreakdown | null
-  image_input_tokens: number
-  image_input_cost: number
-  image_output_tokens: number
-  image_output_cost: number
+  image_input_tokens: number | null
+  image_input_cost: number | null
+  image_output_tokens: number | null
+  image_output_cost: number | null
 
   // User-Agent
   user_agent: string | null
   ip_address?: string | null
 
   // Cache TTL Override
-  cache_ttl_overridden: boolean
+  cache_ttl_overridden: boolean | null
 
   // 计费模式
   billing_mode?: string | null
 
-  created_at: string
+  created_at: string | null
 
   user?: User
   api_key?: ApiKey
@@ -1955,7 +1995,7 @@ export interface RedeemCodeRequest {
 
 // ==================== Dashboard & Statistics ====================
 
-export interface DashboardStats {
+export interface DashboardStats extends FinancialDashboardMetadata {
   // 用户统计
   total_users: number
   today_new_users: number // 今日新增用户数
@@ -2006,7 +2046,7 @@ export interface DashboardStats {
   tpm: number // 近5分钟平均每分钟Token数
 }
 
-export interface UsageStatsResponse {
+export interface UsageStatsResponse extends FinancialStatsMetadata {
   period?: string
   total_requests: number
   total_input_tokens: number
@@ -2026,7 +2066,7 @@ export interface UsageStatsResponse {
 
 // ==================== Trend & Chart Types ====================
 
-export interface TrendDataPoint {
+export interface TrendDataPoint extends FinancialStatsMetadata {
   date: string
   requests: number
   input_tokens: number
@@ -2038,7 +2078,7 @@ export interface TrendDataPoint {
   actual_cost: number // 实际扣除
 }
 
-export interface ModelStat {
+export interface ModelStat extends FinancialStatsMetadata {
   model: string
   requests: number
   input_tokens: number
@@ -2051,7 +2091,7 @@ export interface ModelStat {
   account_cost?: number // 账号成本（仅管理员接口返回）
 }
 
-export interface EndpointStat {
+export interface EndpointStat extends FinancialStatsMetadata {
   endpoint: string
   requests: number
   total_tokens: number
@@ -2059,7 +2099,7 @@ export interface EndpointStat {
   actual_cost: number
 }
 
-export interface GroupStat {
+export interface GroupStat extends FinancialStatsMetadata {
   group_id: number
   group_name: string
   requests: number
@@ -2308,6 +2348,7 @@ export interface UserErrorListParams {
 }
 
 export interface UsageQueryParams {
+  date_basis?: UsageDateBasis
   subscription_id?: number | null
   page?: number
   page_size?: number

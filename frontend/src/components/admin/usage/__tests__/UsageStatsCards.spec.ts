@@ -87,3 +87,34 @@ describe('UsageStatsCards', () => {
     expect(tooltip?.classes()).not.toContain('opacity-0')
   })
 })
+
+
+describe('financial completeness', () => {
+  it('shows actual subscription consumption independently from standard and balance costs', () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: { stats: { ...stats, total_actual_cost: 90, total_cost: 66, balance_actual_cost: 0, subscription_actual_cost: 90 } },
+      global: { stubs: { Icon: true } },
+    })
+    const split = wrapper.get('[data-testid="financial-spending-split"]').text()
+    expect(split).toContain('financial.balanceSpending: $0.0000')
+    expect(split).toContain('financial.subscriptionSpending: $90.0000')
+    expect(wrapper.text()).toContain('$66.0000')
+  })
+  it('labels known subtotals and does not advertise incomplete token/standard sums as exact', () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: { stats: { ...stats, unknown_amount_count: 2, incomplete_record_count: 2, detail_pending_count: 1, standard_cost_complete: false, token_counts_complete: false } },
+      global: { stubs: { Icon: true } },
+    })
+    expect(wrapper.text()).toContain('financial.knownAmount')
+    expect(wrapper.text()).toContain('financial.unknown')
+    expect(wrapper.get('[data-testid="financial-usage-notice"]').text()).toContain('financial.amountUnknown')
+    expect(wrapper.text()).not.toContain('184')
+  })
+})
+
+
+it('does not label a partial supplier-cost sum as complete', () => {
+  const wrapper = mount(UsageStatsCards, { props: { stats: { ...stats, total_account_cost: 70, standard_cost_complete: false, incomplete_record_count: 2 } }, global: { stubs: { Icon: true } } })
+  expect(wrapper.text()).toContain('Cost financial.unknown')
+  expect(wrapper.text()).not.toContain('$70.0000')
+})

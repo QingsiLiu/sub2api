@@ -31,3 +31,15 @@ describe('date presets after midnight', () => {
     expect(w.findAll('input[type="date"]')[1].attributes('max')).toBe('2026-10-02')
   })
 })
+
+
+describe('explicit financial calendar timezone', () => {
+  it('uses Beijing month boundaries even when UTC is still the previous month', async () => {
+    vi.setSystemTime(new Date('2026-09-30T16:01:00Z'))
+    const w = mount(DateRangePicker, { props: { startDate: '2026-09-30', endDate: '2026-09-30', timezone: 'Asia/Shanghai' }, global: { stubs: { Icon: true } } })
+    await w.get('.date-picker-trigger').trigger('click')
+    await w.findAll('.date-picker-preset').find(b => b.text() === 'dates.thisMonth')!.trigger('click')
+    await w.get('.date-picker-apply').trigger('click')
+    expect(w.emitted('change')?.[0]?.[0]).toMatchObject({ startDate: '2026-10-01', endDate: '2026-10-01' })
+  })
+})

@@ -108,7 +108,7 @@
                   {{ t('admin.dashboard.todayTokens') }}
                 </p>
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.today_tokens) }}
+                  {{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats.today_tokens) }}
                 </p>
                 <p class="text-xs">
                   <span
@@ -120,13 +120,13 @@
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.today_account_cost) }}</span
+                    >{{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_account_cost, t('financial.unknown')) }}</span
                   >
                   <span class="text-gray-400 dark:text-gray-500"> / </span>
                   <span
                     class="text-gray-400 dark:text-gray-500"
                     :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.today_cost) }}</span
+                    >{{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_cost, t('financial.unknown')) }}</span
                   >
                 </p>
               </div>
@@ -144,7 +144,7 @@
                   {{ t('admin.dashboard.totalTokens') }}
                 </p>
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.total_tokens) }}
+                  {{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats.total_tokens) }}
                 </p>
                 <p class="text-xs">
                   <span
@@ -156,13 +156,13 @@
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.total_account_cost) }}</span
+                    >{{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_account_cost, t('financial.unknown')) }}</span
                   >
                   <span class="text-gray-400 dark:text-gray-500"> / </span>
                   <span
                     class="text-gray-400 dark:text-gray-500"
                     :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.total_cost) }}</span
+                    >{{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_cost, t('financial.unknown')) }}</span
                   >
                 </p>
               </div>
@@ -215,6 +215,15 @@
             </div>
           </div>
         </div>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
+        <div v-if="stats.today_balance_actual_cost != null || stats.today_subscription_actual_cost != null" class="card flex flex-wrap gap-4 p-4 text-sm" data-testid="admin-financial-spending-split">
+          <span>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.today_balance_actual_cost, t('financial.unknown')) }}</span>
+          <span>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.today_subscription_actual_cost, t('financial.unknown')) }}</span>
+          <span v-if="stats.today_unknown_amount_count" class="text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
+        </div>
+        <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
+        <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
 
         <!-- Quick Actions -->
         <div class="card p-4">
@@ -273,7 +282,7 @@
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.timeRange') }}:</span
                 >
-                <DateRangePicker
+                <DateRangePicker timezone="Asia/Shanghai"
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
                   @change="onDateRangeChange"
@@ -355,6 +364,8 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
+import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
+import { dashboardFinancialMetadata, financialMoney, financialDate } from '@/utils/financialUsage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -412,7 +423,7 @@ const rankingLimit = 12
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return financialDate(date)
 }
 
 const getLast24HoursRangeDates = (): { start: string; end: string } => {
@@ -652,6 +663,8 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
   chartsLoading.value = true
   try {
     const response = await adminAPI.dashboard.getSnapshotV2({
+      date_basis: 'accounting',
+      timezone: 'Asia/Shanghai',
       start_date: startDate.value,
       end_date: endDate.value,
       granularity: granularity.value,

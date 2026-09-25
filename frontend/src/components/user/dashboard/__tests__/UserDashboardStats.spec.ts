@@ -152,3 +152,27 @@ describe('UserDashboardStats 按平台拆分', () => {
     expect(w.html()).not.toContain('dashboard.platformBreakdown')
   })
 })
+
+
+describe('financial dashboard evidence', () => {
+  it('shows 90 subscription consumption separately from a 66 standard price', () => {
+    const wrapper = mountStats(makeStats({ today_actual_cost: 90, today_cost: 66, today_balance_actual_cost: 0, today_subscription_actual_cost: 90 }))
+    expect(wrapper.get('[data-testid="today-financial-spending-split"]').text()).toContain('financial.subscriptionSpending: $90.0000')
+    expect(wrapper.text()).toContain('$66.0000')
+    expect(wrapper.text()).toContain('financial.accountingHint')
+  })
+  it('exposes missing history and does not render incomplete token counts as exact', () => {
+    const wrapper = mountStats(makeStats({ today_tokens: 87654321, today_token_counts_complete: false, total_unknown_amount_count: 2, total_standard_cost_complete: false }))
+    expect(wrapper.text()).toContain('financial.unknown')
+    expect(wrapper.text()).toContain('financial.amountUnknown')
+    expect(wrapper.text()).not.toContain('87.7M')
+  })
+})
+
+
+it('does not present incomplete platform token subtotals as an exact total', () => {
+  const wrapper = mountStats(makeStats({ total_token_counts_complete: false, by_platform: [{ platform: 'unknown', total_requests: 5, total_tokens: 4863, total_actual_cost: 95, today_requests: 4, today_tokens: 3242, today_actual_cost: 92 }] }))
+  const card = wrapper.get('[data-testid="platform-card"]').text()
+  expect(card).toContain('financial.unknown')
+  expect(card).not.toContain('4.9K')
+})

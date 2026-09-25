@@ -13,6 +13,7 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingResponse,
   UserBreakdownItem,
+  UsageDateBasis,
   UsageRequestType
 } from '@/types'
 
@@ -45,6 +46,8 @@ export async function getRealtimeMetrics(): Promise<{
 }
 
 export interface TrendParams {
+  date_basis?: UsageDateBasis
+  timezone?: string
   start_date?: string
   end_date?: string
   granularity?: 'day' | 'hour'
@@ -80,6 +83,8 @@ export async function getUsageTrend(params?: TrendParams): Promise<TrendResponse
 }
 
 export interface ModelStatsParams {
+  date_basis?: UsageDateBasis
+  timezone?: string
   start_date?: string
   end_date?: string
   user_id?: number

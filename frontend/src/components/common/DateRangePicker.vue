@@ -89,6 +89,7 @@ interface DatePreset {
 interface Props {
   startDate: string
   endDate: string
+  timezone?: string
 }
 
 interface Emits {
@@ -108,17 +109,20 @@ const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
 const activePreset = ref<string | null>('last24Hours')
 
-const today = () => formatDateToString(new Date())
-
-// Tomorrow's date - used for max date to handle timezone differences
-// When user is in a timezone behind the server, "today" on server might be "tomorrow" locally
+// geili hook: date-only presets follow the explicitly selected accounting zone.
+const calendarNow = () => {
+  const now = new Date()
+  if (!props.timezone) return now
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: props.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+  const value = (type: string) => Number(parts.find(part => part.type === type)?.value)
+  return new Date(value('year'), value('month') - 1, value('day'), 12)
+}
+const today = () => formatDateToString(calendarNow())
 const tomorrow = () => {
-  const d = new Date()
+  const d = calendarNow()
   d.setDate(d.getDate() + 1)
   return formatDateToString(d)
 }
-
-// Helper function to format date to YYYY-MM-DD using local timezone
 const formatDateToString = (date: Date): string => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -139,7 +143,7 @@ const presets: DatePreset[] = [
     labelKey: 'dates.yesterday',
     value: 'yesterday',
     getRange: () => {
-      const d = new Date()
+      const d = calendarNow()
       d.setDate(d.getDate() - 1)
       const yesterday = formatDateToString(d)
       return { start: yesterday, end: yesterday }
@@ -149,7 +153,7 @@ const presets: DatePreset[] = [
     labelKey: 'dates.last24Hours',
     value: 'last24Hours',
     getRange: () => {
-      const end = new Date()
+      const end = calendarNow()
       const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
       return {
         start: formatDateToString(start),
@@ -162,7 +166,7 @@ const presets: DatePreset[] = [
     value: '7days',
     getRange: () => {
       const end = today()
-      const d = new Date()
+      const d = calendarNow()
       d.setDate(d.getDate() - 6)
       const start = formatDateToString(d)
       return { start, end }
@@ -173,7 +177,7 @@ const presets: DatePreset[] = [
     value: '14days',
     getRange: () => {
       const end = today()
-      const d = new Date()
+      const d = calendarNow()
       d.setDate(d.getDate() - 13)
       const start = formatDateToString(d)
       return { start, end }
@@ -184,7 +188,7 @@ const presets: DatePreset[] = [
     value: '30days',
     getRange: () => {
       const end = today()
-      const d = new Date()
+      const d = calendarNow()
       d.setDate(d.getDate() - 29)
       const start = formatDateToString(d)
       return { start, end }
@@ -194,7 +198,7 @@ const presets: DatePreset[] = [
     labelKey: 'dates.thisMonth',
     value: 'thisMonth',
     getRange: () => {
-      const now = new Date()
+      const now = calendarNow()
       const start = formatDateToString(new Date(now.getFullYear(), now.getMonth(), 1))
       return { start, end: today() }
     }
@@ -203,7 +207,7 @@ const presets: DatePreset[] = [
     labelKey: 'dates.lastMonth',
     value: 'lastMonth',
     getRange: () => {
-      const now = new Date()
+      const now = calendarNow()
       const start = formatDateToString(new Date(now.getFullYear(), now.getMonth() - 1, 1))
       const end = formatDateToString(new Date(now.getFullYear(), now.getMonth(), 0))
       return { start, end }

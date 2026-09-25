@@ -1,5 +1,6 @@
 <template>
   <div class="card p-4">
+    <p v-if="displayGroupStats.some(row => row.token_counts_complete === false || row.standard_cost_complete === false || row.unknown_amount_count)" class="mb-3 text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('financial.partialTotal') }}</p>
     <div class="mb-4 flex items-center justify-between gap-3">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
         {{ t('admin.dashboard.groupDistribution') }}
@@ -35,7 +36,8 @@
     </div>
     <div v-else-if="displayGroupStats.length > 0 && chartData" class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
       <div class="h-48 w-48 shrink-0">
-        <Doughnut :data="chartData" :options="doughnutOptions" />
+        <Doughnut v-if="metric !== 'tokens' || !displayGroupStats.some(row => row.token_counts_complete === false)" :data="chartData" :options="doughnutOptions" />
+        <p v-else class="flex h-full items-center text-center text-xs text-amber-700 dark:text-amber-300">{{ t('financial.partialTotal') }}</p>
       </div>
       <div class="max-h-48 w-full min-w-0 flex-1 overflow-auto">
         <table class="w-full text-xs">
@@ -71,16 +73,16 @@
                   {{ formatNumber(group.requests) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
-                  {{ formatTokens(group.total_tokens) }}
+                  {{ group.token_counts_complete === false ? t('financial.unknown') : formatTokens(group.total_tokens) }}
                 </td>
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
-                  ${{ formatCost(group.actual_cost) }}
+                  ${{ formatCost(group.actual_cost) }}<span v-if="group.unknown_amount_count" class="ml-1 text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
                 </td>
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
-                  ${{ formatCost(group.account_cost) }}
+                  {{ group.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(group.account_cost) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
-                  ${{ formatCost(group.cost) }}
+                  {{ group.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(group.cost) }}
                 </td>
               </tr>
               <!-- User breakdown sub-rows -->

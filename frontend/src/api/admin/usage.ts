@@ -5,11 +5,11 @@
 
 import { apiClient } from '../client'
 import type { AdminUsageLog, UsageQueryParams, PaginatedResponse, UsageRequestType } from '@/types'
-import type { EndpointStat } from '@/types'
+import type { EndpointStat, FinancialStatsMetadata, UsageDateBasis } from '@/types'
 
 // ==================== Types ====================
 
-export interface AdminUsageStatsResponse {
+export interface AdminUsageStatsResponse extends FinancialStatsMetadata {
   total_requests: number
   total_input_tokens: number
   total_output_tokens: number
@@ -120,6 +120,7 @@ export async function list(
  * @returns Usage statistics
  */
 export async function getStats(params: {
+  date_basis?: UsageDateBasis
   user_id?: number
   api_key_id?: number
   account_id?: number

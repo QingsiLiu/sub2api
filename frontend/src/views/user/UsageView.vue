@@ -9,11 +9,13 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
+                :timezone="financialTimezone(dateBasis)"
                 v-model:start-date="startDate"
                 v-model:end-date="endDate"
                 @change="onDateRangeChange"
               />
             </div>
+            <FinancialDateBasis v-model="dateBasis" @change="changeDateBasis" />
             <div class="ml-auto flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
@@ -23,6 +25,8 @@
           </div>
         </div>
 
+        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ dateBasis === 'accounting' ? t('financial.accountingHint') : t('financial.completedHint') }}</p>
+        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:metric="modelDistributionMetric"
@@ -230,6 +234,8 @@ import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import * as subscriptionsAPI from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import FinancialDateBasis from '@/components/common/FinancialDateBasis.vue'
+import { financialDate, financialTimezone, financialExportNumber, escapeFinancialCSV } from '@/utils/financialUsage'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -253,6 +259,7 @@ import type {
   ModelStat,
   TrendDataPoint,
   UsageLog,
+  UsageDateBasis,
   UsageQueryParams,
   UsageStatsResponse,
   UserErrorRequest,
@@ -262,6 +269,7 @@ import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const dateBasis = ref<UsageDateBasis>('accounting')
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
@@ -336,8 +344,7 @@ let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
 
-const formatLocalDate = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const formatLocalDate = (date: Date): string => financialDate(date, dateBasis.value)
 
 const getTodayRangeDates = () => {
   const today = formatLocalDate(new Date())
@@ -440,6 +447,8 @@ const normalizedFilters = computed<UsageQueryParams>(() => {
   const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
   return {
     ...filters.value,
+    date_basis: dateBasis.value,
+    timezone: financialTimezone(dateBasis.value),
     start_date: startDate.value,
     end_date: endDate.value,
     stream: legacyStream === null ? undefined : legacyStream,
@@ -568,7 +577,11 @@ const refreshData = () => {
   if (activeTab.value === 'errors') void loadErrors()
 }
 
+const changeDateBasis = () => { applyFilters() }
+
 const resetFilters = () => {
+  dateBasis.value = 'accounting'
+
   const range = getTodayRangeDates()
   startDate.value = range.start
   endDate.value = range.end
@@ -621,6 +634,7 @@ const handleIpGeoBatchFailed = () => {
 }
 
 const getRequestTypeExportText = (log: UsageLog): string => {
+  if (log.unknown_fields?.includes('request_type')) return ''
   const requestType = resolveUsageRequestType(log)
   if (requestType === 'cyber') return 'Cyber'
   if (requestType === 'live') return 'Live'
@@ -634,15 +648,7 @@ const getDisplayBillingMode = (
   row: Pick<UsageLog, 'billing_mode' | 'image_count'> | null | undefined
 ): string | null | undefined => resolveDisplayBillingMode(row)
 
-const escapeCSVValue = (value: unknown): string => {
-  if (value == null) return ''
-  const str = String(value)
-  const escaped = str.replace(/"/g, '""')
-  if (str === '-') return str
-  if (/^[=+\-@\t\r]/.test(str)) return `"\'${escaped}"`
-  if (/[,"\n\r]/.test(str)) return `"${escaped}"`
-  return str
-}
+const escapeCSVValue = escapeFinancialCSV
 
 const exportToCSV = async () => {
   if (pagination.total === 0) {
@@ -682,6 +688,7 @@ const exportToCSV = async () => {
       'Original Cost',
       'First Token (ms)',
       'Duration (ms)',
+      'Accounting Date', 'Settled At', 'Completed At', 'Record Source', 'Record Completeness', 'Detail Pending', 'Unknown Fields', 'Date Basis',
     ]
     const rows = allLogs.map((log) => [
       log.created_at,
@@ -691,16 +698,17 @@ const exportToCSV = async () => {
       log.inbound_endpoint || '',
       log.ip_address || '',
       getRequestTypeExportText(log),
-      getBillingModeLabel(getDisplayBillingMode(log), t),
+      (log.unknown_fields?.includes('billing_mode') || (!log.billing_mode && log.record_completeness && log.record_completeness !== 'complete')) ? '' : getBillingModeLabel(getDisplayBillingMode(log), t),
       log.input_tokens,
       log.output_tokens,
       log.cache_read_tokens,
       log.cache_creation_tokens,
       log.rate_multiplier,
-      log.actual_cost.toFixed(8),
-      log.total_cost.toFixed(8),
+      financialExportNumber(log.actual_cost, 8),
+      financialExportNumber(log.total_cost, 8),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
+      log.accounting_date, log.settled_at, log.completed_at, log.record_source, log.record_completeness, log.detail_pending, log.unknown_fields?.join('; '), exportParams.date_basis,
     ].map(escapeCSVValue))
     const csvContent = [
       headers.map(escapeCSVValue).join(','),
