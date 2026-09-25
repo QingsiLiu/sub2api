@@ -60,6 +60,7 @@ export default { subscriptionRights: {
   "operation_renew": "续期",
   "operation_refund": "退款",
   "operation_refund_restore": "退款失败恢复",
+  "operation_align_free": "免费对齐到期时间",
   "operation_adjust": "管理员改期",
   "purchase": "开通订阅",
   "upgrade": "整体升级",

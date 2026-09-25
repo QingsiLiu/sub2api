@@ -286,3 +286,31 @@ func TestLegacyManagementOrderLinesUseActualFulfillment(t *testing.T) {
 	require.True(t, lot.ExpiresAt.Equal(lines[0].After.ExpiresAt))
 	require.Equal(t, 7*24*time.Hour, lot.ExpiresAt.Sub(lot.StartsAt))
 }
+
+func TestLegacyManagementGiftAndExpiredRightsNeverAligned(t *testing.T) {
+	s, u, _, parent, ids := legacyPaymentFixture(t)
+	ctx := context.Background()
+	svc := &SubscriptionService{entClient: s.entClient}
+	request := LegacyAlignmentRequest{UserID: u.ID, EntitlementIDs: ids, IdempotencyKey: "unsafe-alignment-test", Reason: "test"}
+	require.NoError(t, s.entClient.UserSubscriptionEntitlement.UpdateOneID(ids[0]).SetSourceType("campaign").Exec(ctx))
+	_, err := svc.AlignLegacyEntitlements(ctx, parent.ID, 1, request)
+	require.Error(t, err)
+	require.NoError(t, s.entClient.UserSubscriptionEntitlement.UpdateOneID(ids[0]).SetSourceType("payment").SetExpiresAt(time.Now().Add(-time.Hour)).Exec(ctx))
+	_, err = svc.AlignLegacyEntitlements(ctx, parent.ID, 1, request)
+	require.Error(t, err)
+	// A later independent gift is not the target when selecting two paid units.
+	require.NoError(t, s.entClient.UserSubscriptionEntitlement.UpdateOneID(ids[0]).SetExpiresAt(time.Now().Add(time.Hour)).Exec(ctx))
+	gift, err := s.entClient.UserSubscriptionEntitlement.Create().SetUserSubscriptionID(parent.ID).SetSourceType("campaign").SetStatus("active").SetStartsAt(time.Now().Add(-time.Hour)).SetExpiresAt(time.Now().Add(7 * 24 * time.Hour)).SetDailyLimitUsd(45).Save(ctx)
+	require.NoError(t, err)
+	preview, err := svc.AlignLegacyEntitlements(ctx, parent.ID, 1, request)
+	require.NoError(t, err)
+	require.True(t, preview.ExpiresAt.Before(gift.ExpiresAt))
+	request.Apply = true
+	request.ExpectedSnapshot = preview.Snapshot
+	_, err = svc.AlignLegacyEntitlements(ctx, parent.ID, 1, request)
+	require.NoError(t, err)
+	unchanged, err := s.entClient.UserSubscriptionEntitlement.Get(ctx, gift.ID)
+	require.NoError(t, err)
+	require.True(t, unchanged.ExpiresAt.Equal(gift.ExpiresAt))
+	require.Equal(t, gift.DailyLimitUsd, unchanged.DailyLimitUsd)
+}

@@ -60,6 +60,7 @@ export default { subscriptionRights: {
   "operation_renew": "Renewed",
   "operation_refund": "Refunded",
   "operation_refund_restore": "Restored after refund failure",
+  "operation_align_free": "Complimentary expiry alignment",
   "operation_adjust": "Admin adjustment",
   "purchase": "Subscribe",
   "upgrade": "Upgrade all units",
