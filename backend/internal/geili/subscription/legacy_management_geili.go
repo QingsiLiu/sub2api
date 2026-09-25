@@ -318,7 +318,9 @@ func ApplyLegacyChange(ctx context.Context, c *dbent.Client, change Change, deta
 		snapshot = map[string]any{}
 	}
 	snapshot["fulfilled_entitlement_changes"] = fulfilled
-	if err = c.PaymentOrder.UpdateOneID(orderID).SetSubscriptionSnapshot(snapshot).Exec(ctx); err != nil {
+	// updated_at is the fulfillment lease token. Updating display metadata must
+	// preserve the lease held by this transaction, not invalidate markCompleted.
+	if err = c.PaymentOrder.UpdateOneID(orderID).SetSubscriptionSnapshot(snapshot).SetUpdatedAt(orderRow.UpdatedAt).Exec(ctx); err != nil {
 		return nil, err
 	}
 	after, err := MarkLegacyContract(ctx, c, parent.ID, now)

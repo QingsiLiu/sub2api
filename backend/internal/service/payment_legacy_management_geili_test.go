@@ -314,3 +314,26 @@ func TestLegacyManagementGiftAndExpiredRightsNeverAligned(t *testing.T) {
 	require.True(t, unchanged.ExpiresAt.Equal(gift.ExpiresAt))
 	require.Equal(t, gift.DailyLimitUsd, unchanged.DailyLimitUsd)
 }
+
+func TestLegacyManagementFulfillmentPreservesLease(t *testing.T) {
+	s, u, plans, parent, ids := legacyPaymentFixture(t)
+	ctx := context.Background()
+	q, e := s.QuoteSubscription(ctx, SubscriptionQuoteRequest{UserID: u.ID, SubscriptionID: parent.ID, PlanID: plans[0].ID, Operation: "renew", EntitlementIDs: ids[:1], Periods: 1})
+	require.NoError(t, e)
+	order, e := v2Create(t, s, u, q)
+	require.NoError(t, e)
+	require.NoError(t, s.entClient.PaymentOrder.UpdateOneID(order.ID).SetStatus(OrderStatusPaid).SetPaidAt(time.Now()).Exec(ctx))
+	order, e = s.entClient.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, e)
+	lease, e := s.acquirePaymentFulfillmentLease(ctx, order)
+	require.NoError(t, e)
+	require.NotNil(t, lease)
+	require.NoError(t, s.ensureSubscriptionV2Assigned(ctx, order))
+	stored, e := s.entClient.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, e)
+	require.True(t, stored.UpdatedAt.Equal(lease.version))
+	require.NoError(t, s.markCompleted(ctx, order, lease, "SUBSCRIPTION_SUCCESS"))
+	stored, e = s.entClient.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, e)
+	require.Equal(t, OrderStatusCompleted, stored.Status)
+}
