@@ -1,0 +1,429 @@
+{
+  "source_parent": "e10503917fed33aacde084b277c7ab60217aac0d",
+  "scope": "layout classes only; media/currency untouched; no deployment",
+  "baseline": {
+    "source": "Stage 0.2.8-geili.4 real order438",
+    "viewport": 375,
+    "documentWidth": 375,
+    "orderWidth": 155,
+    "orderScrollWidth": 179,
+    "modalWidth": 357,
+    "modalScrollWidth": 366
+  },
+  "stable_measurements": [
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 246,
+          "width": 246
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 246,
+          "width": 246
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 246,
+          "width": 246
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 246,
+          "width": 246
+        }
+      ],
+      "documentWidth": 312,
+      "tables": 0,
+      "width": 320
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 286,
+          "width": 286
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 286,
+          "width": 286
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 286,
+          "width": 286
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 286,
+          "width": 286
+        }
+      ],
+      "documentWidth": 352,
+      "tables": 0,
+      "width": 360
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 301,
+          "width": 301
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 301,
+          "width": 301
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 301,
+          "width": 301
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 301,
+          "width": 301
+        }
+      ],
+      "documentWidth": 367,
+      "tables": 0,
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 316,
+          "width": 316
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 316,
+          "width": 316
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 316,
+          "width": 316
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 316,
+          "width": 316
+        }
+      ],
+      "documentWidth": 382,
+      "tables": 0,
+      "width": 390
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 356,
+          "width": 356
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 356,
+          "width": 356
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 356,
+          "width": 356
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 356,
+          "width": 356
+        }
+      ],
+      "documentWidth": 422,
+      "tables": 0,
+      "width": 430
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 566,
+          "width": 566
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 566,
+          "width": 566
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 566,
+          "width": 566
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 566,
+          "width": 566
+        }
+      ],
+      "documentWidth": 632,
+      "tables": 0,
+      "width": 640
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 693,
+          "width": 693
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 693,
+          "width": 693
+        },
+        {
+          "field": "out_trade_no",
+          "scrollWidth": 693,
+          "width": 693
+        },
+        {
+          "field": "user_email",
+          "scrollWidth": 693,
+          "width": 693
+        }
+      ],
+      "documentWidth": 759,
+      "tables": 0,
+      "width": 767
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [],
+      "documentWidth": 768,
+      "tables": 1,
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "kind": "list",
+      "cards": [],
+      "documentWidth": 1280,
+      "tables": 1,
+      "width": 1280
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 708,
+          "scrollHeight": 1398,
+          "scrollWidth": 349,
+          "width": 349
+        }
+      ],
+      "documentWidth": 375,
+      "grids": [
+        "317px",
+        "317px"
+      ],
+      "overflowingText": [],
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 708,
+          "scrollHeight": 1338,
+          "scrollWidth": 404,
+          "width": 404
+        }
+      ],
+      "documentWidth": 430,
+      "grids": [
+        "372px",
+        "372px"
+      ],
+      "overflowingText": [],
+      "width": 430
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 660,
+          "scrollHeight": 924,
+          "scrollWidth": 598,
+          "width": 598
+        }
+      ],
+      "documentWidth": 640,
+      "grids": [
+        "267px 267px",
+        "267px 267px"
+      ],
+      "overflowingText": [],
+      "width": 640
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 660,
+          "scrollHeight": 904,
+          "scrollWidth": 662,
+          "width": 662
+        }
+      ],
+      "documentWidth": 767,
+      "grids": [
+        "299px 299px",
+        "299px 299px"
+      ],
+      "overflowingText": [],
+      "width": 767
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 660,
+          "scrollHeight": 868,
+          "scrollWidth": 726,
+          "width": 726
+        }
+      ],
+      "documentWidth": 768,
+      "grids": [
+        "331px 331px",
+        "331px 331px"
+      ],
+      "overflowingText": [],
+      "width": 768
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail",
+      "bodies": [
+        {
+          "height": 660,
+          "scrollHeight": 848,
+          "scrollWidth": 886,
+          "width": 886
+        }
+      ],
+      "documentWidth": 1280,
+      "grids": [
+        "411px 411px",
+        "411px 411px"
+      ],
+      "overflowingText": [],
+      "width": 1280
+    },
+    {
+      "kind": "long-refund-detail-stable",
+      "bodies": [
+        {
+          "height": 708,
+          "scrollHeight": 1458,
+          "scrollWidth": 294,
+          "width": 294
+        }
+      ],
+      "documentWidth": 320,
+      "overflowingText": [],
+      "theme": "dark",
+      "width": 320
+    },
+    {
+      "kind": "normal-detail-stable",
+      "bodies": [
+        {
+          "scrollWidth": 349,
+          "width": 349
+        }
+      ],
+      "documentWidth": 375,
+      "order": [
+        {
+          "scrollWidth": 317,
+          "text": "sub2_20260925eLSZ4bY5",
+          "width": 317
+        }
+      ],
+      "theme": "dark",
+      "width": 375
+    },
+    {
+      "theme": "light",
+      "kind": "normal-desktop-stable",
+      "bodies": [
+        {
+          "scrollWidth": 894,
+          "width": 894
+        }
+      ],
+      "documentWidth": 1280,
+      "grids": [
+        "415px 415px"
+      ],
+      "width": 1280
+    },
+    {
+      "theme": "light",
+      "kind": "long-refund-detail-stable",
+      "bodies": [
+        {
+          "scrollWidth": 294,
+          "width": 294
+        }
+      ],
+      "documentWidth": 320,
+      "overflowingText": [],
+      "width": 320
+    }
+  ],
+  "viewport_resize_note": "Rapid desktop-to-mobile resize briefly retained old layout; separate stable 320px light/dark checks were required and passed.",
+  "tests": {
+    "files": 7,
+    "passed": 37,
+    "eslint": "passed",
+    "vue_tsc_and_vite_build": "passed",
+    "i18n_completeness": "passed"
+  },
+  "screenshots": {
+    "320-dark-long-detail.png": "096739c59ba05f93e95780656ab151cd55abd380d8c47c77e34645348ea1c4f3",
+    "375-dark-detail.png": "98a1c7d56b8b7a9e83d39b7b4474ab5907feeab0051408f8692f82f648128002",
+    "320-dark-scroll-bottom.png": "2b98d2c5b1ca70ee2f90209af724a1aeb80bb320136243ea40c1af1f69b54d21",
+    "1280-light-detail.png": "2503f186f025645150d008caddc53d49ac7cd3b426952aa94ece13d55f84114d",
+    "375-light-detail.png": "fe98e99e4686e3dffe64d3d595ccd8ab2d044b3d179a2d558b783f5cd5d1b527"
+  },
+  "source_sha256": {
+    "frontend/src/components/payment/OrderTable.vue": "e4132e0bf7fff5f1948e8c5c465a1ca3a0b06d3c550e794218c246ec9b2e3d12",
+    "frontend/src/views/admin/orders/AdminOrdersView.vue": "d53cf0188fcefe901ff4e975f35bd7cad5de4cdb8def5b401e634d779b5d8d2b"
+  }
+}
