@@ -4,7 +4,7 @@
 
 2026-09-25 14:13:26（北京时间），生产请求入站为 `/v1/responses`，账号 `6098` 的 `openai_responses_supported=false` 使其被降级到 `/v1/chat/completions`。上游以 `Function tools with reasoning_effort are not supported for gpt-6-astra` 返回 400。因此要求客户改用 Responses 无法解决问题，客户已经使用该入口。
 
-此前经用户授权，账号 6098 于 14:52:26 暂停调度。2026-09-25 16:24:30 的只读复核显示，该账号仍为不可调度；暂停后受影响客户已有 2,673 次 Astra 成功用量，实际出站全部为 `/v1/responses`；同一时间窗全站同类协议错误计数为 0。此为观察窗口证据，不代表源码已部署或所有其他错误消失。
+此前经用户授权，账号 6098 于 14:52:26 暂停调度。2026-09-25 16:52:06 的只读复核显示，该账号仍为不可调度；暂停后受影响客户已有 2,680 次 Astra 成功用量，实际出站全部为 `/v1/responses`；同一时间窗全站同类协议错误计数为 0。此为观察窗口证据，不代表源码已部署或所有其他错误消失。同期生产容器为 healthy，版本 `0.2.8-geili.5`，revision `9982f97619f65d1b8ff92aca4bd90f3ac8868dc0`，已确认是候选源码的祖先。
 
 ## 保护边界
 
@@ -33,6 +33,6 @@ HTTP 回归覆盖三个入口 × 流式/非流式 × 真实模型名/渠道别�
 
 ## 发布与恢复
 
-版本、revision、不可变镜像 digest 和部署状态以 `RELEASES.md` 为准。生产目前仍靠账号暂停止血；永久保护须走候选 CI → Stage 验收 → 当次用户授权后同一 digest 上生产。
+版本、revision、不可变镜像 digest 和部署状态以 `RELEASES.md` 为准。本候选 revision `9d51db957954ddc01c25f4eca5ab3b19e8167f25`、镜像 `ghcr.io/qingsiliu/sub2api@sha256:22187d5bb250ab20b36a7814ceefe612d028faa697af7f9adbebc993ab12b750` 已通过前端、Go 默认/单元/集成、订阅竞态和 PostgreSQL 支付门禁；候选仍标记 `production_ready=false`，待 Stage 业务验收、外部沙箱/限额联调和生产授权。生产目前仍靠账号暂停止血；永久保护须走候选 CI → Stage 验收 → 当次用户授权后同一 digest 上生产。
 
 不自动恢复账号 6098。先验证其 Astra Responses 工具与推理组合，再按运维仓的变更记录及用户授权恢复调度。历史其他模型的 Responses 成功记录不足以证明 Astra 兼容性。

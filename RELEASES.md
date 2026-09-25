@@ -7,9 +7,9 @@
 ## 0.2.8-geili.6
 
 - 日期：2026-09-25（北京时间）
-- revision：本次 Astra 工具协议修复提交，候选构建后回填完整 SHA。
-- 镜像 digest：等待 `Geili staging candidate` 产出。
-- 部署：仅源码候选；未部署 Stage 或生产，现网仍为 `0.2.8-geili.5`。
+- revision：`9d51db957954ddc01c25f4eca5ab3b19e8167f25`。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:22187d5bb250ab20b36a7814ceefe612d028faa697af7f9adbebc993ab12b750`。
+- 部署：仅源码候选；CI 全部通过，未部署 Stage 或生产，现网仍为 `0.2.8-geili.5`。候选流水线：`36113536572`。
 
 相对 `.5`：
 
