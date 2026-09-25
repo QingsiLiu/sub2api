@@ -42,12 +42,9 @@ const messages: Record<string, string> = {
 	'common.no': 'No',
 }
 
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// Independent calendar expectation: UTC instant plus the fixed Beijing offset.
+const formatAccountingDate = (date: Date): string =>
+  new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
@@ -404,7 +401,9 @@ describe('admin UsageView distribution metric toggles', () => {
     expect((wrapper.vm as any).requestedModelStats).toEqual([{ model: 'B', total_tokens: 20 }])
   })
 
-  it('keeps model and group metric toggles independent without refetching chart data', async () => {
+  it.each(['2026-09-25T15:59:00Z', '2026-09-25T16:01:00Z'])(
+    'keeps metric toggles independent and Beijing accounting dates at %s', async (instant) => {
+    vi.setSystemTime(new Date(instant))
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
@@ -434,8 +433,10 @@ describe('admin UsageView distribution metric toggles', () => {
     const now = new Date()
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatLocalDate(yesterday),
-      end_date: formatLocalDate(now),
+      start_date: formatAccountingDate(yesterday),
+      end_date: formatAccountingDate(now),
+      date_basis: 'accounting',
+      timezone: 'Asia/Shanghai',
       granularity: 'hour'
     }))
 

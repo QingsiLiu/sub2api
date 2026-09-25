@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -43,12 +43,9 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// The expected accounting calendar is independent of the runner/browser zone.
+const formatAccountingDate = (date: Date): string =>
+  new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 const createDashboardStats = (): DashboardStats => ({
   total_users: 0,
@@ -88,6 +85,7 @@ const createDashboardStats = (): DashboardStats => ({
 
 describe('admin DashboardView', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
     setActivePinia(createPinia())
 
     getSnapshotV2.mockReset()
@@ -115,7 +113,11 @@ describe('admin DashboardView', () => {
     })
   })
 
-  it('uses last 24 hours as default dashboard range', async () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each(['2026-09-25T15:59:00Z', '2026-09-25T16:01:00Z'])(
+    'uses the Beijing accounting calendar around midnight at %s', async (instant) => {
+    vi.setSystemTime(new Date(instant))
     mount(DashboardView, {
       global: {
         stubs: {
@@ -138,8 +140,10 @@ describe('admin DashboardView', () => {
 
     expect(getSnapshotV2).toHaveBeenCalledTimes(1)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatLocalDate(yesterday),
-      end_date: formatLocalDate(now),
+      start_date: formatAccountingDate(yesterday),
+      end_date: formatAccountingDate(now),
+      date_basis: 'accounting',
+      timezone: 'Asia/Shanghai',
       granularity: 'hour'
     }))
   })
