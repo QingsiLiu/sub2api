@@ -68,3 +68,16 @@ func TestStripeRefundUsesStableAmountSpecificIdempotencyKey(t *testing.T) {
 	require.Equal(t, "re-sub2_order_456-1235", *backend.params[2].IdempotencyKey)
 	require.NotEqual(t, *backend.params[0].IdempotencyKey, *backend.params[2].IdempotencyKey)
 }
+
+func TestStripeRefundHonorsDurableJournalOperation(t *testing.T) {
+	backend := &stripeRefundBackend{}
+	client := stripe.NewClient("sk_test", stripe.WithBackends(&stripe.Backends{API: backend}))
+	provider := &Stripe{config: map[string]string{"currency": "CNY"}, initialized: true, sc: client}
+	for i := 0; i < 2; i++ {
+		_, err := provider.Refund(context.Background(), payment.RefundRequest{TradeNo: "pi_123", OrderID: "order-7", Amount: "12.34", IdempotencyKey: "geili-refund-7"})
+		require.NoError(t, err)
+	}
+	require.Equal(t, "geili-refund-7", *backend.params[0].IdempotencyKey)
+	require.Equal(t, backend.params[0].IdempotencyKey, backend.params[1].IdempotencyKey)
+	require.Equal(t, "geili-refund-7", backend.params[0].Metadata["geili_refund_key"])
+}

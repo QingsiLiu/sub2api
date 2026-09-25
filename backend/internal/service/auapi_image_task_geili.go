@@ -196,22 +196,14 @@ func (s *AUAPIImageTaskService) Submit(ctx context.Context, key *APIKey, sub *Us
 		task.SubscriptionID = &sub.ID
 		task.AdmissionKey = sub.AdmissionKey
 	}
-	if task.SubscriptionID == nil && s.billing != nil && task.HoldAmount > 0 {
-		_, err = s.billing.ReserveBatchImageBalance(ctx, &BatchImageBalanceHoldCommand{
-			RequestID: "auapi_image_hold:" + task.TaskID, APIKeyID: task.APIKeyID,
-			RequestFingerprint: task.RequestHash, RequestPayloadHash: task.RequestHash,
-			UserID: task.UserID, BatchID: task.TaskID, HoldAmount: task.HoldAmount,
-		})
-		if err != nil {
-			return nil, false, err
-		}
-	}
+	// geili hook: repository acceptance owns the unique idempotency claim and
+	// balance reservation in one transaction. Never reserve before its INSERT.
 	stored, created, err := s.repo.Create(ctx, task)
 	if err != nil {
-		if task.SubscriptionID == nil && s.billing != nil && task.HoldAmount > 0 {
-			_, _ = s.billing.ReleaseBatchImageBalance(ctx, &BatchImageBalanceHoldCommand{RequestID: "auapi_image_release:" + task.TaskID, APIKeyID: task.APIKeyID, RequestFingerprint: task.RequestHash, RequestPayloadHash: task.RequestHash, UserID: task.UserID, BatchID: task.TaskID, HoldAmount: task.HoldAmount})
-		}
 		return nil, false, err
+	}
+	if stored.RequestHash != hash {
+		return nil, false, ErrAUAPIImageConflict
 	}
 	s.invalidate(ctx, stored)
 	// PostgreSQL is the durable outbox. Queue failure cannot undo accepted work;
@@ -236,7 +228,9 @@ func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (Ba
 	if !strings.HasPrefix(id, "auimgtask_") {
 		return BatchImageProcessResult{Terminal: true}, nil
 	}
-	lease := time.Duration(s.cfg.AUAPIImage.LeaseSeconds) * time.Second
+	// The lease must cover one bounded provider step and durable settlement;
+	// stale workers are fenced on every save even when configuration is small.
+	lease := time.Duration(max(s.cfg.AUAPIImage.LeaseSeconds, s.cfg.AUAPIImage.RequestTimeoutSeconds+15)) * time.Second
 	task, err := s.repo.Claim(ctx, id, lease)
 	if err != nil {
 		return BatchImageProcessResult{}, err
@@ -244,14 +238,14 @@ func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (Ba
 	if task == nil {
 		return BatchImageProcessResult{RequeueAfter: 3 * time.Second}, nil
 	}
-	if task.Phase == "done" {
-		return BatchImageProcessResult{Terminal: true}, nil
-	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = s.repo.ReleaseLease(cleanup, task)
 	}()
+	if task.Phase == "done" {
+		return BatchImageProcessResult{Terminal: true}, nil
+	}
 	work, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.AUAPIImage.RequestTimeoutSeconds)*time.Second)
 	defer cancel()
 	err = s.step(work, task)
@@ -388,6 +382,8 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 			t.SuccessCount = len(t.URLs)
 			t.ActualAmount = QuantizeUsageBillingAmount(t.UnitPrice * t.RateMultiplier * float64(t.SuccessCount))
 			t.Phase = "settle"
+			completed := time.Now().UTC().Truncate(time.Microsecond)
+			t.CompletedAt = &completed
 		}
 	default:
 		return fmt.Errorf("invalid AUAPI task phase")
@@ -401,55 +397,72 @@ func (s *AUAPIImageTaskService) finish(ctx context.Context, t *AUAPIImageTaskRec
 		t.SuccessCount = 0
 		t.ResultJSON = nil
 	}
-	if s.billing != nil {
-		if t.SubscriptionID != nil {
-			_, err := s.billing.Apply(ctx, &UsageBillingCommand{
-				SubscriptionAdmissionKey: t.AdmissionKey, RequestID: "auapi_image_settle:" + t.TaskID,
-				APIKeyID: t.APIKeyID, RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
-				UserID: t.UserID, AccountID: t.AccountID, SubscriptionID: t.SubscriptionID,
-				AccountType: AccountTypeAPIKey, Model: t.Model, ImageCount: t.SuccessCount,
-				MediaType: "image", SubscriptionCost: t.ActualAmount,
-			})
-			if err != nil {
-				return err
-			}
-		} else if t.HoldAmount > 0 {
-			if t.Phase == "settle" {
-				_, err := s.billing.CaptureBatchImageBalance(ctx, &BatchImageBalanceHoldCommand{
-					RequestID: "auapi_image_capture:" + t.TaskID, APIKeyID: t.APIKeyID,
-					RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
-					UserID: t.UserID, BatchID: t.TaskID, HoldAmount: t.HoldAmount, ActualAmount: t.ActualAmount,
-				})
-				if err != nil {
-					return err
-				}
-			} else {
-				_, err := s.billing.ReleaseBatchImageBalance(ctx, &BatchImageBalanceHoldCommand{
-					RequestID: "auapi_image_release:" + t.TaskID, APIKeyID: t.APIKeyID,
-					RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
-					UserID: t.UserID, BatchID: t.TaskID, HoldAmount: t.HoldAmount,
-				})
-				if err != nil {
-					return err
-				}
-			}
+	if t.CompletedAt == nil {
+		completed := time.Now().UTC().Truncate(time.Microsecond)
+		t.CompletedAt = &completed
+		// Persist the completion timestamp before financial effects so replay
+		// preserves the original financial/detail identity and time.
+		if err := s.repo.Save(ctx, t); err != nil {
+			return err
 		}
 	}
-	if err := s.repo.Settle(ctx, t); err != nil {
-		return err
+	detail := auapiImageUsageDetail(t)
+	if t.Phase == "fail" {
+		detail = nil // failed work is a terminal zero receipt, not a successful usage row
+	}
+	if s.billing == nil {
+		return errors.New("AUAPI billing repository is not configured")
+	}
+	if t.SubscriptionID != nil {
+		_, err := s.billing.Apply(ctx, &UsageBillingCommand{
+			SubscriptionAdmissionKey: t.AdmissionKey, RequestID: "auapi_image_settle:" + t.TaskID,
+			APIKeyID: t.APIKeyID, RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
+			UserID: t.UserID, AccountID: t.AccountID, SubscriptionID: t.SubscriptionID,
+			AccountType: AccountTypeAPIKey, Model: t.Model, ImageCount: t.SuccessCount,
+			MediaType: "image", SubscriptionCost: t.ActualAmount,
+			UsageDetail: detail, CompletedAt: *t.CompletedAt, TerminalFailure: t.Phase == "fail",
+		})
+		if err != nil {
+			return err
+		}
+	} else if t.HoldAmount > 0 {
+		cmd := &BatchImageBalanceHoldCommand{
+			HoldRequestID: "auapi_image_hold:" + t.TaskID, APIKeyID: t.APIKeyID,
+			RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
+			UserID: t.UserID, BatchID: t.TaskID, HoldAmount: t.HoldAmount,
+			CompletedAt: *t.CompletedAt,
+		}
+		if t.Phase == "settle" {
+			cmd.RequestID = "auapi_image_capture:" + t.TaskID
+			cmd.ActualAmount = t.ActualAmount
+			cmd.UsageDetail = detail
+			if _, err := s.billing.CaptureBatchImageBalance(ctx, cmd); err != nil {
+				return err
+			}
+		} else {
+			cmd.RequestID = "auapi_image_release:" + t.TaskID
+			if _, err := s.billing.ReleaseBatchImageBalance(ctx, cmd); err != nil {
+				return err
+			}
+		}
+	} else if t.Phase == "settle" {
+		// Explicit free balance calls still get financial/detail evidence.
+		if _, err := s.billing.Apply(ctx, &UsageBillingCommand{
+			RequestID: "auapi_image_settle:" + t.TaskID, APIKeyID: t.APIKeyID,
+			RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
+			UserID: t.UserID, AccountID: t.AccountID, AccountType: AccountTypeAPIKey,
+			Model: t.Model, ImageCount: t.SuccessCount, MediaType: "image",
+			UsageDetail: detail, CompletedAt: *t.CompletedAt,
+		}); err != nil {
+			return err
+		}
 	}
 	s.invalidate(ctx, t)
 	if t.Phase == "settle" {
-		mode := "image"
-		in := "/v1/images/generations/async"
-		up := "/v1/images/tasks"
-		typ := BillingTypeBalance
-		if t.SubscriptionID != nil {
-			typ = BillingTypeSubscription
-		}
-		if s.logs != nil {
-			_, err := s.logs.Create(ctx, &UsageLog{UserID: t.UserID, APIKeyID: t.APIKeyID, AccountID: t.AccountID, GroupID: &t.GroupID, SubscriptionID: t.SubscriptionID, RequestID: "auapi_image:" + t.TaskID, Model: t.Model, RequestedModel: t.Model, UpstreamModel: &t.UpstreamModel, ImageCount: t.SuccessCount, ImageSize: &t.ImageSize, ImageOutputCost: t.UnitPrice * float64(t.SuccessCount), TotalCost: t.UnitPrice * float64(t.SuccessCount), ActualCost: t.ActualAmount, RateMultiplier: t.RateMultiplier, AccountRateMultiplier: &t.AccountRateMultiplier, BillingMode: &mode, BillingType: typ, RequestType: RequestTypeSync, InboundEndpoint: &in, UpstreamEndpoint: &up, CreatedAt: t.CreatedAt})
-			if err != nil {
+		// Production delivery is journal-owned. Legacy adapters retain their
+		// immediate projection; they cannot turn delivery retries into a charge.
+		if _, durable := s.billing.(UsageSettlementRepository); !durable && s.logs != nil {
+			if _, err := s.logs.Create(ctx, detail); err != nil {
 				return err
 			}
 		}
@@ -458,12 +471,32 @@ func (s *AUAPIImageTaskService) finish(ctx context.Context, t *AUAPIImageTaskRec
 	} else {
 		t.Status = ImageTaskStatusFailed
 	}
-	now := time.Now()
-	t.CompletedAt = &now
-	t.ExpiresAt = now.Add(24 * time.Hour)
+	t.ExpiresAt = t.CompletedAt.Add(24 * time.Hour)
 	t.Phase = "done"
 	return s.repo.Save(ctx, t)
 }
+
+// auapiImageUsageDetail is deliberately independent of RequestJSON: prompts,
+// supplier keys and authorization headers never enter financial evidence.
+func auapiImageUsageDetail(t *AUAPIImageTaskRecord) *UsageLog {
+	mode, inbound, upstream := "image", "/v1/images/generations/async", "/v1/images/tasks"
+	typ := BillingTypeBalance
+	if t.SubscriptionID != nil {
+		typ = BillingTypeSubscription
+	}
+	return &UsageLog{
+		UserID: t.UserID, APIKeyID: t.APIKeyID, AccountID: t.AccountID,
+		GroupID: &t.GroupID, SubscriptionID: t.SubscriptionID,
+		RequestID: "auapi_image:" + t.TaskID, Model: t.Model, RequestedModel: t.Model,
+		UpstreamModel: &t.UpstreamModel, ImageCount: t.SuccessCount, ImageSize: &t.ImageSize,
+		ImageOutputCost: t.UnitPrice * float64(t.SuccessCount), TotalCost: t.UnitPrice * float64(t.SuccessCount),
+		ActualCost: t.ActualAmount, RateMultiplier: t.RateMultiplier,
+		AccountRateMultiplier: &t.AccountRateMultiplier, BillingMode: &mode,
+		BillingType: typ, RequestType: RequestTypeSync,
+		InboundEndpoint: &inbound, UpstreamEndpoint: &upstream, CreatedAt: t.CreatedAt,
+	}
+}
+
 func (s *AUAPIImageTaskService) invalidate(ctx context.Context, t *AUAPIImageTaskRecord) {
 	if s.authCache != nil {
 		s.authCache.InvalidateAuthCacheByUserID(ctx, t.UserID)

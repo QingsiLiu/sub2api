@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -341,13 +342,13 @@ func TestBatchImageSettlementService_InvalidCountsExhaustsAndReleases(t *testing
 	require.Equal(t, requestHash, billing.releases[0].RequestPayloadHash)
 }
 
-func TestReleaseBatchImageBalanceHold_TreatsFingerprintConflictAsReleased(t *testing.T) {
+func TestReleaseBatchImageBalanceHold_DoesNotTreatFingerprintConflictAsReleased(t *testing.T) {
 	job := testSettlingBatchImageJob("imgbatch_release_conflict")
-	// 历史版本用 manifestHash 释放过一次：同一 request id 再以 RequestHash
-	// 释放会命中指纹冲突。资金已归还，必须视为幂等成功而非毒消息。
+	// A conflict cannot certify return of funds; fail closed unless the
+	// repository verified the exact terminal financial identity.
 	billing := &fakeBatchImageBillingRepo{releaseErr: ErrUsageBillingRequestConflict}
 	err := releaseBatchImageBalanceHold(context.Background(), billing, job, "request-hash")
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.Len(t, billing.releases, 1)
 }
 
@@ -511,3 +512,61 @@ func (r *fakeBatchImageBillingRepo) applyHold(cmd *BatchImageBalanceHoldCommand,
 var _ UsageBillingRepository = (*fakeBatchImageBillingRepo)(nil)
 var _ BatchImagePricingResolver = (*fakeBatchImagePricingResolver)(nil)
 var _ = strings.TrimSpace
+
+type durableBatchImageBillingRepo struct{ fakeBatchImageBillingRepo }
+
+func (*durableBatchImageBillingRepo) PrepareSettlement(context.Context, *UsageBillingCommand, *UsageLog) error {
+	return nil
+}
+func (*durableBatchImageBillingRepo) ProcessPendingSettlements(context.Context, int) ([]UsageSettlementApplied, error) {
+	return nil, nil
+}
+func (*durableBatchImageBillingRepo) DeliverSettledUsage(context.Context, int) (UsageSettlementDeliveryStats, error) {
+	return UsageSettlementDeliveryStats{}, nil
+}
+func (*durableBatchImageBillingRepo) SettlementHealth(context.Context) (UsageSettlementHealth, error) {
+	return UsageSettlementHealth{}, nil
+}
+
+func TestBatchImageDurableSettlementPersistsDetailBeforeCaptureWithoutLegacyWrite(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("durable-detail")
+	repo.jobs[job.BatchID] = job
+	finished := time.Date(2026, 9, 24, 15, 59, 58, 0, time.UTC)
+	job.FinishedAt = &finished
+	billing := &durableBatchImageBillingRepo{}
+	logs := &openAIRecordUsageLogRepoStub{}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: .25}, UsageLogRepo: logs}
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.Len(t, billing.captures, 1)
+	cmd := billing.captures[0]
+	require.NotNil(t, cmd.UsageDetail)
+	require.Equal(t, finished, cmd.CompletedAt)
+	require.Equal(t, cmd.RequestID, cmd.UsageDetail.RequestID)
+	require.Equal(t, .5, cmd.UsageDetail.ActualCost)
+	require.Equal(t, 2, cmd.UsageDetail.ImageCount)
+	require.Nil(t, logs.lastLog)
+}
+
+func TestBatchImageDurableSettlementNeverReleasesOnAmbiguousCaptureAfterRetries(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("durable-ambiguous")
+	job.RetryCount = 12
+	job.LastErrorCode = batchImageStringPtr("SETTLEMENT_BILLING_FAILED")
+	repo.jobs[job.BatchID] = job
+	billing := &durableBatchImageBillingRepo{fakeBatchImageBillingRepo: fakeBatchImageBillingRepo{captureErr: context.DeadlineExceeded}}
+	svc := &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: .25}}
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.Error(t, err)
+	require.Empty(t, billing.releases)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+	// Same immutable manifest/capture identity safely reconciles a commit whose
+	// response was lost; a retry does not release already captured frozen funds.
+	billing.captureErr = nil
+	billing.alreadyApplied = map[string]bool{BatchImageCaptureRequestID(job.BatchID): true}
+	_, err = svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.Empty(t, billing.releases)
+	require.Equal(t, BatchImageJobStatusCompleted, repo.jobs[job.BatchID].Status)
+}

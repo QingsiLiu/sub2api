@@ -94,6 +94,7 @@ func provideCleanup(
 	opsIngressReject *service.OpsIngressRejectAggregator,
 	apiKeyService *service.APIKeyService,
 	authCacheInvalidationWorker *service.AuthCacheInvalidationWorker,
+	usageSettlementWorker *service.UsageSettlementWorker,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
@@ -132,6 +133,12 @@ func provideCleanup(
 	pluginManager *service.PluginManager,
 ) func() {
 	return func() {
+		// geili: finish detached WAL/settlement capture before stopping DB/Redis.
+		drainCtx, drainCancel := context.WithTimeout(context.Background(), 45*time.Second)
+		if err := handler.DrainDurableUsageRecords(drainCtx); err != nil {
+			log.Printf("ALERT financial ingress drain incomplete: %v", err)
+		}
+		drainCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -142,6 +149,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"UsageSettlementWorker", func() error {
+				if usageSettlementWorker != nil {
+					usageSettlementWorker.Stop()
+				}
+				return nil
+			}},
 			{"PluginManager", func() error {
 				if pluginManager != nil {
 					pluginManager.Stop()

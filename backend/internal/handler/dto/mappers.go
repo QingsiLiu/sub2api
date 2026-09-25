@@ -731,6 +731,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		}
 	}
 	return UsageLog{
+		Financial:     l.Financial,
 		BillingSource: source, SubscriptionName: subscriptionName, TargetGroupName: targetGroupName,
 		ID:                        l.ID,
 		UserID:                    l.UserID,

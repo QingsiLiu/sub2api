@@ -32,9 +32,12 @@ func NewDashboardHandler(dashboardService *service.DashboardService, aggregation
 }
 
 // parseTimeRange parses start_date, end_date query parameters
-// Uses user's timezone if provided, otherwise falls back to server timezone
+// Financial reports use the same Beijing accounting dates as subscription quotas.
 func parseTimeRange(c *gin.Context) (time.Time, time.Time) {
-	userTZ := c.Query("timezone") // Get user's timezone from request
+	userTZ := "Asia/Shanghai" // geili: financial day is the quota accounting day, never browser timezone.
+	if usagestats.NormalizeFinancialDateBasis(c.Query("date_basis")) == usagestats.FinancialDateCompleted {
+		userTZ = c.Query("timezone")
+	}
 	now := timezone.NowInUserLocation(userTZ)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
@@ -53,7 +56,7 @@ func parseTimeRange(c *gin.Context) (time.Time, time.Time) {
 
 	if endDate != "" {
 		if t, err := timezone.ParseInUserLocation("2006-01-02", endDate, userTZ); err == nil {
-			endTime = t.Add(24 * time.Hour) // Include the end date
+			endTime = t.AddDate(0, 0, 1) // Include the end date, preserving DST boundaries.
 		} else {
 			endTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, 1), userTZ)
 		}
@@ -116,14 +119,29 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"total_actual_cost":           stats.TotalActualCost, // 实际扣除
 
 		// 今日 Token 使用统计
-		"today_requests":              stats.TodayRequests,
-		"today_input_tokens":          stats.TodayInputTokens,
-		"today_output_tokens":         stats.TodayOutputTokens,
-		"today_cache_creation_tokens": stats.TodayCacheCreationTokens,
-		"today_cache_read_tokens":     stats.TodayCacheReadTokens,
-		"today_tokens":                stats.TodayTokens,
-		"today_cost":                  stats.TodayCost,       // 今日标准计费
-		"today_actual_cost":           stats.TodayActualCost, // 今日实际扣除
+		"today_requests":                 stats.TodayRequests,
+		"today_input_tokens":             stats.TodayInputTokens,
+		"today_output_tokens":            stats.TodayOutputTokens,
+		"today_cache_creation_tokens":    stats.TodayCacheCreationTokens,
+		"today_cache_read_tokens":        stats.TodayCacheReadTokens,
+		"today_tokens":                   stats.TodayTokens,
+		"today_cost":                     stats.TodayCost, // 今日标准计费
+		"today_actual_cost":              stats.TodayActualCost,
+		"total_balance_actual_cost":      stats.TotalBalanceActualCost,
+		"total_subscription_actual_cost": stats.TotalSubscriptionActualCost,
+		"total_detail_pending_count":     stats.TotalDetailPendingCount,
+		"total_unknown_amount_count":     stats.TotalUnknownAmountCount,
+		"total_incomplete_record_count":  stats.TotalIncompleteRecordCount,
+		"total_standard_cost_complete":   stats.TotalStandardCostComplete,
+		"total_token_counts_complete":    stats.TotalTokenCountsComplete,
+		"today_balance_actual_cost":      stats.TodayBalanceActualCost,
+		"today_subscription_actual_cost": stats.TodaySubscriptionActualCost,
+		"today_detail_pending_count":     stats.TodayDetailPendingCount,
+		"today_unknown_amount_count":     stats.TodayUnknownAmountCount,
+		"today_incomplete_record_count":  stats.TodayIncompleteRecordCount,
+		"today_standard_cost_complete":   stats.TodayStandardCostComplete,
+		"today_token_counts_complete":    stats.TodayTokenCountsComplete,
+		"date_basis":                     stats.DateBasis,
 
 		// 系统运行统计
 		"average_duration_ms": stats.AverageDurationMs,
@@ -203,6 +221,10 @@ func (h *DashboardHandler) GetRealtimeMetrics(c *gin.Context) {
 // GET /api/v1/admin/dashboard/trend
 // Query params: start_date, end_date (YYYY-MM-DD), granularity (day/hour), user_id, api_key_id, model, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
+	dateBasis, valid := parseDashboardFinancialDateBasis(c)
+	if !valid {
+		return
+	}
 	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
 	if accountErr != nil {
 		response.BadRequest(c, accountErr.Error())
@@ -282,7 +304,7 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 		return
 	}
 
-	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
+	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, dateBasis, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get usage trend")
 		return
@@ -301,6 +323,10 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 // GET /api/v1/admin/dashboard/models
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetModelStats(c *gin.Context) {
+	dateBasis, valid := parseDashboardFinancialDateBasis(c)
+	if !valid {
+		return
+	}
 	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
 	if accountErr != nil {
 		response.BadRequest(c, accountErr.Error())
@@ -383,7 +409,7 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 		return
 	}
 
-	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
+	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, dateBasis, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get model statistics")
 		return
@@ -401,6 +427,10 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 // GET /api/v1/admin/dashboard/groups
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
+	dateBasis, valid := parseDashboardFinancialDateBasis(c)
+	if !valid {
+		return
+	}
 	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
 	if accountErr != nil {
 		response.BadRequest(c, accountErr.Error())
@@ -474,7 +504,7 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 		return
 	}
 
-	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, subscriptionID)
+	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, nativeCompactionV2, billingType, upstreamModelMismatch, accountIDs, dateBasis, subscriptionID)
 	if err != nil {
 		response.Error(c, 500, "Failed to get group statistics")
 		return

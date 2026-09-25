@@ -28,6 +28,12 @@ const (
 )
 
 var (
+	alipayTradeRefund = func(ctx context.Context, client *alipay.Client, param alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+		return client.TradeRefund(ctx, param)
+	}
+	alipayTradeRefundQuery = func(ctx context.Context, client *alipay.Client, param alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+		return client.TradeFastPayRefundQuery(ctx, param)
+	}
 	alipayTradeWapPay = func(client *alipay.Client, param alipay.TradeWapPay) (*url.URL, error) {
 		return client.TradeWapPay(param)
 	}
@@ -338,11 +344,15 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		return nil, err
 	}
 
-	result, err := client.TradeRefund(ctx, alipay.TradeRefund{
+	requestKey := strings.TrimSpace(req.IdempotencyKey)
+	if requestKey == "" {
+		requestKey = fmt.Sprintf("%s-refund-%d", req.OrderID, time.Now().UnixNano())
+	}
+	result, err := alipayTradeRefund(ctx, client, alipay.TradeRefund{
 		OutTradeNo:   req.OrderID,
 		RefundAmount: req.Amount,
 		RefundReason: req.Reason,
-		OutRequestNo: fmt.Sprintf("%s-refund-%d", req.OrderID, time.Now().UnixNano()),
+		OutRequestNo: requestKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("alipay TradeRefund: %w", err)
@@ -362,6 +372,44 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		RefundID: refundID,
 		Status:   refundStatus,
 	}, nil
+}
+
+// QueryRefund resolves only an explicit durable refund operation. Legacy calls
+// without its original request number stay manual rather than guessing a trade.
+func (a *Alipay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
+	key := strings.TrimSpace(req.IdempotencyKey)
+	if key == "" {
+		return nil, fmt.Errorf("alipay query refund: original refund operation required")
+	}
+	client, err := a.getClient()
+	if err != nil {
+		return nil, err
+	}
+	result, err := alipayTradeRefundQuery(ctx, client, alipay.TradeFastPayRefundQuery{OutTradeNo: req.OrderID, OutRequestNo: key})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || result.OutRequestNo != key || result.OutTradeNo != req.OrderID {
+		return nil, fmt.Errorf("alipay query refund: operation identity mismatch")
+	}
+	expected, err := payment.AmountToMinorUnit(req.Amount, "CNY")
+	if err != nil {
+		return nil, err
+	}
+	actual, err := payment.AmountToMinorUnit(result.RefundAmount, "CNY")
+	if err != nil || actual != expected {
+		return nil, fmt.Errorf("alipay query refund: amount mismatch")
+	}
+	status := payment.ProviderStatusPending
+	// Missing refund_status means not received OR failed, never confirmed failed.
+	if result.RefundStatus == "REFUND_SUCCESS" {
+		status = payment.ProviderStatusSuccess
+	}
+	id := result.TradeNo
+	if id == "" {
+		id = req.OrderID + alipayRefundSuffix
+	}
+	return &payment.RefundResponse{RefundID: id, Status: status}, nil
 }
 
 // CancelPayment closes a pending trade on Alipay.

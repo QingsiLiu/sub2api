@@ -132,10 +132,18 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 				return
 			}
 			subscription, _ := middleware2.GetSubscriptionFromContext(c)
-			task, _, err := h.auapi.Submit(c.Request.Context(), apiKey, subscription, body, c.GetHeader("Idempotency-Key"))
+			task, replayed, err := h.auapi.Submit(c.Request.Context(), apiKey, subscription, body, c.GetHeader("Idempotency-Key"))
 			if err != nil {
 				imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 				return
+			}
+			if replayed {
+				// This 202 references an existing task. Only that task's original
+				// admission remains owned; the new replay admission was never sent.
+				if err := service.CancelReplayedSubscriptionAdmission(c.Request.Context(), subscription); err != nil {
+					imageTaskJSONError(c, http.StatusServiceUnavailable, "api_error", "cannot release replay admission; retry the same idempotency key")
+					return
+				}
 			}
 			pollURL := imageTaskPollURL(c.Request.URL.Path, task.ID)
 			c.Header("Cache-Control", "no-store")

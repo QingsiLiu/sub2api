@@ -23,6 +23,7 @@ type dashboardSnapshotV2Stats struct {
 }
 
 type dashboardSnapshotV2Response struct {
+	DateBasis   string `json:"date_basis"`
 	GeneratedAt string `json:"generated_at"`
 
 	StartDate   string `json:"start_date"`
@@ -37,6 +38,7 @@ type dashboardSnapshotV2Response struct {
 }
 
 type dashboardSnapshotV2Filters struct {
+	DateBasis             string
 	SubscriptionID        int64
 	UserID                int64
 	APIKeyID              int64
@@ -52,6 +54,8 @@ type dashboardSnapshotV2Filters struct {
 }
 
 type dashboardSnapshotV2CacheKey struct {
+	DateBasis             string  `json:"date_basis"`
+	Timezone              string  `json:"timezone"`
 	SubscriptionID        int64   `json:"subscription_id"`
 	StartTime             string  `json:"start_time"`
 	EndTime               string  `json:"end_time"`
@@ -76,6 +80,9 @@ type dashboardSnapshotV2CacheKey struct {
 }
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
+	if _, valid := parseDashboardFinancialDateBasis(c); !valid {
+		return
+	}
 	startTime, endTime := parseTimeRange(c)
 	granularity := strings.TrimSpace(c.DefaultQuery("granularity", "day"))
 	if granularity != "hour" {
@@ -101,6 +108,8 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 	}
 
 	keyRaw, _ := json.Marshal(dashboardSnapshotV2CacheKey{
+		DateBasis:             filters.DateBasis,
+		Timezone:              startTime.Location().String(),
 		StartTime:             startTime.UTC().Format(time.RFC3339),
 		EndTime:               endTime.UTC().Format(time.RFC3339),
 		Granularity:           granularity,
@@ -165,6 +174,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 	usersTrendLimit int,
 ) (*dashboardSnapshotV2Response, error) {
 	resp := &dashboardSnapshotV2Response{
+		DateBasis:   usagestats.NormalizeFinancialDateBasis(filters.DateBasis),
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		StartDate:   startTime.Format("2006-01-02"),
 		EndDate:     endTime.Add(-24 * time.Hour).Format("2006-01-02"),
@@ -199,6 +209,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
 			filters.AccountIDs,
+			filters.DateBasis,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -223,6 +234,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
 			filters.AccountIDs,
+			filters.DateBasis,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -246,6 +258,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.BillingType,
 			filters.UpstreamModelMismatch,
 			filters.AccountIDs,
+			filters.DateBasis,
 			filters.SubscriptionID,
 		)
 		if err != nil {
@@ -267,7 +280,8 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 
 func parseDashboardSnapshotV2Filters(c *gin.Context) (*dashboardSnapshotV2Filters, error) {
 	filters := &dashboardSnapshotV2Filters{
-		Model: strings.TrimSpace(c.Query("model")),
+		DateBasis: usagestats.NormalizeFinancialDateBasis(c.Query("date_basis")),
+		Model:     strings.TrimSpace(c.Query("model")),
 	}
 	accountIDs, err := parseUsageAccountIDsGeili(c)
 	if err != nil {

@@ -50,3 +50,19 @@ func TestMigration223TracksConfiguredTimezone(t *testing.T) {
 	require.Contains(t, sql, "CREATE OR REPLACE FUNCTION invalidate_group_usage_rollup_state")
 	require.Contains(t, sql, "CREATE OR REPLACE FUNCTION invalidate_group_usage_rollup_state_after_insert")
 }
+
+func TestMigration260ReplacesWriterLocksWithIndependentEvents(t *testing.T) {
+	content, err := FS.ReadFile("260_group_usage_rollup_invalidation_queue.sql")
+	require.NoError(t, err)
+	sql := string(content)
+	require.Contains(t, sql, "CREATE TABLE IF NOT EXISTS usage_group_rollup_invalidations")
+	require.Contains(t, sql, "affected_at TIMESTAMPTZ NOT NULL")
+	require.Contains(t, sql, "(affected_at, id)")
+	require.Contains(t, sql, "VALUES (OLD.created_at, OLD.group_id)")
+	require.Contains(t, sql, "VALUES (NEW.created_at, NEW.group_id)")
+	require.Contains(t, sql, "AFTER INSERT ON usage_logs\nFOR EACH ROW")
+	require.NotContains(t, sql, "FOR UPDATE")
+	require.NotContains(t, sql, "FOR KEY SHARE")
+	require.NotContains(t, sql, "REFERENCES ")
+	require.NotContains(t, sql, "UNIQUE (")
+}

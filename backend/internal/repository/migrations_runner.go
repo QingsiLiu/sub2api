@@ -218,6 +218,9 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 					name, existing, checksum, name, name,
 				)
 			}
+			if err := validateFinancialMigrationIndexes(ctx, lockConn, name); err != nil {
+				return fmt.Errorf("validate applied migration %s: %w", name, err)
+			}
 			continue // 迁移已应用且校验和匹配，跳过
 		}
 		if !errors.Is(rowErr, sql.ErrNoRows) {
@@ -249,6 +252,11 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 					return fmt.Errorf("apply migration %s (non-tx statement %d): %w", name, i+1, err)
 				}
 			}
+			// geili: IF NOT EXISTS must not acknowledge an invalid concurrent
+			// index left by a cancelled or disk-full attempt.
+			if err := validateFinancialMigrationIndexes(ctx, lockConn, name); err != nil {
+				return fmt.Errorf("validate migration %s: %w", name, err)
+			}
 			if _, err := lockConn.ExecContext(ctx, "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)", name, checksum); err != nil {
 				return fmt.Errorf("record migration %s (non-tx): %w", name, err)
 			}
@@ -261,6 +269,14 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 			return fmt.Errorf("begin migration %s: %w", name, err)
 		}
 
+		// geili: replacing hot-table triggers must fail promptly rather than
+		// queue behind a long writer and block all new requests in turn.
+		if name == financialRollupTriggerMigration {
+			if _, err := tx.ExecContext(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("set migration %s lock timeout: %w", name, err)
+			}
+		}
 		// 执行迁移 SQL
 		if _, err := tx.ExecContext(ctx, content); err != nil {
 			_ = tx.Rollback()
@@ -292,6 +308,13 @@ type migrationConnection interface {
 
 func prepareNonTransactionalMigration(ctx context.Context, db migrationConnection, name string) error {
 	switch name {
+	case financialUsageIndexesMigration:
+		for _, indexName := range financialUsageMigrationIndexes {
+			if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+				return err
+			}
+		}
+		return nil
 	case paymentOrdersOutTradeNoUniqueMigration:
 		return preparePaymentOrdersOutTradeNoUniqueMigration(ctx, db)
 	case schedulerOutboxPendingDedupKeyMigration:

@@ -22,8 +22,8 @@ func TestParseTimeRange(t *testing.T) {
 	c.Request = req
 
 	start, end := parseTimeRange(c)
-	require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), start)
-	require.Equal(t, time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), end)
+	require.Equal(t, time.Date(2023, 12, 31, 16, 0, 0, 0, time.UTC), start.UTC())
+	require.Equal(t, time.Date(2024, 1, 2, 16, 0, 0, 0, time.UTC), end.UTC())
 
 	req = httptest.NewRequest(http.MethodGet, "/?start_date=bad&timezone=UTC", nil)
 	c.Request = req

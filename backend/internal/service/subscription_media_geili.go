@@ -35,7 +35,7 @@ func (s *SubscriptionService) BindMediaConsumption(ctx context.Context, task str
 	defer func() { _ = tx.Rollback() }()
 	c := tx.Client()
 	tc := dbent.NewTxContext(ctx, tx)
-	if _, err := geilisub.LockParent(tc, c, sub.ID); err != nil {
+	if _, err := geilisub.LockParentUsage(tc, c, sub.ID); err != nil {
 		return err
 	}
 	rows, err := c.QueryContext(tc, `INSERT INTO subscription_media_tasks(task_id,api_key_id,user_id,subscription_id,admission_key) SELECT $1,$2,$3,$4,request_key FROM subscription_requests WHERE request_key=$5 AND api_key_id=$2 AND subscription_id=$4 AND status='admitted' ON CONFLICT(task_id,api_key_id) DO UPDATE SET task_id=EXCLUDED.task_id WHERE subscription_media_tasks.admission_key=EXCLUDED.admission_key RETURNING admission_key`, task, keyID, sub.UserID, sub.ID, sub.AdmissionKey)

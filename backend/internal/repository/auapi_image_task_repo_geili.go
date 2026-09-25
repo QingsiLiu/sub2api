@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/uuid"
 )
 
 type auapiImageTaskRepository struct{ db *sql.DB }
@@ -15,29 +17,62 @@ func NewAUAPIImageTaskRepository(db *sql.DB) service.AUAPIImageTaskRepository {
 	return &auapiImageTaskRepository{db: db}
 }
 func (r *auapiImageTaskRepository) Create(ctx context.Context, t *service.AUAPIImageTaskRecord) (*service.AUAPIImageTaskRecord, bool, error) {
-	if r == nil || r.db == nil {
+	if r == nil || r.db == nil || t == nil {
 		return nil, false, errors.New("auapi image repository unavailable")
 	}
-	raw, e := json.Marshal(t)
-	if e != nil {
-		return nil, false, e
+	raw, err := json.Marshal(t)
+	if err != nil {
+		return nil, false, err
 	}
-	res, e := r.db.ExecContext(ctx, `INSERT INTO auapi_image_tasks(task_id,user_id,api_key_id,account_id,idempotency_key,request_hash,phase,snapshot,next_poll_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10) ON CONFLICT(user_id,api_key_id,idempotency_key) DO NOTHING`, t.TaskID, t.UserID, t.APIKeyID, t.AccountID, t.IdempotencyKey, t.RequestHash, t.Phase, string(raw), t.NextPollAt, t.CreatedAt)
-	if e != nil {
-		return nil, false, e
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
 	}
-	n, _ := res.RowsAffected()
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `INSERT INTO auapi_image_tasks(task_id,user_id,api_key_id,account_id,idempotency_key,request_hash,phase,snapshot,next_poll_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10) ON CONFLICT(user_id,api_key_id,idempotency_key) DO NOTHING`, t.TaskID, t.UserID, t.APIKeyID, t.AccountID, t.IdempotencyKey, t.RequestHash, t.Phase, string(raw), t.NextPollAt, t.CreatedAt)
+	if err != nil {
+		return nil, false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, false, err
+	}
 	if n == 0 {
-		x, e := r.GetByIdempotency(ctx, t.UserID, t.APIKeyID, t.IdempotencyKey)
-		return x, false, e
+		existing, err := scanAUAPIImageTask(tx.QueryRowContext(ctx, `SELECT task_id,phase,snapshot,next_poll_at,created_at FROM auapi_image_tasks WHERE user_id=$1 AND api_key_id=$2 AND idempotency_key=$3`, t.UserID, t.APIKeyID, t.IdempotencyKey))
+		if err != nil {
+			return nil, false, err
+		}
+		if existing.RequestHash != t.RequestHash {
+			return nil, false, service.ErrAUAPIImageConflict
+		}
+		return existing, false, nil
+	}
+	// Task acceptance, unique idempotency ownership and its balance hold share
+	// one commit. A loser or crash cannot leave an orphaned second hold.
+	if t.SubscriptionID == nil && t.HoldAmount > 0 {
+		cmd := &service.BatchImageBalanceHoldCommand{
+			RequestID: "auapi_image_hold:" + t.TaskID, HoldRequestID: "auapi_image_hold:" + t.TaskID,
+			APIKeyID: t.APIKeyID, UserID: t.UserID, BatchID: t.TaskID,
+			RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash, HoldAmount: t.HoldAmount,
+		}
+		if _, err := (&usageBillingRepository{db: r.db}).applyBatchImageBalanceHoldTx(ctx, tx, cmd, reserveUsageBillingBatchImageBalance, "reserve"); err != nil {
+			return nil, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
 	}
 	return t, true, nil
 }
 func (r *auapiImageTaskRepository) scan(ctx context.Context, q string, args ...any) (*service.AUAPIImageTaskRecord, error) {
+	return scanAUAPIImageTask(r.db.QueryRowContext(ctx, q, args...))
+}
+
+func scanAUAPIImageTask(row interface{ Scan(...any) error }) (*service.AUAPIImageTaskRecord, error) {
 	var id, phase string
 	var raw []byte
 	var next, created time.Time
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&id, &phase, &raw, &next, &created)
+	err := row.Scan(&id, &phase, &raw, &next, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrImageTaskNotFound
 	}
@@ -61,9 +96,9 @@ func (r *auapiImageTaskRepository) GetByIdempotency(ctx context.Context, u, k in
 	return r.scan(ctx, `SELECT task_id,phase,snapshot,next_poll_at,created_at FROM auapi_image_tasks WHERE user_id=$1 AND api_key_id=$2 AND idempotency_key=$3`, u, k, key)
 }
 func (r *auapiImageTaskRepository) Claim(ctx context.Context, id string, lease time.Duration) (*service.AUAPIImageTaskRecord, error) {
-	tok := time.Now().UTC().Format(time.RFC3339Nano)
+	tok := uuid.NewString()
 	until := time.Now().Add(lease)
-	res, e := r.db.ExecContext(ctx, `UPDATE auapi_image_tasks SET lease_until=$2,lease_token=$3 WHERE task_id=$1 AND (lease_until IS NULL OR lease_until<NOW())`, id, until, tok)
+	res, e := r.db.ExecContext(ctx, `UPDATE auapi_image_tasks SET lease_until=$2,lease_token=$3 WHERE task_id=$1 AND phase<>'done' AND (lease_until IS NULL OR lease_until<NOW())`, id, until, tok)
 	if e != nil {
 		return nil, e
 	}
@@ -82,8 +117,21 @@ func (r *auapiImageTaskRepository) Save(ctx context.Context, t *service.AUAPIIma
 	if e != nil {
 		return e
 	}
-	_, e = r.db.ExecContext(ctx, `UPDATE auapi_image_tasks SET phase=$2,snapshot=$3::jsonb,next_poll_at=$4,lease_until=NULL,updated_at=NOW() WHERE task_id=$1`, t.TaskID, t.Phase, string(raw), t.NextPollAt)
-	return e
+	if t.LeaseToken == "" {
+		return service.ErrAUAPIImageLease
+	}
+	res, e := r.db.ExecContext(ctx, `UPDATE auapi_image_tasks SET phase=$2,snapshot=$3::jsonb,next_poll_at=$4,updated_at=NOW() WHERE task_id=$1 AND lease_token=$5 AND lease_until>NOW()`, t.TaskID, t.Phase, string(raw), t.NextPollAt, t.LeaseToken)
+	if e != nil {
+		return e
+	}
+	n, e := res.RowsAffected()
+	if e != nil {
+		return e
+	}
+	if n != 1 {
+		return service.ErrAUAPIImageLease
+	}
+	return nil
 }
 func (r *auapiImageTaskRepository) Settle(ctx context.Context, t *service.AUAPIImageTaskRecord) error {
 	return r.Save(ctx, t)

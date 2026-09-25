@@ -164,6 +164,7 @@ func TestExecuteRefundUsesActualAvailableBalanceDeduction(t *testing.T) {
 		SetEmail("refund-execute-clamp@example.com").
 		SetPasswordHash("hash").
 		SetUsername("refund-execute-clamp").
+		SetBalance(25).
 		Save(ctx)
 	require.NoError(t, err)
 	order, err := client.PaymentOrder.Create().
@@ -186,17 +187,12 @@ func TestExecuteRefundUsesActualAvailableBalanceDeduction(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := &mockUserRepo{deductAvailableBalanceFn: func(_ context.Context, id int64, amount float64) (float64, error) {
-		require.Equal(t, user.ID, id)
-		require.Equal(t, 100.0, amount)
-		return 25, nil
-	}}
 	plan := &RefundPlan{
 		OrderID: order.ID, Order: order, RefundAmount: 100, GatewayAmount: 100,
 		Reason: "concurrent spend", Force: true, DeductionType: payment.DeductionTypeBalance, BalanceToDeduct: 100,
 	}
 
-	result, err := (&PaymentService{entClient: client, userRepo: repo}).ExecuteRefund(ctx, plan)
+	result, err := (&PaymentService{entClient: client}).ExecuteRefund(ctx, plan)
 	require.NoError(t, err)
 	require.True(t, result.Success)
 	require.Equal(t, 25.0, plan.BalanceToDeduct)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -325,6 +327,15 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 	requestID string,
 	userID, apiKeyID int64,
 ) (int64, error) {
+	if s != nil && s.HasDurableGrokVideoTasks() {
+		task, err := s.LoadDurableGrokVideoTask(ctx, requestID, userID, apiKeyID)
+		if err != nil {
+			return 0, err
+		}
+		if task != nil {
+			return task.AccountID, nil
+		}
+	}
 	if s == nil || s.cache == nil {
 		return 0, fmt.Errorf("grok video request binding cache is unavailable")
 	}
@@ -482,6 +493,16 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) (*GrokVideoPendingBilling, error) {
+	if s != nil && s.HasDurableGrokVideoTasks() {
+		task, err := s.LoadDurableGrokVideoTask(ctx, requestID, userID, apiKeyID)
+		if err != nil {
+			return nil, err
+		}
+		if task != nil {
+			copy := task.Pending
+			return &copy, nil
+		}
+	}
 	if s == nil || s.cache == nil {
 		return nil, fmt.Errorf("grok video pending billing cache is unavailable")
 	}
@@ -589,14 +610,11 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 	if gjson.ValidBytes(statusBody) {
 		// Official: top-level model.
 		model = strings.TrimSpace(gjson.GetBytes(statusBody, "model").String())
-		// Official: video.duration (number of seconds).
-		if v := gjson.GetBytes(statusBody, "video.duration"); v.Exists() && v.Type == gjson.Number {
-			durationSeconds = int(v.Int())
-			if durationSeconds == 0 && v.Float() > 0 {
-				// Sub-second values are unexpected for this API; still accept truncated int path above.
-				durationSeconds = int(v.Float())
-			}
+		value, err := observedGrokVideoDuration(statusBody)
+		if err != nil {
+			return nil
 		}
+		durationSeconds = value
 	}
 	if pending != nil {
 		if model == "" {
@@ -728,9 +746,14 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		proxyURL = account.Proxy.URL()
 	}
 	upstreamStart := time.Now()
+	ctxkey.MarkUpstreamDispatched(ctx)
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
+		if endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions {
+			// Ambiguous accepted creates must not be reposted on another account.
+			return nil, fmt.Errorf("video creation outcome unknown; automatic retry disabled: %w", err)
+		}
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -738,6 +761,9 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	requestIDHeader := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 	requestModel := requestInfo.Model
 	if resp.StatusCode >= 400 {
+		if resp.StatusCode >= 500 && (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions) {
+			return nil, fmt.Errorf("video creation outcome unknown (HTTP %d); automatic retry disabled", resp.StatusCode)
+		}
 		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel)
 	}
 
@@ -765,11 +791,18 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
 	if (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions) && usage.ResponseID != "" {
+		if strings.HasPrefix(usage.ResponseID, "seedance:") || strings.HasPrefix(usage.ResponseID, "grok-video:") {
+			return nil, errors.New("xAI task ID uses a reserved financial namespace")
+		}
 		bindCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
-		err := BindSubscriptionMediaTask(bindCtx, usage.ResponseID, nil)
+		if _, durable := ctx.Value(grokVideoCreateContextKey{}).(grokVideoCreateContract); durable {
+			err = s.persistGrokVideoAccepted(bindCtx, usage.ResponseID)
+		} else {
+			err = BindSubscriptionMediaTask(bindCtx, usage.ResponseID, nil)
+		}
 		cancel()
 		if err != nil {
-			return nil, fmt.Errorf("persist subscription media identity: %w", err)
+			return nil, fmt.Errorf("persist accepted video financial task: %w", err)
 		}
 	}
 	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)

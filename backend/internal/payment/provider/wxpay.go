@@ -470,7 +470,10 @@ func (w *Wxpay) Refund(ctx context.Context, req payment.RefundRequest) (*payment
 	}
 	rs := refunddomestic.RefundsApiService{Client: c}
 	cur := wxpayCurrency
-	outRefundNo := wxpayRefundID(req.OrderID, req.Amount)
+	outRefundNo := strings.TrimSpace(req.IdempotencyKey)
+	if outRefundNo == "" {
+		outRefundNo = wxpayRefundID(req.OrderID, req.Amount)
+	}
 	res, _, err := rs.Create(ctx, refunddomestic.CreateRequest{
 		OutTradeNo:  core.String(req.OrderID),
 		OutRefundNo: core.String(outRefundNo),
@@ -494,6 +497,9 @@ func (w *Wxpay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest)
 	}
 	outRefundNo := strings.TrimSpace(req.RefundID)
 	if outRefundNo == "" {
+		outRefundNo = strings.TrimSpace(req.IdempotencyKey)
+	}
+	if outRefundNo == "" {
 		outRefundNo = wxpayRefundID(req.OrderID, req.Amount)
 	}
 	if outRefundNo == "" {
@@ -506,18 +512,30 @@ func (w *Wxpay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest)
 	if err != nil {
 		return nil, fmt.Errorf("wxpay query refund: %w", err)
 	}
-	status := payment.ProviderStatusPending
-	if res != nil && res.Status != nil {
-		switch *res.Status {
-		case refunddomestic.STATUS_SUCCESS:
-			status = payment.ProviderStatusSuccess
-		case refunddomestic.STATUS_CLOSED, refunddomestic.STATUS_ABNORMAL:
-			status = payment.ProviderStatusFailed
-		default:
-			status = payment.ProviderStatusPending
+	if req.IdempotencyKey != "" {
+		expected, amountErr := payment.YuanToFen(req.Amount)
+		if amountErr != nil || res == nil || res.OutRefundNo == nil || *res.OutRefundNo != req.IdempotencyKey || res.Amount == nil || res.Amount.Refund == nil || *res.Amount.Refund != expected {
+			return nil, fmt.Errorf("wxpay query refund: operation identity or amount mismatch")
 		}
 	}
+	status := payment.ProviderStatusPending
+	if res != nil && res.Status != nil {
+		status = wxpayRefundProviderStatus(*res.Status)
+	}
 	return &payment.RefundResponse{RefundID: outRefundNo, Status: status}, nil
+}
+
+// Only SUCCESS and CLOSED are terminal. ABNORMAL can subsequently be rerouted
+// to the customer; crediting local balance here would create a double benefit.
+func wxpayRefundProviderStatus(status refunddomestic.Status) string {
+	switch status {
+	case refunddomestic.STATUS_SUCCESS:
+		return payment.ProviderStatusSuccess
+	case refunddomestic.STATUS_CLOSED:
+		return payment.ProviderStatusFailed
+	default:
+		return payment.ProviderStatusPending
+	}
 }
 
 func wxpayRefundID(orderID, amount string) string {

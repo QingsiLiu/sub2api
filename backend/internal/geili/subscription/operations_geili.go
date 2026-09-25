@@ -57,6 +57,19 @@ func LockParent(ctx context.Context, c *dbent.Client, id int64) (*dbent.UserSubs
 	return c.UserSubscription.Query().Unique(false).Where(usersubscription.IDEQ(id), LockRows).Only(ctx)
 }
 
+// LockParentUsage serializes usage/window changes without blocking foreign-key
+// KEY SHARE readers inserting usage evidence. Identity/deletion/refund operations
+// must continue using LockParent and its stronger FOR UPDATE lock.
+func LockParentUsage(ctx context.Context, c *dbent.Client, id int64) (*dbent.UserSubscription, error) {
+	return c.UserSubscription.Query().Unique(false).Where(usersubscription.IDEQ(id), lockUsageRows).Only(ctx)
+}
+
+func lockUsageRows(s *entsql.Selector) {
+	if s.Dialect() != dialect.SQLite {
+		s.For(entsql.LockNoKeyUpdate)
+	}
+}
+
 // EnsureLegacyLot is only for existing records, never the empty shell of a new paid purchase.
 // Caller holds the parent lock. Historical lifetime remains a conservative lower bound.
 func EnsureLegacyLot(ctx context.Context, c *dbent.Client, id int64) ([]Lot, error) {

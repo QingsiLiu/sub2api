@@ -12,6 +12,7 @@ import (
 // AccountUsageService 等不同接收者共享同一实现。
 func resolveCredentialAccount(ctx context.Context, repo AccountRepository, account *Account) (*Account, error) {
 	if account == nil || !account.IsShadow() {
+		FreezeCredentialBillingAccount(ctx, account)
 		return account, nil
 	}
 	parent, err := repo.GetByID(ctx, *account.ParentAccountID)
@@ -29,5 +30,8 @@ func resolveCredentialAccount(ctx context.Context, repo AccountRepository, accou
 	if !parent.IsOpenAIOAuth() {
 		return nil, fmt.Errorf("spark shadow parent %d is not OpenAI OAuth", parent.ID)
 	}
+	// geili hook: capture pricing facts before credentials are used upstream.
+	freezeCredentialBillingAlias(ctx, account, parent)
+	FreezeCredentialBillingAccount(ctx, parent)
 	return parent, nil
 }

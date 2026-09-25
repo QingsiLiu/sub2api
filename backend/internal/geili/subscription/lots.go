@@ -92,6 +92,8 @@ func (e Lot) windowResetAnchor(start time.Time) time.Time {
 // Normalize only mutates a detached snapshot. Persistence is serialized by the
 // aggregate subscription lock. Expired lots never receive fresh quota.
 func (e *Lot) Normalize(now time.Time, activate bool) {
+	// SQL timestamp fields and admission JSON must describe the same window.
+	now = now.Truncate(time.Microsecond)
 	if !e.Active(now) {
 		return
 	}
@@ -297,6 +299,24 @@ func LockSubscription(ctx context.Context, q SQL, id int64) error {
 	}
 	return nil
 }
+
+// LockSubscriptionUsage is restricted to non-key usage/window updates. Keep
+// LockSubscription for administrative lifecycle/identity changes.
+func LockSubscriptionUsage(ctx context.Context, q SQL, id int64) error {
+	rows, err := q.QueryContext(ctx, `SELECT id FROM user_subscriptions WHERE id=$1 FOR NO KEY UPDATE`, id)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if rows.Err() != nil {
+			return rows.Err()
+		}
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func SaveLots(ctx context.Context, q SQL, lots []Lot) error {
 	for _, e := range lots {
 		_, err := q.ExecContext(ctx, `UPDATE user_subscription_entitlements SET daily_window_start=$2,weekly_window_start=$3,monthly_window_start=$4,daily_usage_usd=$5,weekly_usage_usd=$6,monthly_usage_usd=$7,lifetime_usage_usd=$8,updated_at=NOW() WHERE id=$1`, e.ID, e.DailyWindowStart, e.WeeklyWindowStart, e.MonthlyWindowStart, e.DailyUsageUSD, e.WeeklyUsageUSD, e.MonthlyUsageUSD, e.LifetimeUsageUSD)
@@ -318,7 +338,7 @@ func SyncAggregate(ctx context.Context, q SQL, id int64, lots []Lot, now time.Ti
 	return err
 }
 func Debit(ctx context.Context, q SQL, id int64, cost float64, now time.Time) (bool, error) {
-	if err := LockSubscription(ctx, q, id); err != nil {
+	if err := LockSubscriptionUsage(ctx, q, id); err != nil {
 		return false, err
 	}
 	// geili hook: a migrated ledger must never infer a late request's term/date.

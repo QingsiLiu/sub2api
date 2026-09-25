@@ -27,6 +27,8 @@ func NormalizeModelSource(source string) string {
 
 // DashboardStats 仪表盘统计
 type DashboardStats struct {
+	FinancialDashboardSummary
+
 	// 用户统计
 	TotalUsers    int64 `json:"total_users"`
 	TodayNewUsers int64 `json:"today_new_users"` // 今日新增用户数
@@ -81,6 +83,8 @@ type DashboardStats struct {
 
 // TrendDataPoint represents a single point in trend data
 type TrendDataPoint struct {
+	FinancialSummary
+
 	Date                string  `json:"date"`
 	Requests            int64   `json:"requests"`
 	InputTokens         int64   `json:"input_tokens"`
@@ -94,6 +98,8 @@ type TrendDataPoint struct {
 
 // ModelStat represents usage statistics for a single model
 type ModelStat struct {
+	FinancialSummary
+
 	Model               string  `json:"model"`
 	Requests            int64   `json:"requests"`
 	InputTokens         int64   `json:"input_tokens"`
@@ -108,6 +114,8 @@ type ModelStat struct {
 
 // EndpointStat represents usage statistics for a single request endpoint.
 type EndpointStat struct {
+	FinancialSummary
+
 	Endpoint    string  `json:"endpoint"`
 	Requests    int64   `json:"requests"`
 	TotalTokens int64   `json:"total_tokens"`
@@ -125,6 +133,8 @@ type GroupUsageSummary struct {
 
 // GroupStat represents usage statistics for a single group
 type GroupStat struct {
+	FinancialSummary
+
 	GroupID     int64   `json:"group_id"`
 	GroupName   string  `json:"group_name"`
 	Requests    int64   `json:"requests"`
@@ -136,6 +146,8 @@ type GroupStat struct {
 
 // UserUsageTrendPoint represents user usage trend data point
 type UserUsageTrendPoint struct {
+	FinancialSummary
+
 	Date       string  `json:"date"`
 	UserID     int64   `json:"user_id"`
 	Email      string  `json:"email"`
@@ -148,6 +160,8 @@ type UserUsageTrendPoint struct {
 
 // UserSpendingRankingItem represents a user spending ranking row.
 type UserSpendingRankingItem struct {
+	FinancialSummary
+
 	UserID     int64   `json:"user_id"`
 	Email      string  `json:"email"`
 	Username   string  `json:"username"`
@@ -158,6 +172,8 @@ type UserSpendingRankingItem struct {
 
 // UserSpendingRankingResponse represents ranking rows plus total spend for the time range.
 type UserSpendingRankingResponse struct {
+	FinancialSummary
+
 	Ranking         []UserSpendingRankingItem `json:"ranking"`
 	TotalActualCost float64                   `json:"total_actual_cost"`
 	TotalRequests   int64                     `json:"total_requests"`
@@ -166,6 +182,8 @@ type UserSpendingRankingResponse struct {
 
 // UserBreakdownItem represents per-user usage breakdown within a dimension (group, model, endpoint).
 type UserBreakdownItem struct {
+	FinancialSummary
+
 	UserID       int64   `json:"user_id"`
 	Email        string  `json:"email"`
 	Requests     int64   `json:"requests"`
@@ -200,6 +218,8 @@ type UserBreakdownDimension struct {
 
 // APIKeyUsageTrendPoint represents API key usage trend data point
 type APIKeyUsageTrendPoint struct {
+	FinancialSummary
+
 	Date     string `json:"date"`
 	APIKeyID int64  `json:"api_key_id"`
 	KeyName  string `json:"key_name"`
@@ -209,6 +229,8 @@ type APIKeyUsageTrendPoint struct {
 
 // APIKeyDailyUsagePoint represents one day of usage for a single API key.
 type APIKeyDailyUsagePoint struct {
+	FinancialSummary
+
 	Date             string  `json:"date"`
 	Requests         int64   `json:"requests"`
 	InputTokens      int64   `json:"input_tokens"`
@@ -222,6 +244,8 @@ type APIKeyDailyUsagePoint struct {
 
 // UserDashboardStats 用户仪表盘统计
 type UserDashboardStats struct {
+	FinancialDashboardSummary
+
 	// API Key 统计
 	TotalAPIKeys  int64 `json:"total_api_keys"`
 	ActiveAPIKeys int64 `json:"active_api_keys"`
@@ -270,6 +294,8 @@ type PlatformDashboardStats struct {
 
 // UsageLogFilters represents filters for usage log queries
 type UsageLogFilters struct {
+	DateBasis string `json:"date_basis,omitempty"` // accounting (Beijing) or completed
+
 	SubscriptionID int64
 	UserID         int64
 	APIKeyID       int64
@@ -294,6 +320,8 @@ type UsageLogFilters struct {
 
 // UsageStats represents usage statistics
 type UsageStats struct {
+	FinancialSummary
+
 	TotalRequests            int64          `json:"total_requests"`
 	TotalInputTokens         int64          `json:"total_input_tokens"`
 	TotalOutputTokens        int64          `json:"total_output_tokens"`

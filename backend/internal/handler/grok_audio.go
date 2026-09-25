@@ -143,16 +143,17 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	started := time.Now()
 	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(c.Request.Context(), c, conn, upstream)
 	elapsed := time.Since(started)
+	// geili: a transport failure cannot discard already-observed audio usage.
+	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
+		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result)
+		rights.End(true, false)
+	}
 	if proxyErr != nil {
 		reqLog.Info("grok_realtime.proxy_failed", zap.Error(proxyErr))
 		if !isExpectedGrokRealtimeClose(proxyErr) {
 			_ = conn.Close(coderws.StatusInternalError, "upstream realtime websocket failed")
 			return
 		}
-	}
-	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
-		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result)
-		rights.End(true, false)
 	}
 }
 

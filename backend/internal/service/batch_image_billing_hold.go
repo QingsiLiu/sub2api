@@ -5,8 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"go.uber.org/zap"
+	"time"
 )
 
 const (
@@ -46,6 +45,7 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 	}
 	return &BatchImageBalanceHoldCommand{
 		RequestID:          requestID,
+		HoldRequestID:      batchImageDerefString(job.HoldID),
 		APIKeyID:           *job.APIKeyID,
 		UserID:             job.UserID,
 		BatchID:            job.BatchID,
@@ -75,13 +75,20 @@ func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 	return nil
 }
 
-func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, actualAmount float64, payloadHash string) error {
+func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, actualAmount float64, payloadHash string, details ...*UsageLog) error {
 	if repo == nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(errors.New("batch image billing repository is not configured"))
 	}
 	cmd, err := buildBatchImageHoldCommand(job, BatchImageCaptureRequestID(job.BatchID), actualAmount, payloadHash)
 	if err != nil {
 		return err
+	}
+	if len(details) > 0 {
+		cmd.UsageDetail = details[0]
+	}
+	cmd.CompletedAt = time.Now().UTC()
+	if job.FinishedAt != nil {
+		cmd.CompletedAt = *job.FinishedAt
 	}
 	if _, err := repo.CaptureBatchImageBalance(ctx, cmd); err != nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(err)
@@ -101,15 +108,8 @@ func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 		return nil
 	}
 	if _, err := repo.ReleaseBatchImageBalance(ctx, cmd); err != nil {
-		// 同一 release request id 出现指纹冲突，说明此前已有一次携带不同
-		// payloadHash 的释放成功提交（资金已归还）。视为幂等成功，
-		// 避免历史指纹不一致的 job 永远卡在释放失败的毒消息循环里。
-		if errors.Is(err, ErrUsageBillingRequestConflict) {
-			logger.L().Warn("batch_image.release_fingerprint_conflict_treated_as_released",
-				zap.String("batch_id", job.BatchID),
-			)
-			return nil
-		}
+		// A fingerprint conflict is not proof that money was returned. Only
+		// the repository's verified terminal state may report idempotent success.
 		return ErrBatchImageBillingHoldFailed.WithCause(err)
 	}
 	return nil

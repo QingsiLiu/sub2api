@@ -230,7 +230,14 @@ func (s *Stripe) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		Amount:        stripe.Int64(amountInMinorUnit),
 		Reason:        stripe.String(string(stripe.RefundReasonRequestedByCustomer)),
 	}
-	params.SetIdempotencyKey(fmt.Sprintf("re-%s-%d", req.OrderID, amountInMinorUnit))
+	refundKey := strings.TrimSpace(req.IdempotencyKey)
+	if refundKey == "" {
+		refundKey = fmt.Sprintf("re-%s-%d", req.OrderID, amountInMinorUnit)
+	}
+	params.SetIdempotencyKey(refundKey)
+	if req.IdempotencyKey != "" {
+		params.AddMetadata("geili_refund_key", req.IdempotencyKey)
+	}
 	params.Context = ctx
 
 	r, err := s.sc.V1Refunds.Create(ctx, params)
@@ -268,6 +275,9 @@ func (s *Stripe) QueryRefund(ctx context.Context, req payment.RefundQueryRequest
 		}
 		params := &stripe.RefundListParams{PaymentIntent: stripe.String(tradeNo)}
 		params.Limit = stripe.Int64(1)
+		if req.IdempotencyKey != "" {
+			params.Limit = stripe.Int64(100)
+		}
 		list := s.sc.V1Refunds.List(ctx, params)
 		if list.Err() != nil {
 			return nil, fmt.Errorf("stripe query refund: %w", list.Err())
@@ -276,9 +286,29 @@ func (s *Stripe) QueryRefund(ctx context.Context, req payment.RefundQueryRequest
 		if len(refunds) == 0 {
 			return nil, fmt.Errorf("stripe query refund: no refund found")
 		}
-		r = refunds[0]
+		if req.IdempotencyKey == "" {
+			r = refunds[0]
+		} else {
+			for _, candidate := range refunds {
+				if candidate.Metadata["geili_refund_key"] == req.IdempotencyKey {
+					r = candidate
+					break
+				}
+			}
+			if r == nil {
+				return nil, fmt.Errorf("stripe query refund: original operation not found; manual verification required")
+			}
+		}
 	}
-
+	if req.IdempotencyKey != "" && r.Metadata["geili_refund_key"] != req.IdempotencyKey {
+		return nil, fmt.Errorf("stripe query refund: operation identity mismatch")
+	}
+	if req.IdempotencyKey != "" {
+		expected, amountErr := payment.AmountToMinorUnit(req.Amount, s.currency())
+		if amountErr != nil || r.Amount != expected || r.PaymentIntent == nil || r.PaymentIntent.ID != req.TradeNo || !strings.EqualFold(string(r.Currency), s.currency()) {
+			return nil, fmt.Errorf("stripe query refund: amount mismatch")
+		}
+	}
 	return &payment.RefundResponse{RefundID: r.ID, Status: stripeRefundProviderStatus(r.Status)}, nil
 }
 

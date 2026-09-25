@@ -167,6 +167,17 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 	return r.createBatched(ctx, log)
 }
 
+// CreateDirect is the final compatibility fallback: bypass both batch queues.
+func (r *usageLogRepository) CreateDirect(ctx context.Context, log *service.UsageLog) (bool, error) {
+	if log == nil {
+		return false, nil
+	}
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return r.createSingle(ctx, tx.Client(), log)
+	}
+	return r.createSingle(ctx, r.sql, log)
+}
+
 func (r *usageLogRepository) CreateBestEffort(ctx context.Context, log *service.UsageLog) error {
 	if log == nil {
 		return nil
@@ -562,6 +573,12 @@ func (r *usageLogRepository) flushCreateBatch(db *sql.DB, batch []usageLogCreate
 }
 
 func (r *usageLogRepository) flushBestEffortBatch(db *sql.DB, batch []usageLogBestEffortRequest) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	r.flushBestEffortBatchContext(ctx, db, batch)
+}
+
+func (r *usageLogRepository) flushBestEffortBatchContext(ctx context.Context, db *sql.DB, batch []usageLogBestEffortRequest) {
 	if len(batch) == 0 {
 		return
 	}
@@ -604,14 +621,13 @@ func (r *usageLogRepository) flushBestEffortBatch(db *sql.DB, batch []usageLogBe
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	query, args := buildUsageLogBestEffortInsertQuery(preparedList)
 	if _, err := db.ExecContext(ctx, query, args...); err != nil {
 		logger.LegacyPrintf("repository.usage_log", "best-effort batch insert failed: %v", err)
 		for _, group := range groupOrder {
-			singleErr := execUsageLogInsertNoResult(ctx, db, group.prepared)
+			singleCtx, singleCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			singleErr := execUsageLogInsertNoResult(singleCtx, db, group.prepared)
+			singleCancel()
 			if singleErr != nil {
 				logger.LegacyPrintf("repository.usage_log", "best-effort single fallback insert failed: %v", singleErr)
 			} else if group.prepared.requestID != "" && r != nil && r.bestEffortRecent != nil {

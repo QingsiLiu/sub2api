@@ -41,7 +41,16 @@ func (h *OpenAIGatewayHandler) SeedanceTasks(c *gin.Context) {
 // Ark reports actual completion tokens. Never infer tokens from duration or use
 // Grok's per-second video tariff. Repeated polls share the durable task dedup key.
 func prepareSeedanceCompletionBilling(ctx context.Context, h *OpenAIGatewayHandler, key *service.APIKey, subject middleware.AuthSubject, taskID string, result *service.OpenAIForwardResult) *service.OpenAIForwardResult {
-	if result == nil || result.Usage.OutputTokens <= 0 {
+	if result == nil {
+		return nil
+	}
+	if h.gatewayService.HasDurableGrokVideoTasks() && result.UpstreamTerminalEvent == "succeeded_usage_verified" {
+		handled, err := h.gatewayService.ObserveDurableGrokVideoResult(ctx, taskID, subject.UserID, key.ID, result)
+		if err != nil || handled {
+			return nil
+		}
+	}
+	if result.Usage.OutputTokens <= 0 {
 		return nil
 	}
 	pending, err := h.gatewayService.LoadGrokVideoPendingBilling(ctx, taskID, subject.UserID, key.ID)

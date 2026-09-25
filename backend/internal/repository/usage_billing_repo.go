@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -44,29 +46,59 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		}
 	}()
 
-	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
+	// Geili hook: receipt and all monetary effects share one transaction.
+	receipt, err := r.prepareSettlementTx(ctx, tx, cmd, cmd.UsageDetail)
 	if err != nil {
 		return nil, err
 	}
+	applied := false
+	if receipt.state != "settled" {
+		applied, err = r.claimUsageBillingKey(ctx, tx, cmd)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if !applied {
+		if receipt.state != "settled" {
+			if err := r.confirmLegacySettlementTx(ctx, tx, receipt.id, cmd); err != nil {
+				return nil, err
+			}
+		}
 		if cmd.SubscriptionAdmissionKey != "" && cmd.SubscriptionID != nil {
-			if err := geilisub.LockSubscription(ctx, tx, *cmd.SubscriptionID); err != nil {
+			if err := geilisub.LockSubscriptionUsage(ctx, tx, *cmd.SubscriptionID); err != nil {
 				return nil, err
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE subscription_requests SET status='deduplicated',settled_at=$2,billing_request_id=$3 WHERE request_key=$1 AND subscription_id=$4 AND api_key_id=$5 AND status='admitted'`, cmd.SubscriptionAdmissionKey, time.Now(), cmd.RequestID, *cmd.SubscriptionID, cmd.APIKeyID); err != nil {
 				return nil, err
 			}
-			if err := tx.Commit(); err != nil {
-				return nil, err
-			}
-			tx = nil
 		}
+		if err := markSettlementSettledTx(ctx, tx, receipt.id); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		tx = nil
 		return &service.UsageBillingApplyResult{Applied: false}, nil
 	}
 
 	result := &service.UsageBillingApplyResult{Applied: true}
-	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+	// The first persisted command owns the admitted quota date/lot snapshot.
+	// A retry can bring a fresh admission, but cannot move this bill to it.
+	authoritative := cmd
+	if receipt.command != nil {
+		authoritative = receipt.command
+	}
+	if err := r.applyUsageBillingEffects(ctx, tx, authoritative, result); err != nil {
+		return nil, err
+	}
+	if cmd.SubscriptionID != nil && cmd.SubscriptionAdmissionKey != "" && cmd.SubscriptionAdmissionKey != authoritative.SubscriptionAdmissionKey {
+		if _, err := tx.ExecContext(ctx, `UPDATE subscription_requests SET status='deduplicated',settled_at=$2,billing_request_id=$3 WHERE request_key=$1 AND subscription_id=$4 AND api_key_id=$5 AND status='admitted'`, cmd.SubscriptionAdmissionKey, time.Now(), cmd.RequestID, *cmd.SubscriptionID, cmd.APIKeyID); err != nil {
+			return nil, err
+		}
+	}
+	if err := markSettlementSettledTx(ctx, tx, receipt.id); err != nil {
 		return nil, err
 	}
 
@@ -125,21 +157,22 @@ func (r *usageBillingRepository) claimUsageBillingRequest(ctx context.Context, t
 }
 
 func (r *usageBillingRepository) ReserveBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, reserveUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, reserveUsageBillingBatchImageBalance, "reserve")
 }
 
 func (r *usageBillingRepository) CaptureBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, captureUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, captureUsageBillingBatchImageBalance, "capture")
 }
 
 func (r *usageBillingRepository) ReleaseBatchImageBalance(ctx context.Context, cmd *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error) {
-	return r.applyBatchImageBalanceHold(ctx, cmd, releaseUsageBillingBatchImageBalance)
+	return r.applyBatchImageBalanceHold(ctx, cmd, releaseUsageBillingBatchImageBalance, "release")
 }
 
 func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	ctx context.Context,
 	cmd *service.BatchImageBalanceHoldCommand,
 	apply func(context.Context, *sql.Tx, *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error),
+	operation string,
 ) (_ *service.BatchImageBalanceHoldResult, err error) {
 	if cmd == nil {
 		return &service.BatchImageBalanceHoldResult{}, nil
@@ -162,22 +195,10 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 		}
 	}()
 
-	applied, err := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
+	result, err := r.applyBatchImageBalanceHoldTx(ctx, tx, cmd, apply, operation)
 	if err != nil {
 		return nil, err
 	}
-	if !applied {
-		return &service.BatchImageBalanceHoldResult{Applied: false}, nil
-	}
-
-	result, err := apply(ctx, tx, cmd)
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		result = &service.BatchImageBalanceHoldResult{}
-	}
-	result.Applied = true
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -228,7 +249,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.QuotaState = quotaState
 	}
 
-	return nil
+	return incrementSettlementPlatformQuota(ctx, tx, cmd)
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
@@ -358,7 +379,7 @@ func releaseUsageBillingBatchImageBalance(ctx context.Context, tx *sql.Tx, cmd *
 	}
 	// 释放前校验该 job 确实预留过 hold（hold request id 已被 claim），
 	// 防止从未成功冻结的 job 触发"幻影释放"，从其他用户的冻结资金池中凭空生成余额。
-	held, heldErr := batchImageHoldClaimExists(ctx, tx, service.BatchImageHoldRequestID(cmd.BatchID), cmd.APIKeyID)
+	held, heldErr := batchImageHoldClaimExists(ctx, tx, normalizedHoldRequestID(cmd), cmd.APIKeyID)
 	if heldErr != nil {
 		return nil, heldErr
 	}
@@ -577,4 +598,161 @@ func incrementUsageBillingAccountQuota(ctx context.Context, tx *sql.Tx, accountI
 		}
 	}
 	return &state, nil
+}
+
+// Geili hook: reserve an async task's hold in its creation transaction.
+// Never commits or rolls back the caller-owned transaction.
+func (r *usageBillingRepository) applyBatchImageBalanceHoldTx(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand, apply func(context.Context, *sql.Tx, *service.BatchImageBalanceHoldCommand) (*service.BatchImageBalanceHoldResult, error), operations ...string) (*service.BatchImageBalanceHoldResult, error) {
+	if cmd == nil || tx == nil {
+		return nil, errors.New("missing hold transaction or command")
+	}
+	if len(operations) != 1 || (operations[0] != "reserve" && operations[0] != "capture" && operations[0] != "release") {
+		return nil, errors.New("explicit hold operation required")
+	}
+	operation := operations[0]
+	cmd.Normalize()
+	if cmd.RequestID == "" || cmd.HoldRequestID == "" || cmd.BatchID == "" || cmd.UserID <= 0 {
+		return nil, errors.New("invalid hold identity")
+	}
+	if math.IsNaN(cmd.HoldAmount) || math.IsInf(cmd.HoldAmount, 0) || cmd.HoldAmount < 0 || math.IsNaN(cmd.ActualAmount) || math.IsInf(cmd.ActualAmount, 0) || cmd.ActualAmount < 0 {
+		return nil, errors.New("invalid hold amount")
+	}
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, cmd.HoldRequestID+":"+fmt.Sprint(cmd.APIKeyID)); err != nil {
+		return nil, err
+	}
+	var state string
+	var held float64
+	var user int64
+	var batch string
+	var captured sql.NullFloat64
+	var terminalID sql.NullString
+	err := tx.QueryRowContext(ctx, `SELECT state,held_amount,user_id,batch_id,captured_amount,terminal_request_id FROM usage_balance_holds WHERE hold_request_id=$1 AND api_key_id=$2 FOR UPDATE`, cmd.HoldRequestID, cmd.APIKeyID).Scan(&state, &held, &user, &batch, &captured, &terminalID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	found := err == nil
+	if found && (user != cmd.UserID || batch != cmd.BatchID || held != cmd.HoldAmount) {
+		return nil, service.ErrUsageBillingRequestConflict
+	}
+	if !found && operation != "reserve" {
+		exists, e := batchImageHoldClaimExists(ctx, tx, cmd.HoldRequestID, cmd.APIKeyID)
+		if e != nil {
+			return nil, e
+		}
+		if !exists && !(operation == "capture" && cmd.HoldAmount == 0 && cmd.ActualAmount == 0) {
+			if operation == "release" {
+				return &service.BatchImageBalanceHoldResult{}, nil
+			}
+			return nil, errors.New("hold was never reserved")
+		}
+		state = "reserved"
+		for _, terminal := range []struct{ id, state string }{{service.BatchImageCaptureRequestID(cmd.BatchID), "captured"}, {service.BatchImageReleaseRequestID(cmd.BatchID), "released"}, {"auapi_image_capture:" + cmd.BatchID, "captured"}, {"auapi_image_release:" + cmd.BatchID, "released"}} {
+			yes, e := batchImageHoldClaimExists(ctx, tx, terminal.id, cmd.APIKeyID)
+			if e != nil {
+				return nil, e
+			}
+			if yes {
+				// Old AUAPI release used a mismatched reserve namespace and
+				// could claim its dedup key without returning frozen money.
+				// A historical key alone therefore cannot certify completion.
+				if strings.HasPrefix(terminal.id, "auapi_image_release:") {
+					return nil, errors.New("legacy AUAPI release requires financial reconciliation")
+				}
+				state = terminal.state
+				terminalID = sql.NullString{String: terminal.id, Valid: true}
+				break
+			}
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO usage_balance_holds(hold_request_id,api_key_id,user_id,batch_id,held_amount,state,terminal_request_id) VALUES($1,$2,$3,$4,$5,$6,$7)`, cmd.HoldRequestID, cmd.APIKeyID, cmd.UserID, cmd.BatchID, cmd.HoldAmount, state, terminalID)
+		if err != nil {
+			return nil, err
+		}
+		found = true
+	}
+	if found && state != "reserved" && operation != "reserve" {
+		if (state == "captured" && operation == "capture") || (state == "released" && operation == "release") {
+			if terminalID.Valid && terminalID.String != cmd.RequestID {
+				return nil, service.ErrUsageBillingRequestConflict
+			}
+			claimed, claimErr := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
+			if claimErr != nil {
+				return nil, claimErr
+			}
+			if claimed {
+				return nil, service.ErrUsageBillingRequestConflict
+			}
+			if state == "captured" && captured.Valid && captured.Float64 != cmd.ActualAmount {
+				return nil, service.ErrUsageBillingRequestConflict
+			}
+			if operation == "capture" {
+				if err := r.recordCapturedHoldReceipt(ctx, tx, cmd, !captured.Valid); err != nil {
+					return nil, err
+				}
+			}
+			return &service.BatchImageBalanceHoldResult{Applied: false}, nil
+		}
+		return nil, errors.New("hold has a different terminal operation")
+	}
+	applied, err := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if !applied {
+		return &service.BatchImageBalanceHoldResult{Applied: false}, nil
+	}
+	if found && operation == "reserve" {
+		return nil, service.ErrUsageBillingRequestConflict
+	}
+	result, err := apply(ctx, tx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = &service.BatchImageBalanceHoldResult{}
+	}
+	if operation == "reserve" {
+		_, err = tx.ExecContext(ctx, `INSERT INTO usage_balance_holds(hold_request_id,api_key_id,user_id,batch_id,held_amount,state) VALUES($1,$2,$3,$4,$5,'reserved')`, cmd.HoldRequestID, cmd.APIKeyID, cmd.UserID, cmd.BatchID, cmd.HoldAmount)
+	} else {
+		terminal := "released"
+		if operation == "capture" {
+			terminal = "captured"
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE usage_balance_holds SET state=$3,captured_amount=$4,terminal_request_id=$5,updated_at=NOW() WHERE hold_request_id=$1 AND api_key_id=$2`, cmd.HoldRequestID, cmd.APIKeyID, terminal, cmd.ActualAmount, cmd.RequestID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if operation == "capture" {
+		if err := r.recordCapturedHoldReceipt(ctx, tx, cmd, false); err != nil {
+			return nil, err
+		}
+	}
+
+	result.Applied = true
+	return result, nil
+}
+
+func normalizedHoldRequestID(cmd *service.BatchImageBalanceHoldCommand) string {
+	if cmd.HoldRequestID != "" {
+		return cmd.HoldRequestID
+	}
+	return service.BatchImageHoldRequestID(cmd.BatchID)
+}
+
+func (r *usageBillingRepository) recordCapturedHoldReceipt(ctx context.Context, tx *sql.Tx, cmd *service.BatchImageBalanceHoldCommand, requireLegacyProof bool) error {
+	financial := &service.UsageBillingCommand{RequestID: cmd.RequestID, APIKeyID: cmd.APIKeyID, RequestFingerprint: cmd.RequestFingerprint, UserID: cmd.UserID, BalanceCost: cmd.ActualAmount, CompletedAt: cmd.CompletedAt, UsageDetail: cmd.UsageDetail}
+	if cmd.UsageDetail != nil {
+		financial.AccountID = cmd.UsageDetail.AccountID
+		financial.Model = cmd.UsageDetail.Model
+	}
+	receipt, err := r.prepareSettlementTx(ctx, tx, financial, cmd.UsageDetail)
+	if err != nil {
+		return err
+	}
+	if requireLegacyProof && receipt.state != "settled" {
+		if err := r.confirmLegacySettlementTx(ctx, tx, receipt.id, financial); err != nil {
+			return err
+		}
+	}
+	return markSettlementSettledTx(ctx, tx, receipt.id)
 }

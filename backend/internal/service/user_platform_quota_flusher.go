@@ -257,7 +257,7 @@ func (s *UserPlatformQuotaUsageFlusher) Start() {
 
 // Stop 停止 flusher：标记 stopped → Cancel 定时器 → 执行最后一次 flush。
 func (s *UserPlatformQuotaUsageFlusher) Stop() {
-	if s == nil {
+	if s == nil || !s.enabled {
 		return
 	}
 	s.stopped.Store(true)

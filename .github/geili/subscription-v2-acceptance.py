@@ -466,14 +466,33 @@ class Fixture:
         self.await_usage(user, sid, "87.04977312")
         for operation in ("purchase", "stack", "renew", "upgrade"):
             self.rejects("legacy compatibility blocks self-service " + operation, "/payment/subscription-quote", {"plan_id": self.plans["month90"]["id"], "operation": operation, "units": 1 if operation in ("purchase", "stack") else 0, "periods": 1 if operation == "renew" else 0}, user["token"], "SUBSCRIPTION_COMPATIBILITY_MODE", 409)
-        count = self.sql(f"SELECT json_build_object('n',COUNT(*)) FROM usage_logs WHERE user_id={uid};")[0]["n"]
+        # Financial settlement now precedes durable detail delivery. Wait for
+        # this synthetic user's prior work, then compare authoritative money and
+        # idempotency evidence rather than a timing-sensitive usage_logs count.
+        def pending_financial_details():
+            return self.sql(f"SELECT json_build_object('n',COUNT(*)) FROM usage_settlement_receipts WHERE user_id={uid} AND (state='pending' OR (record_source='live' AND record_completeness='complete' AND delivered_at IS NULL));")[0]["n"]
+        deadline = time.monotonic() + 15
+        while pending_financial_details() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.check("prior legacy request receipt and detail delivery drained", pending_financial_details() == 0)
+        def financial_state():
+            return self.sql(f"""SELECT json_build_object(
+                'balance',(SELECT balance::text FROM users WHERE id={uid}),
+                'key', (SELECT json_build_object('quota_used',quota_used::text,'usage_5h',usage_5h::text,'usage_1d',usage_1d::text,'usage_7d',usage_7d::text) FROM api_keys WHERE id={int(key['id'])}),
+                'ledger',(SELECT json_agg(x ORDER BY x.term_id,x.usage_date) FROM (SELECT term_id,usage_date,used_usd::text FROM subscription_daily_usage WHERE subscription_id={sid}) x),
+                'allocations',(SELECT json_agg(x ORDER BY x.id) FROM (SELECT a.id,a.request_key,a.entitlement_id,a.cost_usd::text FROM subscription_usage_allocations a JOIN subscription_requests r ON r.request_key=a.request_key WHERE r.subscription_id={sid}) x),
+                'receipts',(SELECT json_agg(x ORDER BY x.id) FROM (SELECT id,request_id,state,charged_amount::text FROM usage_settlement_receipts WHERE user_id={uid}) x),
+                'dedup',(SELECT json_agg(x ORDER BY x.request_id) FROM (SELECT request_id,request_fingerprint FROM usage_billing_dedup WHERE api_key_id={int(key['id'])}) x)
+            );""")[0]
         self.sql(f"UPDATE subscription_daily_usage SET used_usd=90 WHERE subscription_id={sid} AND term_id=(SELECT term_id FROM subscription_contracts WHERE subscription_id={sid}) AND usage_date=(NOW() AT TIME ZONE 'Asia/Shanghai')::DATE;")
+        before_rejection = financial_state()
         status, body, headers = self.call(key)
         lowered = {k.lower(): v for k, v in headers.items()}
         expected_reset = (datetime.now(BEIJING).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
         retry = int(lowered.get("retry-after", "0"))
         self.check("daily exhaustion reports 429 with code reset metadata and Retry-After", status == 429 and "DAILY_LIMIT_EXCEEDED" in json.dumps(body) and "window_resets_at" in json.dumps(body) and abs(retry - (expected_reset - datetime.now(BEIJING)).total_seconds()) <= 3, {"status": status, "body": body, "retry_after": retry})
-        self.check("quota rejection produces no extra debit", self.sql(f"SELECT json_build_object('n',COUNT(*)) FROM usage_logs WHERE user_id={uid};")[0]["n"] == count)
+        after_rejection = financial_state()
+        self.check("quota rejection produces no extra debit", after_rejection == before_rejection, {"before": before_rejection, "after": after_rejection})
         # Move only this synthetic exhausted bucket to yesterday, preserving history.
         self.sql(f"UPDATE subscription_daily_usage SET usage_date=usage_date-1 WHERE subscription_id={sid} AND term_id=(SELECT term_id FROM subscription_contracts WHERE subscription_id={sid}) AND usage_date=(NOW() AT TIME ZONE 'Asia/Shanghai')::DATE;")
         reset = self.subscription(user, sid)

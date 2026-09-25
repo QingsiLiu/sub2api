@@ -2506,6 +2506,11 @@ func (h *GatewayHandler) submitUsageRecordTask(parent context.Context, task serv
 		return
 	}
 	task = wrapUsageRecordTaskContext(parent, task)
+	// geili hook: pricing and durable Prepare must precede any in-memory queue.
+	if h.gatewayService != nil && h.gatewayService.UsesDurableUsageSettlement() {
+		runDurableUsageRecordTask(task)
+		return
+	}
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDroppedStopped {
 			return
@@ -2536,6 +2541,11 @@ func (h *GatewayHandler) submitMandatoryUsageRecordTask(parent context.Context, 
 		return
 	}
 	task = wrapUsageRecordTaskContext(parent, task)
+	// geili hook: pricing and durable Prepare must precede any in-memory queue.
+	if h.gatewayService != nil && h.gatewayService.UsesDurableUsageSettlement() {
+		runDurableUsageRecordTask(task)
+		return
+	}
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); !mode.Dropped() {
 			return

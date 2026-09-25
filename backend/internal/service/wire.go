@@ -760,6 +760,7 @@ func ProvideOpsService(
 	systemLogSink *OpsSystemLogSink,
 	settingService *SettingService,
 	authCacheInvalidationWorker *AuthCacheInvalidationWorker,
+	usageSettlementWorker *UsageSettlementWorker,
 	apiKeyService *APIKeyService,
 ) *OpsService {
 	svc := NewOpsService(
@@ -782,6 +783,7 @@ func ProvideOpsService(
 		settingService.WarmOpenAIQuotaAutoPauseSettings(context.Background())
 	}
 	svc.authCacheInvalidationWorker = authCacheInvalidationWorker
+	svc.usageSettlementWorker = usageSettlementWorker
 	svc.apiKeyService = apiKeyService
 	svc.StartRuntimeSettingsRefresh(context.Background())
 	return svc
@@ -841,8 +843,11 @@ func ProvideBillingCacheService(
 	rateRepo UserGroupRateRepository,
 	cfg *config.Config,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	billingRepo UsageBillingRepository,
 ) *BillingCacheService {
-	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	svc := NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg, userPlatformQuotaRepo)
+	_, svc.durableSettlement = billingRepo.(UsageSettlementRepository)
+	return svc
 }
 
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
@@ -874,6 +879,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideAuthCacheInvalidationWorker,
+	ProvideUsageSettlementWorker,
 	NewGroupService,
 	NewCompositeRouteResolver,
 	NewAccountService,
@@ -1002,9 +1008,14 @@ var ProviderSet = wire.NewSet(
 )
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
-func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {
+func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService, billingRepo UsageBillingRepository) *UserPlatformQuotaUsageFlusher {
 	svc := NewUserPlatformQuotaUsageFlusher(cfg, cache, quotaRepo, tw)
-	svc.Start()
+	// geili: absolute Redis snapshots must not overwrite atomic SQL settlement.
+	if _, durable := billingRepo.(UsageSettlementRepository); durable {
+		svc.enabled = false // Stop also flushes; disabling Start alone is insufficient.
+	} else {
+		svc.Start()
+	}
 	return svc
 }
 

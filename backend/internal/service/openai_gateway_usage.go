@@ -50,14 +50,15 @@ type OpenAIRecordUsageInput struct {
 // 用量按上游真实 token 计费，与 WS cyber 及正常请求口径一致（InputTokens/OutputTokens
 // 取自上游 response.failed 报告的 usage，即 mark.UpstreamInTok/OutTok）。
 type CyberPolicyUsageInput struct {
-	APIKey       *APIKey
-	Account      *Account
-	Subscription *UserSubscription
-	RequestID    string
-	Model        string
-	Stream       bool
-	InputTokens  int
-	OutputTokens int
+	QuotaPlatform string
+	APIKey        *APIKey
+	Account       *Account
+	Subscription  *UserSubscription
+	RequestID     string
+	Model         string
+	Stream        bool
+	InputTokens   int
+	OutputTokens  int
 	// 渠道归因与请求级 meta，使 cyber 计费行与正常 RecordUsage 行口径一致
 	// （否则 cyber 行 channel_id 等为空，渠道维度统计会遗漏 cyber 命中）。
 	InboundEndpoint    string
@@ -106,6 +107,7 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 		ChannelUsageFields: in.ChannelUsageFields,
 		CyberBlocked:       true,
 		NativeCompactionV2: in.NativeCompactionV2,
+		QuotaPlatform:      in.QuotaPlatform,
 	}); err != nil {
 		logger.LegacyPrintf("service.openai_gateway", "cyber usage record failed: request_id=%s err=%v", in.RequestID, err)
 	}
@@ -167,7 +169,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
-	billingAccount, err := resolveCredentialAccount(ctx, s.accountRepo, account)
+	billingAccount, err := resolveCredentialBillingAccount(ctx, s.accountRepo, account)
 	if err != nil {
 		return err
 	}
@@ -519,6 +521,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
 
+	if s.UsesDurableUsageSettlement() {
+		return billingErr // geili: receipt delivery must never re-enter the log queue
+	}
 	if billingErr != nil {
 		usageLog.ActualCost = 0
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")

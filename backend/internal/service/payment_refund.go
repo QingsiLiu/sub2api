@@ -375,55 +375,8 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	if len(p.SubscriptionLots) > 0 {
 		return s.executeLotRefund(ctx, p)
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(p.OrderID), paymentorder.StatusIn(OrderStatusCompleted, OrderStatusRefundRequested, OrderStatusRefundPending, OrderStatusRefundFailed)).SetStatus(OrderStatusRefunding).Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("lock: %w", err)
-	}
-	if c == 0 {
-		return nil, infraerrors.Conflict("CONFLICT", "order status changed")
-	}
-	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
-		// Skip balance deduction on retry if previous attempt already deducted
-		// but failed to roll back (REFUND_ROLLBACK_FAILED in audit log).
-		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
-			deducted, err := s.deductAvailableBalance(ctx, p.Order.UserID, p.BalanceToDeduct)
-			if err != nil {
-				s.restoreStatus(ctx, p)
-				return nil, fmt.Errorf("deduction: %w", err)
-			}
-			p.BalanceToDeduct = deducted
-		} else {
-			slog.Warn("skipping balance deduction on retry (previous rollback failed)", "orderID", p.OrderID)
-			p.BalanceToDeduct = 0
-		}
-	}
-	if len(p.SubscriptionLots) == 0 && p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
-			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
-			if err != nil {
-				if errors.Is(err, ErrAdjustWouldExpire) {
-					// Deduction would expire the subscription — revoke it entirely
-					slog.Info("subscription deduction would expire, revoking", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct)
-					if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
-						s.restoreStatus(ctx, p)
-						return nil, fmt.Errorf("revoke subscription: %w", revokeErr)
-					}
-				} else {
-					// Other errors (DB failure, not found) — abort refund
-					s.restoreStatus(ctx, p)
-					return nil, fmt.Errorf("deduct subscription days: %w", err)
-				}
-			}
-		} else {
-			slog.Warn("skipping subscription deduction on retry (previous rollback failed)", "orderID", p.OrderID)
-			p.SubDaysToDeduct = 0
-		}
-	}
-	resp, err := s.gwRefund(ctx, p)
-	if err != nil {
-		return s.handleGwFail(ctx, p, err)
-	}
-	return s.finishRefund(ctx, p, resp)
+	// geili hook: non-lot refunds commit intent/debit before the provider call.
+	return s.executeJournalRefund(ctx, p)
 }
 
 func (s *PaymentService) gwRefund(ctx context.Context, p *RefundPlan) (*payment.RefundResponse, error) {
@@ -511,6 +464,16 @@ func (s *PaymentService) finishRefund(ctx context.Context, p *RefundPlan, resp *
 		}
 	}
 
+	// geili hook: callback/replay of a journaled refund never uses legacy
+	// rollback guesses or applies the local debit twice.
+	journal, err := readPaymentRefundJournal(ctx, s.entClient, p.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	if journal != nil {
+		return s.finishJournalRefund(ctx, journal, resp, nil)
+	}
+
 	if err := validateRefundProviderResponse(resp); err != nil {
 		return s.handleGwFail(ctx, p, err)
 	}
@@ -528,6 +491,17 @@ func (s *PaymentService) QueryAndFinalizeRefund(ctx context.Context, oid int64) 
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
+	}
+	// geili hook: resume the original immutable refund, including a crash while
+	// REFUNDING; never infer a rollback from a missing best-effort audit.
+	if !isSubscriptionV2Order(o) {
+		journal, journalErr := readPaymentRefundJournal(ctx, s.entClient, oid)
+		if journalErr != nil {
+			return nil, journalErr
+		}
+		if journal != nil {
+			return s.queryJournalRefund(ctx, journal, o)
+		}
 	}
 	hasJournal, journalErr := s.hasLotRefund(ctx, oid)
 	if journalErr != nil {
@@ -865,6 +839,17 @@ func refundResponseID(resp *payment.RefundResponse) string {
 }
 
 func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr error) bool {
+	// geili hook: transport errors are not proof of refund failure. Journaled
+	// rollback requires a confirmed provider failure and uses atomic finalize.
+	if s.entClient != nil {
+		journal, err := readPaymentRefundJournal(ctx, s.entClient, p.OrderID)
+		if err != nil {
+			return false
+		}
+		if journal != nil {
+			return journal.State == "failed"
+		}
+	}
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		if err := s.userRepo.UpdateBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
 			slog.Error("[CRITICAL] rollback failed", "orderID", p.OrderID, "amount", p.BalanceToDeduct, "error", err)

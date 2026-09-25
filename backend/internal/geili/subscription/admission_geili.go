@@ -10,7 +10,8 @@ import (
 
 // SettleAdmission executes within the existing usage-billing/dedup transaction.
 func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, subID, apiKeyID int64, cost float64, now time.Time) error {
-	if err := LockSubscription(ctx, tx, subID); err != nil {
+	now = now.Truncate(time.Microsecond)
+	if err := LockSubscriptionUsage(ctx, tx, subID); err != nil {
 		return err
 	}
 	var raw []byte
@@ -150,5 +151,18 @@ func SettleAdmission(ctx context.Context, tx *sql.Tx, key, billingID string, sub
 	return err
 }
 func sameWindow(a, b *time.Time) bool {
-	return (a == nil && b == nil) || (a != nil && b != nil && a.Equal(*b))
+	return (a == nil && b == nil) || (a != nil && b != nil && postgresWindowTime(*a).Equal(postgresWindowTime(*b)))
+}
+
+// postgresWindowTime mirrors PostgreSQL's timestamp fractional-second conversion
+// for already persisted legacy admission JSON. New snapshots truncate before both
+// writes; old nanosecond snapshots must round exactly like their SQL columns.
+func postgresWindowTime(t time.Time) time.Time {
+	truncated := t.Truncate(time.Microsecond)
+	nanos := t.Nanosecond()
+	remainder := nanos % 1000
+	if remainder > 500 || (remainder == 500 && (nanos/1000)%2 != 0) {
+		return truncated.Add(time.Microsecond)
+	}
+	return truncated
 }

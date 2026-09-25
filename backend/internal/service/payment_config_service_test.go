@@ -404,6 +404,9 @@ func newPaymentConfigServiceTestClient(t *testing.T) *dbent.Client {
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
 	createSubscriptionV2TestSchema(t, client)
+	if _, err := db.Exec(`CREATE TABLE payment_refund_journals (order_id BIGINT PRIMARY KEY,request_key TEXT NOT NULL UNIQUE,user_id BIGINT NOT NULL,refund_amount NUMERIC NOT NULL,gateway_amount NUMERIC NOT NULL,deducted_balance NUMERIC NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,provider_refund_id TEXT NOT NULL DEFAULT '',last_error TEXT NOT NULL DEFAULT '',created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

@@ -206,8 +206,8 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
 			var sub *service.UserSubscription
 			var subErr error
-			if c.Request.Method == http.MethodGet && c.Param("request_id") != "" && strings.Contains(c.FullPath(), "/videos/") {
-				sub, subErr = subscriptionService.ResumeMediaConsumption(c.Request.Context(), c.Param("request_id"), apiKey.User.ID, apiKey.ID)
+			if taskID := subscriptionMediaLookupTaskID(c); taskID != "" {
+				sub, subErr = subscriptionService.ResumeMediaConsumption(c.Request.Context(), taskID, apiKey.User.ID, apiKey.ID)
 				if errors.Is(subErr, service.ErrSubscriptionNotFound) && apiKey.SubscriptionID != nil {
 					sub, subErr = subscriptionService.GetActiveSubscriptionByIDForUser(c.Request.Context(), apiKey.User.ID, *apiKey.SubscriptionID, legacySubscriptionGroupID)
 				} else if errors.Is(subErr, service.ErrSubscriptionNotFound) && apiKey.BillingSource == "" && apiKey.Group != nil {
@@ -508,4 +508,28 @@ func validateAPIKeyGroupAvailable(apiKey *service.APIKey) (string, string, bool)
 		return "GROUP_DISABLED", "API Key 所属分组已停用", false
 	}
 	return "", "", true
+}
+
+// Only exact registered task routes may resume an existing admission. The
+// provider namespace never changes the caller's authenticated Key or group.
+func subscriptionMediaLookupTaskID(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	method, path := c.Request.Method, c.FullPath()
+	if method == http.MethodGet && c.Param("request_id") != "" {
+		for _, route := range []string{"/videos/:request_id", "/videos/:request_id/content", "/videos/generations/:request_id", "/videos/generations/:request_id/content", "/videos/edits/:request_id", "/videos/edits/:request_id/content", "/videos/extensions/:request_id", "/videos/extensions/:request_id/content"} {
+			if path == route || path == "/v1"+route {
+				return c.Param("request_id")
+			}
+		}
+	}
+	if (method == http.MethodGet || method == http.MethodDelete) && c.Param("task_id") != "" {
+		for _, prefix := range []string{"", "/api/v3", "/v3", "/v1"} {
+			if path == prefix+"/contents/generations/tasks/:task_id" {
+				return service.SeedanceTaskKey(c.Param("task_id"))
+			}
+		}
+	}
+	return ""
 }

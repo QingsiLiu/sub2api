@@ -177,7 +177,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 }
 
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := clientFromContext(ctx, r.client).User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -978,11 +978,16 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 		return service.BalanceChange{Old: current, New: value}, service.ErrBalanceNegative
 	}
 	const updateSQL = `
+		WITH target AS (
+			SELECT id, balance FROM users
+			WHERE id = $2 AND deleted_at IS NULL
+			FOR NO KEY UPDATE
+		)
 		UPDATE users AS u
 		SET balance = $1, updated_at = NOW()
-		FROM (SELECT id, balance FROM users WHERE id = $2 AND deleted_at IS NULL) AS prev
-		WHERE u.id = prev.id AND u.deleted_at IS NULL
-		RETURNING prev.balance, u.balance
+		FROM target
+		WHERE u.id = target.id AND u.deleted_at IS NULL
+		RETURNING target.balance, u.balance
 	`
 	change, ok, err := scanBalanceChange(ctx, clientFromContext(ctx, r.client), updateSQL, value, id)
 	if err != nil {

@@ -104,6 +104,8 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	// geili: SQL settlement is authoritative; stale Redis refills cannot change admission.
+	durableSettlement     bool
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -309,7 +311,7 @@ func (s *BillingCacheService) logCacheWriteDrop(task cacheWriteTask, reason stri
 
 // GetUserBalance 获取用户余额（优先从缓存读取）
 func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
-	if s.cache == nil {
+	if s.durableSettlement || s.cache == nil {
 		// Redis不可用，直接查询数据库
 		return s.getUserBalanceFromDB(ctx, userID)
 	}
@@ -573,6 +575,9 @@ func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, key
 // resets expired windows in-memory and triggers async DB reset,
 // and returns an error if any window limit is exceeded.
 func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
+	if s.durableSettlement {
+		return s.checkSimpleModeAPIKeyRateLimits(ctx, apiKey)
+	}
 	if s.cache == nil {
 		// No cache: fall back to reading from DB directly
 		if s.apiKeyRateLimitLoader == nil {
@@ -741,6 +746,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 			return s.checkSimpleModeAPIKeyRateLimits(ctx, apiKey)
 		}
 		return nil
+	}
+	if s.durableSettlement {
+		if err := checkUsageSettlementIngressReady(s.cfg); err != nil {
+			return ErrBillingServiceUnavailable
+		}
 	}
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
@@ -1170,6 +1180,9 @@ func (s *BillingCacheService) checkUserPlatformQuotaEligibility(
 ) error {
 	if platform == "" || s.userPlatformQuotaRepo == nil {
 		return nil
+	}
+	if s.durableSettlement {
+		return s.checkSettlementPlatformQuota(ctx, userID, platform)
 	}
 
 	// cache 未配置（如简化部署 / 单测路径）→ 直接走 DB 查询，避免 nil panic。

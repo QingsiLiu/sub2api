@@ -132,6 +132,8 @@ type openAIProfitControlGate struct {
 // 利润门。ctx 携带 WithOpenAIProfitControlSuppressed 标记（门范围外流量）时
 // 只固定 pricingAt、不装门。handler 各文本入口应在选号循环前调用一次。
 func (s *OpenAIGatewayService) WithOpenAIRequestPricingContext(ctx context.Context, groupID *int64) (context.Context, time.Time) {
+	// geili hook: request-owned non-secret pricing evidence survives detached billing.
+	ctx = WithCredentialBillingSnapshot(ctx)
 	pricingAt := timezone.Now()
 	ctx = context.WithValue(ctx, openAIPricingAtCtxKey{}, pricingAt)
 	return s.withOpenAIProfitControlGate(ctx, groupID), pricingAt

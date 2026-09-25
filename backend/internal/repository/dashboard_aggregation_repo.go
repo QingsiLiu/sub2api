@@ -137,11 +137,9 @@ func (r *dashboardAggregationRepository) RecomputeRange(ctx context.Context, sta
 		if err != nil {
 			return err
 		}
-		if err := lockGroupUsageRollupState(ctx, tx); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		if err := invalidateGroupUsageRollupsAt(ctx, tx, start); err != nil {
+		// geili: append independent events; never hold the rollup singleton
+		// while dashboard recomputation reads a potentially large range.
+		if err := invalidateGroupUsageRollupsRange(ctx, tx, start, end); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -150,11 +148,10 @@ func (r *dashboardAggregationRepository) RecomputeRange(ctx context.Context, sta
 			_ = tx.Rollback()
 			return err
 		}
-		if err := txRepo.syncGroupUsageRollupsInTx(ctx, service.GroupUsageTodayStart(r.now())); err != nil {
-			_ = tx.Rollback()
+		if err := tx.Commit(); err != nil {
 			return err
 		}
-		return tx.Commit()
+		return r.SyncGroupUsageRollups(ctx, service.GroupUsageTodayStart(r.now()))
 	}
 	return r.recomputeRangeInTx(ctx, hourStart, hourEnd, dayStart, dayEnd)
 }
@@ -296,9 +293,6 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 		return 0, err
 	}
 
-	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
-		return rollback(err)
-	}
 	rows, err := tx.QueryContext(ctx, `
 		WITH victims AS (
 			SELECT tableoid, ctid
@@ -316,7 +310,6 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 	}
 
 	var affected int64
-	var earliestDeletedAt time.Time
 	for rows.Next() {
 		var deletedAt time.Time
 		if err := rows.Scan(&deletedAt); err != nil {
@@ -324,9 +317,6 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 			return rollback(err)
 		}
 		affected++
-		if earliestDeletedAt.IsZero() || deletedAt.Before(earliestDeletedAt) {
-			earliestDeletedAt = deletedAt
-		}
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -335,11 +325,7 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 	if err := rows.Close(); err != nil {
 		return rollback(err)
 	}
-	if affected > 0 {
-		if err := invalidateGroupUsageRollupsAt(ctx, tx, earliestDeletedAt); err != nil {
-			return rollback(err)
-		}
-	}
+	// geili: source DELETE triggers enqueue exact affected dates atomically.
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
@@ -656,10 +642,7 @@ func dropUsageLogsPartitionWithRollupInvalidation(ctx context.Context, db *sql.D
 		return err
 	}
 
-	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
-		return rollback(err)
-	}
-	if err := invalidateGroupUsageRollupsAt(ctx, tx, monthStart); err != nil {
+	if err := invalidateGroupUsageRollupsRange(ctx, tx, monthStart, monthStart.AddDate(0, 1, 0)); err != nil {
 		return rollback(err)
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(name))); err != nil {

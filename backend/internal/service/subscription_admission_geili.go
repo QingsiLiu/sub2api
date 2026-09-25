@@ -28,12 +28,12 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	defer func() { _ = tx.Rollback() }()
 	c := tx.Client()
 	tc := dbent.NewTxContext(ctx, tx)
-	parent, err := geilisub.LockParent(tc, c, sub.ID)
+	parent, err := geilisub.LockParentUsage(tc, c, sub.ID)
 	if err != nil {
 		return nil, err
 	}
 	// Admission is serialized by the parent lock; waits may cross midnight or expiry.
-	now := time.Now()
+	now := time.Now().Truncate(time.Microsecond)
 	if parent.Status != "active" || parent.StartsAt.After(now) || !parent.ExpiresAt.After(now) {
 		return nil, ErrSubscriptionInvalid
 	}
@@ -138,7 +138,7 @@ func (s *SubscriptionService) CancelUnsentConsumption(ctx context.Context, sub *
 	defer func() { _ = tx.Rollback() }()
 	tc := dbent.NewTxContext(ctx, tx)
 	c := tx.Client()
-	if _, err := geilisub.LockParent(tc, c, sub.ID); err != nil {
+	if _, err := geilisub.LockParentUsage(tc, c, sub.ID); err != nil {
 		return err
 	}
 	_, err = c.SubscriptionRequest.Update().Where(subscriptionrequest.RequestKeyEQ(sub.AdmissionKey), subscriptionrequest.StatusEQ("admitted")).SetStatus("cancelled").SetSettledAt(time.Now()).Save(tc)
@@ -161,4 +161,20 @@ func AdmitSubscriptionTurn(ctx context.Context, fallback *UserSubscription) (*Us
 		return f(ctx)
 	}
 	return fallback, nil
+}
+
+// CancelReplayedSubscriptionAdmission releases only the new, unsent admission
+// created for an idempotent HTTP replay. The existing task owns a different
+// admission and must never be cancelled by this request's lifecycle.
+func CancelReplayedSubscriptionAdmission(ctx context.Context, sub *UserSubscription) error {
+	if sub == nil || sub.AdmissionKey == "" {
+		return nil
+	}
+	cancelAdmission, ok := ctx.Value(subscriptionCancelFactoryKey{}).(SubscriptionCancelFactory)
+	if !ok {
+		return nil
+	}
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return cancelAdmission(cleanup, sub)
 }

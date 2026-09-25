@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -516,20 +517,44 @@ func (s *adminServiceImpl) BatchUpdateLimits(ctx context.Context, userIDs []int6
 }
 
 func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error) {
-	// 余额调整必须走原子接口：先读后整行写回会把并发的计费扣款覆盖掉。
-	var (
-		change BalanceChange
-		err    error
-	)
+	if math.IsNaN(balance) || math.IsInf(balance, 0) || balance < 0 {
+		return nil, errors.New("balance adjustment amount must be finite and nonnegative")
+	}
+	// Match the users/redeem_codes NUMERIC(20,8) precision before deriving
+	// old/new amounts; PostgreSQL must not round the mutation differently.
+	balance = QuantizeUsageBillingAmount(balance)
+	if operation != "set" && operation != "add" && operation != "subtract" {
+		return nil, fmt.Errorf("unsupported balance operation: %q", operation)
+	}
+	if s.redeemCodeRepo == nil {
+		return nil, errors.New("balance adjustment audit repository is not configured")
+	}
+	// geili hook: generate evidence identity before any mutation. Real service
+	// wiring always supplies entClient; nil retains in-memory repository fixtures.
+	code, err := GenerateRedeemCode()
+	if err != nil {
+		return nil, fmt.Errorf("generate balance adjustment evidence: %w", err)
+	}
+	opCtx := ctx
+	var tx *dbent.Tx
+	if s.entClient != nil {
+		tx, err = s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = tx.Rollback() }()
+		opCtx = dbent.NewTxContext(ctx, tx)
+	}
+	// Atomic primitives also return the locked, actual pre-mutation amount, so
+	// concurrent request deductions cannot be overwritten or misreported.
+	var change BalanceChange
 	switch operation {
 	case "set":
-		change, err = s.userRepo.SetBalance(ctx, userID, balance)
+		change, err = s.userRepo.SetBalance(opCtx, userID, balance)
 	case "add":
-		change, err = s.userRepo.AdjustBalance(ctx, userID, balance)
+		change, err = s.userRepo.AdjustBalance(opCtx, userID, balance)
 	case "subtract":
-		change, err = s.userRepo.AdjustBalance(ctx, userID, -balance)
-	default:
-		return nil, fmt.Errorf("unsupported balance operation: %q", operation)
+		change, err = s.userRepo.AdjustBalance(opCtx, userID, -balance)
 	}
 	if errors.Is(err, ErrBalanceNegative) {
 		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", change.Old, change.New)
@@ -537,18 +562,31 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, err
 	}
-
-	user, err := s.userRepo.GetByID(ctx, userID)
+	user, err := s.userRepo.GetByID(opCtx, userID)
 	if err != nil {
 		return nil, err
 	}
-
-	balanceDiff := change.New - change.Old
+	balanceDiff := QuantizeUsageBillingAmount(change.New - change.Old)
+	if balanceDiff != 0 {
+		now := time.Now().Truncate(time.Microsecond)
+		adjustmentRecord := &RedeemCode{
+			Code: code, Type: AdjustmentTypeAdminBalance, Value: balanceDiff,
+			Status: StatusUsed, UsedBy: &user.ID, Notes: notes, UsedAt: &now,
+		}
+		if err := s.redeemCodeRepo.Create(opCtx, adjustmentRecord); err != nil {
+			return nil, fmt.Errorf("record balance adjustment evidence: %w", err)
+		}
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
+	// No cache invalidation or affiliate work may escape a rolled-back change.
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	s.tryAccrueAffiliateRebateForAdminRecharge(ctx, userID, operation, balance)
-
 	if s.billingCacheService != nil {
 		go func() {
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -558,30 +596,6 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 			}
 		}()
 	}
-
-	if balanceDiff != 0 {
-		code, err := GenerateRedeemCode()
-		if err != nil {
-			logger.LegacyPrintf("service.admin", "failed to generate adjustment redeem code: %v", err)
-			return user, nil
-		}
-
-		adjustmentRecord := &RedeemCode{
-			Code:   code,
-			Type:   AdjustmentTypeAdminBalance,
-			Value:  balanceDiff,
-			Status: StatusUsed,
-			UsedBy: &user.ID,
-			Notes:  notes,
-		}
-		now := time.Now()
-		adjustmentRecord.UsedAt = &now
-
-		if err := s.redeemCodeRepo.Create(ctx, adjustmentRecord); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to create balance adjustment redeem code: %v", err)
-		}
-	}
-
 	return user, nil
 }
 

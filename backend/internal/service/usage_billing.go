@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -17,6 +18,14 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	// TerminalFailure records a zero-charge async outcome without a usage row.
+	TerminalFailure bool
+	// Geili durable settlement evidence; associations are never serialized.
+	UsageDetail       *UsageLog `json:"-"`
+	CompletedAt       time.Time
+	Platform          string
+	PlatformQuotaCost float64
+
 	SubscriptionAdmissionKey string
 	RequestID                string
 	APIKeyID                 int64
@@ -87,6 +96,7 @@ func (c *UsageBillingCommand) quantizeMonetaryFields() {
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
 	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
 	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	c.PlatformQuotaCost = QuantizeUsageBillingAmount(c.PlatformQuotaCost)
 }
 
 // QuantizeUsageBillingAmount 把金额舍入到 UsageBillingMonetaryScale 位小数，
@@ -173,6 +183,11 @@ type UsageBillingApplyResult struct {
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.
 type BatchImageBalanceHoldCommand struct {
+	// HoldRequestID permits providers to use their own stable hold namespace.
+	HoldRequestID string
+	UsageDetail   *UsageLog `json:"-"`
+	CompletedAt   time.Time
+
 	RequestID          string
 	APIKeyID           int64
 	RequestFingerprint string
@@ -189,9 +204,15 @@ func (c *BatchImageBalanceHoldCommand) Normalize() {
 	}
 	c.RequestID = strings.TrimSpace(c.RequestID)
 	c.BatchID = strings.TrimSpace(c.BatchID)
+	c.HoldRequestID = strings.TrimSpace(c.HoldRequestID)
+	if c.HoldRequestID == "" {
+		c.HoldRequestID = BatchImageHoldRequestID(c.BatchID)
+	}
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
 	}
+	c.HoldAmount = QuantizeUsageBillingAmount(c.HoldAmount)
+	c.ActualAmount = QuantizeUsageBillingAmount(c.ActualAmount)
 }
 
 func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {

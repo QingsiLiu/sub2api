@@ -150,6 +150,10 @@ func (s *UsageService) invalidateUsageCaches(ctx context.Context, userID int64, 
 
 // GetByID 根据ID获取使用日志
 func (s *UsageService) GetByID(ctx context.Context, id int64) (*UsageLog, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialUsageByID(ctx, id)
+	}
 	log, err := s.usageRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get usage log: %w", err)
@@ -291,6 +295,10 @@ func (s *UsageService) Delete(ctx context.Context, id int64) error {
 
 // GetUserDashboardStats returns per-user dashboard summary stats.
 func (s *UsageService) GetUserDashboardStats(ctx context.Context, userID int64) (*usagestats.UserDashboardStats, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialDashboardStats(ctx, userID, 0)
+	}
 	stats, err := s.usageRepo.GetUserDashboardStats(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user dashboard stats: %w", err)
@@ -300,6 +308,10 @@ func (s *UsageService) GetUserDashboardStats(ctx context.Context, userID int64) 
 
 // GetAPIKeyDashboardStats returns dashboard summary stats filtered by API Key.
 func (s *UsageService) GetAPIKeyDashboardStats(ctx context.Context, apiKeyID int64) (*usagestats.UserDashboardStats, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialDashboardStats(ctx, 0, apiKeyID)
+	}
 	stats, err := s.usageRepo.GetAPIKeyDashboardStats(ctx, apiKeyID)
 	if err != nil {
 		return nil, fmt.Errorf("get api key dashboard stats: %w", err)
@@ -309,6 +321,10 @@ func (s *UsageService) GetAPIKeyDashboardStats(ctx context.Context, apiKeyID int
 
 // GetUserUsageTrendByUserID returns per-user usage trend.
 func (s *UsageService) GetUserUsageTrendByUserID(ctx context.Context, userID int64, startTime, endTime time.Time, granularity string) ([]usagestats.TrendDataPoint, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialTrend(ctx, startTime, endTime, granularity, usagestats.UsageLogFilters{UserID: userID})
+	}
 	trend, err := s.usageRepo.GetUserUsageTrendByUserID(ctx, userID, startTime, endTime, granularity)
 	if err != nil {
 		return nil, fmt.Errorf("get user usage trend: %w", err)
@@ -318,6 +334,10 @@ func (s *UsageService) GetUserUsageTrendByUserID(ctx context.Context, userID int
 
 // GetUsageTrendWithFilters returns trend data using the shared usage filter shape.
 func (s *UsageService) GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, filters usagestats.UsageLogFilters) ([]usagestats.TrendDataPoint, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialTrend(ctx, startTime, endTime, granularity, filters)
+	}
 	type usageTrendWithFiltersRepo interface {
 		GetUsageTrendWithUsageFilters(ctx context.Context, startTime, endTime time.Time, granularity string, filters usagestats.UsageLogFilters) ([]usagestats.TrendDataPoint, error)
 	}
@@ -337,6 +357,10 @@ func (s *UsageService) GetUsageTrendWithFilters(ctx context.Context, startTime, 
 
 // GetUserModelStats returns per-user model usage stats.
 func (s *UsageService) GetUserModelStats(ctx context.Context, userID int64, startTime, endTime time.Time) ([]usagestats.ModelStat, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialModels(ctx, startTime, endTime, usagestats.UsageLogFilters{UserID: userID}, usagestats.ModelSourceRequested)
+	}
 	stats, err := s.usageRepo.GetUserModelStats(ctx, userID, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("get user model stats: %w", err)
@@ -346,6 +370,10 @@ func (s *UsageService) GetUserModelStats(ctx context.Context, userID int64, star
 
 // GetModelStatsWithFiltersBySource returns model stats using the shared usage filter shape.
 func (s *UsageService) GetModelStatsWithFiltersBySource(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters, modelSource string) ([]usagestats.ModelStat, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialModels(ctx, startTime, endTime, filters, modelSource)
+	}
 	normalizedSource := usagestats.NormalizeModelSource(modelSource)
 	type modelStatsWithUsageFiltersRepo interface {
 		GetModelStatsWithUsageFiltersBySource(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters, source string) ([]usagestats.ModelStat, error)
@@ -376,6 +404,10 @@ func (s *UsageService) GetModelStatsWithFiltersBySource(ctx context.Context, sta
 
 // GetGroupStatsWithFilters returns group stats using the shared usage filter shape.
 func (s *UsageService) GetGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) ([]usagestats.GroupStat, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialGroups(ctx, startTime, endTime, filters)
+	}
 	type groupStatsWithUsageFiltersRepo interface {
 		GetGroupStatsWithUsageFilters(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) ([]usagestats.GroupStat, error)
 	}
@@ -395,6 +427,10 @@ func (s *UsageService) GetGroupStatsWithFilters(ctx context.Context, startTime, 
 
 // GetAPIKeyModelStats returns per-model usage stats for a specific API Key.
 func (s *UsageService) GetAPIKeyModelStats(ctx context.Context, apiKeyID int64, startTime, endTime time.Time) ([]usagestats.ModelStat, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialModels(ctx, startTime, endTime, usagestats.UsageLogFilters{APIKeyID: apiKeyID}, usagestats.ModelSourceRequested)
+	}
 	stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, startTime, endTime, 0, apiKeyID, 0, 0, nil, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get api key model stats: %w", err)
@@ -404,7 +440,7 @@ func (s *UsageService) GetAPIKeyModelStats(ctx context.Context, apiKeyID int64, 
 
 // GetAPIKeyDailyUsage returns daily usage stats for a user's API key.
 func (s *UsageService) GetAPIKeyDailyUsage(ctx context.Context, userID, apiKeyID int64, startTime, endTime time.Time) ([]usagestats.APIKeyDailyUsagePoint, error) {
-	trend, err := s.usageRepo.GetUsageTrendWithFilters(ctx, startTime, endTime, "day", userID, apiKeyID, 0, 0, "", nil, nil, nil)
+	trend, err := s.GetUsageTrendWithFilters(ctx, startTime, endTime, "day", usagestats.UsageLogFilters{UserID: userID, APIKeyID: apiKeyID})
 	if err != nil {
 		return nil, fmt.Errorf("get api key daily usage: %w", err)
 	}
@@ -412,6 +448,7 @@ func (s *UsageService) GetAPIKeyDailyUsage(ctx context.Context, userID, apiKeyID
 	points := make([]usagestats.APIKeyDailyUsagePoint, 0, len(trend))
 	for _, row := range trend {
 		points = append(points, usagestats.APIKeyDailyUsagePoint{
+			FinancialSummary: row.FinancialSummary,
 			Date:             row.Date,
 			Requests:         row.Requests,
 			InputTokens:      row.InputTokens,
@@ -428,6 +465,10 @@ func (s *UsageService) GetAPIKeyDailyUsage(ctx context.Context, userID, apiKeyID
 
 // GetBatchAPIKeyUsageStats returns today/total actual_cost for given api keys.
 func (s *UsageService) GetBatchAPIKeyUsageStats(ctx context.Context, apiKeyIDs []int64, startTime, endTime time.Time) (map[int64]*usagestats.BatchAPIKeyUsageStats, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialBatchAPIKeyStats(ctx, apiKeyIDs, startTime, endTime)
+	}
 	stats, err := s.usageRepo.GetBatchAPIKeyUsageStats(ctx, apiKeyIDs, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("get batch api key usage stats: %w", err)
@@ -437,6 +478,10 @@ func (s *UsageService) GetBatchAPIKeyUsageStats(ctx context.Context, apiKeyIDs [
 
 // ListWithFilters lists usage logs with admin filters.
 func (s *UsageService) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters usagestats.UsageLogFilters) ([]UsageLog, *pagination.PaginationResult, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.ListFinancialUsage(ctx, params, filters)
+	}
 	logs, result, err := s.usageRepo.ListWithFilters(ctx, params, filters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list usage logs with filters: %w", err)
@@ -446,6 +491,10 @@ func (s *UsageService) ListWithFilters(ctx context.Context, params pagination.Pa
 
 // GetGlobalStats returns global usage stats for a time range.
 func (s *UsageService) GetGlobalStats(ctx context.Context, startTime, endTime time.Time) (*usagestats.UsageStats, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialUsageStats(ctx, usagestats.UsageLogFilters{StartTime: &startTime, EndTime: &endTime})
+	}
 	stats, err := s.usageRepo.GetGlobalStats(ctx, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("get global usage stats: %w", err)
@@ -455,6 +504,10 @@ func (s *UsageService) GetGlobalStats(ctx context.Context, startTime, endTime ti
 
 // GetStatsWithFilters returns usage stats with optional filters.
 func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagestats.UsageLogFilters) (*usagestats.UsageStats, error) {
+	// geili hook: use durable financial evidence for public reporting.
+	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
+		return financial.GetFinancialUsageStats(ctx, filters)
+	}
 	stats, err := s.usageRepo.GetStatsWithFilters(ctx, filters)
 	if err != nil {
 		return nil, fmt.Errorf("get usage stats with filters: %w", err)

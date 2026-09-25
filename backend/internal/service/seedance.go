@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -107,7 +108,13 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		return nil, fmt.Errorf("seedance account missing api_key")
 	}
 	started := time.Now()
-	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
+	requestCtx := ctx
+	if endpoint == SeedanceEndpointCreate {
+		detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		defer cancel()
+		requestCtx = detached
+	}
+	req, err := http.NewRequestWithContext(requestCtx, method, target, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +126,7 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxy = account.Proxy.URL()
 	}
+	ctxkey.MarkUpstreamDispatched(ctx)
 	resp, err := s.httpUpstream.Do(req, proxy, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(started).Milliseconds())
 	if err != nil {
@@ -142,12 +150,23 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 			return nil, fmt.Errorf("seedance create response missing task ID")
 		}
 		result.ResponseID = SeedanceTaskKey(id)
+		persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		err = s.persistGrokVideoAccepted(persistCtx, result.ResponseID)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("persist accepted seedance financial task: %w", err)
+		}
 	}
 	if endpoint == SeedanceEndpointStatus {
 		result.ResponseID = taskID
+		result.UpstreamTerminalEvent = gjson.GetBytes(responseBody, "status").String()
 		result.UpstreamModel = gjson.GetBytes(responseBody, "model").String()
 		if gjson.GetBytes(responseBody, "status").String() == "succeeded" {
-			result.Usage.OutputTokens = max(0, int(gjson.GetBytes(responseBody, "usage.completion_tokens").Int()))
+			units := gjson.GetBytes(responseBody, "usage.completion_tokens")
+			if units.Exists() && units.Type == gjson.Number && units.Int() >= 0 && units.Int() <= 1000000000 && units.Float() == float64(units.Int()) {
+				result.Usage.OutputTokens = int(units.Int())
+				result.UpstreamTerminalEvent = "succeeded_usage_verified"
+			}
 		}
 	}
 	writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)

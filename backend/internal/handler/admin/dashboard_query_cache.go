@@ -18,6 +18,8 @@ var (
 )
 
 type dashboardTrendCacheKey struct {
+	DateBasis             string  `json:"date_basis"`
+	Timezone              string  `json:"timezone"`
 	StartTime             string  `json:"start_time"`
 	EndTime               string  `json:"end_time"`
 	Granularity           string  `json:"granularity"`
@@ -36,6 +38,8 @@ type dashboardTrendCacheKey struct {
 }
 
 type dashboardModelGroupCacheKey struct {
+	DateBasis             string  `json:"date_basis"`
+	Timezone              string  `json:"timezone"`
 	StartTime             string  `json:"start_time"`
 	EndTime               string  `json:"end_time"`
 	UserID                int64   `json:"user_id"`
@@ -95,9 +99,12 @@ func (h *DashboardHandler) getUsageTrendCached(
 	billingType *int8,
 	upstreamModelMismatch *bool,
 	accountIDs []int64, // geili hook
+	dateBasis string,
 	subscriptionIDs ...int64,
 ) ([]usagestats.TrendDataPoint, bool, error) {
 	key := mustMarshalDashboardCacheKey(dashboardTrendCacheKey{
+		DateBasis:             usagestats.NormalizeFinancialDateBasis(dateBasis),
+		Timezone:              startTime.Location().String(),
 		StartTime:             startTime.UTC().Format(time.RFC3339),
 		EndTime:               endTime.UTC().Format(time.RFC3339),
 		Granularity:           granularity,
@@ -116,7 +123,8 @@ func (h *DashboardHandler) getUsageTrendCached(
 	})
 	entry, hit, err := dashboardTrendCache.GetOrLoad(key, func() (any, error) {
 		return h.dashboardService.GetUsageTrendWithUsageFilters(ctx, startTime, endTime, granularity, usagestats.UsageLogFilters{
-			UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
+			DateBasis: usagestats.NormalizeFinancialDateBasis(dateBasis),
+			UserID:    userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
 			Model: model, RequestType: requestType, Stream: stream, NativeCompactionV2: nativeCompactionV2, BillingType: billingType,
 			UpstreamModelMismatch: upstreamModelMismatch,
 		})
@@ -139,9 +147,12 @@ func (h *DashboardHandler) getModelStatsCached(
 	billingType *int8,
 	upstreamModelMismatch *bool,
 	accountIDs []int64, // geili hook
+	dateBasis string,
 	subscriptionIDs ...int64,
 ) ([]usagestats.ModelStat, bool, error) {
 	key := mustMarshalDashboardCacheKey(dashboardModelGroupCacheKey{
+		DateBasis:             usagestats.NormalizeFinancialDateBasis(dateBasis),
+		Timezone:              startTime.Location().String(),
 		StartTime:             startTime.UTC().Format(time.RFC3339),
 		EndTime:               endTime.UTC().Format(time.RFC3339),
 		UserID:                userID,
@@ -159,7 +170,8 @@ func (h *DashboardHandler) getModelStatsCached(
 	})
 	entry, hit, err := dashboardModelStatsCache.GetOrLoad(key, func() (any, error) {
 		return h.dashboardService.GetModelStatsWithUsageFiltersBySource(ctx, startTime, endTime, usagestats.UsageLogFilters{
-			UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
+			DateBasis: usagestats.NormalizeFinancialDateBasis(dateBasis),
+			UserID:    userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
 			RequestType: requestType, Stream: stream, NativeCompactionV2: nativeCompactionV2, BillingType: billingType,
 			UpstreamModelMismatch: upstreamModelMismatch,
 		}, modelSource)
@@ -181,9 +193,12 @@ func (h *DashboardHandler) getGroupStatsCached(
 	billingType *int8,
 	upstreamModelMismatch *bool,
 	accountIDs []int64, // geili hook
+	dateBasis string,
 	subscriptionIDs ...int64,
 ) ([]usagestats.GroupStat, bool, error) {
 	key := mustMarshalDashboardCacheKey(dashboardModelGroupCacheKey{
+		DateBasis:             usagestats.NormalizeFinancialDateBasis(dateBasis),
+		Timezone:              startTime.Location().String(),
 		StartTime:             startTime.UTC().Format(time.RFC3339),
 		EndTime:               endTime.UTC().Format(time.RFC3339),
 		UserID:                userID,
@@ -200,7 +215,8 @@ func (h *DashboardHandler) getGroupStatsCached(
 	})
 	entry, hit, err := dashboardGroupStatsCache.GetOrLoad(key, func() (any, error) {
 		return h.dashboardService.GetGroupStatsWithUsageFilters(ctx, startTime, endTime, usagestats.UsageLogFilters{
-			UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
+			DateBasis: usagestats.NormalizeFinancialDateBasis(dateBasis),
+			UserID:    userID, APIKeyID: apiKeyID, AccountID: accountID, AccountIDs: accountIDs, GroupID: groupID, SubscriptionID: dashboardSubscriptionID(subscriptionIDs),
 			RequestType: requestType, Stream: stream, NativeCompactionV2: nativeCompactionV2, BillingType: billingType,
 			UpstreamModelMismatch: upstreamModelMismatch,
 		})

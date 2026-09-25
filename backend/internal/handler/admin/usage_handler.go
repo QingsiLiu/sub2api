@@ -61,6 +61,12 @@ type CreateUsageCleanupTaskRequest struct {
 // List handles listing all usage records with filters
 // GET /api/v1/admin/usage
 func (h *UsageHandler) List(c *gin.Context) {
+	dateBasis := strings.TrimSpace(c.Query("date_basis"))
+	if !usagestats.ValidFinancialDateBasis(dateBasis) {
+		response.BadRequest(c, "Invalid date_basis, use accounting or completed")
+		return
+	}
+	dateBasis = usagestats.NormalizeFinancialDateBasis(dateBasis)
 	// geili hook: validate the multi-account filter before querying.
 	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
 	if accountErr != nil {
@@ -177,7 +183,10 @@ func (h *UsageHandler) List(c *gin.Context) {
 
 	// Parse date range
 	var startTime, endTime *time.Time
-	userTZ := c.Query("timezone") // Get user's timezone from request
+	userTZ := c.Query("timezone")
+	if dateBasis == usagestats.FinancialDateAccounting {
+		userTZ = "Asia/Shanghai"
+	} // Get user's timezone from request
 	if startDateStr := c.Query("start_date"); startDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
@@ -205,6 +214,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 		SortOrder: c.DefaultQuery("sort_order", "desc"),
 	}
 	filters := usagestats.UsageLogFilters{
+		DateBasis:             dateBasis,
 		UserID:                userID,
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,
@@ -241,6 +251,12 @@ func (h *UsageHandler) List(c *gin.Context) {
 // Stats handles getting usage statistics with filters
 // GET /api/v1/admin/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {
+	dateBasis := strings.TrimSpace(c.Query("date_basis"))
+	if !usagestats.ValidFinancialDateBasis(dateBasis) {
+		response.BadRequest(c, "Invalid date_basis, use accounting or completed")
+		return
+	}
+	dateBasis = usagestats.NormalizeFinancialDateBasis(dateBasis)
 	// geili hook: validate the multi-account filter before querying.
 	accountIDs, accountErr := parseUsageAccountIDsGeili(c)
 	if accountErr != nil {
@@ -345,6 +361,9 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 
 	// Parse date range
 	userTZ := c.Query("timezone")
+	if dateBasis == usagestats.FinancialDateAccounting {
+		userTZ = "Asia/Shanghai"
+	}
 	now := timezone.NowInUserLocation(userTZ)
 	var startTime, endTime time.Time
 
@@ -382,6 +401,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 
 	// Build filters and call GetStatsWithFilters
 	filters := usagestats.UsageLogFilters{
+		DateBasis:             dateBasis,
 		UserID:                userID,
 		APIKeyID:              apiKeyID,
 		AccountID:             accountID,

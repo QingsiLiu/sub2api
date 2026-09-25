@@ -43,7 +43,9 @@ jobs:
           go test ./...
           go test -tags=unit ./...
           CI=true go test -tags=integration ./...
-          CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres' -count=1
+          CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres|TestRefundJournalPostgres' -count=1
+          CI=true go test -race -tags=integration ./internal/repository -run 'TestSettlement|TestGroupUsage|TestFinancialProjection|TestUsageRecoveryIntegration|TestAUAPI|TestDurableVideo' -count=1 -timeout=10m
+          go test -race -tags=unit ./internal/service ./internal/handler ./internal/server/middleware -run 'TestSettlement|TestDurableVideo|TestCredentialBilling|TestAUAPIRepeatedAccepted|TestSubscriptionVideoLookup|TestRefundJournal' -count=1
           go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch|Contract|SubscriptionBillingV2|SubscriptionV2|SubscriptionQuotaGeili|LegacyManagement|LegacyPreview|LegacyStore|LegacyRejects|LegacyCommercial' -count=1
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${CANDIDATE_SHA} -X main.BuildType=release" -o ../sub2api ./cmd/server
       - uses: docker/setup-buildx-action@v3
@@ -75,7 +77,7 @@ jobs:
           import hashlib,json,pathlib,os
           files=sorted(pathlib.Path('backend/migrations').glob('*.sql'))
           migrations={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
-          record={'revision':os.environ['REVISION'],'image':'ghcr.io/qingsiliu/sub2api@'+os.environ['DIGEST'],'gates':{'frontend_full':'passed','go_default':'passed','go_unit':'passed','go_integration':'passed','subscription_race':'passed','subscription_v2_payment_postgres':'passed'},'migration_checksums':migrations,'production_ready':False,'remaining':['stage_business_acceptance','external_sandbox_and_limited_upstream_acceptance','explicit_production_authorization']}
+          record={'revision':os.environ['REVISION'],'image':'ghcr.io/qingsiliu/sub2api@'+os.environ['DIGEST'],'gates':{'frontend_full':'passed','go_default':'passed','go_unit':'passed','go_integration':'passed','subscription_race':'passed','subscription_v2_payment_postgres':'passed','billing_reliability_postgres_race':'passed','billing_ingress_and_async_race':'passed'},'migration_checksums':migrations,'production_ready':False,'remaining':['stage_business_acceptance','external_sandbox_and_limited_upstream_acceptance','explicit_production_authorization']}
           pathlib.Path('candidate-gates.json').write_text(json.dumps(record,indent=2)+'\n')
           PYCODE
       - uses: actions/upload-artifact@v7

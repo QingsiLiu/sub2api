@@ -406,6 +406,7 @@ func TestGrokMediaVideoCompletionStillClaimsBillingOnce(t *testing.T) {
 	c, _ := grokMediaSlotContext(context.Background(), false)
 	key, ok := middleware2.GetAPIKeyFromContext(c)
 	require.True(t, ok)
+	require.NoError(t, h.gatewayService.StoreGrokVideoPendingBilling(c.Request.Context(), "task", 10, key.ID, service.GrokVideoPendingBilling{Model: "grok-imagine-video", VideoResolution: "720p", VideoDurationSeconds: 6}))
 	subject := middleware2.AuthSubject{UserID: 10, Concurrency: 5}
 	result := &service.OpenAIForwardResult{ResponseID: "task", Model: "grok-imagine-video",
 		VideoCount: 1, VideoDurationSeconds: 6}
@@ -419,4 +420,14 @@ func TestGrokMediaVideoCompletionStillClaimsBillingOnce(t *testing.T) {
 		}
 	}
 	require.Len(t, bindings.billed, 1)
+}
+
+func TestGrokMediaVideoMissingSnapshotDoesNotGuess480pOrBurnClaim(t *testing.T) {
+	h, _, bindings, _ := newGrokMediaSlotHandler(t, false, false)
+	c, _ := grokMediaSlotContext(context.Background(), false)
+	key, ok := middleware2.GetAPIKeyFromContext(c)
+	require.True(t, ok)
+	bill := prepareGrokVideoCompletionBilling(c.Request.Context(), h, zap.NewNop(), key, middleware2.AuthSubject{UserID: 10}, "task", &service.OpenAIForwardResult{ResponseID: "task", Model: "grok-imagine-video", VideoCount: 1, VideoDurationSeconds: 6})
+	require.Nil(t, bill)
+	require.Empty(t, bindings.billed)
 }

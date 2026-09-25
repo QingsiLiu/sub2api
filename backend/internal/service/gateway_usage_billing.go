@@ -87,6 +87,8 @@ type postUsageBillingParams struct {
 	// path that records only API-key 5h/1d/7d window usage. It must not trigger
 	// balance, subscription, account, platform, or lifetime-key-quota effects.
 	SimpleModeKeyRateLimitOnly bool
+	// Geili: SQL owns quota increments; cache updates must not repeat them.
+	DurableSettlement bool
 }
 
 var ErrSimpleModeKeyRateLimitBillingUnavailable = errors.New("simple mode api key rate-limit billing unavailable")
@@ -303,6 +305,8 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.SubscriptionID = &p.Subscription.ID
 	}
 	if usageLog != nil {
+		cmd.UsageDetail = usageLog
+		cmd.CompletedAt = usageLog.CreatedAt
 		cmd.Model = usageLog.Model
 		cmd.BillingType = usageLog.BillingType
 		cmd.InputTokens = usageLog.InputTokens
@@ -350,6 +354,11 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
 	}
 
+	// geili hook: the transaction only increments configured platform quotas.
+	if !p.IsSubscriptionBill && p.Platform != "" && p.Cost.ActualCost > 0 {
+		cmd.Platform = p.Platform
+		cmd.PlatformQuotaCost = p.Cost.ActualCost
+	}
 	cmd.Normalize()
 	return cmd
 }
@@ -370,6 +379,20 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return true, nil
 	}
 
+	// geili hook: persist the priced final-usage task before attempting money.
+	// A later Apply failure is retried from this immutable receipt after restart.
+	if durable, ok := repo.(UsageSettlementRepository); ok {
+		p.DurableSettlement = true
+		prepareCtx, prepareCancel := detachedBillingContext(ctx)
+		err := prepareUsageSettlementDurably(prepareCtx, deps.cfg, durable, cmd, usageLog)
+		prepareCancel()
+		if err != nil {
+			if !errors.Is(err, ErrUsageSettlementIngressDeferred) || errors.Is(err, ErrUsageBillingRequestConflict) {
+				return false, err
+			}
+			slog.Error("usage settlement retained locally awaiting database", "request_id", cmd.RequestID, "api_key_id", cmd.APIKeyID)
+		}
+	}
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
@@ -412,7 +435,9 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		return
 	}
 
-	if p.IsSubscriptionBill {
+	if p.DurableSettlement {
+		invalidateSettlementCaches(ctx, deps.billingCacheService, buildUsageBillingCommand("", nil, p))
+	} else if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.Subscription != nil && deps.billingCacheService != nil {
 			if err := deps.billingCacheService.UpdateSubscriptionQuotaCache(ctx, p.Subscription, p.Cost.ActualCost); err != nil {
 				slog.Warn("subscription cache update failed", "subscription_id", p.Subscription.ID, "error", err)
@@ -422,7 +447,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() && deps.billingCacheService != nil {
+	if !p.DurableSettlement && p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() && deps.billingCacheService != nil {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
 	}
 
@@ -435,7 +460,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	//     限制在并发 in-flight 请求数量内（旧实现的异步入队会让超支无限累积直到 worker 处理）
 	//   - DB 异步(flusher_enabled=false):在独立 goroutine 中走 detached context,失败用 ALERT log 触发 oncall 对账
 	//   - flusher_enabled=true:不直写 DB,由 flusher 异步批量刷（markDirty 已在 IncrementUserPlatformQuotaUsage 内部完成）
-	if !p.IsSubscriptionBill && p.Platform != "" && p.Cost.ActualCost > 0 && p.User != nil && deps.userPlatformQuotaRepo != nil && deps.billingCacheService != nil {
+	if !p.DurableSettlement && !p.IsSubscriptionBill && p.Platform != "" && p.Cost.ActualCost > 0 && p.User != nil && deps.userPlatformQuotaRepo != nil && deps.billingCacheService != nil {
 		if deps.billingCacheService.HasUserPlatformQuotaLimit(ctx, p.User.ID, p.Platform) {
 			deps.billingCacheService.IncrementUserPlatformQuotaUsage(p.User.ID, p.Platform, p.Cost.ActualCost)
 			if deps.cfg == nil || !deps.cfg.Database.UserPlatformQuotaFlusherEnabled {
@@ -628,7 +653,7 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 				fallbackCtx, fallbackCancel = detachedBillingContext(context.Background())
 				defer fallbackCancel()
 			}
-			if _, syncErr := repo.Create(fallbackCtx, usageLog); syncErr != nil {
+			if _, syncErr := createUsageLogDirect(fallbackCtx, repo, usageLog); syncErr != nil {
 				logger.LegacyPrintf(logKey, "Create usage log sync fallback failed: %v", syncErr)
 			}
 		}
@@ -912,6 +937,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
 
+	if s.UsesDurableUsageSettlement() {
+		return billingErr // the receipt owns both retry and detail delivery
+	}
 	if billingErr != nil {
 		usageLog.ActualCost = 0
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")

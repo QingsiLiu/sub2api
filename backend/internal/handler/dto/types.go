@@ -598,6 +598,8 @@ type BatchUpdateRedeemCodesRequest struct {
 
 // UsageLog 是普通用户接口使用的 usage log DTO（不包含管理员字段）。
 type UsageLog struct {
+	Financial *service.UsageFinancialMetadata `json:"-"`
+
 	BillingSource    string `json:"billing_source"`
 	SubscriptionName string `json:"subscription_name,omitempty"`
 	TargetGroupName  string `json:"target_group_name,omitempty"`

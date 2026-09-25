@@ -683,6 +683,7 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
+		cfg:                   s.cfg, // geili: mounted ingress WAL must not fall back to the fixture-only nil config
 		accountRepo:           s.accountRepo,
 		userRepo:              s.userRepo,
 		userSubRepo:           s.userSubRepo,
@@ -1207,6 +1208,7 @@ func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Acco
 		}
 		account = credAccount
 	}
+	FreezeCredentialBillingAccount(ctx, account) // geili: freeze nonsecret pricing facts before dispatch
 	switch account.Type {
 	case AccountTypeOAuth:
 		if account.IsOpenAIAgentIdentity() {

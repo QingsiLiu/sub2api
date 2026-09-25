@@ -11,6 +11,7 @@ import (
 var usageStatsCache = newSnapshotCache(30 * time.Second)
 
 type usageStatsCacheKeyData struct {
+	DateBasis             string  `json:"date_basis"`
 	SubscriptionID        int64   `json:"subscription_id"`
 	StartTime             string  `json:"start_time"`
 	EndTime               string  `json:"end_time"`
@@ -38,6 +39,7 @@ func usageStatsCacheKey(filters usagestats.UsageLogFilters) string {
 		end = filters.EndTime.UTC().Format(time.RFC3339)
 	}
 	return mustMarshalDashboardCacheKey(usageStatsCacheKeyData{
+		DateBasis:             usagestats.NormalizeFinancialDateBasis(filters.DateBasis),
 		StartTime:             start,
 		EndTime:               end,
 		UserID:                filters.UserID,
