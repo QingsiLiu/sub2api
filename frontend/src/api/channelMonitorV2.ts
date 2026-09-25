@@ -41,6 +41,8 @@ export interface MonitorMetric {
   rpm: number
   tpm: number
   error_rate: number
+  /** True success/request ratio, unaffected by ignored error categories. */
+  success_rate?: number
   cache_rate: number
   cache_rate_numerator: number
   cache_rate_denominator: number
@@ -102,6 +104,7 @@ export interface MonitorConfig {
   version: number
   enabled: boolean
   refresh_interval_seconds: 60 | 300
+  /** Exact requested-model allowlists per platform; empty lists monitor nothing. */
   platforms: Array<{ platform: string; enabled: boolean; models: string[] }>
   group_ids: number[]
   health_thresholds: {

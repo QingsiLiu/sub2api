@@ -107,9 +107,9 @@
             />
             <span
               class="badge justify-self-start sm:justify-self-end"
-              :class="platform.models.length ? 'badge-gray' : 'badge badge-primary'"
+              :class="platform.models.length ? 'badge-primary' : 'badge-gray'"
             >
-              {{ platform.models.length ? t('channelMonitorV2.settings.badgeOther') : t('channelMonitorV2.settings.badgeAllModels') }}
+              {{ platform.models.length ? t('channelMonitorV2.settings.badgeListedModels') : t('channelMonitorV2.settings.badgeNoModels') }}
             </span>
           </div>
         </div>

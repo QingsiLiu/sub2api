@@ -31,9 +31,10 @@ const (
 )
 
 type ChannelMonitorV2PlatformConfig struct {
-	Platform string   `json:"platform"`
-	Enabled  bool     `json:"enabled"`
-	Models   []string `json:"models"`
+	Platform string `json:"platform"`
+	Enabled  bool   `json:"enabled"`
+	// Models is a strict requested-model allowlist; an empty list monitors nothing.
+	Models []string `json:"models"`
 }
 
 type ChannelMonitorV2Config struct {

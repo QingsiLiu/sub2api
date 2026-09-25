@@ -28,19 +28,19 @@ func TestChannelMonitorV2DateBinOriginIsUTC(t *testing.T) {
 	}
 }
 
-func TestChannelMonitorV2DisplayModelIsPlatformScoped(t *testing.T) {
+func TestChannelMonitorV2DisplayModelKeepsIdentityAfterScopeFiltering(t *testing.T) {
 	cfg := service.ChannelMonitorV2Config{Platforms: []service.ChannelMonitorV2PlatformConfig{
 		{Platform: "openai", Enabled: true, Models: []string{"shared", "gpt-5"}},
 		{Platform: "grok", Enabled: true, Models: []string{"grok-4"}},
-		// Empty models list must NOT collapse everything into __other__.
+		// Empty model lists are excluded by the selector; display keeps raw identity.
 		{Platform: "anthropic", Enabled: true, Models: []string{}},
 	}}
 	require.Equal(t, "shared", channelMonitorV2DisplayModel(cfg, "openai", "shared"))
-	require.Equal(t, service.ChannelMonitorV2OtherModel, channelMonitorV2DisplayModel(cfg, "grok", "shared"))
+	require.Equal(t, "shared", channelMonitorV2DisplayModel(cfg, "grok", "shared"))
 	require.Equal(t, "claude-sonnet-4", channelMonitorV2DisplayModel(cfg, "anthropic", "claude-sonnet-4"))
-	// Unconfigured platform still surfaces the real model name.
+	// Rendering is identity-only; selection rejects unconfigured platforms.
 	require.Equal(t, "gemini-2.5-pro", channelMonitorV2DisplayModel(cfg, "gemini", "gemini-2.5-pro"))
-	require.True(t, channelMonitorV2ModelSelected(service.ChannelMonitorV2Filter{Models: []string{service.ChannelMonitorV2OtherModel}}, cfg, "grok", "shared"))
+	require.False(t, channelMonitorV2ModelSelected(service.ChannelMonitorV2Filter{Models: []string{service.ChannelMonitorV2OtherModel}}, cfg, "grok", "shared"))
 }
 
 func TestChannelMonitorV2MatrixDimensionKey(t *testing.T) {
@@ -48,7 +48,7 @@ func TestChannelMonitorV2MatrixDimensionKey(t *testing.T) {
 	key := channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatformGroupModel, cfg, "openai", 7, "gpt-5")
 	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai", groupID: 7, model: "gpt-5"}, key)
 	key = channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatformModel, cfg, "openai", 7, "unlisted")
-	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai", model: service.ChannelMonitorV2OtherModel}, key)
+	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai", model: "unlisted"}, key)
 	key = channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatform, cfg, "openai", 7, "gpt-5")
 	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai"}, key)
 }
@@ -89,13 +89,13 @@ func TestChannelMonitorV2MetricIncludesSuccessRate(t *testing.T) {
 func TestChannelMonitorV2WhereUsesConfiguredScopeAndEmptyFilterMeansAllConfigured(t *testing.T) {
 	filter := service.ChannelMonitorV2Filter{Start: time.Unix(1, 0), End: time.Unix(2, 0)}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}, {Platform: "grok", Enabled: false}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}, {Platform: "grok", Enabled: false}},
 		GroupIDs:  []int64{3, 4},
 	}
 	where, args := channelMonitorV2Where(filter, cfg, "m")
 	require.Contains(t, where, "m.platform = ANY($3)")
 	require.Contains(t, where, "m.group_id = ANY($4)")
-	require.Len(t, args, 4)
+	require.Len(t, args, 6)
 }
 
 func TestChannelMonitorV2WhereRejectsGroupFilterOutsideConfiguredScope(t *testing.T) {
@@ -103,13 +103,13 @@ func TestChannelMonitorV2WhereRejectsGroupFilterOutsideConfiguredScope(t *testin
 		Start: time.Unix(1, 0), End: time.Unix(2, 0), GroupIDs: []int64{9},
 	}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
 		GroupIDs:  []int64{3, 4},
 	}
 	where, args := channelMonitorV2Where(filter, cfg, "m")
 	require.Contains(t, where, "FALSE")
 	require.NotContains(t, where, "m.group_id = ANY")
-	require.Len(t, args, 3)
+	require.Len(t, args, 5)
 }
 
 func TestChannelMonitorV2WhereRestrictsOrdinaryViewerToAllowedConfiguredGroups(t *testing.T) {
@@ -118,7 +118,7 @@ func TestChannelMonitorV2WhereRestrictsOrdinaryViewerToAllowedConfiguredGroups(t
 		GroupIDs: []int64{4, 9}, AllowedGroupIDs: []int64{3, 4}, RestrictGroups: true,
 	}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
 		GroupIDs:  []int64{3, 4, 9},
 	}
 	where, args := channelMonitorV2Where(filter, cfg, "m")
@@ -132,7 +132,7 @@ func TestChannelMonitorV2WhereRejectsOrdinaryViewerWithNoAllowedGroups(t *testin
 		GroupIDs: []int64{9}, RestrictGroups: true,
 	}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
 		GroupIDs:  []int64{3, 9},
 	}
 	where, _ := channelMonitorV2Where(filter, cfg, "m")
@@ -156,7 +156,7 @@ func TestChannelMonitorV2CatalogKeepsViewerScopeWhileIgnoringPickerFilters(t *te
 func TestChannelMonitorV2AdminScopeRemainsGlobal(t *testing.T) {
 	filter := service.ChannelMonitorV2Filter{Start: time.Unix(1, 0), End: time.Unix(2, 0), GroupIDs: []int64{9}}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
 		GroupIDs:  []int64{3, 9},
 	}
 	where, args := channelMonitorV2Where(filter, cfg, "m")
@@ -167,7 +167,7 @@ func TestChannelMonitorV2AdminScopeRemainsGlobal(t *testing.T) {
 func TestChannelMonitorV2MatrixDoesNotSeedGroupsForEmptyViewerScope(t *testing.T) {
 	filter := service.ChannelMonitorV2Filter{RestrictGroups: true}
 	cfg := service.ChannelMonitorV2Config{
-		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
 		GroupIDs:  []int64{3, 9},
 	}
 	accs := seedChannelMonitorV2MatrixAccumulators(filter, cfg, service.ChannelMonitorV2GroupByPlatformGroup, map[int64]channelMonitorV2GroupInfo{
@@ -463,8 +463,8 @@ func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) 
 
 	cfg := service.ChannelMonitorV2Config{
 		Platforms: []service.ChannelMonitorV2PlatformConfig{
-			{Platform: "openai", Enabled: true},
-			{Platform: "grok", Enabled: true},
+			{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}},
+			{Platform: "grok", Enabled: true, Models: []string{"grok-4"}},
 		},
 		GroupIDs: []int64{3, 4},
 	}
@@ -474,8 +474,8 @@ func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) 
 	// Catalog WHERE still applies config scope (enabled platforms + group allow-list).
 	require.Contains(t, catalogWhere, "m.platform = ANY")
 	require.Contains(t, catalogWhere, "m.group_id = ANY")
-	require.Len(t, catalogArgs, 4) // start, end, platforms, groups
-	require.Len(t, metricArgs, 4)
+	require.Len(t, catalogArgs, 6) // start, end, platforms, groups, paired platform/model allowlists
+	require.Len(t, metricArgs, 6)
 
 	// Metrics WHERE is narrower once multi-select platforms/groups are applied.
 	require.NotEqual(t, catalogArgs, metricArgs)

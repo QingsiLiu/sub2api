@@ -129,7 +129,7 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 	// Catalog dimensions must stay independent of the currently selected
 	// platform/group/model multi-select filters so pickers keep their full option set.
 	// Time/coverage still come from the request filter; config scope (enabled platforms,
-	// group allow-list, display-model collapse) still applies.
+	// group and model allowlists) still applies.
 	catalogFilter := channelMonitorV2CatalogFilter(channelMonitorV2CommonCoverageFilter(filter, *coverage))
 	where, args, _ := channelMonitorV2WhereWithRollup(catalogFilter, cfg, "m")
 	query := `SELECT m.platform, COALESCE(g.name, ''), lower(COALESCE(NULLIF(TRIM(g.platform), ''), 'unknown')), m.group_id, m.model,
@@ -158,20 +158,20 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 	groupCounts := map[int64]groupValue{}
 	for _, platform := range channelMonitorV2EnabledPlatforms(cfg) {
 		platformCounts[platform] += 0
-		for _, p := range cfg.Platforms {
-			if p.Platform != platform || len(p.Models) == 0 {
-				continue
-			}
-			for _, model := range p.Models {
-				modelCounts[platform+"\x00"+model] = modelValue{platform: platform, count: 0}
-			}
+		for _, model := range configuredChannelMonitorV2Models(cfg, platform, catalogFilter) {
+			modelCounts[platform+"\x00"+model] = modelValue{platform: platform, count: 0}
 		}
 	}
 	groupInfo, err := r.loadChannelMonitorV2GroupInfo(ctx, configuredChannelMonitorV2GroupIDs(catalogFilter, cfg))
 	if err != nil {
 		return nil, err
 	}
+	// geili hook: empty model lists must not seed unmonitored groups.
+	platforms := channelMonitorV2EnabledPlatforms(cfg)
 	for groupID, info := range groupInfo {
+		if !containsString(platforms, info.platform) && !(info.platform == "composite" && len(platforms) > 0) {
+			continue
+		}
 		groupCounts[groupID] = groupValue{name: info.name, platform: info.platform, count: 0}
 	}
 	for rows.Next() {
@@ -179,6 +179,10 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 		var groupID, count int64
 		if err := rows.Scan(&platform, &groupName, &groupPlatform, &groupID, &model, &count); err != nil {
 			return nil, err
+		}
+		// geili hook: also enforce the allowlist when constructing picker counts.
+		if !channelMonitorV2ModelSelected(catalogFilter, cfg, platform, model) {
+			continue
 		}
 		platformCounts[platform] += count
 		displayModel := channelMonitorV2DisplayModel(cfg, platform, model)
@@ -205,7 +209,9 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 	for value, count := range platformCounts {
 		result.Platforms = append(result.Platforms, service.ChannelMonitorV2Dimension{Value: value, Label: value, RequestCount: count})
 	}
-	for value, meta := range modelCounts {
+	for key, meta := range modelCounts {
+		// geili hook: the map key is platform-scoped, but the API value is a model name.
+		value := strings.TrimPrefix(key, meta.platform+"\x00")
 		result.Models = append(result.Models, service.ChannelMonitorV2Dimension{Value: value, Label: channelMonitorV2ModelLabel(value), Platform: meta.platform, RequestCount: meta.count})
 	}
 	for id, value := range groupCounts {
@@ -532,12 +538,13 @@ func seedChannelMonitorV2MatrixAccumulators(filter service.ChannelMonitorV2Filte
 		}
 	}
 	for _, platform := range platforms {
-		models := []string{""}
-		if groupBy == service.ChannelMonitorV2GroupByPlatformModel || groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel {
-			models = configuredChannelMonitorV2Models(cfg, platform, filter)
-			if len(models) == 0 {
-				models = []string{""}
-			}
+		// geili hook: never seed a platform/model outside the effective allowlist.
+		models := configuredChannelMonitorV2Models(cfg, platform, filter)
+		if len(models) == 0 {
+			continue
+		}
+		if groupBy == service.ChannelMonitorV2GroupByPlatform || groupBy == service.ChannelMonitorV2GroupByPlatformGroup {
+			models = []string{""}
 		}
 		for _, groupID := range groupIDs {
 			info := groupInfo[groupID]
@@ -567,22 +574,8 @@ func seedChannelMonitorV2MatrixAccumulators(filter service.ChannelMonitorV2Filte
 }
 
 func configuredChannelMonitorV2Models(cfg service.ChannelMonitorV2Config, platform string, filter service.ChannelMonitorV2Filter) []string {
-	models := []string{}
-	for _, p := range cfg.Platforms {
-		if p.Platform != platform {
-			continue
-		}
-		models = append(models, p.Models...)
-		break
-	}
-	if len(filter.Models) > 0 {
-		if len(models) == 0 {
-			models = append(models, filter.Models...)
-		} else {
-			models = intersectStrings(models, filter.Models)
-		}
-	}
-	return models
+	// geili hook: model pickers may narrow, never expand the configured allowlist.
+	return geiliChannelMonitorV2Models(cfg, platform, filter)
 }
 
 // channelMonitorV2CatalogFilter clears multi-select dimensions so catalog endpoints
@@ -764,7 +757,7 @@ func (r *channelMonitorV2Repository) loadErrorDetails(ctx context.Context, filte
 	}
 	if len(platforms) > 0 {
 		args = append(args, pq.Array(platforms))
-		conditions = append(conditions, fmt.Sprintf("lower(COALESCE(NULLIF(TRIM(current_error.platform), ''), 'unknown')) = ANY($%d)", len(args)))
+		conditions = append(conditions, fmt.Sprintf("%s = ANY($%d)", geiliChannelMonitorV2ErrorPlatformSQL, len(args)))
 	} else {
 		conditions = append(conditions, "FALSE")
 	}
@@ -775,10 +768,13 @@ func (r *channelMonitorV2Repository) loadErrorDetails(ctx context.Context, filte
 		args = append(args, pq.Array(groups))
 		conditions = append(conditions, fmt.Sprintf("COALESCE(current_error.group_id, 0) = ANY($%d)", len(args)))
 	}
+	// geili hook: filter raw samples before GROUP BY/LIMIT, using rollup attribution.
+	modelScope, args := geiliChannelMonitorV2ModelScopeSQL(filter, cfg, geiliChannelMonitorV2ErrorPlatformSQL, geiliChannelMonitorV2ErrorModelSQL, args)
+	conditions = append(conditions, modelScope)
 	query := `SELECT
-			lower(COALESCE(NULLIF(TRIM(current_error.platform), ''), 'unknown')) AS platform,
+			` + geiliChannelMonitorV2ErrorPlatformSQL + ` AS platform,
 			COALESCE(current_error.group_id, 0) AS group_id,
-			COALESCE(NULLIF(TRIM(current_error.requested_model), ''), NULLIF(TRIM(current_error.model), ''), 'unknown') AS model,
+			` + geiliChannelMonitorV2ErrorModelSQL + ` AS model,
 			COALESCE(current_error.error_type, '') AS error_type,
 			COALESCE(current_error.error_owner, '') AS error_owner,
 			COALESCE(current_error.error_source, '') AS error_source,
@@ -787,6 +783,8 @@ func (r *channelMonitorV2Repository) loadErrorDetails(ctx context.Context, filte
 			LEFT(COALESCE(NULLIF(current_error.upstream_error_message, ''), NULLIF(current_error.error_message, ''), NULLIF(current_error.upstream_error_detail, ''), NULLIF(current_error.error_body, ''), current_error.error_type, ''), 600) AS message,
 			COUNT(*) AS count
 		FROM ops_error_logs current_error
+		LEFT JOIN groups g ON g.id = current_error.group_id
+		LEFT JOIN accounts a ON a.id = current_error.account_id
 		WHERE ` + strings.Join(conditions, " AND ") + `
 		GROUP BY 1,2,3,4,5,6,7,8,9
 		ORDER BY count DESC
@@ -1179,59 +1177,31 @@ func channelMonitorV2Where(filter service.ChannelMonitorV2Filter, cfg service.Ch
 		args = append(args, pq.Array(groups))
 		conditions = append(conditions, fmt.Sprintf("%s.group_id = ANY($%d)", alias, len(args)))
 	}
+	// geili hook: all monitor reads (including rollups/histograms) use the same scope.
+	modelScope, args := geiliChannelMonitorV2ModelScopeSQL(filter, cfg, alias+".platform", alias+".model", args)
+	conditions = append(conditions, modelScope)
 	return "WHERE " + strings.Join(conditions, " AND "), args
 }
 
 func channelMonitorV2EnabledPlatforms(cfg service.ChannelMonitorV2Config) []string {
 	out := []string{}
 	for _, p := range cfg.Platforms {
-		if p.Enabled {
+		// geili hook: a platform with no configured models does not participate.
+		if len(geiliChannelMonitorV2Models(cfg, p.Platform, service.ChannelMonitorV2Filter{})) > 0 {
 			out = append(out, p.Platform)
 		}
 	}
 	return out
 }
 
-// channelMonitorV2DisplayModel maps a raw model name for presentation.
-// Semantics (parallel to empty group_ids = all groups):
-//   - platform not in config / disabled → keep raw model (still collected)
-//   - models list empty → show the real model name (no collapsing)
-//   - models list non-empty → selected keep identity; everything else → __other__
-func channelMonitorV2DisplayModel(cfg service.ChannelMonitorV2Config, platform, model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return service.ChannelMonitorV2OtherModel
-	}
-	for _, p := range cfg.Platforms {
-		if p.Platform != platform {
-			continue
-		}
-		// Empty allow-list: surface every real model instead of dumping into __other__.
-		// Operators opt into the named + __other__ split only by listing models.
-		if len(p.Models) == 0 {
-			return model
-		}
-		for _, selected := range p.Models {
-			if selected == model {
-				return model
-			}
-		}
-		return service.ChannelMonitorV2OtherModel
-	}
-	// Platform not configured: still show the real model so traffic is visible.
-	return model
+// channelMonitorV2DisplayModel preserves the requested model name. Callers must
+// first enforce channelMonitorV2ModelSelected; unlisted models never form a row.
+func channelMonitorV2DisplayModel(_ service.ChannelMonitorV2Config, _, model string) string {
+	return strings.TrimSpace(model)
 }
 func channelMonitorV2ModelSelected(filter service.ChannelMonitorV2Filter, cfg service.ChannelMonitorV2Config, platform, model string) bool {
-	if len(filter.Models) == 0 {
-		return true
-	}
-	display := channelMonitorV2DisplayModel(cfg, platform, model)
-	for _, selected := range filter.Models {
-		if selected == display {
-			return true
-		}
-	}
-	return false
+	// geili hook: even an empty request filter is bounded by the admin allowlist.
+	return containsString(geiliChannelMonitorV2Models(cfg, platform, filter), strings.TrimSpace(model))
 }
 func channelMonitorV2ModelLabel(model string) string {
 	if model == service.ChannelMonitorV2OtherModel {

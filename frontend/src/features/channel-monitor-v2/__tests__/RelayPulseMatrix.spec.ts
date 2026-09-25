@@ -82,6 +82,26 @@ function metrics(requestCount: number): MonitorMetric {
 }
 
 describe('RelayPulseMatrix', () => {
+  it('renders an empty allowlisted model as no data even when throughput is hidden', () => {
+    const emptyMetrics = {
+      ...metrics(0), success_rate: 0, token_count: 0, rpm: 0, tpm: 0,
+      ttft: { sample_count: 0, p50_ms: null, p95_ms: null, avg_ms: null },
+      duration: { sample_count: 0, p50_ms: null, p95_ms: null, avg_ms: null },
+    }
+    const wrapper = mount(RelayPulseMatrix, { props: {
+      rows: [{ platform: 'openai', model: 'idle', metrics: emptyMetrics,
+        health: { overall: 'unknown', error_rate: 'unknown', ttft: 'unknown', minimum_sample: 50 }, buckets: [],
+      }],
+      coverage: { requested_start: '2026-08-01T00:00:00Z', requested_end: '2026-08-01T00:01:00Z',
+        coverage_start: '2026-08-01T00:00:00Z', data_through: '2026-08-01T00:01:00Z',
+        computed_at: '2026-08-01T00:01:00Z', aggregation_lag_seconds: 0, coverage_complete: true, bucket_seconds: 60 },
+      healthMode: 'overall', showThroughput: false,
+    } })
+    expect(wrapper.text()).not.toContain('100.0%')
+    expect(wrapper.text()).toContain('—')
+    wrapper.unmount()
+  })
+
   it('shows privacy-safe hover tooltips and multi-band colors without click modal', async () => {
     const wrapper = mount(RelayPulseMatrix, {
       props: {

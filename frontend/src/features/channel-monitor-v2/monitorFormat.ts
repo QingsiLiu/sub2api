@@ -6,7 +6,7 @@
  * request/error/token counts in user-facing surfaces.
  */
 
-import type { HealthScoreBand, HealthState, MonitorHealth } from '@/api/channelMonitorV2'
+import type { HealthScoreBand, HealthState, MonitorHealth, MonitorMetric } from '@/api/channelMonitorV2'
 import { formatCompactNumber } from '@/utils/format'
 
 export function monitorIntlLocale(): string {
@@ -75,6 +75,21 @@ export function formatMonitorSuccessRate(successRequests: number, requestCount: 
 
 export function formatMonitorSuccessRateFromError(errorRate: number): string {
   return formatMonitorPercent(1 - (errorRate || 0))
+}
+
+/** Use the backend's true success ratio, not the complement of scored errors.
+ * Public responses redact counts (and optionally throughput), but keep ratios,
+ * latency and health scores. No remaining traffic signal means no data, not 100%.
+ */
+export function formatMonitorMetricSuccessRate(metrics: MonitorMetric, health?: MonitorHealth): string {
+  const hasTraffic = metrics.request_count > 0 || metrics.rpm > 0 || metrics.tpm > 0
+    || (metrics.success_rate ?? 0) > 0 || metrics.error_rate > 0
+    || metrics.ttft.p50_ms != null || metrics.duration.p50_ms != null
+    || health?.error_rate_score != null
+  if (!hasTraffic) return '—'
+  return metrics.success_rate == null
+    ? formatMonitorSuccessRateFromError(metrics.error_rate)
+    : formatMonitorPercent(metrics.success_rate)
 }
 
 /**

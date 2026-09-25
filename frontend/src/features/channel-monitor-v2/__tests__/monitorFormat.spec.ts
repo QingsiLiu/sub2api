@@ -3,6 +3,7 @@ import {
   formatLatencyKpiSecondary,
   formatLatencyPrivacy,
   formatMonitorMs,
+  formatMonitorMetricSuccessRate,
   formatMonitorNumber,
   formatMonitorPercent,
   formatMonitorRate,
@@ -16,7 +17,7 @@ import {
   tokensPerSecondFromTpm,
   ttftDisplayState,
 } from '../monitorFormat'
-import type { MonitorHealth } from '@/api/channelMonitorV2'
+import type { MonitorHealth, MonitorMetric } from '@/api/channelMonitorV2'
 
 describe('monitorFormat accuracy', () => {
   it('converts backend TPM (per minute) to tokens/sec for display', () => {
@@ -75,6 +76,27 @@ describe('monitorFormat accuracy', () => {
   it('derives success rate from error_rate without absolute counts', () => {
     expect(formatMonitorSuccessRateFromError(0.1)).toBe('90.0%')
     expect(formatMonitorSuccessRateFromError(0)).toBe('100.0%')
+  })
+
+  it('uses true success rate and does not show 100% for empty/redacted traffic', () => {
+    const empty: MonitorMetric = {
+      request_count: 0, success_requests: 0, error_requests: 0,
+      success_rate: 0, error_rate: 0, rpm: 0, tpm: 0, token_count: 0,
+      cache_rate: 0, cache_rate_numerator: 0, cache_rate_denominator: 0,
+      ttft: { sample_count: 0, p50_ms: null, p95_ms: null, avg_ms: null },
+      duration: { sample_count: 0, p50_ms: null, p95_ms: null, avg_ms: null },
+    }
+    expect(formatMonitorMetricSuccessRate(empty)).toBe('—')
+    // An ignored error changes scored error rate, never true success rate.
+    expect(formatMonitorMetricSuccessRate({ ...empty, request_count: 100, success_rate: 0.9 })).toBe('90.0%')
+    // Counts and throughput can both be hidden for users.
+    expect(formatMonitorMetricSuccessRate({ ...empty, success_rate: 0.9 })).toBe('90.0%')
+    expect(formatMonitorMetricSuccessRate({ ...empty, error_rate: 1 })).toBe('0.00%')
+    expect(formatMonitorMetricSuccessRate(empty, {
+      overall: 'healthy', error_rate: 'healthy', ttft: 'unknown', minimum_sample: 50, error_rate_score: 100,
+    })).toBe('0.00%') // all failures ignored, but scored traffic exists
+    // Compatibility with older payloads lacking success_rate.
+    expect(formatMonitorMetricSuccessRate({ ...empty, success_rate: undefined, error_rate: 0.1 })).toBe('90.0%')
   })
 
   it('maps continuous scores to multi-stop bands', () => {
