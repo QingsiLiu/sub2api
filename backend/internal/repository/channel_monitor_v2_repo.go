@@ -359,6 +359,13 @@ func (r *channelMonitorV2Repository) GetModels(ctx context.Context, filter servi
 	for key, acc := range accs {
 		parts := strings.SplitN(key, "\x00", 2)
 		metrics := acc.metric(minutes, admin)
+		// The platform catalog is intentionally used to keep picker options
+		// stable, but the detail table should only show models with traffic in
+		// the selected window. A model with requests that all failed still has a
+		// non-zero request_count and remains visible for diagnosis.
+		if metrics.RequestCount == 0 {
+			continue
+		}
 		applyIgnoredErrors(&metrics, ignoredByPM[key])
 		items = append(items, service.ChannelMonitorV2ModelRow{Platform: parts[0], Model: parts[1], Metrics: metrics, Health: service.ChannelMonitorV2HealthForWithThresholds(metrics, cfg.HealthThresholds)})
 	}
@@ -469,6 +476,9 @@ func (r *channelMonitorV2Repository) GetMatrix(ctx context.Context, filter servi
 			continue
 		}
 		metrics := acc.total.metric(minutes, admin)
+		if (groupBy == service.ChannelMonitorV2GroupByPlatformModel || groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel) && metrics.RequestCount == 0 {
+			continue
+		}
 		applyIgnoredErrors(&metrics, ignoredByDim[key])
 		row := service.ChannelMonitorV2MatrixRow{Platform: key.platform, GroupName: acc.groupName, Model: key.model, Metrics: metrics, Health: service.ChannelMonitorV2HealthForWithThresholds(metrics, cfg.HealthThresholds), Buckets: []service.ChannelMonitorV2TrendPoint{}}
 		if key.groupID > 0 {

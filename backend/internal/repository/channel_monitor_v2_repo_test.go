@@ -200,6 +200,22 @@ func TestChannelMonitorV2GroupSelectionDoesNotSeedPlatformModels(t *testing.T) {
 	require.Len(t, accs, 4, "unfiltered matrix keeps the configured platform model catalog")
 }
 
+func TestChannelMonitorV2ModelDetailsHideZeroRequestModels(t *testing.T) {
+	accs := map[string]*metricAccumulator{
+		"openai\x00gpt-5":         newMetricAccumulator(),
+		"openai\x00deepseek-chat": newMetricAccumulator(),
+	}
+	accs["openai\x00gpt-5"].success = 3
+	items := make([]string, 0, len(accs))
+	for key, acc := range accs {
+		if acc.metric(1, true).RequestCount == 0 {
+			continue
+		}
+		items = append(items, key)
+	}
+	require.Equal(t, []string{"openai\x00gpt-5"}, items)
+}
+
 func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptyInventory(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
