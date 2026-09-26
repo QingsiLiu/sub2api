@@ -152,29 +152,53 @@ class ComprehensiveFixture(v2.Fixture):
         self.balance_key = self.api("/keys", {"name": "V2 balance media", "billing_source": "balance", "group_id": self.protocol_groups["images"]["id"]}, self.owner["token"])
 
     def logs(self, uid):
-        return self.sql(f"SELECT row_to_json(x) FROM (SELECT id,api_key_id,subscription_id,group_id,model,input_tokens,output_tokens,total_cost,actual_cost,rate_multiplier,route_billing_snapshot FROM usage_logs WHERE user_id={int(uid)} ORDER BY id) x;")
+        return self.sql(f"SELECT row_to_json(x) FROM (SELECT id,request_id,api_key_id,subscription_id,group_id,model,input_tokens,output_tokens,total_cost,actual_cost,rate_multiplier,route_billing_snapshot FROM usage_logs WHERE user_id={int(uid)} ORDER BY id) x;")
 
     def balance(self, uid):
         return self.sql(f"SELECT json_build_object('balance',balance) FROM users WHERE id={int(uid)};")[0]["balance"]
 
-    def charged(self, label, key, path, payload, raw_cost, rate, group, user=None, sid=None, check_body=None):
+    def charge_baseline(self, user, sid):
+        # Async workers can settle between marking mock output ready and the
+        # first client status poll. Capture money BEFORE submitting creation.
+        return {"user_id": user["id"], "subscription_id": sid,
+                "daily_usage": self.subscription(user, sid)["quota_summary"]["daily_usage_usd"],
+                "balance": self.balance(user["id"]), "logs": self.logs(user["id"])}
+
+    def charged(self, label, key, path, payload, raw_cost, rate, group, user=None, sid=None, check_body=None, baseline=None, financial_request_id=None):
         user = user or self.owner
         sid = sid or self.protocol_sid
-        before = self.subscription(user, sid)["quota_summary"]["daily_usage_usd"]
-        bal = self.balance(user["id"])
-        old = self.logs(user["id"])
+        if financial_request_id and baseline is None:
+            raise AssertionError("async charge requires a pre-create baseline")
+        baseline = baseline or self.charge_baseline(user, sid)
+        if baseline["user_id"] != user["id"] or baseline["subscription_id"] != sid:
+            raise AssertionError("charge baseline identity mismatch")
+        before, bal, old = baseline["daily_usage"], baseline["balance"], baseline["logs"]
         last = old[-1]["id"] if old else 0
         status, body, _ = self.request(path, payload, key["key"])
         self.check(label + " HTTP200", status == 200, {"status": status, "body": str(body)[:500]})
         if check_body:
             self.check(label + " protocol shape", check_body(body), str(body)[:500])
-        for _ in range(100):
-            fresh = [row for row in self.logs(user["id"]) if row["id"] > last]
+        deadline = time.monotonic() + 120 if financial_request_id else None
+        fresh, observed = [], []
+        for _ in range(2400 if financial_request_id else 100):
+            if deadline is not None and time.monotonic() >= deadline:
+                break
+            observed = self.logs(user["id"])
+            if financial_request_id:
+                fresh = [row for row in observed if row["request_id"] == financial_request_id and row["api_key_id"] == key["id"]]
+            else:
+                fresh = [row for row in observed if row["id"] > last]
             if fresh:
                 break
             time.sleep(0.05)
         self.check(label + " one usage record", len(fresh) == 1, fresh)
         row = fresh[0]
+        if financial_request_id:
+            # A pre-existing unrelated log cannot satisfy this check; the one
+            # newly accepted task has exactly one stable financial/log identity.
+            old_ids = {item["id"] for item in old}
+            new_rows = [item for item in observed if item["id"] not in old_ids]
+            self.check(label + " one new task record since creation", row["id"] not in old_ids and len(new_rows) == 1, new_rows)
         self.check(label + " exact price and group multiplier", close_amount(row["total_cost"], raw_cost) and close_amount(row["actual_cost"], Decimal(str(raw_cost)) * Decimal(str(rate))) and close_amount(row["rate_multiplier"], rate) and row["group_id"] == group["id"], row)
         if key["billing_source"] == "subscription":
             after = self.await_usage(user, sid, Decimal(str(before)) + Decimal(str(raw_cost)) * Decimal(str(rate)))
@@ -253,21 +277,23 @@ class ComprehensiveFixture(v2.Fixture):
         status, failed, _ = self.request("/v1/videos/" + task, token=key["key"])
         self.check("failed async video never charges quota", status == 200 and failed.get("status") == "failed" and not self.logs(user["id"]) and self.subscription(user)["quota_summary"]["daily_usage_usd"] == 0, failed)
         self.api("/admin/groups/" + str(group["id"]), {"subscription_rate_multiplier": 0}, self.admin, "PUT")
+        zero_baseline = self.charge_baseline(user, sid)
         status, body, _ = self.request("/v1/videos/generations", payload, key["key"])
         self.check("zero-rate video creation accepted", status == 200, body)
         task = body["request_id"]
         with self.lock:
             self.videos[task]["status"] = "done"
-        self.charged("Zero subscription video multiplier", key, "/v1/videos/" + task, None, "0.35", "0", group, user=user, sid=sid)
+        self.charged("Zero subscription video multiplier", key, "/v1/videos/" + task, None, "0.35", "0", group, user=user, sid=sid, baseline=zero_baseline, financial_request_id="grok-video:" + task)
         self.api("/admin/groups/" + str(group["id"]), {"subscription_rate_multiplier": 1.5}, self.admin, "PUT")
         self.api("/admin/users/" + str(user["id"]) + "/balance", {"balance": 5, "operation": "set", "notes": "synthetic video balance"}, self.admin)
         balance = self.api("/keys", {"name": "V2 video balance price only", "billing_source": "balance", "group_id": group["id"]}, user["token"])
+        balance_baseline = self.charge_baseline(user, sid)
         status, body, _ = self.request("/v1/videos/generations", payload, balance["key"])
         self.check("balance video uses non-token group price", status == 200, body)
         task = body["request_id"]
         with self.lock:
             self.videos[task]["status"] = "done"
-        self.charged("Balance video group seconds price", balance, "/v1/videos/" + task, None, "0.35", "0.5", group, user=user, sid=sid)
+        self.charged("Balance video group seconds price", balance, "/v1/videos/" + task, None, "0.35", "0.5", group, user=user, sid=sid, baseline=balance_baseline, financial_request_id="grok-video:" + task)
 
     def verify_video_cross_expiry(self):
         user = self.user("video-expiry")
