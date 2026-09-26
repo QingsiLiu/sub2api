@@ -75,14 +75,16 @@ func TestFinancialProjectionReceiptAuthorityRecoveryAndMidnight(t *testing.T) {
 	filters.DateBasis = "completed"
 	stats, err = repo.GetFinancialUsageStats(ctx, filters)
 	require.NoError(t, err)
-	require.Zero(t, stats.TotalRequests)
+	require.Equal(t, usagestats.FinancialDateAccounting, stats.DateBasis)
+	require.Equal(t, int64(3), stats.TotalRequests)
+	require.InDelta(t, 46.78302384, stats.TotalActualCost, 1e-9)
 	filters.StartTime = &end
 	next := end.AddDate(0, 0, 1)
 	filters.EndTime = &next
 	stats, err = repo.GetFinancialUsageStats(ctx, filters)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), stats.TotalRequests)
-	require.InDelta(t, 10.84225728, stats.TotalActualCost, 1e-9)
+	require.Zero(t, stats.TotalRequests)
+	require.Zero(t, stats.TotalActualCost)
 	// Every reporting surface must include recovery and must remain read-only.
 	filters.DateBasis = "accounting"
 	filters.StartTime = &start
@@ -124,7 +126,7 @@ func TestFinancialProjectionReceiptAuthorityRecoveryAndMidnight(t *testing.T) {
 	require.InDelta(t, 46.78302384, dash.TotalActualCost, 1e-9)
 	dash, e = repo.GetFinancialDashboardStatsWithBasis(ctx, user.ID, 0, "completed", "America/Los_Angeles")
 	require.NoError(t, e)
-	require.Equal(t, "completed", dash.DateBasis)
+	require.Equal(t, usagestats.FinancialDateAccounting, dash.DateBasis)
 	_, e = repo.GetFinancialAdminDashboardStats(ctx)
 	require.NoError(t, e)
 	// The derived accounting date must not force a scan over all historical
