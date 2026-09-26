@@ -63,3 +63,14 @@
 - 生产只读新日窗口复核：00:00–05:20的19,295笔订阅结算缺明细0；只代表该观察窗口，不等同根因已消失。
 - 10:39部署前复核：生产仍原`.5`应用/PG/Redis容器、重启数均0；Stage仍`.6`，Stage库43MiB。主盘空闲下降至约4.4GiB，生产容量前置条件仍未满足。
 - Stage部署/业务验收待执行；生产就绪仍为false。
+
+
+## Stage最终验收（2026-09-26 12:17）
+
+- 同一候选50f735741/digest33de93e7于10:41部署Stage，备份`/opt/sub2api-subscription-lab/backups/20260926T024052Z-candidate`；生产`.5`/PG/Redis容器ID、启动时间和重启数均未变。
+- Stage总468项通过：计费专项22、综合284、Astra55、旧份额29、赠礼52、交叉26；所有套件restored=true。5张实际Stage桌面/390和320手机浅深色截图，日期口径/未知数据正确，展示专用5凭证归档清理，活动/支付/供应商配置哈希未变。
+- Stage视频首次断言失败是自动后台先完成结算：唯一$0.175日志864在客户端轮询前已投递。仅将验收脚本改为创建前账务基线＋稳定financialID，不改backend/frontend。测试源码ad4365620与运行候选50f735741的backend/frontend逐字节相同；新完整284项通过。运行镜像未变。
+- 最终health：pending settlement/delivery/partial live均0，金额冲突0，采样线程无错误。读取时近5分钟无合格新记录，checked_count=0；不把零样本当作全历史对账。
+- 当前主盘约22GiB空闲/78%，是另一已授权磁盘清理任务释放17.77GiB的结果（本任务未删除生产数据/镜像）；短期压力缓解，长期365天凭证保留容量仍需计划，累计统计生产规模耗时、外部告警收件及当前候选真实联调也仍未验。
+- 运维证据：`subscription-lab-ops/docs/reports/billing-0288-stage-20260926.md`，proof `deploy/subscription-lab/acceptance/50f735741fb7bf5e0a2418c8cd237902fa788fb5.json` 保持production_ready=false。
+- 历史生产补账/补偿尚未执行；须先完成生产门禁与当次授权、新链路上线观察，再审核实际清单hash分批恢复。默认只读工具、两位样例精确金额与未知字段回归已经完成。
