@@ -29,3 +29,14 @@ func TestFinancialPageUnboundedSourcesUseIndependentLimits(t *testing.T) {
 	require.Contains(t, q, "financial_time_source='receipt'")
 	require.Contains(t, q, "LIMIT $1 OFFSET $2")
 }
+
+func TestFinancialPageRecentProbeAlwaysBoundedAndFallsBack(t *testing.T) {
+	end := time.Now().Add(24 * time.Hour)
+	f := usagestats.UsageLogFilters{EndTime: &end}
+	where, args := financialUsageWhere(f)
+	q := financialUsagePageQuery(pagination.DefaultPagination(), f, where, len(args))
+	require.Contains(t, q, "legacy_probe AS MATERIALIZED")
+	require.Contains(t, q, "LIMIT GREATEST(1000,")
+	require.Contains(t, q, "WHERE (SELECT COUNT(*) FROM legacy_probe)>=")
+	require.Contains(t, q, "financial_receipt_id IS NULL AND (SELECT COUNT(*) FROM legacy_probe)<")
+}

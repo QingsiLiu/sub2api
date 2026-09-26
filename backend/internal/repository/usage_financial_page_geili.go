@@ -26,6 +26,7 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
 	if params.SortBy == "accounting_date" {
 		source = financialUsageTable
 	}
+	prefix := ""
 	identities := fmt.Sprintf("SELECT id,financial_receipt_id,%s AS financial_sort FROM %s f %s", column, source, where)
 	if source == "usage_financial_total_records" {
 		// For unbounded history, independently limit each disjoint source before
@@ -51,21 +52,24 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
 		if where != "" {
 			predicate = where + " AND "
 		}
-		rawScope := ""
-		// These physical identities have the same meaning on every legacy branch.
-		if filters.UserID > 0 {
-			rawScope += fmt.Sprintf(" AND u.user_id=%d", filters.UserID)
-		}
-		if filters.APIKeyID > 0 {
-			rawScope += fmt.Sprintf(" AND u.api_key_id=%d", filters.APIKeyID)
-		}
-		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,created_at AS financial_sort FROM usage_financial_records f %s financial_time_source='receipt' ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT ($%d::bigint+$%d::bigint))
- UNION ALL (SELECT f.id,f.financial_receipt_id,u.created_at AS financial_sort FROM usage_logs u
+		// Bound the physical probe. After every new request has a receipt there
+		// may be no legacy row today; an unbounded backwards scan would then
+		// traverse the entire historical table. If the probe is insufficient,
+		// use the exact date-indexed canonical fallback instead.
+		need := fmt.Sprintf("($%d::bigint+$%d::bigint)", argCount+1, argCount+2)
+		prefix = fmt.Sprintf(`legacy_probe AS MATERIALIZED (
+ SELECT f.id,f.financial_receipt_id,u.created_at AS financial_sort
+ FROM (SELECT id,created_at FROM usage_logs ORDER BY created_at DESC,id DESC LIMIT GREATEST(1000,%s*4)) u
  CROSS JOIN LATERAL (SELECT id,financial_receipt_id FROM usage_financial_records f %s
  f.financial_receipt_id IS NULL AND f.id=u.id OFFSET 0) f
- WHERE TRUE %s ORDER BY u.created_at DESC,u.id DESC LIMIT ($%d::bigint+$%d::bigint))`, predicate, argCount+1, argCount+2, predicate, rawScope, argCount+1, argCount+2)
+ ORDER BY u.created_at DESC,u.id DESC LIMIT %s
+ ), `, need, predicate, need)
+		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,created_at AS financial_sort FROM usage_financial_records f %s financial_time_source='receipt' ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s)
+ UNION ALL (SELECT id,financial_receipt_id,financial_sort FROM legacy_probe WHERE (SELECT COUNT(*) FROM legacy_probe)>=%s)
+ UNION ALL (SELECT id,financial_receipt_id,created_at AS financial_sort FROM usage_financial_records f %s financial_receipt_id IS NULL AND (SELECT COUNT(*) FROM legacy_probe)<%s ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s)`, predicate, need, need, predicate, need, need)
+
 	}
-	return fmt.Sprintf(`WITH financial_page AS MATERIALIZED (
+	return fmt.Sprintf(`WITH %sfinancial_page AS MATERIALIZED (
  %s ORDER BY financial_sort %s NULLS LAST,id %s LIMIT $%d OFFSET $%d
  ), hydrated AS (
  SELECT p.financial_sort,p.id AS financial_id,to_jsonb(f) AS record
@@ -79,5 +83,5 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
  SELECT * FROM usage_financial_records f WHERE p.financial_receipt_id IS NULL
  AND f.financial_receipt_id IS NULL AND f.id=p.id OFFSET 0
  ) f
- ) SELECT record FROM hydrated ORDER BY financial_sort %s NULLS LAST,financial_id %s`, identities, order, order, argCount+1, argCount+2, order, order)
+ ) SELECT record FROM hydrated ORDER BY financial_sort %s NULLS LAST,financial_id %s`, prefix, identities, order, order, argCount+1, argCount+2, order, order)
 }

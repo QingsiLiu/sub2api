@@ -56,7 +56,7 @@ func TestFinancialMigrationNeverMarksInvalidIndexApplied(t *testing.T) {
 }
 
 func TestFinancialTriggerMigrationUsesShortLockDeadlineAndRollback(t *testing.T) {
-	for _, name := range []string{financialRollupTriggerMigration, "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql"} {
+	for _, name := range []string{financialRollupTriggerMigration, "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql"} {
 		t.Run(name, func(t *testing.T) {
 			db, mock := newSQLMock(t)
 			prepareMigrationsBootstrapExpectations(mock)
@@ -71,4 +71,14 @@ func TestFinancialTriggerMigrationUsesShortLockDeadlineAndRollback(t *testing.T)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestFinancialLookupIndexInterruptedMigrationFailsClosed(t *testing.T) {
+	db, mock := newSQLMock(t)
+	mock.ExpectQuery("SELECT EXISTS").WithArgs(financialLookupIndexName).WillReturnRows(sqlmock.NewRows([]string{"invalid"}).AddRow(true))
+	mock.ExpectExec("DROP INDEX CONCURRENTLY IF EXISTS " + financialLookupIndexName).WillReturnResult(sqlmock.NewResult(0, 0))
+	require.NoError(t, prepareNonTransactionalMigration(context.Background(), db, financialLookupIndexMigration))
+	mock.ExpectQuery("SELECT EXISTS").WithArgs(financialLookupIndexName).WillReturnRows(sqlmock.NewRows([]string{"ready"}).AddRow(false))
+	require.ErrorContains(t, validateFinancialMigrationIndexes(context.Background(), db, financialLookupIndexMigration), "missing or invalid")
+	require.NoError(t, mock.ExpectationsWereMet())
 }

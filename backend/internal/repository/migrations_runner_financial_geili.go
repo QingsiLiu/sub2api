@@ -6,6 +6,8 @@ import (
 )
 
 const financialUsageIndexesMigration = "262_usage_financial_indexes_notx.sql"
+const financialLookupIndexMigration = "267_subscription_billing_lookup_notx.sql"
+const financialLookupIndexName = "subscription_requests_settled_identity_lookup_geili"
 const financialRollupTriggerMigration = "260_group_usage_rollup_invalidation_queue.sql"
 
 var financialUsageMigrationIndexes = []string{
@@ -17,10 +19,13 @@ var financialUsageMigrationIndexes = []string{
 }
 
 func validateFinancialMigrationIndexes(ctx context.Context, db migrationConnection, name string) error {
-	if name != financialUsageIndexesMigration {
+	indexes := financialUsageMigrationIndexes
+	if name == financialLookupIndexMigration {
+		indexes = []string{financialLookupIndexName}
+	} else if name != financialUsageIndexesMigration {
 		return nil
 	}
-	for _, indexName := range financialUsageMigrationIndexes {
+	for _, indexName := range indexes {
 		var ready bool
 		if err := db.QueryRowContext(ctx, `SELECT EXISTS(
  SELECT 1 FROM pg_class idx

@@ -271,7 +271,7 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 
 		// geili: replacing hot-table triggers must fail promptly rather than
 		// queue behind a long writer and block all new requests in turn.
-		if name == financialRollupTriggerMigration || name == "265_usage_financial_daily_rollups.sql" || name == "266_usage_financial_rollup_time_columns.sql" {
+		if name == financialRollupTriggerMigration || name == "265_usage_financial_daily_rollups.sql" || name == "266_usage_financial_rollup_time_columns.sql" || name == "268_usage_financial_page_projection.sql" {
 			if _, err := tx.ExecContext(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("set migration %s lock timeout: %w", name, err)
@@ -308,6 +308,8 @@ type migrationConnection interface {
 
 func prepareNonTransactionalMigration(ctx context.Context, db migrationConnection, name string) error {
 	switch name {
+	case financialLookupIndexMigration:
+		return dropInvalidIndexIfPresent(ctx, db, financialLookupIndexName)
 	case financialUsageIndexesMigration:
 		for _, indexName := range financialUsageMigrationIndexes {
 			if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {

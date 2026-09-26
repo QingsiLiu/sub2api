@@ -72,4 +72,18 @@ func TestFinancialProjectionPagedHydrationMatchesCanonicalOracle(t *testing.T) {
 			}
 		}
 	}
+	// No user predicate exercises the bounded recent-admin probe and exact fallback.
+	future := time.Now().AddDate(0, 0, 2)
+	recent := usagestats.UsageLogFilters{StartTime: &start, EndTime: &future}
+	params := pagination.DefaultPagination()
+	where, args := financialUsageWhere(recent)
+	oracle, err := r.queryFinancialUsage(ctx, "SELECT to_jsonb(f) FROM usage_financial_records f "+where+" ORDER BY "+financialOrder(params)+" LIMIT 20", args...)
+	require.NoError(t, err)
+	records, _, err := r.ListFinancialUsage(ctx, params, recent)
+	require.NoError(t, err)
+	require.Len(t, records, len(oracle))
+	for i := range oracle {
+		require.Equal(t, oracle[i].ID, records[i].ID)
+	}
+
 }
