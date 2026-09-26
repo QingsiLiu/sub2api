@@ -54,12 +54,13 @@ type DashboardAggregationRepository interface {
 
 // DashboardAggregationService 负责定时聚合与回填。
 type DashboardAggregationService struct {
-	repo                 DashboardAggregationRepository
-	timingWheel          *TimingWheelService
-	cfg                  config.DashboardAggregationConfig
-	settingRepo          SettingRepository
-	running              int32
-	lastRetentionCleanup atomic.Value // time.Time
+	repo                   DashboardAggregationRepository
+	timingWheel            *TimingWheelService
+	cfg                    config.DashboardAggregationConfig
+	settingRepo            SettingRepository
+	running                int32
+	financialRollupRunning int32
+	lastRetentionCleanup   atomic.Value // time.Time
 
 	lockCache  LeaderLockCache
 	db         *sql.DB
@@ -96,6 +97,8 @@ func (s *DashboardAggregationService) Start() {
 	if s == nil || s.repo == nil || s.timingWheel == nil {
 		return
 	}
+	// geili: financial correctness maintenance runs even with optional aggregation disabled.
+	s.startFinancialRollupsGeili()
 	if !s.cfg.Enabled {
 		logger.LegacyPrintf("service.dashboard_aggregation", "[DashboardAggregation] 聚合作业已禁用")
 		// Explicit runtime retention remains available without dashboard aggregation.

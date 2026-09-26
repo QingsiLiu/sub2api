@@ -602,13 +602,29 @@ func (r *usageLogRepository) GetFinancialBatchAPIKeyStats(ctx context.Context, i
 }
 
 func (r *usageLogRepository) GetFinancialAdminDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error) {
+	// All card components observe the same source/rollup publication snapshot.
+	if db, ok := r.sql.(*sql.DB); ok {
+		tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+		out, err := (&usageLogRepository{sql: tx}).GetFinancialAdminDashboardStats(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
 	out := &usagestats.DashboardStats{}
 	start, end := financialTodayRange()
 	now := time.Now()
 	if err := r.fillDashboardEntityStats(ctx, out, start, now); err != nil {
 		return nil, err
 	}
-	total, err := r.financialTotals(ctx, usagestats.UsageLogFilters{})
+	total, err := r.financialAdminAllTimeTotals(ctx)
 	if err != nil {
 		return nil, err
 	}

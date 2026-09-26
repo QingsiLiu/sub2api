@@ -642,6 +642,9 @@ func dropUsageLogsPartitionWithRollupInvalidation(ctx context.Context, db *sql.D
 		return err
 	}
 
+	if err := invalidateFinancialRollupsRange(ctx, tx, monthStart, monthStart.AddDate(0, 1, 0)); err != nil {
+		return rollback(err)
+	}
 	if err := invalidateGroupUsageRollupsRange(ctx, tx, monthStart, monthStart.AddDate(0, 1, 0)); err != nil {
 		return rollback(err)
 	}

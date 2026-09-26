@@ -107,6 +107,17 @@ func NewDashboardService(usageRepo UsageLogRepository, aggRepo DashboardAggregat
 }
 
 func (s *DashboardService) GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error) {
+	// geili: exact financial buckets already provide bounded aggregation. A TTL
+	// response cache would hide receipt/log changes and bypass dirty-bucket checks.
+	if _, financial := s.usageRepo.(FinancialAdminUsageRepository); financial {
+		stats, err := s.fetchDashboardStats(ctx)
+		if err != nil {
+			return nil, err
+		}
+		stats.StatsUpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		stats.StatsStale = false // includes raw fallback for every dirty/unbuilt bucket
+		return stats, nil
+	}
 	if s.cache != nil {
 		cached, fresh, err := s.getCachedDashboardStats(ctx)
 		if err == nil && cached != nil {

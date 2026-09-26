@@ -271,7 +271,7 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 
 		// geili: replacing hot-table triggers must fail promptly rather than
 		// queue behind a long writer and block all new requests in turn.
-		if name == financialRollupTriggerMigration {
+		if name == financialRollupTriggerMigration || name == "265_usage_financial_daily_rollups.sql" {
 			if _, err := tx.ExecContext(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("set migration %s lock timeout: %w", name, err)

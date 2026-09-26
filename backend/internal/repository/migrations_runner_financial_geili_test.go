@@ -56,15 +56,19 @@ func TestFinancialMigrationNeverMarksInvalidIndexApplied(t *testing.T) {
 }
 
 func TestFinancialTriggerMigrationUsesShortLockDeadlineAndRollback(t *testing.T) {
-	db, mock := newSQLMock(t)
-	prepareMigrationsBootstrapExpectations(mock)
-	mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(financialRollupTriggerMigration).WillReturnError(sql.ErrNoRows)
-	mock.ExpectBegin()
-	mock.ExpectExec("SET LOCAL lock_timeout = '5s'").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("SELECT 1").WillReturnError(errors.New("canceling statement due to lock timeout"))
-	mock.ExpectRollback()
-	mock.ExpectExec("SELECT pg_advisory_unlock").WillReturnResult(sqlmock.NewResult(0, 1))
-	err := applyMigrationsFS(context.Background(), db, fstest.MapFS{financialRollupTriggerMigration: &fstest.MapFile{Data: []byte("SELECT 1;")}})
-	require.ErrorContains(t, err, "lock timeout")
-	require.NoError(t, mock.ExpectationsWereMet())
+	for _, name := range []string{financialRollupTriggerMigration, "265_usage_financial_daily_rollups.sql"} {
+		t.Run(name, func(t *testing.T) {
+			db, mock := newSQLMock(t)
+			prepareMigrationsBootstrapExpectations(mock)
+			mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").WithArgs(name).WillReturnError(sql.ErrNoRows)
+			mock.ExpectBegin()
+			mock.ExpectExec("SET LOCAL lock_timeout = '5s'").WillReturnResult(sqlmock.NewResult(0, 0))
+			mock.ExpectExec("SELECT 1").WillReturnError(errors.New("canceling statement due to lock timeout"))
+			mock.ExpectRollback()
+			mock.ExpectExec("SELECT pg_advisory_unlock").WillReturnResult(sqlmock.NewResult(0, 1))
+			err := applyMigrationsFS(context.Background(), db, fstest.MapFS{name: &fstest.MapFile{Data: []byte("SELECT 1;")}})
+			require.ErrorContains(t, err, "lock timeout")
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }
