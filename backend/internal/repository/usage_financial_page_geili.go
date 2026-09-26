@@ -21,7 +21,7 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
 	case "accounting_date", "completed_at", "created_at", "actual_cost", "id":
 		column = params.SortBy
 	}
-	source := financialStatsSource(filters)
+	source := financialPageSource(filters)
 	if params.SortBy == "accounting_date" {
 		source = financialUsageTable
 	}

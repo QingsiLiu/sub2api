@@ -67,7 +67,10 @@ func TestFinancialDecodePreservesKnownZeroFreeUsage(t *testing.T) {
 func TestFinancialMissingProjectionFailsClosed(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := newUsageLogRepositoryWithSQL(nil, db)
-	mock.ExpectQuery("usage_financial_total_records").WillReturnError(errors.New("relation usage_financial_records does not exist"))
+	mock.ExpectBegin()
+	mock.ExpectExec("SET LOCAL jit=off").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("usage_financial_total_statistics").WillReturnError(errors.New("relation usage_financial_records does not exist"))
+	mock.ExpectRollback()
 	_, err := repo.GetFinancialUsageStats(context.Background(), usagestats.UsageLogFilters{UserID: 7})
 	require.ErrorContains(t, err, "does not exist")
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -77,7 +80,10 @@ func TestFinancialAggregateTracksUnknownAndPending(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := newUsageLogRepositoryWithSQL(nil, db)
 	cols := []string{"gi", "gu", "i", "u", "requests", "input", "output", "write", "read", "cost", "actual", "account", "duration", "balance", "subscription", "pending", "unknown", "partial", "cost_complete", "tokens_complete"}
+	mock.ExpectBegin()
+	mock.ExpectExec("SET LOCAL jit=off").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery("WITH financial_scope").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows(cols).AddRow(1, 1, nil, nil, 3, 1, 2, 0, 0, 2.0, 12.0, 2.0, 10.0, 2.0, 10.0, 1, 1, 2, false, false))
+	mock.ExpectCommit()
 	stats, err := repo.GetFinancialUsageStats(context.Background(), usagestats.UsageLogFilters{UserID: 7})
 	require.NoError(t, err)
 	require.Equal(t, 12.0, stats.TotalActualCost)

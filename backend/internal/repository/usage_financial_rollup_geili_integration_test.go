@@ -36,7 +36,7 @@ func financialRollupTestSchema(t *testing.T) string {
  CREATE TABLE usage_settlement_receipts(LIKE public.usage_settlement_receipts INCLUDING DEFAULTS);
  CREATE UNIQUE INDEX ON usage_settlement_receipts(id);CREATE INDEX ON usage_settlement_receipts(usage_request_id,api_key_id);CREATE INDEX ON usage_settlement_receipts(usage_log_id);`)
 	require.NoError(t, err)
-	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql"} {
+	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql", "269_usage_financial_statistics_decode.sql"} {
 		body, e := migrations.FS.ReadFile(file)
 		require.NoError(t, e)
 		_, e = tx.ExecContext(ctx, string(body))

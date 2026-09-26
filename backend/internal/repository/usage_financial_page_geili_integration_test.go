@@ -72,6 +72,17 @@ func TestFinancialProjectionPagedHydrationMatchesCanonicalOracle(t *testing.T) {
 			}
 		}
 	}
+	// Every field in the optimized statistics view must equal the canonical
+	// projection, including explicit JSON null, zero and absent metadata.
+	_, err = tx.ExecContext(ctx, `UPDATE usage_settlement_receipts SET detail=COALESCE(detail,'{}'::jsonb)||'{"input_tokens":null,"output_tokens":0,"rate_multiplier":0,"route_billing_snapshot":null,"image_size_breakdown":null}'::jsonb WHERE user_id=$1 AND record_source='live'`, u.ID)
+	require.NoError(t, err)
+	var differences int
+	err = scanSingleRow(ctx, tx, `SELECT count(*) FROM (SELECT to_jsonb(f) v FROM usage_financial_records f WHERE user_id=$1 EXCEPT ALL SELECT to_jsonb(s) FROM usage_financial_statistics s WHERE user_id=$1) diff`, []any{u.ID}, &differences)
+	require.NoError(t, err)
+	require.Zero(t, differences)
+	err = scanSingleRow(ctx, tx, `SELECT count(*) FROM (SELECT to_jsonb(s) v FROM usage_financial_statistics s WHERE user_id=$1 EXCEPT ALL SELECT to_jsonb(f) FROM usage_financial_records f WHERE user_id=$1) diff`, []any{u.ID}, &differences)
+	require.NoError(t, err)
+	require.Zero(t, differences)
 	// No user predicate exercises the bounded recent-admin probe and exact fallback.
 	future := time.Now().AddDate(0, 0, 2)
 	recent := usagestats.UsageLogFilters{StartTime: &start, EndTime: &future}

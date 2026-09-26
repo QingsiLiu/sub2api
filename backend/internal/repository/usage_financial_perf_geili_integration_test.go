@@ -38,7 +38,7 @@ func TestFinancialHotUserQueryPerformanceGeili(t *testing.T) {
 	require.NoError(t, err)
 	_, err = tx.ExecContext(ctx, "ANALYZE usage_settlement_receipts")
 	require.NoError(t, err)
-	_, err = tx.ExecContext(ctx, "SET LOCAL statement_timeout='15s'")
+	_, err = tx.ExecContext(ctx, "SET LOCAL statement_timeout='15s'; SET LOCAL jit=off")
 	require.NoError(t, err)
 	start := time.Date(2026, 9, 26, 0, 0, 0, 0, financialBeijing)
 	end := start.AddDate(0, 0, 1)
@@ -50,6 +50,7 @@ func TestFinancialHotUserQueryPerformanceGeili(t *testing.T) {
 	}{
 		{"sum", "SELECT COUNT(*),SUM(actual_cost) FROM usage_financial_records", nil},
 		{"day", "SELECT " + financialAggregateColumns + " FROM usage_financial_records " + where, args},
+		{"statistics", "SELECT " + financialAggregateColumns + " FROM usage_financial_statistics " + where, args},
 		{"list", financialUsagePageQuery(pagination.PaginationParams{SortBy: "created_at"}, filters, where, len(args)), append(append([]any{}, args...), 21, 0)},
 	}
 	for _, q := range queries {
@@ -58,7 +59,9 @@ func TestFinancialHotUserQueryPerformanceGeili(t *testing.T) {
 		require.NoError(t, scanSingleRow(ctx, tx, "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) "+q.query, q.args, &plan))
 		t.Logf("FINANCIAL_PERF %s elapsed=%s plan=%s", q.name, time.Since(begin), plan)
 		require.NotContains(t, plan, "jsonb_populate_record")
-		require.NotContains(t, plan, "Function Scan")
+		if q.name != "statistics" {
+			require.NotContains(t, plan, "Function Scan")
+		}
 		var planData []struct {
 			ExecutionTime float64        `json:"Execution Time"`
 			Plan          map[string]any `json:"Plan"`
