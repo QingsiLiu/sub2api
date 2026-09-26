@@ -294,7 +294,7 @@ type PlatformDashboardStats struct {
 
 // UsageLogFilters represents filters for usage log queries
 type UsageLogFilters struct {
-	DateBasis string `json:"date_basis,omitempty"` // accounting (Beijing) or completed
+	DateBasis string `json:"date_basis,omitempty"` // accounting (Beijing); completed is legacy input only
 
 	SubscriptionID int64
 	UserID         int64

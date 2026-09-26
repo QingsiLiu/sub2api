@@ -46,7 +46,7 @@ export function escapeFinancialCSV(value: unknown): string {
   return neutralized || /[,"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
-export function financialDate(date: Date = new Date(), basis: UsageDateBasis = 'accounting'): string {
+export function financialDate(date: Date = new Date(), _basis: UsageDateBasis = 'accounting'): string {
   // Completed-time reporting is retired; keep the parameter for API/source
   // compatibility while always using the Beijing accounting calendar.
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)

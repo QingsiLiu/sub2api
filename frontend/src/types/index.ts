@@ -1774,6 +1774,8 @@ export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
 // geili hook: financial evidence may be complete, recovered, or still unknown.
+// The completed value is retained only at the API compatibility boundary; all
+// financial queries and UI state use the Beijing accounting day.
 export type UsageDateBasis = 'accounting' | 'completed'
 export type UsageRecordSource = 'live' | 'legacy_log' | 'historical_recovery'
 export type UsageRecordCompleteness = 'complete' | 'partial' | 'amount_unknown'

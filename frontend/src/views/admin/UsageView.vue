@@ -243,7 +243,7 @@ const showBalanceHistoryModal = ref(false)
 const balanceHistoryUser = ref<AdminUser | null>(null)
 
 const breakdownFilters = computed(() => {
-  const f: Record<string, any> = { date_basis: 'accounting', timezone: financialTimezone('accounting') }
+  const f: Record<string, any> = { date_basis: 'accounting' as const, timezone: financialTimezone('accounting') }
   if (filters.value.user_id) f.user_id = filters.value.user_id
   if (filters.value.api_key_id) f.api_key_id = filters.value.api_key_id
   if (filters.value.account_id) f.account_id = filters.value.account_id
@@ -381,7 +381,7 @@ const buildUsageListParams = (
     page_size: pageSize,
     exact_total: exactTotal,
     ...filters.value,
-    date_basis: 'accounting',
+    date_basis: 'accounting' as const,
     timezone: financialTimezone('accounting'),
     stream: legacyStream === null ? undefined : legacyStream,
     sort_by: sortState.sort_by,
@@ -407,7 +407,7 @@ const loadStats = async (force = false) => {
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const s = await adminAPI.usage.getStats({
       ...filters.value,
-      date_basis: 'accounting',
+      date_basis: 'accounting' as const,
       timezone: financialTimezone('accounting'),
       stream: legacyStream === null ? undefined : legacyStream,
       ...(force ? { nocache: 1 } : {}),
@@ -446,7 +446,7 @@ const loadModelStats = async (source: ModelDistributionSource, force = false) =>
     const requestType = filters.value.request_type
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const baseParams = {
-      date_basis: 'accounting',
+      date_basis: 'accounting' as const,
       timezone: financialTimezone('accounting'),
       start_date: filters.value.start_date || startDate.value,
       end_date: filters.value.end_date || endDate.value,
@@ -500,7 +500,7 @@ const loadChartData = async () => {
     const requestType = filters.value.request_type
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const snapshot = await adminAPI.dashboard.getSnapshotV2({
-      date_basis: 'accounting',
+      date_basis: 'accounting' as const,
       timezone: financialTimezone('accounting'),
       start_date: filters.value.start_date || startDate.value,
       end_date: filters.value.end_date || endDate.value,

@@ -34,10 +34,8 @@ func NewDashboardHandler(dashboardService *service.DashboardService, aggregation
 // parseTimeRange parses start_date, end_date query parameters
 // Financial reports use the same Beijing accounting dates as subscription quotas.
 func parseTimeRange(c *gin.Context) (time.Time, time.Time) {
-	userTZ := "Asia/Shanghai" // geili: financial day is the quota accounting day, never browser timezone.
-	if usagestats.NormalizeFinancialDateBasis(c.Query("date_basis")) == usagestats.FinancialDateCompleted {
-		userTZ = c.Query("timezone")
-	}
+	// geili: financial day is the quota accounting day, never browser timezone.
+	userTZ := "Asia/Shanghai"
 	now := timezone.NowInUserLocation(userTZ)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")

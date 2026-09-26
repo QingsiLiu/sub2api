@@ -26,6 +26,6 @@ func TestFinancialUsageDateBasisValidatesAndDefaultsToBeijing(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/usage?date_basis=completed&start_date=2026-09-25&end_date=2026-09-25&timezone=America%2FLos_Angeles", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, "completed", repo.listFilters.DateBasis)
-	require.Equal(t, time.Date(2026, 9, 25, 7, 0, 0, 0, time.UTC), repo.listFilters.StartTime.UTC())
+	require.Equal(t, "accounting", repo.listFilters.DateBasis)
+	require.Equal(t, time.Date(2026, 9, 24, 16, 0, 0, 0, time.UTC), repo.listFilters.StartTime.UTC())
 }

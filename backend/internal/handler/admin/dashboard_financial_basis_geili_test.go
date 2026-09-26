@@ -37,13 +37,12 @@ func (r *dashboardFinancialBasisCapture) GetGroupStatsWithUsageFilters(_ context
 	return []usagestats.GroupStat{{FinancialSummary: usagestats.FinancialSummary{DateBasis: f.DateBasis}, GroupID: 7, Requests: n, ActualCost: c}}, nil
 }
 func basisFixtureAmount(basis string) (int64, float64) {
-	if basis == "completed" {
-		return 3, 85
-	}
+	// The legacy completed value is accepted for wire compatibility but is
+	// normalized to the single accounting-day basis before reaching the repo.
 	return 5, 95
 }
 
-func TestDashboardFinancialBasisPropagatesAndSeparatesAllChartCaches(t *testing.T) {
+func TestDashboardFinancialBasisPropagatesSingleAccountingCache(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	// Restore process globals after this isolated test so other cache tests retain
 	// their original fixture state. None of these tests run in parallel.
@@ -63,6 +62,7 @@ func TestDashboardFinancialBasisPropagatesAndSeparatesAllChartCaches(t *testing.
 	router.GET("/groups", h.GetGroupStats)
 	router.GET("/snapshot", h.GetSnapshotV2)
 	for _, basis := range []string{"accounting", "completed", "accounting", "completed"} {
+		expectedBasis := "accounting"
 		for _, route := range []string{"trend", "models", "groups", "snapshot"} {
 			target := "/" + route + "?date_basis=" + basis + "&timezone=Asia%2FShanghai&start_date=2026-09-25&end_date=2026-09-26&include_stats=false&include_trend=true&include_model_stats=true&include_group_stats=true"
 			rec := httptest.NewRecorder()
@@ -84,16 +84,17 @@ func TestDashboardFinancialBasisPropagatesAndSeparatesAllChartCaches(t *testing.
 				}
 				require.NoError(t, json.Unmarshal(body.Data[key], &rows))
 				require.Len(t, rows, 1)
-				n, c := basisFixtureAmount(basis)
-				require.Equal(t, basis, rows[0].Basis)
+				n, c := basisFixtureAmount(expectedBasis)
+				require.Equal(t, expectedBasis, rows[0].Basis)
 				require.Equal(t, n, rows[0].Requests)
 				require.Equal(t, c, rows[0].Amount)
 			}
 		}
 	}
-	require.Len(t, repo.trends, 2)
-	require.Len(t, repo.models, 2)
-	require.Len(t, repo.groups, 2)
+	// Legacy completed requests normalize to the same accounting cache key.
+	require.Len(t, repo.trends, 1)
+	require.Len(t, repo.models, 1)
+	require.Len(t, repo.groups, 1)
 	for _, route := range []string{"trend", "models", "groups", "snapshot"} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/"+route+"?date_basis=invalid", nil))
@@ -101,13 +102,13 @@ func TestDashboardFinancialBasisPropagatesAndSeparatesAllChartCaches(t *testing.
 	}
 }
 
-func TestDashboardCompletedBasisHonorsTimezoneAndDST(t *testing.T) {
+func TestDashboardLegacyCompletedBasisStillUsesAccountingTimezone(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/?date_basis=completed&timezone=America%2FNew_York&start_date=2026-03-08&end_date=2026-03-08", nil)
 	start, end := parseTimeRange(c)
-	require.Equal(t, 23*time.Hour, end.Sub(start))
-	require.Equal(t, "America/New_York", start.Location().String())
+	require.Equal(t, 24*time.Hour, end.Sub(start))
+	require.Equal(t, "Asia/Shanghai", start.Location().String())
 	c, _ = gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/?date_basis=accounting&timezone=America%2FNew_York&start_date=2026-03-08&end_date=2026-03-08", nil)
 	start, end = parseTimeRange(c)
