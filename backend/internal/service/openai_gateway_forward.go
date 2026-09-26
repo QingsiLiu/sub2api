@@ -1113,7 +1113,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 			respBody = s.redactAgentIdentitySensitiveBody(ctx, account, respBody)
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
-			if !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest && upstreamCode == "invalid_encrypted_content" {
+			// geili hook: some providers wrap decryption failures as invalid_request_error;
+			// allow one reasoning-only recovery without discarding opaque conversation history.
+			if !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest &&
+				(upstreamCode == "invalid_encrypted_content" || canRecoverOpenAIWrappedEncryptedReasoningGeili(resp.StatusCode, upstreamCode, upstreamMsg, body)) {
 				decoded, decodeErr := ensureReqBody()
 				if decodeErr != nil {
 					return nil, decodeErr
