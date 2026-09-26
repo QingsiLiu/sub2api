@@ -308,18 +308,24 @@ func (r *channelMonitorV2Repository) GetModels(ctx context.Context, filter servi
 		return nil, err
 	}
 	accs := map[string]*metricAccumulator{}
-	for _, platform := range channelMonitorV2EnabledPlatforms(cfg) {
-		if len(filter.Platforms) > 0 && !containsString(filter.Platforms, platform) {
-			continue
-		}
-		models := configuredChannelMonitorV2Models(cfg, platform, filter)
-		for _, model := range models {
-			if model == "" {
+	// A selected group is a narrower model scope than the platform-level
+	// monitor allowlist. Do not seed every configured platform model into a
+	// group-scoped table: that makes models belonging to another group appear
+	// with zero traffic under the selected group.
+	if !channelMonitorV2HasGroupSelection(filter) {
+		for _, platform := range channelMonitorV2EnabledPlatforms(cfg) {
+			if len(filter.Platforms) > 0 && !containsString(filter.Platforms, platform) {
 				continue
 			}
-			key := platform + "\x00" + model
-			if accs[key] == nil {
-				accs[key] = newMetricAccumulator()
+			models := configuredChannelMonitorV2Models(cfg, platform, filter)
+			for _, model := range models {
+				if model == "" {
+					continue
+				}
+				key := platform + "\x00" + model
+				if accs[key] == nil {
+					accs[key] = newMetricAccumulator()
+				}
 			}
 		}
 	}
@@ -540,6 +546,13 @@ func seedChannelMonitorV2MatrixAccumulators(filter service.ChannelMonitorV2Filte
 	for _, platform := range platforms {
 		// geili hook: never seed a platform/model outside the effective allowlist.
 		models := configuredChannelMonitorV2Models(cfg, platform, filter)
+		// Once a group is selected, model-bearing matrix views are populated from
+		// the selected groups' facts below. Platform-wide model seeds would leak
+		// models that exist only in another group.
+		if channelMonitorV2HasGroupSelection(filter) &&
+			(groupBy == service.ChannelMonitorV2GroupByPlatformModel || groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel) {
+			models = nil
+		}
 		if len(models) == 0 {
 			continue
 		}
@@ -571,6 +584,13 @@ func seedChannelMonitorV2MatrixAccumulators(filter service.ChannelMonitorV2Filte
 		}
 	}
 	return accs
+}
+
+func channelMonitorV2HasGroupSelection(filter service.ChannelMonitorV2Filter) bool {
+	// RestrictGroups is the server-derived authorization scope for ordinary
+	// viewers, not an explicit picker selection. Only an actual group_id query
+	// should narrow the model inventory to the selected groups.
+	return len(filter.GroupIDs) > 0
 }
 
 func configuredChannelMonitorV2Models(cfg service.ChannelMonitorV2Config, platform string, filter service.ChannelMonitorV2Filter) []string {

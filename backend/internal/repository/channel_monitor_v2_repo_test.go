@@ -176,6 +176,30 @@ func TestChannelMonitorV2MatrixDoesNotSeedGroupsForEmptyViewerScope(t *testing.T
 	require.Empty(t, accs)
 }
 
+func TestChannelMonitorV2GroupSelectionDoesNotSeedPlatformModels(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{7}}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{
+			Platform: "openai", Enabled: true, Models: []string{"gpt-5", "deepseek-chat"},
+		}},
+		GroupIDs: []int64{7, 8},
+	}
+	groups := map[int64]channelMonitorV2GroupInfo{
+		7: {name: "GPT", platform: "openai"},
+		8: {name: "Other", platform: "openai"},
+	}
+
+	accs := seedChannelMonitorV2MatrixAccumulators(
+		filter, cfg, service.ChannelMonitorV2GroupByPlatformGroupModel, groups,
+	)
+	require.Empty(t, accs, "selected groups must not inherit platform-wide model seeds")
+
+	accs = seedChannelMonitorV2MatrixAccumulators(
+		service.ChannelMonitorV2Filter{}, cfg, service.ChannelMonitorV2GroupByPlatformGroupModel, groups,
+	)
+	require.Len(t, accs, 4, "unfiltered matrix keeps the configured platform model catalog")
+}
+
 func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptyInventory(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

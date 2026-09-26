@@ -197,6 +197,12 @@ func TestGeiliChannelMonitorV2AllowlistPostgres(t *testing.T) {
 				require.Equal(t, model.Value, model.Label)
 				require.True(t, channelMonitorV2ModelSelected(filter, cfg, model.Platform, model.Value))
 			}
+			selectedGroup := filter
+			selectedGroup.GroupIDs = []int64{groupIDs[0]}
+			selectedModels, err := repo.GetModels(ctx, selectedGroup, cfg, true)
+			require.NoError(t, err)
+			require.Len(t, selectedModels.Items, 1, "group-scoped model details must not inherit models from other groups")
+			require.Equal(t, "gpt-5", selectedModels.Items[0].Model)
 			filtered := filter
 			filtered.Models = []string{"gpt-5"}
 			selected, err := repo.GetSnapshot(ctx, filtered, cfg, true)
