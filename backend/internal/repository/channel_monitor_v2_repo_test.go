@@ -204,8 +204,10 @@ func TestChannelMonitorV2ModelDetailsHideZeroRequestModels(t *testing.T) {
 	accs := map[string]*metricAccumulator{
 		"openai\x00gpt-5":         newMetricAccumulator(),
 		"openai\x00deepseek-chat": newMetricAccumulator(),
+		"openai\x00claude":        newMetricAccumulator(),
 	}
 	accs["openai\x00gpt-5"].success = 3
+	accs["openai\x00claude"].errors = 2
 	items := make([]string, 0, len(accs))
 	for key, acc := range accs {
 		if acc.metric(1, true).RequestCount == 0 {
@@ -213,7 +215,7 @@ func TestChannelMonitorV2ModelDetailsHideZeroRequestModels(t *testing.T) {
 		}
 		items = append(items, key)
 	}
-	require.Equal(t, []string{"openai\x00gpt-5"}, items)
+	require.ElementsMatch(t, []string{"openai\x00gpt-5", "openai\x00claude"}, items)
 }
 
 func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptyInventory(t *testing.T) {
