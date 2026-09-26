@@ -9,13 +9,12 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
-                :timezone="financialTimezone(dateBasis)"
+                :timezone="financialTimezone('accounting')"
                 v-model:start-date="startDate"
                 v-model:end-date="endDate"
                 @change="onDateRangeChange"
               />
             </div>
-            <FinancialDateBasis v-model="dateBasis" @change="applyFilters" />
             <div class="ml-auto flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
@@ -24,7 +23,7 @@
             </div>
           </div>
         </div>
-        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ dateBasis === 'accounting' ? t('financial.accountingHint') : t('financial.completedHint') }}</p>
+        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:source="modelDistributionSource"
@@ -195,9 +194,7 @@ import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admi
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
-import FinancialDateBasis from '@/components/common/FinancialDateBasis.vue'
 import { financialDate, financialTimezone, financialExportNumber, safeSpreadsheetCell, accountFinancialCost } from '@/utils/financialUsage'
-import type { UsageDateBasis } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
@@ -219,7 +216,6 @@ type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
 type ModelDistributionSource = 'requested' | 'upstream' | 'mapping'
 const route = useRoute()
-const dateBasis = ref<UsageDateBasis>('accounting')
 const usageStats = ref<AdminUsageStatsResponse | null>(null); const usageLogs = ref<AdminUsageLog[]>([]); const loading = ref(false); const exporting = ref(false)
 const trendData = ref<TrendDataPoint[]>([]); const requestedModelStats = ref<ModelStat[]>([]); const upstreamModelStats = ref<ModelStat[]>([]); const mappingModelStats = ref<ModelStat[]>([]); const groupStats = ref<GroupStat[]>([]); const chartsLoading = ref(false); const modelStatsLoading = ref(false); const granularity = ref<'day' | 'hour'>('hour')
 const modelDistributionMetric = ref<DistributionMetric>('tokens')
@@ -247,7 +243,7 @@ const showBalanceHistoryModal = ref(false)
 const balanceHistoryUser = ref<AdminUser | null>(null)
 
 const breakdownFilters = computed(() => {
-  const f: Record<string, any> = { date_basis: dateBasis.value, timezone: financialTimezone(dateBasis.value) }
+  const f: Record<string, any> = { date_basis: 'accounting', timezone: financialTimezone('accounting') }
   if (filters.value.user_id) f.user_id = filters.value.user_id
   if (filters.value.api_key_id) f.api_key_id = filters.value.api_key_id
   if (filters.value.account_id) f.account_id = filters.value.account_id
@@ -283,7 +279,7 @@ const handleRankingSelectUser = (userId: number, email: string) => {
 }
 
 const granularityOptions = computed(() => [{ value: 'day', label: t('admin.dashboard.day') }, { value: 'hour', label: t('admin.dashboard.hour') }])
-const formatLD = (d: Date) => financialDate(d, dateBasis.value)
+const formatLD = (d: Date) => financialDate(d, 'accounting')
 
 const getLast24HoursRangeDates = (): { start: string; end: string } => {
   const end = new Date()
@@ -385,8 +381,8 @@ const buildUsageListParams = (
     page_size: pageSize,
     exact_total: exactTotal,
     ...filters.value,
-    date_basis: dateBasis.value,
-    timezone: financialTimezone(dateBasis.value),
+    date_basis: 'accounting',
+    timezone: financialTimezone('accounting'),
     stream: legacyStream === null ? undefined : legacyStream,
     sort_by: sortState.sort_by,
     sort_order: sortState.sort_order
@@ -411,8 +407,8 @@ const loadStats = async (force = false) => {
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const s = await adminAPI.usage.getStats({
       ...filters.value,
-      date_basis: dateBasis.value,
-      timezone: financialTimezone(dateBasis.value),
+      date_basis: 'accounting',
+      timezone: financialTimezone('accounting'),
       stream: legacyStream === null ? undefined : legacyStream,
       ...(force ? { nocache: 1 } : {}),
     })
@@ -450,8 +446,8 @@ const loadModelStats = async (source: ModelDistributionSource, force = false) =>
     const requestType = filters.value.request_type
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const baseParams = {
-      date_basis: dateBasis.value,
-      timezone: financialTimezone(dateBasis.value),
+      date_basis: 'accounting',
+      timezone: financialTimezone('accounting'),
       start_date: filters.value.start_date || startDate.value,
       end_date: filters.value.end_date || endDate.value,
       user_id: filters.value.user_id,
@@ -504,8 +500,8 @@ const loadChartData = async () => {
     const requestType = filters.value.request_type
     const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
     const snapshot = await adminAPI.dashboard.getSnapshotV2({
-      date_basis: dateBasis.value,
-      timezone: financialTimezone(dateBasis.value),
+      date_basis: 'accounting',
+      timezone: financialTimezone('accounting'),
       start_date: filters.value.start_date || startDate.value,
       end_date: filters.value.end_date || endDate.value,
       granularity: granularity.value,
@@ -556,8 +552,6 @@ const refreshData = () => {
   if (rankingMounted.value) rankingRef.value?.reload()
 }
 const resetFilters = () => {
-  dateBasis.value = 'accounting'
-
   const range = getLast24HoursRangeDates()
   startDate.value = range.start
   endDate.value = range.end

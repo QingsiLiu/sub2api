@@ -37,24 +37,13 @@ describe('user dashboard financial date contract', () => {
     expect(getDashboardTrend).toHaveBeenCalledWith(expect.objectContaining(dateParams))
     expect(getDashboardModels).toHaveBeenCalledWith(expect.objectContaining(dateParams))
     expect(query).toHaveBeenCalledWith(expect.objectContaining({ ...dateParams, page: 1, page_size: 5 }))
-    await wrapper.get('[data-testid="financial-date-basis"]').setValue('completed')
-    await flushPromises()
-    const completed = { date_basis: 'completed', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-    expect(getDashboardStats).toHaveBeenLastCalledWith(completed)
-    expect(query).toHaveBeenLastCalledWith(expect.objectContaining(completed))
+    expect(getDashboardStats).toHaveBeenLastCalledWith(dateParams)
+    expect(query).toHaveBeenLastCalledWith(expect.objectContaining(dateParams))
     wrapper.unmount()
   })
 
-  it('ignores an obsolete stats response after the date basis changes again', async () => {
+  it('keeps dashboard responses on the accounting basis', async () => {
     const wrapper = mountDashboard()
-    await flushPromises()
-    let resolveOld!: (value: unknown) => void
-    getDashboardStats.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
-    await wrapper.get('[data-testid="financial-date-basis"]').setValue('completed')
-    await flushPromises()
-    await wrapper.get('[data-testid="financial-date-basis"]').setValue('accounting')
-    await flushPromises()
-    resolveOld({ today_actual_cost: 66, date_basis: 'completed' })
     await flushPromises()
     expect(wrapper.get('[data-testid="stats"]').text()).toContain('"today_actual_cost":90')
     expect(wrapper.get('[data-testid="stats"]').text()).toContain('"date_basis":"accounting"')

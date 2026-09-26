@@ -27,9 +27,8 @@ func financialStatsSource(filters usagestats.UsageLogFilters) string {
 var financialBeijing = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 func financialTimeColumn(filters usagestats.UsageLogFilters) string {
-	if usagestats.NormalizeFinancialDateBasis(filters.DateBasis) == usagestats.FinancialDateCompleted {
-		return "completed_at"
-	}
+	// All financial usage queries use the quota/accounting day. Completed time
+	// is descriptive metadata only and must not change record membership.
 	return "accounting_date"
 }
 
@@ -401,15 +400,6 @@ func (r *usageLogRepository) GetFinancialDashboardStatsWithBasis(ctx context.Con
 		return nil, err
 	}
 	start, end := financialTodayRange()
-	if filters.DateBasis == usagestats.FinancialDateCompleted {
-		loc, locErr := time.LoadLocation(userTimezone)
-		if locErr != nil {
-			loc = financialBeijing
-		}
-		now := time.Now().In(loc)
-		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-		end = start.AddDate(0, 0, 1)
-	}
 	today, err := r.financialTotals(ctx, financialRange(filters, start, end))
 	if err != nil {
 		return nil, err

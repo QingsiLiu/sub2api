@@ -47,14 +47,12 @@ export function escapeFinancialCSV(value: unknown): string {
 }
 
 export function financialDate(date: Date = new Date(), basis: UsageDateBasis = 'accounting'): string {
-  if (basis === 'completed') {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-  }
+  // Completed-time reporting is retired; keep the parameter for API/source
+  // compatibility while always using the Beijing accounting calendar.
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 
-export const financialTimezone = (basis: UsageDateBasis): string =>
-  basis === 'accounting' ? 'Asia/Shanghai' : Intl.DateTimeFormat().resolvedOptions().timeZone
+export const financialTimezone = (_basis: UsageDateBasis): string => 'Asia/Shanghai'
 
 export function dashboardFinancialMetadata(stats: FinancialDashboardMetadata, period: 'today' | 'total'): FinancialStatsMetadata {
   return {

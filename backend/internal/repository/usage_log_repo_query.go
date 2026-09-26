@@ -175,11 +175,11 @@ func upstreamModelMismatchCondition(column string, mismatch bool) string {
 }
 
 func shouldUseFastUsageLogTotal(filters UsageLogFilters) bool {
-	if filters.ExactTotal {
-		return false
-	}
-	// 强选择过滤下记录集通常较小，保留精确总数。
-	return filters.UserID == 0 && filters.APIKeyID == 0 && filters.AccountID == 0 && filters.SubscriptionID == 0
+	// The financial projection is a UNION over receipts and legacy logs. An
+	// exact COUNT on it can hold a user-visible usage page for minutes on a
+	// large production dataset. Normal pagination only needs a next-page
+	// signal; callers that explicitly request exact_total retain the old path.
+	return !filters.ExactTotal
 }
 
 func (r *usageLogRepository) listUsageLogsWithPagination(ctx context.Context, whereClause string, args []any, params pagination.PaginationParams) ([]service.UsageLog, *pagination.PaginationResult, error) {

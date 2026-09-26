@@ -222,17 +222,13 @@ describe('user UsageView', () => {
 
   afterEach(() => { vi.useRealTimers() })
 
-  it('uses Beijing accounting by default and applies completion-date selection to every financial query', async () => {
+  it('uses Beijing accounting for every financial query', async () => {
     const wrapper = mountUsageView()
     await flushPromises()
     expect(query).toHaveBeenCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }), expect.anything())
-    await wrapper.get('[data-testid="financial-date-basis"]').setValue('completed')
-    await flushPromises()
-    const expected = { date_basis: 'completed', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-    expect(query).toHaveBeenLastCalledWith(expect.objectContaining(expected), expect.anything())
-    expect(getStats).toHaveBeenLastCalledWith(expect.objectContaining(expected))
-    expect(getDashboardModels).toHaveBeenLastCalledWith(expect.objectContaining(expected))
-    expect(getDashboardSnapshotV2).toHaveBeenLastCalledWith(expect.objectContaining(expected))
+    expect(getStats).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
+    expect(getDashboardModels).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
+    expect(getDashboardSnapshotV2).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
     wrapper.unmount()
   })
 

@@ -27,9 +27,10 @@ func TestFinancialWhereUsesBeijingAccountingAndAllIdentityFilters(t *testing.T) 
 	require.Equal(t, "2026-09-27", args[len(args)-2])
 	filters.DateBasis = "completed"
 	where, args = financialUsageWhere(filters)
-	require.Contains(t, where, "completed_at >=")
-	require.Equal(t, start, args[len(args)-2])
-	require.Equal(t, end, args[len(args)-1])
+	require.Contains(t, where, "accounting_date >=")
+	require.NotContains(t, where, "completed_at >=")
+	require.Equal(t, "2026-09-26", args[len(args)-4])
+	require.Equal(t, "2026-09-27", args[len(args)-2])
 }
 
 func TestFinancialDecodePartialNeverInventsMissingMetadata(t *testing.T) {

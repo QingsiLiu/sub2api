@@ -4,8 +4,7 @@
       <div v-if="loading && !stats" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <template v-else-if="stats">
         <UserDashboardStats :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
-        <div class="card p-4"><FinancialDateBasis v-model="dateBasis" @change="refreshAll" /></div>
-        <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :timezone="financialTimezone(dateBasis)" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadRange" @granularityChange="loadCharts" @refresh="refreshAll" />
+        <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :timezone="financialTimezone('accounting')" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadRange" @granularityChange="loadCharts" @refresh="refreshAll" />
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div class="lg:col-span-2"><UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" /></div>
           <div class="lg:col-span-1"><UserDashboardQuickActions /></div>
@@ -21,12 +20,11 @@ import { useAuthStore } from '@/stores/auth'
 import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import FinancialDateBasis from '@/components/common/FinancialDateBasis.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
 import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'
 import UserDashboardQuickActions from '@/components/user/dashboard/UserDashboardQuickActions.vue'
-import type { UsageLog, TrendDataPoint, ModelStat, PlatformQuotaItem, UsageDateBasis } from '@/types'
+import type { UsageLog, TrendDataPoint, ModelStat, PlatformQuotaItem } from '@/types'
 import { getMyPlatformQuotas } from '@/api/user'
 import { financialDate, financialTimezone } from '@/utils/financialUsage'
 
@@ -40,14 +38,13 @@ const trendData = ref<TrendDataPoint[]>([])
 const modelStats = ref<ModelStat[]>([])
 const recentUsage = ref<UsageLog[]>([])
 const platformQuotas = ref<PlatformQuotaItem[] | null>(null)
-const dateBasis = ref<UsageDateBasis>('accounting')
 const startDate = ref(financialDate(new Date(Date.now() - 6 * 86400000)))
 const endDate = ref(financialDate())
 const granularity = ref<'day' | 'hour'>('day')
 let statsSeq = 0
 let chartsSeq = 0
 let recentSeq = 0
-const dateParams = () => ({ date_basis: dateBasis.value, timezone: financialTimezone(dateBasis.value) })
+const dateParams = () => ({ date_basis: 'accounting' as const, timezone: financialTimezone('accounting') })
 const rangeParams = () => ({ ...dateParams(), start_date: startDate.value, end_date: endDate.value })
 
 const loadStats = async () => {

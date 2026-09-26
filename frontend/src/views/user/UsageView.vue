@@ -9,13 +9,12 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
-                :timezone="financialTimezone(dateBasis)"
+                :timezone="financialTimezone('accounting')"
                 v-model:start-date="startDate"
                 v-model:end-date="endDate"
                 @change="onDateRangeChange"
               />
             </div>
-            <FinancialDateBasis v-model="dateBasis" @change="changeDateBasis" />
             <div class="ml-auto flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
@@ -25,7 +24,7 @@
           </div>
         </div>
 
-        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ dateBasis === 'accounting' ? t('financial.accountingHint') : t('financial.completedHint') }}</p>
+        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
         <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
@@ -234,7 +233,6 @@ import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import * as subscriptionsAPI from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import FinancialDateBasis from '@/components/common/FinancialDateBasis.vue'
 import { financialDate, financialTimezone, financialExportNumber, escapeFinancialCSV } from '@/utils/financialUsage'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
@@ -259,7 +257,6 @@ import type {
   ModelStat,
   TrendDataPoint,
   UsageLog,
-  UsageDateBasis,
   UsageQueryParams,
   UsageStatsResponse,
   UserErrorRequest,
@@ -269,7 +266,6 @@ import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const dateBasis = ref<UsageDateBasis>('accounting')
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
@@ -344,7 +340,7 @@ let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
 
-const formatLocalDate = (date: Date): string => financialDate(date, dateBasis.value)
+const formatLocalDate = (date: Date): string => financialDate(date, 'accounting')
 
 const getTodayRangeDates = () => {
   const today = formatLocalDate(new Date())
@@ -447,8 +443,8 @@ const normalizedFilters = computed<UsageQueryParams>(() => {
   const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
   return {
     ...filters.value,
-    date_basis: dateBasis.value,
-    timezone: financialTimezone(dateBasis.value),
+    date_basis: 'accounting',
+    timezone: financialTimezone('accounting'),
     start_date: startDate.value,
     end_date: endDate.value,
     stream: legacyStream === null ? undefined : legacyStream,
@@ -577,11 +573,7 @@ const refreshData = () => {
   if (activeTab.value === 'errors') void loadErrors()
 }
 
-const changeDateBasis = () => { applyFilters() }
-
 const resetFilters = () => {
-  dateBasis.value = 'accounting'
-
   const range = getTodayRangeDates()
   startDate.value = range.start
   endDate.value = range.end

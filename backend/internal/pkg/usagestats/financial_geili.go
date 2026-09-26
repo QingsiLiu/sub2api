@@ -6,9 +6,9 @@ const FinancialDateAccounting = "accounting"
 const FinancialDateCompleted = "completed"
 
 func NormalizeFinancialDateBasis(raw string) string {
-	if strings.TrimSpace(raw) == FinancialDateCompleted {
-		return FinancialDateCompleted
-	}
+	// Financial reporting is intentionally single-basis: quota ownership is
+	// assigned to the request/admission day in Beijing. Keep accepting the old
+	// value for wire compatibility, but never execute a completed_at query.
 	return FinancialDateAccounting
 }
 

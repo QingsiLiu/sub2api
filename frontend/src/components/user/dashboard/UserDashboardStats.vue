@@ -77,7 +77,7 @@
     </div>
   </div>
 
-  <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ stats.date_basis === 'completed' ? t('financial.completedHint') : t('financial.accountingHint') }}</p>
+  <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
   <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
