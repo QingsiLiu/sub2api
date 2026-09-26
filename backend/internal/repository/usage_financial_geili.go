@@ -111,19 +111,34 @@ func financialRange(filters usagestats.UsageLogFilters, start, end time.Time) us
 	return filters
 }
 
-func financialOrder(params pagination.PaginationParams) string {
-	order := strings.ToUpper(params.NormalizedSortOrder(pagination.SortOrderDesc))
-	column := "created_at"
-	switch params.SortBy {
-	case "model":
-		column = "COALESCE(NULLIF(TRIM(requested_model), ''), model)"
-	case "accounting_date", "completed_at", "created_at", "actual_cost", "id":
-		column = params.SortBy
-	}
-	return column + " " + order + " NULLS LAST, id " + order
-}
-
 func (r *usageLogRepository) ListFinancialUsage(ctx context.Context, params pagination.PaginationParams, filters usagestats.UsageLogFilters) ([]service.UsageLog, *pagination.PaginationResult, error) {
+	if db, ok := r.sql.(*sql.DB); ok {
+		// PostgreSQL estimates the unused historical fallback at global scale
+		// and JIT-compiles hundreds of branches before reading this tiny page.
+		// Limit the setting to this read transaction; never change the pool,
+		// database, or billing writers' planner settings.
+		tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, nil, err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err = tx.ExecContext(ctx, "SET LOCAL jit=off"); err != nil {
+			return nil, nil, err
+		}
+		rows, page, err := (&usageLogRepository{sql: tx}).ListFinancialUsage(ctx, params, filters)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, nil, err
+		}
+		if r.client != nil {
+			if err = r.hydrateUsageLogAssociations(ctx, rows); err != nil {
+				return nil, nil, err
+			}
+		}
+		return rows, page, nil
+	}
 	where, args := financialUsageWhere(filters)
 	// Preserve the existing administrator fast-total contract. A blank admin
 	// listing must not add a multi-million-row COUNT on every pagination request.

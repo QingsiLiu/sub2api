@@ -49,12 +49,12 @@ func TestFinancialProjectionPagedHydrationMatchesCanonicalOracle(t *testing.T) {
 					f.StartTime = &start
 					f.EndTime = &end
 				}
-				p := pagination.PaginationParams{Page: 1, PageSize: 5, SortBy: sortBy, SortOrder: order}
+				p := pagination.PaginationParams{Page: 1, PageSize: 2, SortBy: sortBy, SortOrder: order}
 				where, args := financialUsageWhere(f)
 				oracle, err := r.queryFinancialUsage(ctx, "SELECT to_jsonb(f) FROM usage_financial_records f "+where+" ORDER BY "+financialOrder(p), args...)
 				require.NoError(t, err)
 				var actual []service.UsageLog
-				for page := 1; page <= 4; page++ {
+				for page := 1; page <= 10; page++ {
 					p.Page = page
 					rows, total, e := r.ListFinancialUsage(ctx, p, f)
 					require.NoError(t, e, "bounded=%v sort=%s %s page=%d", bounded, sortBy, order, page)

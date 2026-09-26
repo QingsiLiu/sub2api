@@ -3,7 +3,6 @@ package repository
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
@@ -43,31 +42,40 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
 		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,%s AS financial_sort FROM %s f %s financial_time_source='receipt' ORDER BY financial_sort %s NULLS LAST,id %s LIMIT ($%d::bigint+$%d::bigint))
  UNION ALL (SELECT id,financial_receipt_id,%s AS financial_sort FROM %s f %s financial_time_source='log' ORDER BY financial_sort %s%s,id %s LIMIT ($%d::bigint+$%d::bigint))`, column, source, predicate, order, order, argCount+1, argCount+2, column, source, predicate, order, legacyNulls, order, argCount+1, argCount+2)
 	}
-	if source == financialUsageTable && filters.UserID == 0 && filters.APIKeyID == 0 && filters.AccountID == 0 && len(filters.AccountIDs) == 0 && filters.SubscriptionID == 0 && filters.GroupID == 0 && filters.Model == "" && filters.RequestID == "" && filters.BillingType == nil && filters.RequestType == nil && filters.Stream == nil && filters.BillingMode == "" && filters.NativeCompactionV2 == nil && filters.UpstreamModelMismatch == nil && column == "created_at" && order == "DESC" &&
-		(filters.EndTime == nil || !filters.EndTime.Before(time.Now())) {
-		// Recent pages should walk the raw log time index and probe canonical
-		// accounting membership only for candidate rows. A full day may contain
-		// hundreds of thousands of rows; it must not be sorted just for page one.
+	if column == "created_at" && order == "DESC" {
 		predicate := " WHERE "
 		if where != "" {
 			predicate = where + " AND "
 		}
-		// Bound the physical probe. After every new request has a receipt there
-		// may be no legacy row today; an unbounded backwards scan would then
-		// traverse the entire historical table. If the probe is insufficient,
-		// use the exact date-indexed canonical fallback instead.
 		need := fmt.Sprintf("($%d::bigint+$%d::bigint)", argCount+1, argCount+2)
-		prefix = fmt.Sprintf(`legacy_probe AS MATERIALIZED (
- SELECT f.id,f.financial_receipt_id,u.created_at AS financial_sort
- FROM (SELECT id,created_at FROM usage_logs ORDER BY created_at DESC,id DESC LIMIT GREATEST(1000,%s*4)) u
- CROSS JOIN LATERAL (SELECT id,financial_receipt_id FROM usage_financial_records f %s
+		rawScope := ""
+		if filters.UserID > 0 {
+			rawScope += fmt.Sprintf(" AND u.user_id=%d", filters.UserID)
+		}
+		if filters.APIKeyID > 0 {
+			rawScope += fmt.Sprintf(" AND u.api_key_id=%d", filters.APIKeyID)
+		}
+		// If K timestamped receipts already qualify, older legacy rows cannot
+		// enter the first K of the union. Probe the raw time index only above
+		// that exact cutoff (inclusive for ties), then apply canonical filters.
+		// Unlike a fixed lookback/sample, this cannot omit a qualifying record.
+		// Null timestamps or fewer receipts take the full exact fallback.
+		prefix = fmt.Sprintf(`receipt_page AS MATERIALIZED (
+ SELECT id,financial_receipt_id,created_at AS financial_sort FROM %s f %s financial_time_source='receipt'
+ ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s
+ ), receipt_cutoff AS MATERIALIZED (
+ SELECT COUNT(financial_sort)>=%s AS bounded,MIN(financial_sort) AS oldest FROM receipt_page
+ ), `, source, predicate, need, need)
+		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,financial_sort FROM receipt_page)
+ UNION ALL (SELECT f.id,f.financial_receipt_id,u.created_at AS financial_sort
+ FROM usage_logs u CROSS JOIN LATERAL (
+ SELECT id,financial_receipt_id FROM usage_financial_records f %s
  f.financial_receipt_id IS NULL AND f.id=u.id OFFSET 0) f
- ORDER BY u.created_at DESC,u.id DESC LIMIT %s
- ), `, need, predicate, need)
-		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,created_at AS financial_sort FROM usage_financial_records f %s financial_time_source='receipt' ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s)
- UNION ALL (SELECT id,financial_receipt_id,financial_sort FROM legacy_probe WHERE (SELECT COUNT(*) FROM legacy_probe)>=%s)
- UNION ALL (SELECT id,financial_receipt_id,created_at AS financial_sort FROM usage_financial_records f %s financial_receipt_id IS NULL AND (SELECT COUNT(*) FROM legacy_probe)<%s ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s)`, predicate, need, need, predicate, need, need)
-
+ WHERE (SELECT bounded FROM receipt_cutoff) AND u.created_at >= (SELECT oldest FROM receipt_cutoff) %s
+ ORDER BY u.created_at DESC,u.id DESC LIMIT %s)
+ UNION ALL (SELECT id,financial_receipt_id,created_at AS financial_sort FROM %s f %s
+ financial_receipt_id IS NULL AND NOT (SELECT bounded FROM receipt_cutoff)
+ ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT %s)`, predicate, rawScope, need, source, predicate, need)
 	}
 	return fmt.Sprintf(`WITH %sfinancial_page AS MATERIALIZED (
  %s ORDER BY financial_sort %s NULLS LAST,id %s LIMIT $%d OFFSET $%d
