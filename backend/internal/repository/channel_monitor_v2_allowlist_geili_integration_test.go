@@ -146,19 +146,15 @@ func TestGeiliChannelMonitorV2AllowlistPostgres(t *testing.T) {
 			assertMetrics(t, snap.Trend[0].Metrics)
 			models, err := repo.GetModels(ctx, filter, cfg, true)
 			require.NoError(t, err)
-			require.Len(t, models.Items, 3) // includes allowed models without traffic
-			for _, row := range models.Items {
-				if row.Model == "gpt-5" {
-					assertMetrics(t, row.Metrics)
-				} else {
-					require.Zero(t, row.Metrics.RequestCount)
-					require.Equal(t, "unknown", row.Health.Overall)
-					require.Nil(t, row.Health.Score)
-				}
-			}
+			require.Len(t, models.Items, 1, "details omit allowed models without traffic; dimensions still retain the catalog")
+			require.Equal(t, "gpt-5", models.Items[0].Model)
+			assertMetrics(t, models.Items[0].Metrics)
 			for _, groupBy := range []service.ChannelMonitorV2GroupBy{service.ChannelMonitorV2GroupByPlatform, service.ChannelMonitorV2GroupByPlatformGroup, service.ChannelMonitorV2GroupByPlatformModel, service.ChannelMonitorV2GroupByPlatformGroupModel} {
 				matrix, err := repo.GetMatrix(ctx, filter, cfg, groupBy, true)
 				require.NoError(t, err)
+				if groupBy == service.ChannelMonitorV2GroupByPlatformModel || groupBy == service.ChannelMonitorV2GroupByPlatformGroupModel {
+					require.Len(t, matrix.Items, 1, "model-bearing matrices must omit zero-request rows")
+				}
 				var total int64
 				for _, row := range matrix.Items {
 					require.Contains(t, []string{"openai", "grok"}, row.Platform)
@@ -297,4 +293,112 @@ func TestGeiliChannelMonitorV2AllowlistPostgres(t *testing.T) {
 		require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM ops_error_logs WHERE group_id=ANY($1)`, pq.Array(groupIDs)).Scan(&logs))
 		require.Equal(t, int64(804), logs, "raw error logs remain intact")
 	})
+}
+
+// Exercise filtering before public-volume redaction against real PostgreSQL.
+func TestGeiliChannelMonitorV2ModelTrafficPostgres(t *testing.T) {
+	ctx := context.Background()
+	repo := &channelMonitorV2Repository{db: integrationDB}
+	original, err := repo.GetConfig(ctx)
+	require.NoError(t, err)
+	var usageStart, errorStart, through, successful, backfill sql.NullTime
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT usage_coverage_start,error_coverage_start,data_through,last_successful_at,backfill_cursor FROM channel_monitor_v2_watermarks WHERE id=1`).Scan(&usageStart, &errorStart, &through, &successful, &backfill))
+	t.Cleanup(func() {
+		_, err := integrationDB.ExecContext(ctx, `UPDATE channel_monitor_v2_watermarks SET usage_coverage_start=$1,error_coverage_start=$2,data_through=$3,last_successful_at=$4,backfill_cursor=$5 WHERE id=1`, usageStart, errorStart, through, successful, backfill)
+		require.NoError(t, err)
+		current, err := repo.GetConfig(ctx)
+		require.NoError(t, err)
+		_, err = repo.UpdateConfig(ctx, *original, current.Version)
+		require.NoError(t, err)
+	})
+	groups := []int64{}
+	for _, name := range []string{"GPT", "DeepSeek"} {
+		group := mustCreateGroup(t, integrationEntClient, &service.Group{Name: t.Name() + name, Platform: "openai", RateMultiplier: 1})
+		groups = append(groups, group.ID)
+		t.Cleanup(func() { require.NoError(t, integrationEntClient.Group.DeleteOneID(group.ID).Exec(ctx)) })
+	}
+	t.Cleanup(func() {
+		for _, suffix := range []string{"1m", "rollup"} {
+			_, err := integrationDB.ExecContext(ctx, "DELETE FROM channel_monitor_v2_metrics_"+suffix+" WHERE group_id=ANY($1)", pq.Array(groups))
+			require.NoError(t, err)
+		}
+	})
+	start := time.Now().UTC().Truncate(24 * time.Hour).Add(-48 * time.Hour)
+	_, err = integrationDB.ExecContext(ctx, `UPDATE channel_monitor_v2_watermarks SET usage_coverage_start=$1,error_coverage_start=$1,data_through=$2,last_successful_at=NOW(),backfill_cursor=$3 WHERE id=1`, start, start.Add(24*time.Hour), start.Add(-31*24*time.Hour))
+	require.NoError(t, err)
+	for _, row := range []struct {
+		group           int64
+		model           string
+		success, errors int64
+	}{{groups[0], "gpt-5", 3, 0}, {groups[0], "failed-only", 0, 2}, {groups[0], "zero-row", 0, 0}, {groups[1], "deepseek-chat", 5, 0}} {
+		_, err := integrationDB.ExecContext(ctx, `INSERT INTO channel_monitor_v2_metrics_1m (bucket_start,platform,group_id,model,success_requests,error_requests) VALUES ($1,'openai',$2,$3,$4,$5)`, start, row.group, row.model, row.success, row.errors)
+		require.NoError(t, err)
+	}
+	for _, seconds := range []int{300, 3600, 43200, 86400} {
+		_, err = integrationDB.ExecContext(ctx, `INSERT INTO channel_monitor_v2_metrics_rollup (bucket_start,bucket_seconds,platform,group_id,model,success_requests,error_requests) SELECT bucket_start,$1,platform,group_id,model,success_requests,error_requests FROM channel_monitor_v2_metrics_1m WHERE group_id=ANY($2)`, seconds, pq.Array(groups))
+		require.NoError(t, err)
+	}
+	cfg := *original
+	cfg.Enabled = true
+	cfg.GroupIDs = groups
+	cfg.Platforms = []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5", "failed-only", "zero-row", "idle", "deepseek-chat"}}}
+	cfg.IgnoredErrorCategories = nil
+	saved, err := repo.UpdateConfig(ctx, cfg, original.Version)
+	require.NoError(t, err)
+	cfg = *saved
+	svc := service.NewChannelMonitorV2Service(repo)
+	for _, bucket := range []time.Duration{time.Minute, 5 * time.Minute, time.Hour, 12 * time.Hour, 24 * time.Hour} {
+		t.Run(bucket.String(), func(t *testing.T) {
+			for _, selection := range []struct {
+				name string
+				ids  []int64
+				want []string
+			}{
+				{"all", nil, []string{"gpt-5", "failed-only", "deepseek-chat"}},
+				{"GPT", groups[:1], []string{"gpt-5", "failed-only"}},
+				{"DeepSeek", groups[1:], []string{"deepseek-chat"}},
+				{"multiple", groups, []string{"gpt-5", "failed-only", "deepseek-chat"}},
+			} {
+				t.Run(selection.name, func(t *testing.T) {
+					filter := service.ChannelMonitorV2Filter{Start: start, End: start.Add(bucket), Bucket: bucket, GroupIDs: selection.ids}
+					for _, admin := range []bool{true, false} {
+						f := filter
+						if !admin {
+							f.RestrictGroups = true
+							f.AllowedGroupIDs = groups
+						}
+						rows, err := svc.Models(ctx, f, admin)
+						require.NoError(t, err)
+						names := []string{}
+						for _, row := range rows.Items {
+							names = append(names, row.Model)
+							if admin {
+								require.Positive(t, row.Metrics.RequestCount)
+							} else {
+								require.Zero(t, row.Metrics.RequestCount)
+							}
+							if row.Model == "failed-only" {
+								require.Zero(t, row.Metrics.SuccessRate)
+								require.Equal(t, float64(1), row.Metrics.ErrorRate)
+							}
+						}
+						require.ElementsMatch(t, selection.want, names)
+						for _, by := range []service.ChannelMonitorV2GroupBy{service.ChannelMonitorV2GroupByPlatformModel, service.ChannelMonitorV2GroupByPlatformGroupModel} {
+							matrix, err := svc.Matrix(ctx, f, by, admin)
+							require.NoError(t, err)
+							names = names[:0]
+							for _, row := range matrix.Items {
+								names = append(names, row.Model)
+							}
+							require.ElementsMatch(t, selection.want, names)
+						}
+					}
+				})
+			}
+		})
+	}
+	filter := service.ChannelMonitorV2Filter{Start: start.Add(time.Minute), End: start.Add(2 * time.Minute), Bucket: time.Minute}
+	rows, err := repo.GetModels(ctx, filter, cfg, true)
+	require.NoError(t, err)
+	require.Empty(t, rows.Items, "requests outside the selected window must not keep a model visible")
 }
