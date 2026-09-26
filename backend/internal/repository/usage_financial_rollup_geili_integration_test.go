@@ -36,7 +36,7 @@ func financialRollupTestSchema(t *testing.T) string {
  CREATE TABLE usage_settlement_receipts(LIKE public.usage_settlement_receipts INCLUDING DEFAULTS);
  CREATE UNIQUE INDEX ON usage_settlement_receipts(id);CREATE INDEX ON usage_settlement_receipts(usage_request_id,api_key_id);CREATE INDEX ON usage_settlement_receipts(usage_log_id);`)
 	require.NoError(t, err)
-	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql"} {
+	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql"} {
 		body, e := migrations.FS.ReadFile(file)
 		require.NoError(t, e)
 		_, e = tx.ExecContext(ctx, string(body))
@@ -106,7 +106,8 @@ func TestFinancialRollupExactMutationRecoveryAndMissingBuckets(t *testing.T) {
 	financialRollupSeedLog(t, seed, 1, "2026-09-22 12:00:00+08", 1)
 	financialRollupSeedLog(t, seed, 2, "2026-09-23 12:00:00+08", 2)
 	financialRollupSeedReceipt(t, seed, 1, "2026-09-24 12:00:00+08", 4)
-	financialRollupExec(t, seed, `UPDATE usage_logs SET account_stats_cost=5,account_rate_multiplier=2,duration_ms=1000 WHERE id=2;
+	financialRollupExec(t, seed, `UPDATE usage_settlement_receipts SET settled_at='2026-09-25 23:59:59.999999+08' WHERE id=1;
+ UPDATE usage_logs SET account_stats_cost=5,account_rate_multiplier=2,duration_ms=1000 WHERE id=2;
  INSERT INTO usage_settlement_receipts(id,request_id,request_fingerprint,user_id,api_key_id,billing_type,charged_amount,accounting_date,settled_at,state,record_source,record_completeness) VALUES(30,'unknown','test',1,2,0,NULL,'2026-09-22','2026-09-25 12:00:00+08','settled','historical_recovery','amount_unknown'),(31,'partial','test',1,2,1,7,'2026-09-22','2026-09-25 12:00:00+08','settled','historical_recovery','partial');`)
 	require.NoError(t, seed.Commit())
 	financialRollupPublish(t, schema)
@@ -121,6 +122,7 @@ func TestFinancialRollupExactMutationRecoveryAndMissingBuckets(t *testing.T) {
 	edits := []string{
 		`UPDATE usage_logs SET created_at='2026-09-21 01:00:00+08',actual_cost=20,total_cost=22,duration_ms=NULL,input_tokens=77 WHERE id=2`,
 		`UPDATE usage_settlement_receipts SET delivered_at=NOW(),charged_amount=9,detail=detail||'{"duration_ms":800,"total_cost":null}'::jsonb WHERE id=1`,
+		`UPDATE usage_settlement_receipts SET completed_at=NULL WHERE id=1`,
 		`UPDATE usage_settlement_receipts SET usage_request_id=NULL,usage_log_id=2,completed_at='2026-09-23 12:00:00+08' WHERE id=1`,
 		`UPDATE usage_settlement_receipts SET command='{"TerminalFailure":true}'::jsonb WHERE id=1`,
 		`DELETE FROM usage_settlement_receipts WHERE id=1`,

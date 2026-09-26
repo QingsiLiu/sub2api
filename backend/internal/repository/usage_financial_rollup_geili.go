@@ -36,12 +36,18 @@ const financialRollupCombineColumns = `COALESCE(SUM(requests),0),
 // Physical aggregation dates are internal only. Financial accounting/completion
 // date filters still use the existing canonical financial projection unchanged.
 func financialRollupRangeSQL(start, end string) string {
-	receipt := "COALESCE(completed_at,settled_at) >= " + start
+	// PostgreSQL can use a partial COALESCE expression index while ignoring its
+	// histogram for selectivity (1/3 estimate even for an empty tail). Ordinary
+	// column predicates retain statistics and avoid unnecessary global JIT work.
+	completed := "completed_at >= " + start
+	settled := "settled_at >= " + start
 	log := "created_at >= " + start
 	if end != "" {
-		receipt += " AND COALESCE(completed_at,settled_at) < " + end
+		completed += " AND completed_at < " + end
+		settled += " AND settled_at < " + end
 		log += " AND created_at < " + end
 	}
+	receipt := "((" + completed + ") OR (completed_at IS NULL AND " + settled + "))"
 	return "((financial_time_source='receipt' AND " + receipt + ") OR (financial_time_source<>'receipt' AND " + log + "))"
 }
 
@@ -185,7 +191,7 @@ func (r *dashboardAggregationRepository) syncFinancialRollupStep(ctx context.Con
 	}
 	if !closed.Valid {
 		var earliest sql.NullTime
-		if err := scanSingleRow(ctx, r.sql, `SELECT MIN(at) FROM (SELECT MIN(created_at) at FROM usage_logs UNION ALL SELECT MIN(COALESCE(completed_at,settled_at)) FROM usage_settlement_receipts WHERE state='settled') dates`, nil, &earliest); err != nil {
+		if err := scanSingleRow(ctx, r.sql, `SELECT MIN(at) FROM (SELECT MIN(created_at) at FROM usage_logs UNION ALL SELECT MIN(completed_at) FROM usage_settlement_receipts WHERE state='settled' AND completed_at IS NOT NULL UNION ALL SELECT MIN(settled_at) FROM usage_settlement_receipts WHERE state='settled' AND completed_at IS NULL) dates`, nil, &earliest); err != nil {
 			return false, err
 		}
 		at := today

@@ -148,6 +148,7 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionedSortsAndInvali
 	for _, month := range []int{4, 6} {
 		start := time.Date(2026, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 		mock.ExpectBegin()
+		mock.ExpectExec(`(?s)INSERT INTO usage_financial_rollup_events.*generate_series.*usage_settlement_receipts`).WithArgs(start, start.AddDate(0, 1, 0)).WillReturnResult(sqlmock.NewResult(0, 31))
 		mock.ExpectExec(`(?s)INSERT INTO usage_group_rollup_invalidations.*generate_series`).WithArgs(start, start.AddDate(0, 1, 0), "Asia/Shanghai").WillReturnResult(sqlmock.NewResult(0, 31))
 		mock.ExpectExec(`DROP TABLE IF EXISTS "usage_logs_` + start.Format("200601") + `"`).WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectCommit()
@@ -167,6 +168,7 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionFailureRollsBack
 	mock.ExpectQuery(`SELECT EXISTS`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectQuery(`SELECT c.relname`).WillReturnRows(sqlmock.NewRows([]string{"relname"}).AddRow("usage_logs_202606").AddRow("usage_logs_202604"))
 	mock.ExpectBegin()
+	mock.ExpectExec(`(?s)INSERT INTO usage_financial_rollup_events.*generate_series.*usage_settlement_receipts`).WithArgs(start, start.AddDate(0, 1, 0)).WillReturnResult(sqlmock.NewResult(0, 31))
 	mock.ExpectExec(`INSERT INTO usage_group_rollup_invalidations`).WithArgs(start, start.AddDate(0, 1, 0), "Asia/Shanghai").WillReturnResult(sqlmock.NewResult(0, 31))
 	mock.ExpectExec(`DROP TABLE IF EXISTS "usage_logs_202604"`).WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()
@@ -188,5 +190,20 @@ func TestDashboardAggregationRepositorySyncGroupUsageRollupsRetriesConsumerSnaps
 	mock.ExpectRollback()
 	expectGroupRollupNoop(mock, today, retained, "Asia/Shanghai")
 	require.NoError(t, newDashboardAggregationRepositoryWithSQL(db).SyncGroupUsageRollups(context.Background(), today))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// Financial invalidation must be durable before a partition is removed. A
+// failure must roll back and stop before either DROP or later partitions.
+func TestDashboardAggregationRepositoryCleanupFinancialInvalidationFailureStopsBeforeDrop(t *testing.T) {
+	db, mock := newSQLMock(t)
+	cutoff := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`SELECT EXISTS`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectQuery(`SELECT c.relname`).WillReturnRows(sqlmock.NewRows([]string{"relname"}).AddRow("usage_logs_202606").AddRow("usage_logs_202604"))
+	mock.ExpectBegin()
+	mock.ExpectExec(`(?s)INSERT INTO usage_financial_rollup_events.*usage_settlement_receipts`).WithArgs(start, start.AddDate(0, 1, 0)).WillReturnError(sql.ErrConnDone)
+	mock.ExpectRollback()
+	require.ErrorIs(t, newDashboardAggregationRepositoryWithSQL(db).CleanupUsageLogs(context.Background(), cutoff), sql.ErrConnDone)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

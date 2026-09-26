@@ -56,7 +56,7 @@ func TestFinancialMigrationNeverMarksInvalidIndexApplied(t *testing.T) {
 }
 
 func TestFinancialTriggerMigrationUsesShortLockDeadlineAndRollback(t *testing.T) {
-	for _, name := range []string{financialRollupTriggerMigration, "265_usage_financial_daily_rollups.sql"} {
+	for _, name := range []string{financialRollupTriggerMigration, "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql"} {
 		t.Run(name, func(t *testing.T) {
 			db, mock := newSQLMock(t)
 			prepareMigrationsBootstrapExpectations(mock)
