@@ -138,7 +138,7 @@ func (r *usageLogRepository) ListFinancialUsage(ctx context.Context, params pagi
 	if fast {
 		limit++
 	}
-	query := fmt.Sprintf("SELECT to_jsonb(page) FROM (SELECT * FROM %s f %s ORDER BY %s LIMIT $%d OFFSET $%d) page", financialUsageTable, where, financialOrder(params), len(args)+1, len(args)+2)
+	query := financialUsagePageQuery(params, filters, where, len(args))
 	logs, err := r.queryFinancialUsage(ctx, query, append(args, limit, params.Offset())...)
 	if err != nil {
 		return nil, nil, err

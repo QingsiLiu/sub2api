@@ -653,10 +653,12 @@ const exportToCSV = async () => {
     const allLogs: UsageLog[] = []
     const pageSize = 100
     const exportParams = buildUsageListParams(1, pageSize)
-    const totalPages = Math.ceil(pagination.total / pageSize)
-    for (let page = 1; page <= totalPages; page++) {
+    // Fast list totals only indicate whether another page exists. Never use
+    // that lower bound to truncate exports.
+    for (let page = 1; ; page++) {
       const response = await usageAPI.query({ ...exportParams, page })
       allLogs.push(...response.items)
+      if (response.items.length < pageSize || allLogs.length >= response.total) break
     }
     if (allLogs.length === 0) {
       appStore.showWarning(t('usage.noDataToExport'))

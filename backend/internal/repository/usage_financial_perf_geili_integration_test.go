@@ -5,7 +5,6 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -43,14 +42,15 @@ func TestFinancialHotUserQueryPerformanceGeili(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Date(2026, 9, 26, 0, 0, 0, 0, financialBeijing)
 	end := start.AddDate(0, 0, 1)
-	where, args := financialUsageWhere(usagestats.UsageLogFilters{UserID: user.ID, StartTime: &start, EndTime: &end})
+	filters := usagestats.UsageLogFilters{UserID: user.ID, StartTime: &start, EndTime: &end}
+	where, args := financialUsageWhere(filters)
 	queries := []struct {
 		name, query string
 		args        []any
 	}{
 		{"sum", "SELECT COUNT(*),SUM(actual_cost) FROM usage_financial_records", nil},
 		{"day", "SELECT " + financialAggregateColumns + " FROM usage_financial_records " + where, args},
-		{"list", fmt.Sprintf("SELECT to_jsonb(page) FROM (SELECT * FROM usage_financial_records f %s ORDER BY %s LIMIT 21) page", where, financialOrder(pagination.PaginationParams{SortBy: "created_at"})), args},
+		{"list", financialUsagePageQuery(pagination.PaginationParams{SortBy: "created_at"}, filters, where, len(args)), append(append([]any{}, args...), 21, 0)},
 	}
 	for _, q := range queries {
 		var plan string

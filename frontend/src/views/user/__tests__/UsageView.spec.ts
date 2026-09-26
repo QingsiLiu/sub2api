@@ -526,7 +526,7 @@ describe('user UsageView', () => {
   })
 
   it('keeps the initial filters, sort, and filename while exporting multiple pages', async () => {
-    const pageResponse = { items: [usageLog], total: 101, pages: 2 }
+    const pageResponse = { items: [usageLog], total: 21, pages: 2 }
     query.mockResolvedValue(pageResponse)
     const wrapper = mountUsageView()
     await flushPromises()
@@ -571,7 +571,7 @@ describe('user UsageView', () => {
         sort_by: 'actual_cost', sort_order: 'asc',
       }), expect.anything())
 
-      resolveFirstPage(pageResponse)
+      resolveFirstPage({ items: Array.from({ length: 100 }, (_, id) => ({ ...usageLog, id })), total: 101, pages: 2 })
       await flushPromises()
 
       const exportCalls = query.mock.calls.filter((call) => call.length === 1)

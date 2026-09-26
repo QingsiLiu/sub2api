@@ -589,7 +589,7 @@ const exportToExcel = async () => {
   const c = new AbortController(); exportAbortController = c
   try {
     let p = 1; let total = pagination.total; let exportedCount = 0
-    const exportParams = { ...buildUsageListParams(1, 100, true), account_ids: filters.value.account_ids ? [...filters.value.account_ids] : undefined }
+    const exportParams = { ...buildUsageListParams(1, 100, false), account_ids: filters.value.account_ids ? [...filters.value.account_ids] : undefined }
     const XLSX = await import('xlsx')
     const headers = [
       t('usage.time'), t('admin.usage.user'), t('usage.apiKeyFilter'),
@@ -611,7 +611,7 @@ const exportToExcel = async () => {
         { ...exportParams, page: p },
         { signal: c.signal }
       )
-      if (c.signal.aborted) break; if (p === 1) { total = res.total; exportProgress.total = total }
+      if (c.signal.aborted) break; { total = res.total; exportProgress.total = total }
       const rows = (res.items || []).map((log: AdminUsageLog) => [
         log.created_at, log.user?.email || '', log.api_key?.name || '', log.account?.name || '', log.model,
         log.upstream_model || (log.record_completeness && log.record_completeness !== 'complete' ? '' : log.model), log.upstream_response_model || '', log.upstream_model_mismatch == null ? '' : t(log.upstream_model_mismatch ? 'common.yes' : 'common.no'), formatReasoningEffort(log.reasoning_effort), formatReasoningEffort(log.upstream_reasoning_effort || log.reasoning_effort), log.group?.name || '',
