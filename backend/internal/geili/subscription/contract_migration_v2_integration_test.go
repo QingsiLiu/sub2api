@@ -34,7 +34,7 @@ func TestContractMigrationV2PostgresRepairReplayAndAtomicity(t *testing.T) {
  CREATE TABLE user_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT REFERENCES users(id),plan_id BIGINT REFERENCES subscription_plans(id),starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,status TEXT,deleted_at TIMESTAMPTZ,daily_window_start TIMESTAMPTZ,daily_usage_usd NUMERIC DEFAULT 0);
  CREATE TABLE user_subscription_entitlements(id BIGINT PRIMARY KEY,user_subscription_id BIGINT REFERENCES user_subscriptions(id),plan_id BIGINT REFERENCES subscription_plans(id),status TEXT,starts_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,daily_limit_usd NUMERIC,daily_window_start TIMESTAMPTZ,daily_usage_usd NUMERIC DEFAULT 0,source_order_id BIGINT);
  CREATE TABLE subscription_requests(id BIGINT PRIMARY KEY,request_key TEXT UNIQUE,subscription_id BIGINT REFERENCES user_subscriptions(id),admitted_at TIMESTAMPTZ);
- CREATE TABLE subscription_usage_allocations(id BIGINT PRIMARY KEY,request_key TEXT REFERENCES subscription_requests(request_key),cost_usd NUMERIC);
+ CREATE TABLE subscription_usage_allocations(id BIGINT PRIMARY KEY,request_key TEXT REFERENCES subscription_requests(request_key),entitlement_id BIGINT REFERENCES user_subscription_entitlements(id),cost_usd NUMERIC);
  CREATE TABLE payment_orders(id BIGINT PRIMARY KEY,subscription_days INTEGER);
  INSERT INTO subscription_plans VALUES(1,'month45',30,'day',FALSE,30,45),(2,'free',30,'day',FALSE,0,45),(3,'compat',30,'day',TRUE,30,45),(4,'edited',30,'day',FALSE,30,90);
  `)
@@ -103,7 +103,11 @@ func TestContractMigrationV2PostgresRepairReplayAndAtomicity(t *testing.T) {
 		}
 		_, e = db.ExecContext(ctx, `INSERT INTO subscription_requests VALUES($1,$2,$1,$3)`, tc.id, tc.name, now.Add(-time.Minute))
 		require.NoError(t, e)
-		_, e = db.ExecContext(ctx, `INSERT INTO subscription_usage_allocations VALUES($1,$2,7.123456789)`, tc.id, tc.name)
+		var lot any
+		if !tc.noLot {
+			lot = tc.id
+		}
+		_, e = db.ExecContext(ctx, `INSERT INTO subscription_usage_allocations(id,request_key,entitlement_id,cost_usd) VALUES($1,$2,$3,7.123456789)`, tc.id, tc.name, lot)
 		require.NoError(t, e)
 	}
 	for _, tc := range cases {
@@ -159,7 +163,7 @@ func TestContractMigrationV2PostgresRepairReplayAndAtomicity(t *testing.T) {
 		key := fmt.Sprintf("cross-offset-%d", offset)
 		_, err = db.ExecContext(ctx, `INSERT INTO subscription_requests VALUES($1,$2,1,$3)`, requestID, key, now.In(time.FixedZone("test", offset*3600)))
 		require.NoError(t, err)
-		_, err = db.ExecContext(ctx, `INSERT INTO subscription_usage_allocations VALUES($1,$2,$3)`, requestID, key, float64(i+1)/100)
+		_, err = db.ExecContext(ctx, `INSERT INTO subscription_usage_allocations(id,request_key,entitlement_id,cost_usd) VALUES($1,$2,1,$3)`, requestID, key, float64(i+1)/100)
 		require.NoError(t, err)
 	}
 	overlay, err := ReadDailyUsage(ctx, db, 1, "legacy-1", now)
