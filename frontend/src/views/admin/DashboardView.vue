@@ -223,12 +223,6 @@
           </div>
         </div>
 
-        <p class="flex items-center text-xs text-gray-500 dark:text-gray-400">{{ t('financial.accountingShort') }}<HelpTooltip width-class="w-72" :content="t('financial.accountingHint')" /></p>
-        <div v-if="stats.today_balance_actual_cost != null || stats.today_subscription_actual_cost != null" class="card flex flex-wrap gap-4 p-4 text-sm" data-testid="admin-financial-spending-split">
-          <span>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.today_balance_actual_cost, t('financial.unknown')) }}</span>
-          <span>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.today_subscription_actual_cost, t('financial.unknown')) }}</span>
-          <span v-if="stats.today_unknown_amount_count" class="text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
-        </div>
         <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
         <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
 
@@ -372,7 +366,6 @@ import type {
   UserSpendingRankingItem
 } from '@/types'
 import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
-import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import { dashboardFinancialMetadata, financialMoney, financialDate } from '@/utils/financialUsage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'

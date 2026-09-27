@@ -156,10 +156,14 @@ describe('UserDashboardStats 按平台拆分', () => {
 
 describe('financial dashboard evidence', () => {
   it('shows 90 subscription consumption separately from a 66 standard price', () => {
-    const wrapper = mountStats(makeStats({ today_actual_cost: 90, today_cost: 66, today_balance_actual_cost: 0, today_subscription_actual_cost: 90 }))
+    const wrapper = mount(UserDashboardStats, {
+      props: { stats: makeStats({ today_actual_cost: 90, today_cost: 66, today_balance_actual_cost: 0, today_subscription_actual_cost: 90 }), balance: 0, isSimple: false, platformQuotas: null },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
     expect(wrapper.get('[data-testid="today-financial-spending-split"]').text()).toContain('financial.subscriptionSpending: $90.0000')
     expect(wrapper.text()).toContain('$66.0000')
-    expect(wrapper.text()).toContain('financial.accountingShort')
+    expect(wrapper.text()).not.toContain('financial.accountingShort')
+    expect(wrapper.text()).not.toContain('financial.overrunHint')
   })
   it('exposes missing history and does not render incomplete token counts as exact', () => {
     const wrapper = mountStats(makeStats({ today_tokens: 87654321, today_token_counts_complete: false, total_unknown_amount_count: 2, total_standard_cost_complete: false }))

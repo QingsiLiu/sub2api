@@ -52,33 +52,33 @@
           <Icon name="dollar" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
         </div>
         <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</p>
-          <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('financial.actualSpending') }} / {{ t('dashboard.standard') }}</p>
-          <p class="break-words text-xl font-bold text-gray-900 dark:text-white">
+          <p class="flex items-center text-xs font-medium text-gray-500 dark:text-gray-400">
+            {{ t('dashboard.todayCost') }}
+            <!-- geili hook: balance/subscription split stays one hover away so the card matches its neighbours. -->
+            <HelpTooltip v-if="hasSpendingSplit" width-class="w-60">
+              <div class="space-y-1" data-testid="today-financial-spending-split">
+                <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.today_balance_actual_cost, t('financial.unknown')) }}</p>
+                <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.today_subscription_actual_cost, t('financial.unknown')) }}</p>
+                <p class="pt-1 text-gray-300">{{ t('common.total') }} · {{ t('financial.balanceSpending') }}: {{ financialMoney(stats.total_balance_actual_cost, t('financial.unknown')) }}</p>
+                <p class="text-gray-300">{{ t('common.total') }} · {{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.total_subscription_actual_cost, t('financial.unknown')) }}</p>
+                <p v-if="stats.today_unknown_amount_count" class="text-amber-300">{{ t('financial.knownAmount') }}</p>
+              </div>
+            </HelpTooltip>
+          </p>
+          <p class="text-xl font-bold text-gray-900 dark:text-white">
             <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">{{ financialMoney(stats?.today_actual_cost, t('financial.unknown')) }}</span>
             <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / {{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_cost, t('financial.unknown')) }}</span>
           </p>
-          <p v-if="stats.today_unknown_amount_count" class="text-xs text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</p>
-          <div v-if="stats.today_balance_actual_cost != null || stats.today_subscription_actual_cost != null" class="my-1 space-y-1 text-xs text-gray-600 dark:text-gray-300" data-testid="today-financial-spending-split">
-            <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.today_balance_actual_cost, t('financial.unknown')) }}</p>
-            <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.today_subscription_actual_cost, t('financial.unknown')) }}</p>
-          </div>
           <p class="text-xs">
             <span class="text-gray-500 dark:text-gray-400">{{ t('common.total') }}: </span>
             <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">{{ financialMoney(stats?.total_actual_cost, t('financial.unknown')) }}</span>
             <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / {{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_cost, t('financial.unknown')) }}</span>
           </p>
-          <div v-if="stats.total_balance_actual_cost != null || stats.total_subscription_actual_cost != null" class="mt-1 space-y-1 text-xs text-gray-500 dark:text-gray-400">
-            <p>{{ t('common.total') }} · {{ t('financial.balanceSpending') }}: {{ financialMoney(stats.total_balance_actual_cost, t('financial.unknown')) }}</p>
-            <p>{{ t('common.total') }} · {{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.total_subscription_actual_cost, t('financial.unknown')) }}</p>
-          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <p class="flex items-center text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingShort') }}<HelpTooltip width-class="w-72" :content="t('financial.accountingHint')" /></p>
-  <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
 
@@ -266,6 +266,8 @@ const props = defineProps<{
   platformQuotas?: PlatformQuotaItem[] | null
 }>()
 const { t } = useI18n()
+
+const hasSpendingSplit = computed(() => [props.stats.today_balance_actual_cost, props.stats.today_subscription_actual_cost, props.stats.total_balance_actual_cost, props.stats.total_subscription_actual_cost].some((v) => v != null))
 
 const PLATFORM_LABELS: Record<string, string> = {
   anthropic: 'Claude',

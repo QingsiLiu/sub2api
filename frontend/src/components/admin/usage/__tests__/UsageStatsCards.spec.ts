@@ -92,13 +92,21 @@ describe('UsageStatsCards', () => {
 describe('financial completeness', () => {
   it('shows actual subscription consumption independently from standard and balance costs', () => {
     const wrapper = mount(UsageStatsCards, {
-      props: { stats: { ...stats, total_actual_cost: 90, total_cost: 66, balance_actual_cost: 0, subscription_actual_cost: 90 } },
-      global: { stubs: { Icon: true } },
+      props: { stats: { ...stats, total_actual_cost: 90, total_cost: 66, balance_actual_cost: 0, subscription_actual_cost: 90 }, showSpendingSplit: true },
+      global: { stubs: { Icon: true, Teleport: true } },
     })
     const split = wrapper.get('[data-testid="financial-spending-split"]').text()
     expect(split).toContain('financial.balanceSpending: $0.0000')
     expect(split).toContain('financial.subscriptionSpending: $90.0000')
     expect(wrapper.text()).toContain('$66.0000')
+  })
+  it('does not show the balance/subscription split on the admin cards', () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: { stats: { ...stats, total_actual_cost: 90, total_cost: 66, balance_actual_cost: 0, subscription_actual_cost: 90 } },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
+    expect(wrapper.find('[data-testid="financial-spending-split"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('financial.balanceSpending')
   })
   it('labels known subtotals and does not advertise incomplete token/standard sums as exact', () => {
     const wrapper = mount(UsageStatsCards, {

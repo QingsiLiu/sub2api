@@ -63,14 +63,19 @@
         <Icon name="dollar" size="md" />
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-medium text-gray-500">{{ stats?.unknown_amount_count ? t('financial.knownAmount') : t('financial.actualSpending') }}</p>
+        <p class="flex items-center text-xs font-medium text-gray-500">
+          {{ stats?.unknown_amount_count ? t('financial.knownAmount') : t('financial.actualSpending') }}
+          <!-- geili hook: users keep the balance/subscription split one hover away; admins do not need it. -->
+          <HelpTooltip v-if="showSpendingSplit && (stats?.balance_actual_cost != null || stats?.subscription_actual_cost != null)" width-class="w-56">
+            <div class="space-y-1" data-testid="financial-spending-split">
+              <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats?.balance_actual_cost, t('financial.unknown')) }}</p>
+              <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats?.subscription_actual_cost, t('financial.unknown')) }}</p>
+            </div>
+          </HelpTooltip>
+        </p>
         <p class="text-xl font-bold text-green-600">
           {{ financialMoney(stats?.total_actual_cost, t('financial.unknown')) }}
         </p>
-        <div v-if="stats?.balance_actual_cost != null || stats?.subscription_actual_cost != null" class="mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-300" data-testid="financial-spending-split">
-          <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.balance_actual_cost, t('financial.unknown')) }}</p>
-          <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.subscription_actual_cost, t('financial.unknown')) }}</p>
-        </div>
         <p class="text-xs text-gray-400">
           <template v-if="showAccountCost && totalAccountCost != null">
             <span class="text-orange-500">{{ t('usage.accountCost') }} {{ stats?.standard_cost_complete === false ? t('financial.unknown') : financialMoney(totalAccountCost, t('financial.unknown')) }}</span>
@@ -101,14 +106,17 @@ import type { UsageStatsResponse } from '@/types'
 import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
 import { financialMoney } from '@/utils/financialUsage'
 import Icon from '@/components/icons/Icon.vue'
+import HelpTooltip from '@/components/common/HelpTooltip.vue'
 
 const props = withDefaults(defineProps<{
   stats: (AdminUsageStatsResponse | UsageStatsResponse) | null
   showAccountCost?: boolean
   strikeStandardCost?: boolean
+  showSpendingSplit?: boolean
 }>(), {
   showAccountCost: true,
   strikeStandardCost: false,
+  showSpendingSplit: false,
 })
 
 const { t } = useI18n()
@@ -119,6 +127,7 @@ const totalAccountCost = computed(() => {
 })
 const showAccountCost = computed(() => props.showAccountCost)
 const strikeStandardCost = computed(() => props.strikeStandardCost)
+const showSpendingSplit = computed(() => props.showSpendingSplit)
 
 const formatDuration = (ms: number) =>
   ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
