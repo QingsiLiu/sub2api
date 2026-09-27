@@ -2,20 +2,23 @@
   <AppLayout>
     <div class="space-y-6">
       <div v-if="loading && !stats" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
-      <template v-else-if="stats">
-        <UserDashboardStats :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
-        <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :timezone="financialTimezone('accounting')" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadRange" @granularityChange="loadCharts" @refresh="refreshAll" />
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div class="lg:col-span-2"><UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" /></div>
-          <div class="lg:col-span-1"><UserDashboardQuickActions /></div>
-        </div>
-      </template>
+      <div v-else-if="!stats" class="card flex items-center justify-between gap-4 p-4" role="alert">
+        <span>{{ t('admin.dashboard.failedToLoad') }}</span>
+        <button class="btn btn-secondary" @click="loadStats">{{ t('common.tryAgain') }}</button>
+      </div>
+      <UserDashboardStats v-if="stats" :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
+      <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :timezone="financialTimezone('accounting')" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadRange" @granularityChange="loadCharts" @refresh="refreshAll" />
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2"><UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" /></div>
+        <div class="lg:col-span-1"><UserDashboardQuickActions /></div>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -29,6 +32,7 @@ import { getMyPlatformQuotas } from '@/api/user'
 import { financialDate, financialTimezone } from '@/utils/financialUsage'
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 const user = computed(() => authStore.user)
 const stats = ref<UserStatsType | null>(null)
 const loading = ref(false)
@@ -52,7 +56,7 @@ const loadStats = async () => {
   const params = dateParams()
   loading.value = true
   try {
-    const [, response] = await Promise.all([authStore.refreshUser(), usageAPI.getDashboardStats(params)])
+    const response = await usageAPI.getDashboardStats(params)
     if (seq === statsSeq) stats.value = response
   } catch (error) { console.error('Failed to load dashboard stats:', error) }
   finally { if (seq === statsSeq) loading.value = false }
@@ -84,7 +88,10 @@ const loadPlatformQuotas = async () => {
   catch (error) { console.warn('Failed to load platform quotas:', error); platformQuotas.value = [] }
 }
 const loadRange = () => { void loadCharts(); void loadRecent() }
-const refreshAll = () => { void loadStats(); loadRange(); void loadPlatformQuotas() }
+const refreshAll = () => {
+  void authStore.refreshUser().catch(error => console.warn('Failed to refresh profile:', error))
+  void loadStats(); loadRange(); void loadPlatformQuotas()
+}
 onMounted(refreshAll)
 onUnmounted(() => { ++statsSeq; ++chartsSeq; ++recentSeq })
 </script>

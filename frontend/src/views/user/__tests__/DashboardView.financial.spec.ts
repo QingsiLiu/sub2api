@@ -49,4 +49,37 @@ describe('user dashboard financial date contract', () => {
     expect(wrapper.get('[data-testid="stats"]').text()).toContain('"date_basis":"accounting"')
     wrapper.unmount()
   })
+
+  it('shows recent usage and shortcuts while the financial totals are pending', async () => {
+    getDashboardStats.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountDashboard()
+    await flushPromises()
+    expect(wrapper.find('user-dashboard-recent-usage-stub').exists()).toBe(true)
+    expect(wrapper.find('user-dashboard-quick-actions-stub').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="stats"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps the dashboard usable on totals failure and supports retry', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDashboardStats.mockRejectedValueOnce(new Error('timeout'))
+    const wrapper = mountDashboard()
+    await flushPromises()
+    expect(wrapper.find('user-dashboard-recent-usage-stub').exists()).toBe(true)
+    expect(wrapper.get('[role="alert"]').text()).toContain('admin.dashboard.failedToLoad')
+    await wrapper.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="stats"]').text()).toContain('"today_actual_cost":90')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not discard financial totals when refreshing the profile fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    refreshUser.mockRejectedValueOnce(new Error('profile timeout'))
+    const wrapper = mountDashboard()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="stats"]').text()).toContain('"today_actual_cost":90')
+    wrapper.unmount()
+  })
 })
