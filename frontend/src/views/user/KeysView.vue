@@ -221,13 +221,13 @@
               <div class="flex items-center gap-1.5">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('keys.today') }}:</span>
                 <span class="font-medium text-gray-900 dark:text-white">
-                  ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
+                  {{ usageStats[row.id] ? `$${usageStats[row.id].today_actual_cost.toFixed(4)}` : '—' }}
                 </span>
               </div>
               <div class="mt-0.5 flex items-center gap-1.5">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('keys.total') }}:</span>
                 <span class="font-medium text-gray-900 dark:text-white">
-                  ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
+                  {{ usageStats[row.id] ? `$${usageStats[row.id].total_actual_cost.toFixed(4)}` : '—' }}
                 </span>
               </div>
               <!-- Quota progress (if quota is set) -->
@@ -1780,6 +1780,11 @@ const loadApiKeys = async () => {
     handleSelectionChange(selectedIds.value)
     pagination.value.total = response.total
     pagination.value.pages = response.pages
+
+    // geili hook: the key list is usable as soon as it arrives. A slow financial
+    // summary must not block copying, editing or creating keys, or look like $0.
+    usageStats.value = {}
+    loading.value = false
 
     // Load usage stats for all API keys in the list
     if (response.items.length > 0) {

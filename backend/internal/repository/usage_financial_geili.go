@@ -599,6 +599,11 @@ func (r *usageLogRepository) GetFinancialGroups(ctx context.Context, start, end 
 }
 
 func (r *usageLogRepository) GetFinancialBatchAPIKeyStats(ctx context.Context, ids []int64, start, end time.Time) (map[int64]*usagestats.BatchAPIKeyUsageStats, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) (map[int64]*usagestats.BatchAPIKeyUsageStats, error) {
+			return scoped.GetFinancialBatchAPIKeyStats(ctx, ids, start, end)
+		})
+	}
 	out := map[int64]*usagestats.BatchAPIKeyUsageStats{}
 	ids = normalizePositiveInt64IDs(ids)
 	if len(ids) == 0 {
@@ -711,6 +716,11 @@ func (r *usageLogRepository) GetFinancialAdminDashboardStats(ctx context.Context
 }
 
 func (r *usageLogRepository) GetFinancialBatchUserStats(ctx context.Context, ids []int64, start, end time.Time) (map[int64]*usagestats.BatchUserUsageStats, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) (map[int64]*usagestats.BatchUserUsageStats, error) {
+			return scoped.GetFinancialBatchUserStats(ctx, ids, start, end)
+		})
+	}
 	out := map[int64]*usagestats.BatchUserUsageStats{}
 	ids = normalizePositiveInt64IDs(ids)
 	if len(ids) == 0 {
@@ -757,6 +767,11 @@ func (r *usageLogRepository) GetFinancialBatchUserStats(ctx context.Context, ids
 }
 
 func (r *usageLogRepository) GetFinancialUserRanking(ctx context.Context, start, end time.Time, limit int) (*usagestats.UserSpendingRankingResponse, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) (*usagestats.UserSpendingRankingResponse, error) {
+			return scoped.GetFinancialUserRanking(ctx, start, end, limit)
+		})
+	}
 	if limit <= 0 {
 		limit = 12
 	}
@@ -802,6 +817,11 @@ func (r *usageLogRepository) GetFinancialUserRanking(ctx context.Context, start,
 }
 
 func (r *usageLogRepository) GetFinancialUserTrend(ctx context.Context, start, end time.Time, granularity string, limit int) ([]usagestats.UserUsageTrendPoint, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) ([]usagestats.UserUsageTrendPoint, error) {
+			return scoped.GetFinancialUserTrend(ctx, start, end, granularity, limit)
+		})
+	}
 	if limit <= 0 {
 		limit = 12
 	}
@@ -832,6 +852,11 @@ func (r *usageLogRepository) GetFinancialUserTrend(ctx context.Context, start, e
 }
 
 func (r *usageLogRepository) GetFinancialKeyTrend(ctx context.Context, start, end time.Time, granularity string, limit int) ([]usagestats.APIKeyUsageTrendPoint, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) ([]usagestats.APIKeyUsageTrendPoint, error) {
+			return scoped.GetFinancialKeyTrend(ctx, start, end, granularity, limit)
+		})
+	}
 	if limit <= 0 {
 		limit = 12
 	}
@@ -860,6 +885,11 @@ func (r *usageLogRepository) GetFinancialKeyTrend(ctx context.Context, start, en
 }
 
 func (r *usageLogRepository) GetFinancialUserBreakdown(ctx context.Context, start, end time.Time, dim usagestats.UserBreakdownDimension, limit int) ([]usagestats.UserBreakdownItem, error) {
+	if _, ok := r.sql.(*sql.DB); ok {
+		return financialStatsRead(ctx, r, func(scoped *usageLogRepository) ([]usagestats.UserBreakdownItem, error) {
+			return scoped.GetFinancialUserBreakdown(ctx, start, end, dim, limit)
+		})
+	}
 	filters := usagestats.UsageLogFilters{UserID: dim.UserID, APIKeyID: dim.APIKeyID, AccountID: dim.AccountID, AccountIDs: dim.AccountIDs, GroupID: dim.GroupID, Model: dim.Model, ModelFilterSource: dim.ModelType, RequestType: dim.RequestType, Stream: dim.Stream, NativeCompactionV2: dim.NativeCompactionV2, BillingType: dim.BillingType}
 	where, args := financialUsageWhere(financialRange(filters, start, end))
 	if dim.Endpoint != "" {

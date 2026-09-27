@@ -162,7 +162,7 @@ const TablePageLayoutStub = {
 
 const DataTableStub = {
   name: 'DataTable',
-  props: { columns: Array, data: Array, selectedKeys: Array, selectable: Boolean },
+  props: { columns: Array, data: Array, selectedKeys: Array, selectable: Boolean, loading: Boolean },
   emits: ['sort', 'update:selectedKeys'],
   template: `
     <div>
@@ -180,6 +180,7 @@ const DataTableStub = {
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
         <div data-test="key-group"><slot name="cell-group" :row="row" /></div>
+        <div data-test="key-usage"><slot name="cell-usage" :row="row" /></div>
         <slot name="cell-actions" :row="row" />
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
@@ -326,6 +327,32 @@ describe('user KeysView column settings', () => {
   })
 
   afterEach(() => { vi.restoreAllMocks() })
+
+  it('shows usable keys before slow usage statistics, without displaying a false zero', async () => {
+    let finish!: (value: unknown) => void
+    getDashboardApiKeysUsage.mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const wrapper = await mountView()
+    expect(wrapper.findComponent({ name: 'DataTable' }).props('loading')).toBe(false)
+    expect(wrapper.text()).toContain('test-key')
+    expect(wrapper.get('[data-test="key-usage"]').text()).toContain('—')
+    expect(wrapper.get('[data-test="key-usage"]').text()).not.toContain('$0.0000')
+    finish({ stats: { 1: { api_key_id: 1, today_actual_cost: 2, total_actual_cost: 3 } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="key-usage"]').text()).toContain('$2.0000')
+    expect(wrapper.get('[data-test="key-usage"]').text()).toContain('$3.0000')
+    wrapper.unmount()
+  })
+
+  it('keeps keys usable when the usage request fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    getDashboardApiKeysUsage.mockRejectedValue(new Error('timeout'))
+    const wrapper = await mountView()
+    expect(wrapper.findComponent({ name: 'DataTable' }).props('loading')).toBe(false)
+    expect(wrapper.text()).toContain('test-key')
+    expect(wrapper.get('[data-test="key-usage"]').text()).not.toContain('$0.0000')
+    expect(showError).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 
   it.each(['multi-group', 'legacy'] as const)('recognizes %s composite keys in the tutorial and CCS import', async (kind) => {
     const key: ApiKey = kind === 'multi-group'

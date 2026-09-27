@@ -60,6 +60,9 @@ func (r *usageLogRepository) financialAdminAllTimeTotals(ctx context.Context) (*
 			return nil, err
 		}
 		defer tx.Rollback()
+		if _, err = tx.ExecContext(ctx, "SET LOCAL jit=off"); err != nil {
+			return nil, err
+		}
 		out, err := (&usageLogRepository{sql: tx}).financialAdminAllTimeTotals(ctx)
 		if err != nil {
 			return nil, err
@@ -127,14 +130,14 @@ func (r *usageLogRepository) financialAdminAllTimeTotals(ctx context.Context) (*
 
 func financialRollupTotalsQuery(closed time.Time, dirty []string) (string, []any, error) {
 	args := []any{closed.Format("2006-01-02"), pq.Array(dirty), financialRollupDay(closed)}
-	query := `WITH parts AS (SELECT ` + financialRollupColumnNames + ` FROM usage_financial_daily_rollups WHERE bucket_date<$1::date AND NOT(bucket_date=ANY($2::date[])) UNION ALL SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_records WHERE ` + financialRollupRangeSQL("$3::timestamptz", "")
+	query := `WITH parts AS (SELECT ` + financialRollupColumnNames + ` FROM usage_financial_daily_rollups WHERE bucket_date<$1::date AND NOT(bucket_date=ANY($2::date[])) UNION ALL SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_statistics WHERE ` + financialRollupRangeSQL("$3::timestamptz", "")
 	for _, day := range dirty {
 		at, err := time.ParseInLocation("2006-01-02", day, financialBeijing)
 		if err != nil {
 			return "", nil, err
 		}
 		args = append(args, at, at.AddDate(0, 0, 1))
-		query += ` UNION ALL SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_records WHERE ` + financialRollupRangeSQL(fmt.Sprintf("$%d::timestamptz", len(args)-1), fmt.Sprintf("$%d::timestamptz", len(args)))
+		query += ` UNION ALL SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_statistics WHERE ` + financialRollupRangeSQL(fmt.Sprintf("$%d::timestamptz", len(args)-1), fmt.Sprintf("$%d::timestamptz", len(args)))
 	}
 	return query + `) SELECT ` + financialRollupCombineColumns + ` FROM parts`, args, nil
 }
