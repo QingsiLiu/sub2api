@@ -6,6 +6,13 @@
         <LoadingSpinner />
       </div>
 
+      <div v-else-if="!stats" class="card flex items-center justify-between gap-4 p-4" role="alert">
+        <span>{{ t('admin.dashboard.failedToLoad') }}</span>
+        <button type="button" class="btn btn-secondary" @click="loadDashboardStats">
+          {{ t('common.tryAgain') }}
+        </button>
+      </div>
+
       <template v-else-if="stats">
         <!-- Row 1: Core Stats -->
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">

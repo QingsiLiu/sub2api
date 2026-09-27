@@ -190,9 +190,14 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 	g, gctx := errgroup.WithContext(ctx)
 	if includeStats {
 		g.Go(func() error {
-			stats, err := h.dashboardService.GetDashboardStats(gctx)
+			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
+			defer cancel()
+			stats, err := h.dashboardService.GetDashboardStats(readCtx)
 			if err != nil {
-				return errors.New("failed to get dashboard statistics")
+				// A slow financial card must not blank the whole dashboard. The
+				// frontend can render the independent trend/model sections and
+				// offer a retry for the cards.
+				return nil
 			}
 			resp.Stats = &dashboardSnapshotV2Stats{
 				DashboardStats: *stats,
@@ -204,8 +209,10 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 
 	if includeTrend {
 		g.Go(func() error {
+			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
+			defer cancel()
 			trend, _, err := h.getUsageTrendCached(
-				gctx,
+				readCtx,
 				startTime,
 				endTime,
 				granularity,
@@ -224,7 +231,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 				filters.SubscriptionID,
 			)
 			if err != nil {
-				return errors.New("failed to get usage trend")
+				return nil
 			}
 			resp.Trend = trend
 			return nil
@@ -233,8 +240,10 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 
 	if includeModels {
 		g.Go(func() error {
+			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
+			defer cancel()
 			models, _, err := h.getModelStatsCached(
-				gctx,
+				readCtx,
 				startTime,
 				endTime,
 				filters.UserID,
@@ -252,7 +261,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 				filters.SubscriptionID,
 			)
 			if err != nil {
-				return errors.New("failed to get model statistics")
+				return nil
 			}
 			resp.Models = models
 			return nil
@@ -261,8 +270,10 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 
 	if includeGroups {
 		g.Go(func() error {
+			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
+			defer cancel()
 			groups, _, err := h.getGroupStatsCached(
-				gctx,
+				readCtx,
 				startTime,
 				endTime,
 				filters.UserID,
@@ -279,7 +290,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 				filters.SubscriptionID,
 			)
 			if err != nil {
-				return errors.New("failed to get group statistics")
+				return nil
 			}
 			resp.Groups = groups
 			return nil
@@ -288,9 +299,11 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 
 	if includeUsersTrend {
 		g.Go(func() error {
-			usersTrend, _, err := h.getUserUsageTrendCached(gctx, startTime, endTime, granularity, usersTrendLimit)
+			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
+			defer cancel()
+			usersTrend, _, err := h.getUserUsageTrendCached(readCtx, startTime, endTime, granularity, usersTrendLimit)
 			if err != nil {
-				return errors.New("failed to get user usage trend")
+				return nil
 			}
 			resp.UsersTrend = usersTrend
 			return nil
