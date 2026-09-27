@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 )
 
 var dashboardSnapshotV2Cache = newSnapshotCache(30 * time.Second)
@@ -181,98 +182,123 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 		Granularity: granularity,
 	}
 
+	// These reads are independent. Running them in one request serially made a
+	// cold dashboard wait for the stats, trend and model queries one after
+	// another, even though each query already uses its own read-only snapshot.
+	// Keep the response shape and cache semantics unchanged while allowing the
+	// database pool to serve the independent reads concurrently.
+	g, gctx := errgroup.WithContext(ctx)
 	if includeStats {
-		stats, err := h.dashboardService.GetDashboardStats(ctx)
-		if err != nil {
-			return nil, errors.New("failed to get dashboard statistics")
-		}
-		resp.Stats = &dashboardSnapshotV2Stats{
-			DashboardStats: *stats,
-			Uptime:         int64(time.Since(h.startTime).Seconds()),
-		}
+		g.Go(func() error {
+			stats, err := h.dashboardService.GetDashboardStats(gctx)
+			if err != nil {
+				return errors.New("failed to get dashboard statistics")
+			}
+			resp.Stats = &dashboardSnapshotV2Stats{
+				DashboardStats: *stats,
+				Uptime:         int64(time.Since(h.startTime).Seconds()),
+			}
+			return nil
+		})
 	}
 
 	if includeTrend {
-		trend, _, err := h.getUsageTrendCached(
-			ctx,
-			startTime,
-			endTime,
-			granularity,
-			filters.UserID,
-			filters.APIKeyID,
-			filters.AccountID,
-			filters.GroupID,
-			filters.Model,
-			filters.RequestType,
-			filters.Stream,
-			filters.NativeCompactionV2,
-			filters.BillingType,
-			filters.UpstreamModelMismatch,
-			filters.AccountIDs,
-			filters.DateBasis,
-			filters.SubscriptionID,
-		)
-		if err != nil {
-			return nil, errors.New("failed to get usage trend")
-		}
-		resp.Trend = trend
+		g.Go(func() error {
+			trend, _, err := h.getUsageTrendCached(
+				gctx,
+				startTime,
+				endTime,
+				granularity,
+				filters.UserID,
+				filters.APIKeyID,
+				filters.AccountID,
+				filters.GroupID,
+				filters.Model,
+				filters.RequestType,
+				filters.Stream,
+				filters.NativeCompactionV2,
+				filters.BillingType,
+				filters.UpstreamModelMismatch,
+				filters.AccountIDs,
+				filters.DateBasis,
+				filters.SubscriptionID,
+			)
+			if err != nil {
+				return errors.New("failed to get usage trend")
+			}
+			resp.Trend = trend
+			return nil
+		})
 	}
 
 	if includeModels {
-		models, _, err := h.getModelStatsCached(
-			ctx,
-			startTime,
-			endTime,
-			filters.UserID,
-			filters.APIKeyID,
-			filters.AccountID,
-			filters.GroupID,
-			usagestats.ModelSourceRequested,
-			filters.RequestType,
-			filters.Stream,
-			filters.NativeCompactionV2,
-			filters.BillingType,
-			filters.UpstreamModelMismatch,
-			filters.AccountIDs,
-			filters.DateBasis,
-			filters.SubscriptionID,
-		)
-		if err != nil {
-			return nil, errors.New("failed to get model statistics")
-		}
-		resp.Models = models
+		g.Go(func() error {
+			models, _, err := h.getModelStatsCached(
+				gctx,
+				startTime,
+				endTime,
+				filters.UserID,
+				filters.APIKeyID,
+				filters.AccountID,
+				filters.GroupID,
+				usagestats.ModelSourceRequested,
+				filters.RequestType,
+				filters.Stream,
+				filters.NativeCompactionV2,
+				filters.BillingType,
+				filters.UpstreamModelMismatch,
+				filters.AccountIDs,
+				filters.DateBasis,
+				filters.SubscriptionID,
+			)
+			if err != nil {
+				return errors.New("failed to get model statistics")
+			}
+			resp.Models = models
+			return nil
+		})
 	}
 
 	if includeGroups {
-		groups, _, err := h.getGroupStatsCached(
-			ctx,
-			startTime,
-			endTime,
-			filters.UserID,
-			filters.APIKeyID,
-			filters.AccountID,
-			filters.GroupID,
-			filters.RequestType,
-			filters.Stream,
-			filters.NativeCompactionV2,
-			filters.BillingType,
-			filters.UpstreamModelMismatch,
-			filters.AccountIDs,
-			filters.DateBasis,
-			filters.SubscriptionID,
-		)
-		if err != nil {
-			return nil, errors.New("failed to get group statistics")
-		}
-		resp.Groups = groups
+		g.Go(func() error {
+			groups, _, err := h.getGroupStatsCached(
+				gctx,
+				startTime,
+				endTime,
+				filters.UserID,
+				filters.APIKeyID,
+				filters.AccountID,
+				filters.GroupID,
+				filters.RequestType,
+				filters.Stream,
+				filters.NativeCompactionV2,
+				filters.BillingType,
+				filters.UpstreamModelMismatch,
+				filters.AccountIDs,
+				filters.DateBasis,
+				filters.SubscriptionID,
+			)
+			if err != nil {
+				return errors.New("failed to get group statistics")
+			}
+			resp.Groups = groups
+			return nil
+		})
 	}
 
 	if includeUsersTrend {
-		usersTrend, _, err := h.getUserUsageTrendCached(ctx, startTime, endTime, granularity, usersTrendLimit)
-		if err != nil {
-			return nil, errors.New("failed to get user usage trend")
-		}
-		resp.UsersTrend = usersTrend
+		g.Go(func() error {
+			usersTrend, _, err := h.getUserUsageTrendCached(gctx, startTime, endTime, granularity, usersTrendLimit)
+			if err != nil {
+				return errors.New("failed to get user usage trend")
+			}
+			resp.UsersTrend = usersTrend
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
