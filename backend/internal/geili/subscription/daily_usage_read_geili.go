@@ -1,9 +1,13 @@
 package subscription
 
+// The probe only scans this subscription's own lots through
+// (entitlement_id,id), so other subscriptions' traffic never pushes an idle
+// heavy subscription onto the unbounded fallback.
 const dailyUsageReadQuery = `WITH pending_probe AS MATERIALIZED (
  SELECT request_key,cost_usd FROM subscription_usage_allocations
- WHERE id>(SELECT allocation_watermark FROM subscription_ledger_state WHERE subscription_id=$1)
- ORDER BY id LIMIT 1025
+ WHERE entitlement_id IN (SELECT e.id FROM user_subscription_entitlements e WHERE e.user_subscription_id=$1)
+ AND id>(SELECT allocation_watermark FROM subscription_ledger_state WHERE subscription_id=$1)
+ LIMIT 1025
 )
 SELECT COALESCE((SELECT used_usd FROM subscription_daily_usage WHERE subscription_id=$1 AND term_id=$2 AND usage_date=$3),0)
 +COALESCE(CASE WHEN (SELECT COUNT(*) FROM pending_probe)<1025 THEN (
