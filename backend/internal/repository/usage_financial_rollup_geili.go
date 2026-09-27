@@ -183,7 +183,12 @@ func (r *dashboardAggregationRepository) SyncFinancialUsageRollups(ctx context.C
 		if err != nil {
 			return err
 		}
-		more, err := newDashboardAggregationRepositoryWithSQL(tx).syncFinancialRollupStep(ctx, today)
+		// JIT compiles the canonical views per worker: on production the
+		// today seed took 119s with JIT and 22s without, against a 2m step.
+		more := false
+		if _, err = tx.ExecContext(ctx, "SET LOCAL jit=off"); err == nil {
+			more, err = newDashboardAggregationRepositoryWithSQL(tx).syncFinancialRollupStep(ctx, today)
+		}
 		if err == nil {
 			err = tx.Commit()
 		} else {
