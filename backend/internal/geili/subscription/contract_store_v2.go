@@ -351,29 +351,10 @@ func SyncDailyLedger(ctx context.Context, q SQL, subID int64, now time.Time) err
 func ReadDailyUsage(ctx context.Context, q SQL, subID int64, termID string, now time.Time) (float64, error) {
 	day := DayStart(now)
 	var used decimal.Decimal
-	// The settlement worker continuously folds allocations into the daily
-	// ledger. Once the per-subscription watermark reaches that subscription's
-	// latest allocation, the legacy fallback scan is both unnecessary and very
-	// expensive under load (it joins every request and contract row). Check the
-	// watermark first and only execute the detailed projection when a real
-	// unbridged allocation exists.
-	var watermark, latest int64
-	watermarkErr := scalar(ctx, q, `SELECT allocation_watermark FROM subscription_ledger_state WHERE subscription_id=$1`, []any{subID}, &watermark)
-	latestErr := scalar(ctx, q, `SELECT COALESCE((SELECT MAX(a.id) FROM subscription_usage_allocations a JOIN subscription_requests r ON r.request_key=a.request_key WHERE r.subscription_id=$1),0)`, []any{subID}, &latest)
-	if watermarkErr != nil && !errors.Is(watermarkErr, sql.ErrNoRows) {
-		return 0, watermarkErr
-	}
-	if latestErr != nil && !errors.Is(latestErr, sql.ErrNoRows) {
-		return 0, latestErr
-	}
-	if watermarkErr == nil && latestErr == nil && latest <= watermark {
-		if err := scalar(ctx, q, `SELECT COALESCE(used_usd,0) FROM subscription_daily_usage WHERE subscription_id=$1 AND term_id=$2 AND usage_date=$3`, []any{subID, termID, day.Format("2006-01-02")}, &used); err == nil {
-			return used.InexactFloat64(), nil
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return 0, err
-		}
-	}
-	err := scalar(ctx, q, `SELECT COALESCE((SELECT used_usd FROM subscription_daily_usage WHERE subscription_id=$1 AND term_id=$2 AND usage_date=$3),0)+COALESCE((SELECT SUM(a.cost_usd) FROM subscription_usage_allocations a JOIN subscription_requests r ON r.request_key=a.request_key LEFT JOIN subscription_request_contracts b ON b.request_key=r.request_key JOIN subscription_ledger_state st ON st.subscription_id=r.subscription_id WHERE r.subscription_id=$1 AND a.id>st.allocation_watermark AND r.admitted_at>=$4 AND r.admitted_at<$5 AND COALESCE(b.term_id,(SELECT t.term_id FROM subscription_contract_terms t WHERE t.subscription_id=r.subscription_id AND t.starts_at<=r.admitted_at AND t.expires_at>r.admitted_at ORDER BY t.starts_at DESC LIMIT 1),(SELECT t.term_id FROM subscription_contract_terms t WHERE t.subscription_id=r.subscription_id ORDER BY t.starts_at LIMIT 1))=$2),0)`, []any{subID, termID, day.Format("2006-01-02"), day, day.Add(24 * time.Hour)}, &used)
+	// geili: one MVCC snapshot for both the ledger and its unbridged tail.
+	// A bounded probe avoids joining the entire request/contract history for
+	// active subscriptions. A larger tail takes the exact original projection.
+	err := scalar(ctx, q, dailyUsageReadQuery, []any{subID, termID, day.Format("2006-01-02"), day, day.Add(24 * time.Hour)}, &used)
 	return used.InexactFloat64(), err
 }
 
