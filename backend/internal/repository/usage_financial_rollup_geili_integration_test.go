@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/google/uuid"
@@ -128,6 +129,14 @@ func financialFactsAssertOracle(t *testing.T, tx *sql.Tx) {
 			batch, err := repo.GetFinancialBatchUserStats(ctx, []int64{1, 9}, start, end)
 			require.NoError(t, err)
 			out = append(out, stats, user, trend, models, groups, batch)
+			// Usage record pages: default order, user scope, other sorts, exact totals.
+			for _, page := range []pagination.PaginationParams{{Page: 1, PageSize: 3}, {Page: 2, PageSize: 3}, {Page: 1, PageSize: 50, SortBy: "actual_cost", SortOrder: "asc"}, {Page: 1, PageSize: 50, SortBy: "model"}} {
+				for _, f := range []usagestats.UsageLogFilters{{StartTime: &start, EndTime: &end}, {StartTime: &start, EndTime: &end, UserID: 1, ExactTotal: true}} {
+					rows, result, err := repo.ListFinancialUsage(ctx, page, f)
+					require.NoError(t, err)
+					out = append(out, rows, result)
+				}
+			}
 		}
 		summary, err := repo.GetFinancialGroupSummary(ctx, day(26))
 		require.NoError(t, err)
@@ -423,6 +432,10 @@ func TestFinancialFactsWindowSubscriptionAndPendingOverlay(t *testing.T) {
 	var cov time.Time
 	require.NoError(t, read.QueryRow(`SELECT coverage_start FROM usage_financial_fact_state`).Scan(&cov))
 	require.Equal(t, "2026-09-19", cov.Format("2006-01-02"))
+	pageStart, pageEnd := time.Date(2026, 9, 22, 0, 0, 0, 0, financialBeijing), time.Date(2026, 9, 24, 0, 0, 0, 0, financialBeijing)
+	relation, err := (&usageLogRepository{sql: read}).financialFactPageRelation(context.Background(), usagestats.UsageLogFilters{StartTime: &pageStart, EndTime: &pageEnd})
+	require.NoError(t, err)
+	require.NotEmpty(t, relation, "usage pages inside coverage must read facts")
 	require.NoError(t, read.Commit())
 	edits := []string{
 		`UPDATE subscription_request_contracts SET usage_date='2026-09-12' WHERE request_key='rk-20'`,

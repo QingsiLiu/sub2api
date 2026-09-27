@@ -125,7 +125,9 @@ func (r *usageLogRepository) ListFinancialUsage(ctx context.Context, params pagi
 		// and JIT-compiles hundreds of branches before reading this tiny page.
 		// Limit the setting to this read transaction; never change the pool,
 		// database, or billing writers' planner settings.
-		tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		// Repeatable read: fact state, queued events and fact rows must share
+		// one snapshot (financialFactPageRelation).
+		tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -148,12 +150,20 @@ func (r *usageLogRepository) ListFinancialUsage(ctx context.Context, params pagi
 		return rows, page, nil
 	}
 	where, args := financialUsageWhere(filters)
+	facts, err := r.financialFactPageRelation(ctx, filters)
+	if err != nil {
+		return nil, nil, err
+	}
+	countSource := financialUsageTable
+	if facts != "" {
+		countSource = facts + " f"
+	}
 	// Preserve the existing administrator fast-total contract. A blank admin
 	// listing must not add a multi-million-row COUNT on every pagination request.
 	fast := shouldUseFastUsageLogTotal(filters)
 	var total int64
 	if !fast {
-		if err := scanSingleRow(ctx, r.sql, "SELECT COUNT(*) FROM "+financialUsageTable+" "+where, args, &total); err != nil {
+		if err := scanSingleRow(ctx, r.sql, "SELECT COUNT(*) FROM "+countSource+" "+where, args, &total); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -161,7 +171,7 @@ func (r *usageLogRepository) ListFinancialUsage(ctx context.Context, params pagi
 	if fast {
 		limit++
 	}
-	query := financialUsagePageQuery(params, filters, where, len(args))
+	query := financialUsagePageQuery(params, filters, where, len(args), facts)
 	logs, err := r.queryFinancialUsage(ctx, query, append(args, limit, params.Offset())...)
 	if err != nil {
 		return nil, nil, err

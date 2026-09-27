@@ -9,6 +9,9 @@ const financialUsageIndexesMigration = "262_usage_financial_indexes_notx.sql"
 const financialLookupIndexMigration = "267_subscription_billing_lookup_notx.sql"
 const financialLookupIndexName = "subscription_requests_settled_identity_lookup_geili"
 const financialRollupTriggerMigration = "260_group_usage_rollup_invalidation_queue.sql"
+const financialFactPageIndexMigration = "272_usage_financial_facts_page_indexes_notx.sql"
+
+var financialFactPageIndexes = []string{"usage_financial_facts_created_geili", "usage_financial_facts_user_created_geili"}
 
 var financialUsageMigrationIndexes = []string{
 	"subscription_requests_billing_identity_geili",
@@ -22,6 +25,8 @@ func validateFinancialMigrationIndexes(ctx context.Context, db migrationConnecti
 	indexes := financialUsageMigrationIndexes
 	if name == financialLookupIndexMigration {
 		indexes = []string{financialLookupIndexName}
+	} else if name == financialFactPageIndexMigration {
+		indexes = financialFactPageIndexes
 	} else if name != financialUsageIndexesMigration {
 		return nil
 	}
@@ -37,6 +42,19 @@ func validateFinancialMigrationIndexes(ctx context.Context, db migrationConnecti
 		}
 		if !ready {
 			return fmt.Errorf("financial index %s is missing or invalid; do not mark this migration applied", indexName)
+		}
+	}
+	return nil
+}
+
+// prepareFinancialFactPageIndexes drops invalid leftovers so IF NOT EXISTS retries.
+func prepareFinancialFactPageIndexes(ctx context.Context, db migrationConnection, name string) error {
+	if name != financialFactPageIndexMigration {
+		return nil
+	}
+	for _, indexName := range financialFactPageIndexes {
+		if err := dropInvalidIndexIfPresent(ctx, db, indexName); err != nil {
+			return err
 		}
 	}
 	return nil

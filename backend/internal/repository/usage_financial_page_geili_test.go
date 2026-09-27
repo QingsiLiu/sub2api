@@ -16,7 +16,7 @@ func TestFinancialPageMaterializesOnlySelectedIdentities(t *testing.T) {
 	start := time.Date(2026, 9, 27, 0, 0, 0, 0, financialBeijing)
 	f := usagestats.UsageLogFilters{UserID: 7, StartTime: &start}
 	where, args := financialUsageWhere(f)
-	q := financialUsagePageQuery(pagination.DefaultPagination(), f, where, len(args))
+	q := financialUsagePageQuery(pagination.DefaultPagination(), f, where, len(args), "")
 	require.Contains(t, q, "financial_page AS MATERIALIZED")
 	require.Contains(t, q, "SELECT id,financial_receipt_id,created_at AS financial_sort")
 	require.Contains(t, q, "user_id = $1")
@@ -27,7 +27,7 @@ func TestFinancialPageMaterializesOnlySelectedIdentities(t *testing.T) {
 }
 
 func TestFinancialPageUnboundedSourcesUseIndependentLimits(t *testing.T) {
-	q := financialUsagePageQuery(pagination.PaginationParams{SortBy: "id"}, usagestats.UsageLogFilters{}, "", 0)
+	q := financialUsagePageQuery(pagination.PaginationParams{SortBy: "id"}, usagestats.UsageLogFilters{}, "", 0, "")
 	require.Contains(t, q, "usage_financial_total_records")
 	require.Contains(t, q, "financial_time_source='log' ORDER BY financial_sort DESC NULLS LAST,id DESC LIMIT ($1::bigint+$2::bigint)")
 	require.Contains(t, q, "financial_time_source='receipt'")
@@ -38,7 +38,7 @@ func TestFinancialPageReceiptCutoffIsExactAndFallsBack(t *testing.T) {
 	end := time.Now().Add(24 * time.Hour)
 	f := usagestats.UsageLogFilters{EndTime: &end}
 	where, args := financialUsageWhere(f)
-	q := financialUsagePageQuery(pagination.DefaultPagination(), f, where, len(args))
+	q := financialUsagePageQuery(pagination.DefaultPagination(), f, where, len(args), "")
 	require.Contains(t, q, "receipt_cutoff AS MATERIALIZED")
 	require.Contains(t, q, "COUNT(financial_sort)>=")
 	require.Contains(t, q, "u.created_at >= (SELECT oldest FROM receipt_cutoff)")

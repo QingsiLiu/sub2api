@@ -335,7 +335,7 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 	case usageLogsUpstreamRequestIDIndexMigration:
 		return dropInvalidIndexIfPresent(ctx, db, usageLogsUpstreamRequestIDIndex)
 	default:
-		return nil
+		return prepareFinancialFactPageIndexes(ctx, db, name) // geili hook
 	}
 }
 

@@ -242,6 +242,26 @@ func (r *usageLogRepository) financialStatsRelation(ctx context.Context, filters
 	return "(" + relation + ") financial_rows", nil
 }
 
+// financialFactPageRelation is the materialized relation for a bounded usage
+// page, or "" to page the canonical projection. Every row matching
+// accounting_date >= start is materialized once start is inside coverage.
+func (r *usageLogRepository) financialFactPageRelation(ctx context.Context, filters usagestats.UsageLogFilters) (string, error) {
+	if filters.StartTime == nil || filters.EndTime == nil || strings.TrimSpace(filters.RequestID) != "" {
+		return "", nil
+	}
+	if _, ok := r.sql.(*sql.DB); ok {
+		return "", nil
+	}
+	view, err := r.financialFactSnapshot(ctx)
+	if err != nil || view == nil {
+		return "", err
+	}
+	if financialRollupDay(filters.StartTime.In(financialBeijing)).Before(view.coverage) {
+		return "", nil
+	}
+	return "(" + view.facts("TRUE") + ")", nil
+}
+
 // financialAdminTailSQL is the unfiltered all-time tail after the rollup cursor,
 // or "" to read it from the canonical view. Receipt rows come from facts; legacy
 // rows keep their direct created_at index path in the total view.

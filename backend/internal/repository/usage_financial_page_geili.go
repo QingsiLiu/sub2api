@@ -12,7 +12,9 @@ import (
 // JSON and wide usage rows. Both stages use the same statement/MVCC snapshot.
 // Financial amounts, unknown fields and stable receipt/log deduplication remain
 // owned by the canonical projection, never reconstructed from current Key data.
-func financialUsagePageQuery(params pagination.PaginationParams, filters usagestats.UsageLogFilters, where string, argCount int) string {
+// facts, when set, is a materialized relation covering every row the filters
+// can match (see financialFactPageRelation); page identities then come from it.
+func financialUsagePageQuery(params pagination.PaginationParams, filters usagestats.UsageLogFilters, where string, argCount int, facts string) string {
 	order := strings.ToUpper(params.NormalizedSortOrder(pagination.SortOrderDesc))
 	column := "created_at"
 	switch params.SortBy {
@@ -42,7 +44,11 @@ func financialUsagePageQuery(params pagination.PaginationParams, filters usagest
 		identities = fmt.Sprintf(`(SELECT id,financial_receipt_id,%s AS financial_sort FROM %s f %s financial_time_source='receipt' ORDER BY financial_sort %s NULLS LAST,id %s LIMIT ($%d::bigint+$%d::bigint))
  UNION ALL (SELECT id,financial_receipt_id,%s AS financial_sort FROM %s f %s financial_time_source='log' ORDER BY financial_sort %s%s,id %s LIMIT ($%d::bigint+$%d::bigint))`, column, source, predicate, order, order, argCount+1, argCount+2, column, source, predicate, order, legacyNulls, order, argCount+1, argCount+2)
 	}
-	if column == "created_at" && order == "DESC" {
+	if facts != "" {
+		// Facts carry the same row identities; only receipt rows (kind 1) have
+		// financial_receipt_id, and it is their source_id.
+		identities = fmt.Sprintf("SELECT id,CASE WHEN fact_kind=1 THEN source_id END AS financial_receipt_id,%s AS financial_sort FROM %s f %s", column, facts, where)
+	} else if column == "created_at" && order == "DESC" {
 		predicate := " WHERE "
 		if where != "" {
 			predicate = where + " AND "

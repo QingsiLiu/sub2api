@@ -51,7 +51,7 @@ func TestFinancialHotUserQueryPerformanceGeili(t *testing.T) {
 		{"sum", "SELECT COUNT(*),SUM(actual_cost) FROM usage_financial_records", nil},
 		{"day", "SELECT " + financialAggregateColumns + " FROM usage_financial_records " + where, args},
 		{"statistics", "SELECT " + financialAggregateColumns + " FROM usage_financial_statistics " + where, args},
-		{"list", financialUsagePageQuery(pagination.PaginationParams{SortBy: "created_at"}, filters, where, len(args)), append(append([]any{}, args...), 21, 0)},
+		{"list", financialUsagePageQuery(pagination.PaginationParams{SortBy: "created_at"}, filters, where, len(args), ""), append(append([]any{}, args...), 21, 0)},
 	}
 	for _, q := range queries {
 		var plan string
