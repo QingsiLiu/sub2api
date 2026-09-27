@@ -27,6 +27,8 @@ import (
 
 var ErrUsageSettlementIngressDeferred = errors.New("usage settlement retained in durable ingress for SQL retry")
 
+const usageSettlementIngressQuarantineDir = ".quarantine"
+
 const (
 	usageSettlementIngressDir      = "usage-settlement-ingress"
 	usageSettlementIngressVersion  = 1
@@ -455,6 +457,19 @@ func acknowledgeUsageSettlementIngress(ctx context.Context, root *os.Root, name 
 	return syncUsageSettlementDirectory(root)
 }
 
+// quarantineUsageSettlementIngress preserves an immutable record that can no
+// longer be replayed safely (for example, a request fingerprint conflict)
+// without letting it monopolize the bounded replay cursor forever.
+func quarantineUsageSettlementIngress(root *os.Root, name string) error {
+	if err := root.Mkdir(usageSettlementIngressQuarantineDir, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	if err := root.Rename(name, usageSettlementIngressQuarantineDir+"/"+name); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return syncUsageSettlementDirectory(root)
+}
+
 type usageSettlementIngressCursor struct {
 	mu   sync.Mutex
 	file *os.File
@@ -555,6 +570,15 @@ func replayUsageSettlementIngress(ctx context.Context, cfg *config.Config, repo 
 		unlock()
 		e = repo.PrepareSettlement(ctx, &record.Command, record.Detail.UsageLog())
 		if e != nil {
+			if errors.Is(e, ErrUsageBillingRequestConflict) {
+				if quarantineErr := quarantineUsageSettlementIngress(root, name); quarantineErr != nil {
+					stats.Deferred++
+					failures = append(failures, quarantineErr)
+					continue
+				}
+				stats.Invalid++
+				continue
+			}
 			stats.Deferred++
 			failures = append(failures, e)
 			continue
@@ -563,6 +587,14 @@ func replayUsageSettlementIngress(ctx context.Context, cfg *config.Config, repo 
 		e = acknowledgeUsageSettlementIngress(ackCtx, root, name, record)
 		cancel()
 		if e != nil {
+			if errors.Is(e, ErrUsageBillingRequestConflict) {
+				if quarantineErr := quarantineUsageSettlementIngress(root, name); quarantineErr == nil {
+					stats.Invalid++
+					continue
+				} else {
+					e = quarantineErr
+				}
+			}
 			stats.Deferred++
 			failures = append(failures, e)
 		} else {
