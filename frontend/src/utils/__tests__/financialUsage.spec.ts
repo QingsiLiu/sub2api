@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountFinancialCost, dashboardFinancialMetadata, escapeFinancialCSV, financialDate, financialExportNumber, financialMoney, financialTokenTotal, financialTimezone, safeSpreadsheetCell } from '../financialUsage'
+import { accountFinancialCost, dashboardFinancialMetadata, escapeFinancialCSV, financialDate, financialExportNumber, financialMoney, financialTokenTotal, financialTimeExtras, financialTimezone, safeSpreadsheetCell } from '../financialUsage'
 
 describe('financial evidence presentation', () => {
   it('keeps exact zero distinct from unknown or nonfinite money', () => {
@@ -37,5 +37,19 @@ describe('financial evidence presentation', () => {
     const stats = { today_subscription_actual_cost: 90, total_subscription_actual_cost: 100, today_unknown_amount_count: 0, total_unknown_amount_count: 3 }
     expect(dashboardFinancialMetadata(stats, 'today')).toMatchObject({ subscription_actual_cost: 90, unknown_amount_count: 0 })
     expect(dashboardFinancialMetadata(stats, 'total')).toMatchObject({ subscription_actual_cost: 100, unknown_amount_count: 3 })
+  })
+})
+
+describe('financial time extras', () => {
+  const at = '2026-09-27T06:00:00Z'
+  it('hides secondary times that repeat the displayed time', () => {
+    expect(financialTimeExtras({ created_at: at, accounting_date: '2026-09-27', completed_at: '2026-09-27T06:00:00.300Z', settled_at: '2026-09-27T06:00:02Z' })).toEqual([])
+    expect(financialTimeExtras({ created_at: at })).toEqual([])
+  })
+  it('shows a cross-midnight accounting day and delayed settlement', () => {
+    expect(financialTimeExtras({ created_at: '2026-09-27T16:00:30Z', accounting_date: '2026-09-27', completed_at: '2026-09-27T16:00:30Z', settled_at: '2026-09-27T16:10:00Z' }).map((extra) => extra.key)).toEqual(['accountingDate', 'settledAt'])
+  })
+  it('keeps unknown accounting evidence visible', () => {
+    expect(financialTimeExtras({ created_at: at, accounting_date: null })).toEqual([{ key: 'accountingDate', value: null, time: false }])
   })
 })

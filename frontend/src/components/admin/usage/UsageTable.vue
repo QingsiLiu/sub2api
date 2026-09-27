@@ -273,9 +273,9 @@
         <template #cell-created_at="{ row }">
           <div class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
             <p>{{ row.created_at ? formatDateTime(row.created_at) : t('financial.unknown') }}</p>
-            <p v-if="'accounting_date' in row">{{ t('financial.accountingDate') }}: {{ row.accounting_date || t('financial.unknown') }}</p>
-            <p v-if="'completed_at' in row">{{ t('financial.completedAt') }}: {{ row.completed_at ? formatDateTime(row.completed_at) : t('financial.unknown') }}</p>
-            <p v-if="row.settled_at">{{ t('financial.settledAt') }}: {{ formatDateTime(row.settled_at) }}</p>
+            <p v-for="extra in financialTimeExtras(row)" :key="extra.key" class="text-gray-400 dark:text-gray-500">
+              {{ t(`financial.${extra.key}`) }}: {{ extra.value ? (extra.time ? formatDateTime(extra.value) : extra.value) : t('financial.unknown') }}
+            </p>
           </div>
         </template>
 
@@ -598,7 +598,7 @@ import {
 } from '@/utils/imageUsage'
 
 import FinancialRecordBadge from '@/components/common/FinancialRecordBadge.vue'
-import { accountFinancialCost, financialMoney, finiteFinancialNumber } from '@/utils/financialUsage'
+import { accountFinancialCost, financialMoney, financialTimeExtras, finiteFinancialNumber } from '@/utils/financialUsage'
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IpGeoCell from '@/components/common/IpGeoCell.vue'

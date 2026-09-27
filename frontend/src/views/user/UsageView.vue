@@ -24,8 +24,7 @@
           </div>
         </div>
 
-        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
-        <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
+        <p class="flex items-center text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingShort') }}<HelpTooltip width-class="w-72" :content="`${t('financial.accountingHint')} ${t('financial.overrunHint')}`" /></p>
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:metric="modelDistributionMetric"
@@ -237,6 +236,7 @@ import { financialDate, financialTimezone, financialExportNumber, escapeFinancia
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'

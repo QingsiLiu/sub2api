@@ -159,7 +159,7 @@ describe('financial dashboard evidence', () => {
     const wrapper = mountStats(makeStats({ today_actual_cost: 90, today_cost: 66, today_balance_actual_cost: 0, today_subscription_actual_cost: 90 }))
     expect(wrapper.get('[data-testid="today-financial-spending-split"]').text()).toContain('financial.subscriptionSpending: $90.0000')
     expect(wrapper.text()).toContain('$66.0000')
-    expect(wrapper.text()).toContain('financial.accountingHint')
+    expect(wrapper.text()).toContain('financial.accountingShort')
   })
   it('exposes missing history and does not render incomplete token counts as exact', () => {
     const wrapper = mountStats(makeStats({ today_tokens: 87654321, today_token_counts_complete: false, total_unknown_amount_count: 2, total_standard_cost_complete: false }))

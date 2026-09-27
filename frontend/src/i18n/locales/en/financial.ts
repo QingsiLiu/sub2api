@@ -5,6 +5,7 @@ export default {
     accountingDate: 'Accounting date',
     accountingBasis: 'Accounting date (Beijing)',
     completedBasis: 'Completion date (local)',
+    accountingShort: 'Beijing time',
     accountingHint: 'Beijing accounting dates: subscription usage belongs to the admission date; balance charges to the settlement date. Completion dates may differ across midnight.',
     completedHint: 'Grouped by request completion date in your local timezone, which may differ from the subscription daily ledger. Historical records with unknown completion time are excluded.',
     settledAt: 'Settled at',

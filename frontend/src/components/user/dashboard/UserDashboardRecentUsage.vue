@@ -20,7 +20,7 @@
             <div>
               <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ log.model || t('financial.unknown') }}</p>
               <FinancialRecordBadge :row="log" />
-              <p class="text-xs text-gray-500 dark:text-dark-400">{{ log.completed_at ? formatDateTime(log.completed_at) : ('completed_at' in log || !log.created_at ? t('financial.unknown') : formatDateTime(log.created_at)) }}</p>
+              <p class="text-xs text-gray-500 dark:text-dark-400">{{ log.completed_at || log.created_at ? formatDateTime(log.completed_at || log.created_at) : t('financial.unknown') }}</p>
             </div>
           </div>
           <div class="text-right">

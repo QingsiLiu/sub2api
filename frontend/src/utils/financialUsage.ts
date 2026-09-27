@@ -66,3 +66,25 @@ export function dashboardFinancialMetadata(stats: FinancialDashboardMetadata, pe
     token_counts_complete: stats[`${period}_token_counts_complete`],
   }
 }
+
+export type FinancialTimeExtra = { key: 'accountingDate' | 'completedAt' | 'settledAt'; value: string | null; time: boolean }
+
+// geili hook: secondary financial times appear only when they add information.
+// Most rows complete, settle and belong to the same Beijing day within seconds.
+const FINANCIAL_TIME_GAP_MS = 60_000
+
+export function financialTimeExtras(row: Pick<UsageLog, 'created_at'> & { accounting_date?: string | null; completed_at?: string | null; settled_at?: string | null }): FinancialTimeExtra[] {
+  const shown = row.created_at ? new Date(row.created_at).getTime() : NaN
+  const differs = (value: string | null | undefined): value is string => {
+    if (!value) return false
+    const at = new Date(value).getTime()
+    return !Number.isFinite(shown) || !Number.isFinite(at) || Math.abs(at - shown) > FINANCIAL_TIME_GAP_MS
+  }
+  const extras: FinancialTimeExtra[] = []
+  if ('accounting_date' in row && (!row.accounting_date || !Number.isFinite(shown) || row.accounting_date !== financialDate(new Date(shown)))) {
+    extras.push({ key: 'accountingDate', value: row.accounting_date || null, time: false })
+  }
+  if (differs(row.completed_at)) extras.push({ key: 'completedAt', value: row.completed_at, time: true })
+  if (differs(row.settled_at)) extras.push({ key: 'settledAt', value: row.settled_at, time: true })
+  return extras
+}

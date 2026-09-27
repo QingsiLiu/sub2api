@@ -879,3 +879,23 @@ describe('financial recovery evidence', () => {
     wrapper.unmount()
   })
 })
+
+describe('usage time cell', () => {
+  const TimeStub = { props: ['data'], template: '<div><div v-for="row in data" :key="row.request_id"><slot name="cell-created_at" :row="row" /></div></div>' }
+  const mountTime = (row: Record<string, unknown>) => mount(UsageTable, {
+    props: { data: [{ ...baseImageRow, ...row }], columns: [] },
+    global: { stubs: { DataTable: TimeStub, Icon: true, Teleport: true } },
+  })
+  it('shows only the primary time when financial times agree', () => {
+    const wrapper = mountTime({ created_at: '2026-09-27T06:00:00Z', accounting_date: '2026-09-27', completed_at: '2026-09-27T06:00:00Z', settled_at: '2026-09-27T06:00:01Z' })
+    expect(wrapper.findAll('p')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('financial.')
+    wrapper.unmount()
+  })
+  it('explains a cross-midnight accounting day', () => {
+    const wrapper = mountTime({ created_at: '2026-09-27T16:00:30Z', accounting_date: '2026-09-27', completed_at: '2026-09-27T16:00:30Z', settled_at: '2026-09-27T16:00:30Z' })
+    expect(wrapper.text()).toContain('financial.accountingDate: 2026-09-27')
+    expect(wrapper.text()).not.toContain('financial.settledAt')
+    wrapper.unmount()
+  })
+})

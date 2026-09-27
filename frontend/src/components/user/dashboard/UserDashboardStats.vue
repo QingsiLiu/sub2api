@@ -77,7 +77,7 @@
     </div>
   </div>
 
-  <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingHint') }}</p>
+  <p class="flex items-center text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.accountingShort') }}<HelpTooltip width-class="w-72" :content="t('financial.accountingHint')" /></p>
   <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('financial.overrunHint') }}</p>
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
   <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
@@ -243,6 +243,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
+import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import { financialMoney, dashboardFinancialMetadata } from '@/utils/financialUsage'
 import Icon from '@/components/icons/Icon.vue'
 import type { PlatformDashboardStats, UserDashboardStats as UserStatsType } from '@/api/usage'

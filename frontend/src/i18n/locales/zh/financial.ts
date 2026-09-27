@@ -5,6 +5,7 @@ export default {
     accountingDate: '额度归属日',
     accountingBasis: '额度归属日（北京时间）',
     completedBasis: '请求完成日（本地时间）',
+    accountingShort: '按北京时间统计',
     accountingHint: '按北京时间额度归属日统计：订阅按请求准入日，余额按实际扣款日。跨午夜请求的完成日可能不同。',
     completedHint: '按请求完成日和本地时区统计，可能与订阅每日额度账本不同。无法恢复完成时间的历史记录不计入此视图。',
     settledAt: '结算时间',
