@@ -154,6 +154,16 @@ describe("SubscriptionPlanCard", () => {
 
 
 describe("SubscriptionPlanCard eligibility feedback", () => {
+  it("offers weekly gift stacking and emits selection", async () => {
+    const wrapper = mountPlanCard("openai", { validity_days: 7, daily_limit_usd: 90 });
+    await wrapper.setProps({ activeSubscriptions: [{ id: 1, status: "active", expires_at: "2099-01-01", campaign_stack: { expires_at: "2099-01-01", gift_daily_usd: 45 } } as UserSubscription] });
+    expect(wrapper.get("button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.get("button").text()).toBe("subscriptionRights.campaignStack");
+    expect(wrapper.text()).toContain("subscriptionRights.campaignStackHint");
+    await wrapper.get("button").trigger("click");
+    expect(wrapper.emitted("select")).toHaveLength(1);
+    wrapper.unmount();
+  });
   it("explains legacy restrictions without emitting a purchase or changing rights", async () => {
     const wrapper = mountPlanCard("openai");
     const subscription = { id: 277, status: "active", expires_at: "2099-09-27T13:15:51+08:00", contract: { mode: "legacy_daily" } } as UserSubscription;

@@ -1,5 +1,8 @@
 export default { subscriptionRights: {
-  "campaignCompatibilityHint": "Gift rights are still active. Self-service purchases on an independent gift pool are not supported. Contact support to add a paid plan, or purchase after the gift expires.",
+  "campaignCompatibilityHint": "These gift or historical rights are not eligible for weekly self-service stacking. Contact support for assistance. Eligible seven-day gifts can be stacked with a paid weekly plan.",
+  "campaignStack": "Add weekly quota",
+  "campaignStackHint": "Paid weekly quota starts immediately and expires with the gift. The price is prorated by remaining days, rounding partial days up. Renewal extends paid units only; the gift keeps its original expiry.",
+  "campaignStackQuota": "Gift daily quota ${gift} + added paid daily quota ${paid}",
   "campaignGift": "Campaign gift",
   "campaignPriority": "Used first; purchased rights stay unchanged",
   "existingPaymentHint": "Your subscription order already exists and its payment result is not confirmed. Check its status here or in your orders. To place a new order, explicitly cancel the existing order first.",
@@ -27,7 +30,7 @@ export default { subscriptionRights: {
   "stack": "Add quota",
   "quantity": "Quantity",
   "units": "{count} units",
-  "renewHint": "Extend all units together, charged for every unit. Today’s usage is retained.",
+  "renewHint": "Extend and pay for all paid units together. Gifts keep their original expiry and today’s usage is retained.",
   "stackHint": "Add units at your current tier until the existing expiry, priced for the remaining days.",
   "loading": "Checking benefits…",
   "previewFailed": "Could not preview benefits. Please retry.",

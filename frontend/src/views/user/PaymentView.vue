@@ -158,7 +158,7 @@
                     <span>{{ t('subscriptionRights.periodCount') }}</span>
                     <select v-model.number="subscriptionPeriods" :disabled="submitting" class="input w-28 py-1 text-sm"><option v-for="n in 10" :key="n" :value="n">{{ t('subscriptionRights.periods', { count: n }) }}</option></select>
                   </label>
-                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(legacyPool ? `subscriptionRights.legacyHint_${subscriptionMode}` : `subscriptionRights.${subscriptionMode}Hint`) }}</p>
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t(campaignStack ? 'subscriptionRights.campaignStackHint' : legacyPool ? `subscriptionRights.legacyHint_${subscriptionMode}` : `subscriptionRights.${subscriptionMode}Hint`) }}</p>
                   <p v-if="subscriptionBlockedReason" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t(subscriptionBlockedReason) }}</p>
                   <p v-if="quoteExpired" role="alert" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.quoteExpired') }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button></p>
                   <p v-if="quoteLoading" role="status" class="mt-2 text-xs">{{ t('subscriptionRights.loading') }}</p>
@@ -166,7 +166,8 @@
                     {{ quoteError }} <button type="button" class="underline" @click="refreshSubscriptionQuote">{{ t('subscriptionRights.retry') }}</button>
                   </div>
                   <div v-if="subscriptionQuote?.projected" aria-live="polite" class="mt-2 space-y-1 text-xs text-primary-600 dark:text-primary-300">
-                    <p v-if="subscriptionQuote.current_contract">{{ t('subscriptionRights.before') }}: {{ contractLabel(subscriptionQuote.current_contract, t) }} · {{ formatDateTimeToMinute(subscriptionQuote.current_contract.expires_at) }}</p>
+                    <p v-if="subscriptionQuote.campaign_stack">{{ t('subscriptionRights.campaignStackQuota', { gift: subscriptionQuote.campaign_stack.gift_daily_usd, paid: subscriptionQuote.projected_contract.unit_daily_usd * subscriptionQuote.projected_contract.quantity }) }}</p>
+                    <p v-else-if="subscriptionQuote.current_contract">{{ t('subscriptionRights.before') }}: {{ contractLabel(subscriptionQuote.current_contract, t) }} · {{ formatDateTimeToMinute(subscriptionQuote.current_contract.expires_at) }}</p>
                     <p v-if="subscriptionQuote.projected_contract">{{ t('subscriptionRights.after') }}: {{ contractLabel(subscriptionQuote.projected_contract, t) }}</p>
                     <p>{{ t('subscriptionRights.daily') }}: ${{ subscriptionQuote.projected.daily_limit_usd }} · {{ t('subscriptionRights.remaining') }}: {{ subscriptionQuote.projected.remaining_usd == null ? '—' : '$' + subscriptionQuote.projected.remaining_usd.toFixed(4) }}</p>
                     <p v-if="!legacyPool">{{ t('subscriptionRights.expiry', { time: formatDateTimeToMinute(subscriptionQuote.projected_contract?.expires_at || subscriptionQuote.projected.expires_at || '') }) }}</p>
@@ -330,7 +331,7 @@ import type { UserSubscription } from '@/types'
 import { legacyActions, legacyPlanAvailable } from '@/utils/legacySubscription'
 import type { LegacyManagementOptions } from '@/types/payment'
 import LegacyEntitlementChanges from '@/components/payment/LegacyEntitlementChanges.vue'
-import { subscriptionActions, subscriptionQuota, contractLabel, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
+import { subscriptionActions, subscriptionQuota, contractLabel, subscriptionRefreshDelay, campaignStackSubscription } from '@/utils/subscriptionV2'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
@@ -435,6 +436,7 @@ async function refreshLegacyOptions() {
   try { legacyOptions.value = (await paymentAPI.legacySubscriptionOptions()).data }
   catch { legacyOptions.value = { enabled: false, pools: [] } }
 }
+const campaignStack = computed(() => !legacyPoolID.value && !!campaignStackSubscription(eligibilitySubscriptions.value, eligibilityNow.value))
 const availableOperations = computed(() => {
   if (!selectedPlan.value) return []
   if (legacyPoolID.value) return legacyActions(selectedPlan.value, legacyPool.value, eligibilityNow.value)
@@ -455,7 +457,7 @@ watch(availableOperations, operations => {
   }
 })
 const quoteExpired = computed(() => !!subscriptionQuote.value && (!Number.isFinite(Date.parse(subscriptionQuote.value.expires_at)) || Date.parse(subscriptionQuote.value.expires_at) <= quoteNow.value))
-const hasLegacySubscription = computed(() => eligibilitySubscriptions.value.some(sub => sub.status === 'active' && (!sub.expires_at || Date.parse(sub.expires_at) > eligibilityNow.value) && sub.contract?.mode !== 'v2'))
+const hasLegacySubscription = computed(() => !campaignStack.value && eligibilitySubscriptions.value.some(sub => sub.status === 'active' && (!sub.expires_at || Date.parse(sub.expires_at) > eligibilityNow.value) && sub.contract?.mode !== 'v2'))
 async function refreshSubscriptionQuote() {
   const revision = ++quoteRevision
   subscriptionQuote.value = null

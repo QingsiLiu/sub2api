@@ -413,7 +413,13 @@ func ApplyContractChange(ctx context.Context, c *dbent.Client, change Change, or
 		}
 	}
 	after := change.After
-	if change.Operation == "purchase" {
+	// geili hook: promote a gift-only pool without starting a new usage term.
+	if change.CampaignStack != nil {
+		if err = validateCampaignStackChange(ctx, c, current, lots, change, now); err != nil {
+			return nil, err
+		}
+		after.TermID, after.Revision = current.TermID, current.Revision+1
+	} else if change.Operation == "purchase" {
 		if parent.Status != "active" && parent.Status != "expired" {
 			return nil, ErrStateConflict
 		}

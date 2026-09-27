@@ -31,6 +31,58 @@ func ensureBillingV2Contract(t *testing.T, f entitlementFixture, now time.Time) 
 	return contract
 }
 
+func TestSubscriptionBillingV2CampaignStackPreservesKeyAndLateSettlement(t *testing.T) {
+	f := newEntitlementFixture(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	expiry := now.Add(3 * 24 * time.Hour)
+	lotID := f.sub.Entitlements[0].ID
+	require.NoError(t, f.c.UserSubscription.UpdateOneID(f.sub.ID).ClearPlanID().SetStartsAt(expiry.Add(-7*24*time.Hour)).SetExpiresAt(expiry).Exec(ctx))
+	require.NoError(t, f.c.UserSubscriptionEntitlement.UpdateOneID(lotID).ClearPlanID().SetSourceType("campaign").SetStartsAt(expiry.Add(-7*24*time.Hour)).SetExpiresAt(expiry).SetDailyLimitUsd(45).ClearWeeklyLimitUsd().ClearMonthlyLimitUsd().SetDailyWindowStart(geilisub.DayStart(now)).SetDailyUsageUsd(40).SetLifetimeUsageUsd(40).Exec(ctx))
+	current := ensureBillingV2Contract(t, f, now)
+	require.Equal(t, "legacy_daily", current.Mode)
+	fresh, err := NewUserSubscriptionRepository(f.c).GetByID(ctx, f.sub.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fresh.CampaignStackOffer(now))
+	oldAdmission, err := f.svc.AdmitConsumption(ctx, fresh, f.key.ID)
+	require.NoError(t, err)
+	lots, err := geilisub.ReadLots(ctx, f.c, f.sub.ID)
+	require.NoError(t, err)
+	plan := geilisub.Plan{ID: f.plan.ID, Name: "week90", Kind: "week", DailyUSD: 90, PeriodDays: 7, Price: decimal.RequireFromString("46.99")}
+	change, err := geilisub.PreviewCampaignStack(current, geilisub.CampaignStackCandidate(current, lots, now), plan, 1, 0, now)
+	require.NoError(t, err)
+	tx, err := f.c.Tx(ctx)
+	require.NoError(t, err)
+	after, err := geilisub.ApplyContractChange(ctx, tx.Client(), change, 0, "admin", "campaign-stack-test", 0, now)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.Equal(t, current.TermID, after.TermID)
+	// A request admitted while only the gift existed can complete after stacking.
+	late := &service.UsageBillingCommand{RequestID: uuid.NewString(), APIKeyID: f.key.ID, UserID: f.user.ID, AccountID: f.account.ID, AccountType: "apikey", SubscriptionID: &f.sub.ID, SubscriptionAdmissionKey: oldAdmission.AdmissionKey, SubscriptionCost: 5}
+	billing := NewUsageBillingRepository(f.c, integrationDB)
+	result, err := billing.Apply(ctx, late)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	fresh, err = NewUserSubscriptionRepository(f.c).GetByID(ctx, f.sub.ID)
+	require.NoError(t, err)
+	require.Equal(t, 135.0, *fresh.QuotaSummary.DailyLimitUSD)
+	require.Equal(t, 45.0, fresh.QuotaSummary.DailyUsageUSD)
+	require.Equal(t, 90.0, *fresh.QuotaSummary.RemainingUSD)
+	require.Nil(t, fresh.CampaignStackOffer(time.Now()))
+	admitted, err := f.svc.AdmitConsumption(ctx, fresh, f.key.ID)
+	require.NoError(t, err, "the same key can use the paid quota after the gift is exhausted")
+	paid := &service.UsageBillingCommand{RequestID: uuid.NewString(), APIKeyID: f.key.ID, UserID: f.user.ID, AccountID: f.account.ID, AccountType: "apikey", SubscriptionID: &f.sub.ID, SubscriptionAdmissionKey: admitted.AdmissionKey, SubscriptionCost: 10}
+	result, err = billing.Apply(ctx, paid)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	result, err = billing.Apply(ctx, paid)
+	require.NoError(t, err)
+	require.False(t, result.Applied)
+	fresh, err = NewUserSubscriptionRepository(f.c).GetByID(ctx, f.sub.ID)
+	require.NoError(t, err)
+	require.Equal(t, 80.0, *fresh.QuotaSummary.RemainingUSD)
+}
+
 func TestSubscriptionBillingV2RegressionAndSharedKeys(t *testing.T) {
 	f := newEntitlementFixture(t)
 	ctx := context.Background()

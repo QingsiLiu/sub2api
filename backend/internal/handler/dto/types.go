@@ -766,6 +766,7 @@ type Setting struct {
 }
 
 type UserSubscription struct {
+	CampaignStack         *service.CampaignStackOffer                `json:"campaign_stack,omitempty"`
 	EntitlementOperations []service.SubscriptionEntitlementOperation `json:"entitlement_operations,omitempty"`
 	PlanID                *int64                                     `json:"plan_id,omitempty"`
 	Plan                  *service.SubscriptionQuotaPlan             `json:"plan,omitempty"`

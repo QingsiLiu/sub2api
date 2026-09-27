@@ -2213,6 +2213,7 @@ export interface SubscriptionContract {
 }
 
 export interface UserSubscription {
+  campaign_stack?: { expires_at: string; gift_daily_usd: number }
   contract?: SubscriptionContract
  entitlement_operations?: Array<{ id:number; entitlement_id:number; operation:string; source_type:string; source_reference?:string; created_at:string; before_expires_at?:string; after_expires_at?:string }>
   plan_id?: number | null

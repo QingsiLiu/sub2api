@@ -110,25 +110,26 @@ type SubscriptionQuoteRequest struct {
 }
 
 type SubscriptionQuoteResponse struct {
-	ManagementMode       string                    `json:"management_mode,omitempty"`
-	EntitlementChanges   []geilisub.LegacyLine     `json:"entitlement_changes,omitempty"`
-	QuoteID              string                    `json:"quote_id"`
-	ExpiresAt            time.Time                 `json:"expires_at"`
-	BillableDays         int                       `json:"billable_days"`
-	Operation            string                    `json:"operation"`
-	Units                int                       `json:"units"`
-	Periods              int                       `json:"periods"`
-	CurrentContract      *geilisub.Contract        `json:"current_contract,omitempty"`
-	ProjectedContract    *geilisub.Contract        `json:"projected_contract"`
-	PlanRevision         string                    `json:"plan_revision"`
-	PlanID               int64                     `json:"plan_id"`
-	SubscriptionMode     string                    `json:"subscription_mode"`
-	SubscriptionQuantity int                       `json:"subscription_quantity"`
-	OrderAmount          float64                   `json:"order_amount"`
-	ValidityDays         int                       `json:"validity_days"`
-	CanRenewLots         int                       `json:"can_renew_lots"`
-	Current              *SubscriptionQuotaSummary `json:"current,omitempty"`
-	Projected            *SubscriptionQuotaSummary `json:"projected"`
+	CampaignStack        *geilisub.CampaignStackOffer `json:"campaign_stack,omitempty"`
+	ManagementMode       string                       `json:"management_mode,omitempty"`
+	EntitlementChanges   []geilisub.LegacyLine        `json:"entitlement_changes,omitempty"`
+	QuoteID              string                       `json:"quote_id"`
+	ExpiresAt            time.Time                    `json:"expires_at"`
+	BillableDays         int                          `json:"billable_days"`
+	Operation            string                       `json:"operation"`
+	Units                int                          `json:"units"`
+	Periods              int                          `json:"periods"`
+	CurrentContract      *geilisub.Contract           `json:"current_contract,omitempty"`
+	ProjectedContract    *geilisub.Contract           `json:"projected_contract"`
+	PlanRevision         string                       `json:"plan_revision"`
+	PlanID               int64                        `json:"plan_id"`
+	SubscriptionMode     string                       `json:"subscription_mode"`
+	SubscriptionQuantity int                          `json:"subscription_quantity"`
+	OrderAmount          float64                      `json:"order_amount"`
+	ValidityDays         int                          `json:"validity_days"`
+	CanRenewLots         int                          `json:"can_renew_lots"`
+	Current              *SubscriptionQuotaSummary    `json:"current,omitempty"`
+	Projected            *SubscriptionQuotaSummary    `json:"projected"`
 }
 
 type CreateOrderResponse struct {

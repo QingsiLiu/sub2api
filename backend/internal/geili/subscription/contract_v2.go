@@ -55,13 +55,14 @@ type Plan struct {
 }
 
 type Change struct {
-	Before       *Contract       `json:"before"`
-	After        Contract        `json:"after"`
-	Operation    string          `json:"operation"`
-	Units        int             `json:"units"`
-	Periods      int             `json:"periods"`
-	BillableDays int             `json:"billable_days"`
-	Amount       decimal.Decimal `json:"amount"`
+	CampaignStack *CampaignStackSnapshot `json:"campaign_stack,omitempty"`
+	Before        *Contract              `json:"before"`
+	After         Contract               `json:"after"`
+	Operation     string                 `json:"operation"`
+	Units         int                    `json:"units"`
+	Periods       int                    `json:"periods"`
+	BillableDays  int                    `json:"billable_days"`
+	Amount        decimal.Decimal        `json:"amount"`
 }
 
 var beijing = time.FixedZone("CST", 8*60*60)

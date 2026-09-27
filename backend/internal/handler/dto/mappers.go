@@ -947,6 +947,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 	}
 	sub = &copy
 	return UserSubscription{
+		CampaignStack:         sub.CampaignStackOffer(time.Now()),
 		EntitlementOperations: sub.EntitlementOperations,
 		ID:                    sub.ID,
 		UserID:                sub.UserID,

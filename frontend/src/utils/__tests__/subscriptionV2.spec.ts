@@ -99,6 +99,21 @@ describe('campaign gift labels', () => {
 })
 
 describe('gift and expired paid term action boundaries', () => {
+  const offer = { expires_at: '2026-09-24T00:00:00Z', gift_daily_usd: 45 }
+  const giftSub = { ...sub, contract: undefined, expires_at: offer.expires_at, campaign_stack: offer }
+  it.each([90, 180])('offers only stack for the %s weekly tier against an eligible gift', daily => {
+    const weekly = { ...plan, validity_days: 7, daily_limit_usd: daily }
+    expect(subscriptionActions(weekly, [giftSub], now).actions).toEqual(['stack'])
+    expect(subscriptionActions(weekly, [{ ...giftSub, contract: { ...contract, expires_at: '2026-09-20T00:00:00Z' } }], now).actions).toEqual(['stack'])
+  })
+  it('keeps month, suspended, multi-pool and elapsed offers unavailable', () => {
+    const weekly = { ...plan, validity_days: 7, daily_limit_usd: 90 }
+    expect(subscriptionActions(plan, [giftSub], now).reason).toBe('subscriptionRights.sameTypeOnly')
+    expect(subscriptionActions(weekly, [{ ...giftSub, status: 'suspended' }], now).actions).toEqual([])
+    expect(subscriptionActions(weekly, [giftSub, { ...giftSub, id: 10 }], now).actions).toEqual([])
+    expect(subscriptionActions(weekly, [{ ...giftSub, campaign_stack: { ...offer, expires_at: '2026-09-20T00:00:00Z' } }], now).actions).toEqual([])
+    expect(subscriptionActions(plan, [{ ...giftSub, expires_at: contract.expires_at, contract }], now).actions).toEqual(['stack', 'renew'])
+  })
   it('does not offer renewal for an expired paid term kept alive by gift', () => {
     const value = { ...sub, expires_at:'2026-10-08T00:00:00Z', contract:{...contract,expires_at:'2026-09-20T00:00:00Z'} }
     expect(subscriptionActions(plan,[value],now)).toEqual({actions:[],reason:'subscriptionRights.campaignCompatibilityHint'})

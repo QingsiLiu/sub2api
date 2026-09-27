@@ -84,8 +84,9 @@
         :disabled="!canSelect"
         @click="selectPlan"
       >
-        {{ loading ? t('subscriptionRights.loading') : !eligibility.actions.length ? t('subscriptionRights.selfServiceUnavailable') : eligibility.actions.includes('upgrade') ? t('subscriptionRights.upgrade') : isRenewal ? t('subscriptionRights.manage') : t('payment.subscribeNow') }}
+        {{ loading ? t('subscriptionRights.loading') : !eligibility.actions.length ? t('subscriptionRights.selfServiceUnavailable') : campaignStack ? t('subscriptionRights.campaignStack') : eligibility.actions.includes('upgrade') ? t('subscriptionRights.upgrade') : isRenewal ? t('subscriptionRights.manage') : t('payment.subscribeNow') }}
       </button>
+      <p v-if="!loading && canSelect && campaignStack" class="mt-2 text-xs text-gray-600 dark:text-gray-300">{{ t('subscriptionRights.campaignStackHint') }}</p>
       <template v-if="!loading && eligibility.reason">
         <p class="mt-2 text-xs text-gray-600 dark:text-gray-300">{{ t(eligibility.reason) }}</p>
         <div class="mt-2">
@@ -103,7 +104,7 @@ import type { SubscriptionPlan } from '@/types/payment'
 import type { UserSubscription } from '@/types'
 import { legacyPlanAvailable } from '@/utils/legacySubscription'
 import type { LegacyManagementOptions } from '@/types/payment'
-import { subscriptionActions } from '@/utils/subscriptionV2'
+import { subscriptionActions, campaignStackSubscription } from '@/utils/subscriptionV2'
 import SubscriptionActionHelp from './SubscriptionActionHelp.vue'
 import { planValiditySuffix } from './validity'
 import { currencySymbol } from '@/components/payment/currency'
@@ -123,6 +124,7 @@ const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
 
 const eligibility = computed(() => legacyPlanAvailable(props.plan, props.legacyOptions) ? { actions: ['purchase'] as import('@/types/payment').SubscriptionOperation[], reason: undefined } : subscriptionActions(props.plan, props.activeSubscriptions ?? []))
+const campaignStack = computed(() => !!campaignStackSubscription(props.activeSubscriptions ?? []))
 const canSelect = computed(() => !props.loading && eligibility.value.actions.length > 0)
 function selectPlan() {
   if (canSelect.value) emit('select', props.plan)

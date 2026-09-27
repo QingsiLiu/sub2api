@@ -1,5 +1,8 @@
 export default { subscriptionRights: {
-  "campaignCompatibilityHint": "赠礼权益仍在生效；当前不支持在独立赠礼池上自助续购。若需新增付费套餐，请联系客服，或待赠礼到期后购买。",
+  "campaignCompatibilityHint": "当前赠礼或历史权益不符合周卡自助叠加条件，请联系客服确认。符合条件的7天赠礼可直接叠加付费周卡。",
+  "campaignStack": "叠加周卡",
+  "campaignStackHint": "付费周卡立即增加日额度，与赠礼同时到期；按剩余天数折算，不足一天按一天收费。后续续期只延长付费份数，赠礼按原日期结束。",
+  "campaignStackQuota": "赠礼日额度 ${gift} + 新增付费日额度 ${paid}",
   "campaignGift": "活动赠礼",
   "campaignPriority": "优先消耗，不改变已购订阅",
   "existingPaymentHint": "当前订阅订单已创建，尚未确认付款结果。请在此查看状态，或到订单列表处理；需要重新下单时，请先明确取消原订单。",
@@ -27,7 +30,7 @@ export default { subscriptionRights: {
   "stack": "叠加额度",
   "quantity": "份数",
   "units": "{count} 份",
-  "renewHint": "全部份数一起延长，按全部份数收费；今日已用额度不清零。",
+  "renewHint": "全部付费份数一起延长，按付费份数收费；赠礼按原日期结束，今日已用额度不清零。",
   "stackHint": "新增当前档位份数，与现有订阅同时到期；按剩余天数折算。",
   "loading": "正在核对权益…",
   "previewFailed": "权益预览失败，请重试。",

@@ -58,8 +58,9 @@
                     {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
                   </span>
                 </div>
-                <p v-if="campaignOnly(subscription) || (subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) <= Date.now())" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.campaignCompatibilityHint') }}</p>
-                <p v-if="subscription.contract?.mode === 'legacy_daily' && !campaignOnly(subscription)" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ legacyOptions.enabled ? t('subscriptionRights.legacyManageHint') : t('subscriptionRights.compatibilityHint') }}</p>
+                <p v-if="campaignStackSubscription(subscriptions)?.id === subscription.id" class="mt-2 text-xs text-primary-600 dark:text-primary-300">{{ t('subscriptionRights.campaignStackHint') }}</p>
+                <p v-else-if="campaignOnly(subscription) || (subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) <= Date.now())" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ t('subscriptionRights.campaignCompatibilityHint') }}</p>
+                <p v-else-if="subscription.contract?.mode === 'legacy_daily'" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ legacyOptions.enabled ? t('subscriptionRights.legacyManageHint') : t('subscriptionRights.compatibilityHint') }}</p>
                 <div v-if="subscription.quota_summary" class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-dark-700/50 dark:text-gray-300">
                   <span>{{ t('subscriptionRights.active', { count: subscription.quota_summary.active_lot_count }) }}</span>
                   <span v-if="subscription.quota_summary.next_expiry_at" class="ml-3">{{ t('subscriptionRights.nextExpiry', { time: formatDateTimeToMinute(subscription.quota_summary.next_expiry_at) }) }}</span>
@@ -94,7 +95,8 @@
               >
                 {{ t(`userSubscriptions.status.${subscription.status}`) }}
               </span>
-              <template v-if="subscription.status === 'active' && subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) > Date.now()">
+              <button v-if="campaignStackSubscription(subscriptions)?.id === subscription.id" type="button" class="btn btn-primary min-h-11 px-3 py-2 text-xs" @click="router.push({ path: '/purchase', query: { tab: 'subscription', operation: 'stack' } })">{{ t('subscriptionRights.campaignStack') }}</button>
+              <template v-else-if="subscription.status === 'active' && subscription.contract?.mode === 'v2' && Date.parse(subscription.contract.expires_at) > Date.now()">
                 <button v-for="operation in (subscription.contract.unit_daily_usd < 180 ? ['stack', 'renew', 'upgrade'] as const : ['stack', 'renew'] as const)" :key="operation" class="btn btn-primary px-3 py-1.5 text-xs" @click="router.push({ path: '/purchase', query: { tab: 'subscription', ...(operation === 'upgrade' ? {} : { plan: String(subscription.contract.plan_id) }), operation } })">{{ t(`subscriptionRights.${operation}`) }}</button>
               </template>
               <button v-else-if="legacyOptions.enabled && legacyOptions.pools.some(pool => pool.subscription_id === subscription.id && pool.lots.some(lot => !lot.reason))" type="button" class="btn btn-primary min-h-11 px-3 py-2 text-xs" @click="router.push({path:'/purchase',query:{tab:'subscription',subscription:String(subscription.id)}})">{{ t('subscriptionRights.legacyManage') }}</button>
@@ -280,7 +282,7 @@
 </template>
 
 <script setup lang="ts">
-import { subscriptionQuota, subscriptionLabel, campaignOnly, subscriptionRefreshDelay } from '@/utils/subscriptionV2'
+import { subscriptionQuota, subscriptionLabel, campaignOnly, subscriptionRefreshDelay, campaignStackSubscription } from '@/utils/subscriptionV2'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

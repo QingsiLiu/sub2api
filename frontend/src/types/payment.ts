@@ -220,6 +220,7 @@ export interface SubscriptionQuoteRequest {
 }
 
 export interface SubscriptionQuoteResponse {
+  campaign_stack?: { expires_at: string; gift_daily_usd: number }
   management_mode?: string
   entitlement_changes?: LegacyEntitlementChange[]
   quote_id: string

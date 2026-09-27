@@ -956,6 +956,24 @@ describe('PaymentView subscription feature flag', () => {
 
 // Regression: the user must see a quote before creating a payment order.
 describe('Subscription audit purchase preview', () => {
+  it('quotes and pays gift-first weekly stacking without the compatibility banner', async () => {
+    quoteSubscription.mockReset().mockResolvedValue({ data: {
+      quote_id: 'campaign-v4', expires_at: '2099-01-01T00:00:00Z', order_amount: 20.14, billable_days: 3,
+      campaign_stack: { expires_at: '2099-01-03T00:00:00Z', gift_daily_usd: 45 },
+      projected_contract: { mode: 'v2', kind: 'week', unit_daily_usd: 90, quantity: 1, expires_at: '2099-01-03T00:00:00Z' },
+      projected: { active_lot_count: 2, daily_limit_usd: 135, remaining_usd: 115, expires_at: '2099-01-03T00:00:00Z' },
+    } })
+    const wrapper = await mountSubscriptionConfirm({ plan: { validity_days: 7, daily_limit_usd: 90, price: 46.99 }, subscriptions: [{ id: 9, status: 'active', expires_at: '2099-01-03', campaign_stack: { expires_at: '2099-01-03', gift_daily_usd: 45 } } as UserSubscription], query: { plan: '7', operation: 'stack' } })
+    expect(quoteSubscription).toHaveBeenLastCalledWith({ plan_id: 7, operation: 'stack', units: 1, periods: undefined })
+    expect(wrapper.text()).toContain('subscriptionRights.campaignStackHint')
+    expect(wrapper.text()).toContain('subscriptionRights.campaignStackQuota')
+    expect(wrapper.text()).not.toContain('subscriptionRights.compatibilityHint')
+    expect(wrapper.text()).not.toContain('subscriptionRights.campaignCompatibilityHint')
+    createOrder.mockResolvedValue({ order_id: 123, amount: 20.14, pay_amount: 20.14, expires_at: '2099-01-01', qr_code: 'test', fee_rate: 0 })
+    await wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))!.trigger('click')
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ quote_id: 'campaign-v4', operation: 'stack', units: 1, amount: 20.14 }))
+    wrapper.unmount()
+  })
   it('loads the projected benefits before the user commits to payment', async () => {
     quoteSubscription.mockReset().mockResolvedValue({ data: {
       quote_id: 'quote-test', expires_at: '2099-01-01T00:00:00Z',

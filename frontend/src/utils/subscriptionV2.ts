@@ -15,6 +15,7 @@ export function subscriptionActions(plan: SubscriptionPlan, subscriptions: UserS
   if (plan.is_legacy_compat || !supportedTier) return { actions: [], reason: 'subscriptionRights.unavailablePlan' }
   if (!active.length) return { actions: ['purchase'] }
   if (active.some(sub => sub.status === 'suspended')) return { actions: [], reason: 'subscriptionRights.suspendedHint' }
+  if (campaignStackSubscription(subscriptions, now)) return days === 7 ? { actions: ['stack'] } : { actions: [], reason: 'subscriptionRights.sameTypeOnly' }
   if (active.some(campaignOnly)) return { actions: [], reason: 'subscriptionRights.campaignCompatibilityHint' }
   if (active.length !== 1 || active[0].contract?.mode !== 'v2') return { actions: [], reason: 'subscriptionRights.compatibilityHint' }
   const contract = active[0].contract
@@ -23,6 +24,14 @@ export function subscriptionActions(plan: SubscriptionPlan, subscriptions: UserS
   if (plan.id === contract.plan_id) return { actions: ['stack', 'renew'] }
   if ((plan.daily_limit_usd ?? 0) > contract.unit_daily_usd) return { actions: ['upgrade'] }
   return { actions: [], reason: 'subscriptionRights.noDowngrade' }
+}
+
+export function campaignStackSubscription(subscriptions: UserSubscription[], now = Date.now()): UserSubscription | undefined {
+  const active = subscriptions.filter(s => (s.status === 'active' || s.status === 'suspended') && (!s.expires_at || Date.parse(s.expires_at) > now))
+  if (active.length !== 1 || active[0].status !== 'active') return undefined
+  const sub = active[0]
+  if (sub.contract?.mode === 'v2' && Date.parse(sub.contract.expires_at) > now) return undefined
+  return sub.campaign_stack && Date.parse(sub.campaign_stack.expires_at) > now ? sub : undefined
 }
 
 // geili hook: the server's daily ledger projection is authoritative on every surface.
@@ -58,7 +67,7 @@ export function isPaidSubscriptionReview(order: Pick<PaymentOrder, 'order_type' 
 }
 
 export function subscriptionRefreshDelay(subscriptions: UserSubscription[], now = Date.now()): number | null {
-  const boundaries = subscriptions.flatMap(sub => [sub.quota_summary?.daily_reset_at, sub.quota_summary?.next_expiry_at, sub.contract?.expires_at, sub.expires_at])
+  const boundaries = subscriptions.flatMap(sub => [sub.quota_summary?.daily_reset_at, sub.quota_summary?.next_expiry_at, sub.campaign_stack?.expires_at, sub.contract?.expires_at, sub.expires_at])
     .filter((at): at is string => typeof at === 'string')
     .map(Date.parse).filter(at => Number.isFinite(at) && at > now)
   return boundaries.length ? Math.min(2_147_483_647, Math.max(100, Math.min(...boundaries) - now + 100)) : null

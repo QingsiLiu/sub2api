@@ -84,6 +84,16 @@ describe('V2 subscription user quota matrix', () => {
 
 
 describe('expired paid contract with live gift', () => {
+  it('offers weekly stacking instead of the old compatibility message', async () => {
+    getMySubscriptions.mockResolvedValue([{id:1,status:'active',starts_at:'2026-01-01',expires_at:'2099-01-01',contract:{mode:'v2',kind:'month',quantity:1,unit_daily_usd:90,plan_id:7,expires_at:'2026-01-02'},campaign_stack:{expires_at:'2099-01-01',gift_daily_usd:45},quota_summary:{active_lot_count:1,daily_limit_usd:45,daily_usage_usd:0,remaining_usd:45}}])
+    const wrapper=mount(SubscriptionsView,{global:{stubs:{AppLayout:{template:'<div><slot /></div>'},Icon:true}}})
+    await flushPromises()
+    expect(wrapper.text()).toContain('subscriptionRights.campaignStackHint')
+    expect(wrapper.text()).not.toContain('subscriptionRights.campaignCompatibilityHint')
+    expect(wrapper.findAll('button').some(b=>b.text().includes('subscriptionRights.campaignStack'))).toBe(true)
+    expect(wrapper.findAll('button').some(b=>b.text().includes('subscriptionRights.renew'))).toBe(false)
+    wrapper.unmount()
+  })
   it('does not offer paid renewal actions against the extended parent expiry', async () => {
     getMySubscriptions.mockResolvedValue([{id:1,status:'active',starts_at:'2026-01-01',expires_at:'2099-01-01',contract:{mode:'v2',kind:'month',quantity:1,unit_daily_usd:90,plan_id:7,expires_at:'2026-01-02'},quota_summary:{active_lot_count:1,daily_limit_usd:45,daily_usage_usd:0,remaining_usd:45}}])
     const wrapper=mount(SubscriptionsView,{global:{stubs:{AppLayout:{template:'<div><slot /></div>'},Icon:true}}})

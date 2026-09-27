@@ -83,6 +83,19 @@ func (s *PaymentService) QuoteSubscription(ctx context.Context, req Subscription
 		return result, nil
 	}
 	now := time.Now().Truncate(time.Microsecond)
+	// geili hook: gift-first customers stack into the same pool and usage term.
+	if current, gift, e := geilisub.CurrentCampaignStack(ctx, c, req.UserID, now); e != nil {
+		return nil, e
+	} else if gift != nil {
+		result, e := s.quoteCampaignStackTx(ctx, c, req, current, gift)
+		if e != nil {
+			return nil, e
+		}
+		if e = tx.Commit(); e != nil {
+			return nil, e
+		}
+		return result, nil
+	}
 	current, err := geilisub.CurrentContract(ctx, c, req.UserID, now)
 	if err != nil {
 		return nil, err
@@ -239,6 +252,9 @@ func (s *PaymentService) validateSubscriptionV2OrderTx(ctx context.Context, c *d
 	if q.Version == 3 {
 		return s.validateLegacyOrderTx(ctx, c, q)
 	}
+	if q.Version == 4 {
+		return s.validateCampaignStackOrderTx(ctx, c, q)
+	}
 	current, err := geilisub.CurrentContract(ctx, c, req.UserID, time.Now())
 	if err != nil {
 		return err
@@ -343,11 +359,11 @@ func isSubscriptionV2Order(o *dbent.PaymentOrder) bool {
 	}
 	switch v := v.(type) {
 	case int:
-		return v == 2 || v == 3
+		return v == 2 || v == 3 || v == 4
 	case float64:
-		return v == 2 || v == 3
+		return v == 2 || v == 3 || v == 4
 	case json.Number:
-		return v == "2" || v == "3"
+		return v == "2" || v == "3" || v == "4"
 	}
 	return false
 }
@@ -511,5 +527,5 @@ func (s *PaymentService) fulfillPaymentWebhook(ctx context.Context, id int64) er
 // Versioned legacy orders use the same idempotent paid-review/refund lifecycle,
 // never the pre-migration order fallback.
 func validSubscriptionQuoteVersion(q *subscriptionV2Quote) bool {
-	return q != nil && (q.Version == 2 && q.TokenType == "subscription_quote_v2" && q.Legacy == nil || q.Version == 3 && q.TokenType == "subscription_quote_legacy_v3" && q.Legacy != nil && q.Change.Before != nil && q.Change.Before.Mode == geilisub.ContractModeLegacy && q.Change.After.SubscriptionID == q.Change.Before.SubscriptionID && q.Legacy.Target.ID == q.Change.After.PlanID && len(q.Legacy.Lines) > 0)
+	return q != nil && (q.Version == 2 && q.TokenType == "subscription_quote_v2" && q.Legacy == nil && q.Change.CampaignStack == nil || q.Version == 3 && q.TokenType == "subscription_quote_legacy_v3" && q.Legacy != nil && q.Change.CampaignStack == nil && q.Change.Before != nil && q.Change.Before.Mode == geilisub.ContractModeLegacy && q.Change.After.SubscriptionID == q.Change.Before.SubscriptionID && q.Legacy.Target.ID == q.Change.After.PlanID && len(q.Legacy.Lines) > 0 || validCampaignStackQuote(q))
 }
