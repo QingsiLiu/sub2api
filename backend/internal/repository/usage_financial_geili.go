@@ -332,7 +332,11 @@ func (r *usageLogRepository) financialTotals(ctx context.Context, filters usages
 		})
 	}
 	where, args := financialUsageWhere(filters)
-	rows, err := r.sql.QueryContext(ctx, "SELECT "+financialAggregateColumns+" FROM "+financialStatsSource(filters)+" "+where, args...)
+	relation, err := r.financialStatsRelation(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.sql.QueryContext(ctx, "SELECT "+financialAggregateColumns+" FROM "+relation+" "+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -358,8 +362,12 @@ func (r *usageLogRepository) GetFinancialUsageStats(ctx context.Context, filters
 		})
 	}
 	where, args := financialUsageWhere(filters)
+	relation, err := r.financialStatsRelation(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
 	// GROUPING SETS supplies the totals and endpoint breakdown from one snapshot.
-	query := `WITH financial_scope AS (SELECT *, COALESCE(NULLIF(TRIM(inbound_endpoint),''),'unknown') AS fin_in, COALESCE(NULLIF(TRIM(upstream_endpoint),''),'unknown') AS fin_up FROM ` + financialStatsSource(filters) + ` ` + where + `) SELECT GROUPING(fin_in),GROUPING(fin_up),fin_in,fin_up,` + financialAggregateColumns + ` FROM financial_scope GROUP BY GROUPING SETS((),(fin_in),(fin_up),(fin_in,fin_up))`
+	query := `WITH financial_scope AS (SELECT *, COALESCE(NULLIF(TRIM(inbound_endpoint),''),'unknown') AS fin_in, COALESCE(NULLIF(TRIM(upstream_endpoint),''),'unknown') AS fin_up FROM ` + relation + ` ` + where + `) SELECT GROUPING(fin_in),GROUPING(fin_up),fin_in,fin_up,` + financialAggregateColumns + ` FROM financial_scope GROUP BY GROUPING SETS((),(fin_in),(fin_up),(fin_in,fin_up))`
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -490,6 +498,10 @@ func (r *usageLogRepository) GetFinancialTrend(ctx context.Context, start, end t
 	}
 	filters = financialRange(filters, start, end)
 	where, args := financialUsageWhere(filters)
+	relation, err := r.financialStatsRelation(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
 	dateExpr := "accounting_date::timestamp"
 	if financialTimeColumn(filters) == "completed_at" {
 		zone := start.Location().String()
@@ -499,7 +511,7 @@ func (r *usageLogRepository) GetFinancialTrend(ctx context.Context, start, end t
 		args = append(args, zone)
 		dateExpr = fmt.Sprintf("completed_at AT TIME ZONE $%d", len(args))
 	}
-	query := fmt.Sprintf("SELECT TO_CHAR(%s,'%s'),%s FROM %s %s GROUP BY 1 ORDER BY 1", dateExpr, safeDateFormat(granularity), financialAggregateColumns, financialStatisticsTable, where)
+	query := fmt.Sprintf("SELECT TO_CHAR(%s,'%s'),%s FROM %s %s GROUP BY 1 ORDER BY 1", dateExpr, safeDateFormat(granularity), financialAggregateColumns, relation, where)
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -525,8 +537,12 @@ func (r *usageLogRepository) GetFinancialModels(ctx context.Context, start, end 
 		})
 	}
 	where, args := financialUsageWhere(financialRange(filters, start, end))
+	relation, err := r.financialStatsRelation(ctx, financialRange(filters, start, end))
+	if err != nil {
+		return nil, err
+	}
 	expr := "COALESCE(" + resolveModelDimensionExpression(source) + ",'unknown')"
-	query := "SELECT " + expr + "," + financialAggregateColumns + " FROM " + financialStatisticsTable + " " + where + " GROUP BY 1 ORDER BY 8 DESC"
+	query := "SELECT " + expr + "," + financialAggregateColumns + " FROM " + relation + " " + where + " GROUP BY 1 ORDER BY 8 DESC"
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -556,7 +572,11 @@ func (r *usageLogRepository) GetFinancialGroups(ctx context.Context, start, end 
 		})
 	}
 	where, args := financialUsageWhere(financialRange(filters, start, end))
-	query := `WITH grouped AS (SELECT group_id,` + financialAggregateColumns + ` FROM ` + financialStatisticsTable + ` ` + where + ` GROUP BY group_id) SELECT * FROM grouped ORDER BY 8 DESC`
+	relation, err := r.financialStatsRelation(ctx, financialRange(filters, start, end))
+	if err != nil {
+		return nil, err
+	}
+	query := `WITH grouped AS (SELECT group_id,` + financialAggregateColumns + ` FROM ` + relation + ` ` + where + ` GROUP BY group_id) SELECT * FROM grouped ORDER BY 8 DESC`
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -629,7 +649,11 @@ func (r *usageLogRepository) GetFinancialBatchAPIKeyStats(ctx context.Context, i
 		upper = tomorrow
 	}
 	where, scopeArgs := financialUsageWhere(usagestats.UsageLogFilters{StartTime: &lower, EndTime: &upper})
-	source := "(SELECT * FROM " + financialStatisticsTable + " " + where + ")"
+	relation, err := r.financialStatsRelation(ctx, usagestats.UsageLogFilters{StartTime: &lower, EndTime: &upper})
+	if err != nil {
+		return nil, err
+	}
+	source := "(SELECT * FROM " + relation + " " + where + ")"
 	scopeCount := len(scopeArgs)
 
 	query := fmt.Sprintf(`SELECT api_key_id,COALESCE(SUM(actual_cost) FILTER(WHERE accounting_date >= $%d::date AND accounting_date < $%d::date),0),COALESCE(SUM(actual_cost) FILTER(WHERE accounting_date=$%d::date),0) FROM %s f WHERE api_key_id=ANY($%d) GROUP BY api_key_id`, scopeCount+2, scopeCount+3, scopeCount+4, source, scopeCount+1)
@@ -704,7 +728,11 @@ func (r *usageLogRepository) GetFinancialAdminDashboardStats(ctx context.Context
 	out.TodayActualCost = today.TotalActualCost
 	out.TodayAccountCost = *today.TotalAccountCost
 	where, args := financialUsageWhere(usagestats.UsageLogFilters{StartTime: &start, EndTime: &end})
-	if err = scanSingleRow(ctx, r.sql, "SELECT COUNT(DISTINCT user_id) FROM "+financialStatisticsTable+" "+where, args, &out.ActiveUsers); err != nil {
+	relation, err := r.financialStatsRelation(ctx, usagestats.UsageLogFilters{StartTime: &start, EndTime: &end})
+	if err != nil {
+		return nil, err
+	}
+	if err = scanSingleRow(ctx, r.sql, "SELECT COUNT(DISTINCT user_id) FROM "+relation+" "+where, args, &out.ActiveUsers); err != nil {
 		return nil, err
 	}
 	// Operational activity remains request-completion based, independently of billing dates.
@@ -746,7 +774,11 @@ func (r *usageLogRepository) GetFinancialBatchUserStats(ctx context.Context, ids
 		upper = tomorrow
 	}
 	where, scopeArgs := financialUsageWhere(usagestats.UsageLogFilters{StartTime: &lower, EndTime: &upper})
-	source := "(SELECT * FROM " + financialStatisticsTable + " " + where + ")"
+	relation, err := r.financialStatsRelation(ctx, usagestats.UsageLogFilters{StartTime: &lower, EndTime: &upper})
+	if err != nil {
+		return nil, err
+	}
+	source := "(SELECT * FROM " + relation + " " + where + ")"
 	scopeCount := len(scopeArgs)
 
 	query := fmt.Sprintf(`SELECT user_id,COALESCE(SUM(actual_cost) FILTER(WHERE accounting_date >= $%d::date AND accounting_date < $%d::date),0),COALESCE(SUM(actual_cost) FILTER(WHERE accounting_date=$%d::date),0) FROM %s f WHERE user_id=ANY($%d) GROUP BY user_id`, scopeCount+2, scopeCount+3, scopeCount+4, source, scopeCount+1)
@@ -776,7 +808,11 @@ func (r *usageLogRepository) GetFinancialUserRanking(ctx context.Context, start,
 		limit = 12
 	}
 	where, args := financialUsageWhere(financialRange(usagestats.UsageLogFilters{}, start, end))
-	query := `WITH scoped AS (SELECT * FROM ` + financialStatisticsTable + ` ` + where + `) SELECT GROUPING(f.user_id),f.user_id,u.email,u.username,` + financialAggregateColumns + ` FROM scoped f LEFT JOIN users u ON u.id=f.user_id GROUP BY GROUPING SETS((),(f.user_id,u.email,u.username))`
+	relation, err := r.financialStatsRelation(ctx, financialRange(usagestats.UsageLogFilters{}, start, end))
+	if err != nil {
+		return nil, err
+	}
+	query := `WITH scoped AS (SELECT * FROM ` + relation + ` ` + where + `) SELECT GROUPING(f.user_id),f.user_id,u.email,u.username,` + financialAggregateColumns + ` FROM scoped f LEFT JOIN users u ON u.id=f.user_id GROUP BY GROUPING SETS((),(f.user_id,u.email,u.username))`
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -826,8 +862,12 @@ func (r *usageLogRepository) GetFinancialUserTrend(ctx context.Context, start, e
 		limit = 12
 	}
 	where, args := financialUsageWhere(financialRange(usagestats.UsageLogFilters{}, start, end))
+	relation, err := r.financialStatsRelation(ctx, financialRange(usagestats.UsageLogFilters{}, start, end))
+	if err != nil {
+		return nil, err
+	}
 	args = append(args, limit)
-	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s),top_users AS (SELECT user_id FROM scoped GROUP BY user_id ORDER BY SUM(actual_cost) DESC LIMIT $%d) SELECT TO_CHAR(f.accounting_date,'%s'),f.user_id,COALESCE(u.email,''),COALESCE(u.username,''),%s FROM scoped f LEFT JOIN users u ON u.id=f.user_id WHERE f.user_id IN(SELECT user_id FROM top_users) GROUP BY 1,2,3,4 ORDER BY 1,11 DESC`, financialStatisticsTable, where, len(args), safeDateFormat(granularity), financialAggregateColumns)
+	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s),top_users AS (SELECT user_id FROM scoped GROUP BY user_id ORDER BY SUM(actual_cost) DESC LIMIT $%d) SELECT TO_CHAR(f.accounting_date,'%s'),f.user_id,COALESCE(u.email,''),COALESCE(u.username,''),%s FROM scoped f LEFT JOIN users u ON u.id=f.user_id WHERE f.user_id IN(SELECT user_id FROM top_users) GROUP BY 1,2,3,4 ORDER BY 1,11 DESC`, relation, where, len(args), safeDateFormat(granularity), financialAggregateColumns)
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -861,8 +901,12 @@ func (r *usageLogRepository) GetFinancialKeyTrend(ctx context.Context, start, en
 		limit = 12
 	}
 	where, args := financialUsageWhere(financialRange(usagestats.UsageLogFilters{}, start, end))
+	relation, err := r.financialStatsRelation(ctx, financialRange(usagestats.UsageLogFilters{}, start, end))
+	if err != nil {
+		return nil, err
+	}
 	args = append(args, limit)
-	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s),top_keys AS (SELECT api_key_id FROM scoped GROUP BY api_key_id ORDER BY SUM(actual_cost) DESC LIMIT $%d) SELECT TO_CHAR(f.accounting_date,'%s'),f.api_key_id,COALESCE(k.name,''),%s FROM scoped f LEFT JOIN api_keys k ON k.id=f.api_key_id WHERE f.api_key_id IN(SELECT api_key_id FROM top_keys) GROUP BY 1,2,3 ORDER BY 1,10 DESC`, financialStatisticsTable, where, len(args), safeDateFormat(granularity), financialAggregateColumns)
+	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s),top_keys AS (SELECT api_key_id FROM scoped GROUP BY api_key_id ORDER BY SUM(actual_cost) DESC LIMIT $%d) SELECT TO_CHAR(f.accounting_date,'%s'),f.api_key_id,COALESCE(k.name,''),%s FROM scoped f LEFT JOIN api_keys k ON k.id=f.api_key_id WHERE f.api_key_id IN(SELECT api_key_id FROM top_keys) GROUP BY 1,2,3 ORDER BY 1,10 DESC`, relation, where, len(args), safeDateFormat(granularity), financialAggregateColumns)
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -892,6 +936,10 @@ func (r *usageLogRepository) GetFinancialUserBreakdown(ctx context.Context, star
 	}
 	filters := usagestats.UsageLogFilters{UserID: dim.UserID, APIKeyID: dim.APIKeyID, AccountID: dim.AccountID, AccountIDs: dim.AccountIDs, GroupID: dim.GroupID, Model: dim.Model, ModelFilterSource: dim.ModelType, RequestType: dim.RequestType, Stream: dim.Stream, NativeCompactionV2: dim.NativeCompactionV2, BillingType: dim.BillingType}
 	where, args := financialUsageWhere(financialRange(filters, start, end))
+	relation, err := r.financialStatsRelation(ctx, financialRange(filters, start, end))
+	if err != nil {
+		return nil, err
+	}
 	if dim.Endpoint != "" {
 		expr := "inbound_endpoint"
 		switch dim.EndpointType {
@@ -918,7 +966,7 @@ func (r *usageLogRepository) GetFinancialUserBreakdown(ctx context.Context, star
 	case "account_cost":
 		order = "COALESCE(SUM(COALESCE(account_stats_cost,total_cost)*COALESCE(account_rate_multiplier,1)),0)"
 	}
-	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s) SELECT f.user_id,COALESCE(u.email,''),%s FROM scoped f LEFT JOIN users u ON u.id=f.user_id GROUP BY f.user_id,u.email ORDER BY %s DESC,f.user_id LIMIT $%d`, financialStatisticsTable, where, financialAggregateColumns, order, len(args))
+	query := fmt.Sprintf(`WITH scoped AS (SELECT * FROM %s %s) SELECT f.user_id,COALESCE(u.email,''),%s FROM scoped f LEFT JOIN users u ON u.id=f.user_id GROUP BY f.user_id,u.email ORDER BY %s DESC,f.user_id LIMIT $%d`, relation, where, financialAggregateColumns, order, len(args))
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -953,6 +1001,9 @@ func (r *usageLogRepository) GetFinancialGroupSummary(ctx context.Context, today
 			return nil, err
 		}
 		defer tx.Rollback()
+		if _, err = tx.ExecContext(ctx, "SET LOCAL jit=off"); err != nil {
+			return nil, err
+		}
 		result, err := (&usageLogRepository{sql: tx}).GetFinancialGroupSummary(ctx, today)
 		if err != nil {
 			return nil, err
@@ -981,40 +1032,17 @@ func (r *usageLogRepository) GetFinancialGroupSummary(ctx context.Context, today
 	}
 	values[0] = &usagestats.GroupUsageSummary{GroupID: 0, TotalCost: unknownGroupCost}
 
-	deltaSQL := `WITH matched AS MATERIALIZED (
- SELECT r.group_id receipt_group,r.charged_amount,r.command,u.group_id log_group,u.actual_cost log_cost
- FROM usage_settlement_receipts r LEFT JOIN LATERAL (
-  SELECT linked.group_id,linked.actual_cost FROM usage_logs linked
-  WHERE r.user_id=linked.user_id AND r.api_key_id=linked.api_key_id
-  AND ((r.usage_log_id=linked.id AND (r.usage_request_id IS NULL OR r.usage_request_id=linked.request_id))
-   OR (r.usage_log_id IS NULL AND r.usage_request_id IS NOT NULL AND r.usage_request_id=linked.request_id)) LIMIT 1
- ) u ON TRUE WHERE r.state='settled'
- ), deltas AS (
- SELECT COALESCE(receipt_group,log_group,0) group_id,COALESCE(charged_amount,0) amount FROM matched WHERE COALESCE(command->>'TerminalFailure','false')<>'true'
- UNION ALL SELECT COALESCE(log_group,0),-log_cost FROM matched WHERE log_cost IS NOT NULL
- ) SELECT group_id,SUM(amount) FROM deltas GROUP BY group_id`
-	deltaRows, err := r.sql.QueryContext(ctx, deltaSQL)
+	// Closed completion days come from the per-day delta table maintained with
+	// the financial rollups; dirty, unmarked and tail days are read from source.
+	deltas, err := r.financialGroupDeltas(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for deltaRows.Next() {
-		var groupID int64
-		var delta float64
-		if err = deltaRows.Scan(&groupID, &delta); err != nil {
-			deltaRows.Close()
-			return nil, err
-		}
+	for groupID, delta := range deltas {
 		if values[groupID] == nil {
 			values[groupID] = &usagestats.GroupUsageSummary{GroupID: groupID}
 		}
 		values[groupID].TotalCost += delta
-	}
-	if err = deltaRows.Err(); err != nil {
-		deltaRows.Close()
-		return nil, err
-	}
-	if err = deltaRows.Close(); err != nil {
-		return nil, err
 	}
 
 	for i := 1; i < 3; i++ {
@@ -1024,7 +1052,10 @@ func (r *usageLogRepository) GetFinancialGroupSummary(ctx context.Context, today
 		}
 		end := start.AddDate(0, 0, 1)
 		where, args := financialUsageWhere(usagestats.UsageLogFilters{StartTime: &start, EndTime: &end})
-		source := financialStatisticsTable
+		source, err := r.financialStatsRelation(ctx, usagestats.UsageLogFilters{StartTime: &start, EndTime: &end})
+		if err != nil {
+			return nil, err
+		}
 		rows, err := r.sql.QueryContext(ctx, "SELECT COALESCE(group_id,0),COALESCE(SUM(actual_cost),0) FROM "+source+" "+where+" GROUP BY group_id", args...)
 		if err != nil {
 			return nil, err

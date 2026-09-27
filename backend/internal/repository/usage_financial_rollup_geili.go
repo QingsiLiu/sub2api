@@ -105,7 +105,11 @@ func (r *usageLogRepository) financialAdminAllTimeTotals(ctx context.Context) (*
 	if err != nil {
 		return nil, err
 	}
-	query, args, err := financialRollupTotalsQuery(closed.Time, dirty)
+	tail, err := r.financialAdminTailSQL(ctx, financialRollupDay(closed.Time))
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := financialRollupTotalsQueryWithTail(closed.Time, dirty, tail)
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +133,18 @@ func (r *usageLogRepository) financialAdminAllTimeTotals(ctx context.Context) (*
 }
 
 func financialRollupTotalsQuery(closed time.Time, dirty []string) (string, []any, error) {
+	return financialRollupTotalsQueryWithTail(closed, dirty, "")
+}
+
+// An empty tail reads every row after the cursor from the canonical view.
+func financialRollupTotalsQueryWithTail(closed time.Time, dirty []string, tail string) (string, []any, error) {
 	args := []any{closed.Format("2006-01-02"), pq.Array(dirty), financialRollupDay(closed)}
-	query := `WITH parts AS (SELECT ` + financialRollupColumnNames + ` FROM usage_financial_daily_rollups WHERE bucket_date<$1::date AND NOT(bucket_date=ANY($2::date[])) UNION ALL SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_statistics WHERE ` + financialRollupRangeSQL("$3::timestamptz", "")
+	if tail == "" {
+		tail = `SELECT ` + financialRollupRawColumns + ` FROM usage_financial_total_statistics WHERE ` + financialRollupRangeSQL("$3::timestamptz", "")
+	} else {
+		tail += ` AND $3::timestamptz IS NOT NULL`
+	}
+	query := `WITH parts AS (SELECT ` + financialRollupColumnNames + ` FROM usage_financial_daily_rollups WHERE bucket_date<$1::date AND NOT(bucket_date=ANY($2::date[])) UNION ALL ` + tail
 	for _, day := range dirty {
 		at, err := time.ParseInLocation("2006-01-02", day, financialBeijing)
 		if err != nil {
@@ -141,6 +155,9 @@ func financialRollupTotalsQuery(closed time.Time, dirty []string) (string, []any
 	}
 	return query + `) SELECT ` + financialRollupCombineColumns + ` FROM parts`, args, nil
 }
+
+// Source events acknowledged per consumer transaction.
+const financialRollupEventBatch = 256
 
 func financialRollupDay(at time.Time) time.Time {
 	// SQL DATE values may be returned in UTC; preserve their calendar components.
@@ -226,7 +243,7 @@ func (r *dashboardAggregationRepository) syncFinancialRollupStep(ctx context.Con
 	}
 	// Exact selected IDs, never a sequence watermark. A lower ID belonging to an
 	// uncommitted source transaction remains invisible and survives this batch.
-	rows, err := r.sql.QueryContext(ctx, `SELECT id FROM usage_financial_rollup_events ORDER BY id LIMIT 32`)
+	rows, err := r.sql.QueryContext(ctx, `SELECT id FROM usage_financial_rollup_events ORDER BY id LIMIT $1`, financialRollupEventBatch)
 	if err != nil {
 		return false, err
 	}
@@ -284,6 +301,15 @@ func (r *dashboardAggregationRepository) syncFinancialRollupStep(ctx context.Con
 		if _, err = r.sql.ExecContext(ctx, query, day, at, at.AddDate(0, 0, 1)); err != nil {
 			return false, err
 		}
+		// geili hook: group deltas are published with the rollup of the same day.
+		if err = refreshFinancialGroupDeltaDay(ctx, r.sql, day, at); err != nil {
+			return false, err
+		}
+	}
+	// geili hook: facts must reflect these events before they are acknowledged.
+	factsMore, err := projectFinancialFacts(ctx, r.sql, today, ids)
+	if err != nil {
+		return false, err
 	}
 	// Tail days need no cached rows: readers always scan the tail. Historical
 	// dependencies above have ALL been published before acknowledging each event.
@@ -295,10 +321,14 @@ func (r *dashboardAggregationRepository) syncFinancialRollupStep(ctx context.Con
 	if backfill {
 		cursor = cursor.AddDate(0, 0, 1)
 	}
+	deltasMore, err := fillFinancialGroupDeltaDays(ctx, r.sql, cursor)
+	if err != nil {
+		return false, err
+	}
 	if _, err = r.sql.ExecContext(ctx, `UPDATE usage_financial_rollup_state SET start_date=$1::date,closed_before=$2::date WHERE id=1`, first.Time.Format("2006-01-02"), cursor.Format("2006-01-02")); err != nil {
 		return false, err
 	}
-	return cursor.Before(today) || len(ids) == 32 || missing.Valid || expanded, nil
+	return cursor.Before(today) || len(ids) == financialRollupEventBatch || missing.Valid || expanded || factsMore || deltasMore, nil
 }
 
 // Partition removal bypasses row triggers. Capture receipt dependencies BEFORE

@@ -34,9 +34,11 @@ func financialRollupTestSchema(t *testing.T) string {
 	_, err = tx.ExecContext(ctx, `CREATE TABLE usage_logs(LIKE public.usage_logs INCLUDING DEFAULTS);
  CREATE UNIQUE INDEX ON usage_logs(id);CREATE INDEX ON usage_logs(created_at);CREATE INDEX ON usage_logs(request_id,api_key_id);
  CREATE TABLE usage_settlement_receipts(LIKE public.usage_settlement_receipts INCLUDING DEFAULTS);
- CREATE UNIQUE INDEX ON usage_settlement_receipts(id);CREATE INDEX ON usage_settlement_receipts(usage_request_id,api_key_id);CREATE INDEX ON usage_settlement_receipts(usage_log_id);`)
+ CREATE UNIQUE INDEX ON usage_settlement_receipts(id);CREATE INDEX ON usage_settlement_receipts(usage_request_id,api_key_id);CREATE INDEX ON usage_settlement_receipts(usage_log_id);
+ CREATE TABLE subscription_requests(LIKE public.subscription_requests INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);
+ CREATE TABLE subscription_request_contracts(LIKE public.subscription_request_contracts INCLUDING DEFAULTS INCLUDING INDEXES);`)
 	require.NoError(t, err)
-	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql", "269_usage_financial_statistics_decode.sql"} {
+	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql", "269_usage_financial_statistics_decode.sql", "271_usage_financial_facts.sql"} {
 		body, e := migrations.FS.ReadFile(file)
 		require.NoError(t, e)
 		_, e = tx.ExecContext(ctx, string(body))
@@ -97,7 +99,52 @@ func financialRollupAssertOracle(t *testing.T, tx *sql.Tx) *usagestats.UsageStat
 	require.InDelta(t, *want.TotalAccountCost, *got.TotalAccountCost, 1e-9)
 	require.InDelta(t, want.AverageDurationMs, got.AverageDurationMs, 1e-9)
 	require.Equal(t, want.FinancialSummary, got.FinancialSummary)
+	financialFactsAssertOracle(t, tx)
 	return got
+}
+
+// financialFactsAssertOracle compares every bounded reader on the materialized
+// window with the same reader on the canonical view, in the caller's snapshot.
+func financialFactsAssertOracle(t *testing.T, tx *sql.Tx) {
+	t.Helper()
+	ctx := context.Background()
+	repo := &usageLogRepository{sql: tx}
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, financialBeijing) }
+	ranges := [][2]time.Time{{day(19), day(27)}, {day(15), day(27)}, {day(22), day(24)}, {day(25), day(26)}, {day(26), day(27)}, {day(10), day(20)}, {day(20), day(30)}, {day(27), day(30)}}
+	collect := func() ([]any, []usagestats.GroupUsageSummary) {
+		out := []any{}
+		for _, r := range ranges {
+			start, end := r[0], r[1]
+			stats, err := repo.financialTotals(ctx, usagestats.UsageLogFilters{StartTime: &start, EndTime: &end})
+			require.NoError(t, err)
+			user, err := repo.financialTotals(ctx, usagestats.UsageLogFilters{StartTime: &start, EndTime: &end, UserID: 1})
+			require.NoError(t, err)
+			trend, err := repo.GetFinancialTrend(ctx, start, end, "day", usagestats.UsageLogFilters{})
+			require.NoError(t, err)
+			models, err := repo.GetFinancialModels(ctx, start, end, usagestats.UsageLogFilters{}, "")
+			require.NoError(t, err)
+			groups, err := repo.GetFinancialGroups(ctx, start, end, usagestats.UsageLogFilters{})
+			require.NoError(t, err)
+			batch, err := repo.GetFinancialBatchUserStats(ctx, []int64{1, 9}, start, end)
+			require.NoError(t, err)
+			out = append(out, stats, user, trend, models, groups, batch)
+		}
+		summary, err := repo.GetFinancialGroupSummary(ctx, day(26))
+		require.NoError(t, err)
+		return out, summary
+	}
+	got, gotSummary := collect()
+	financialRollupExec(t, tx, `SAVEPOINT facts_oracle; UPDATE usage_financial_fact_state SET coverage_start=NULL; DELETE FROM usage_financial_group_delta_days`)
+	want, wantSummary := collect()
+	financialRollupExec(t, tx, `ROLLBACK TO SAVEPOINT facts_oracle`)
+	require.Equal(t, want, got)
+	require.Len(t, gotSummary, len(wantSummary))
+	for i := range wantSummary {
+		require.Equal(t, wantSummary[i].GroupID, gotSummary[i].GroupID)
+		require.InDelta(t, wantSummary[i].TotalCost, gotSummary[i].TotalCost, 1e-9)
+		require.InDelta(t, wantSummary[i].TodayCost, gotSummary[i].TodayCost, 1e-9)
+		require.InDelta(t, wantSummary[i].YesterdayCost, gotSummary[i].YesterdayCost, 1e-9)
+	}
 }
 
 func TestFinancialRollupExactMutationRecoveryAndMissingBuckets(t *testing.T) {
@@ -351,4 +398,73 @@ func TestFinancialRollupStateLockDoesNotBlockSubscriptionFKOrDebit(t *testing.T)
 	require.NoError(t, billing.Commit())
 	require.NoError(t, writer.Commit())
 	require.NoError(t, publisher.Rollback())
+}
+
+func TestFinancialFactsWindowSubscriptionAndPendingOverlay(t *testing.T) {
+	schema := financialRollupTestSchema(t)
+	seed := financialRollupTestTx(t, schema)
+	for i, d := range []string{"2026-09-14", "2026-09-18", "2026-09-19", "2026-09-21", "2026-09-24", "2026-09-26"} {
+		financialRollupSeedLog(t, seed, int64(i+1), d+" 12:00:00+08", float64(i+1))
+	}
+	// Receipt accounted before the window but completed inside it, and the reverse.
+	financialRollupSeedReceipt(t, seed, 2, "2026-09-20 12:00:00+08", 7)
+	financialRollupSeedReceipt(t, seed, 5, "2026-09-24 13:00:00+08", 8)
+	financialRollupExec(t, seed, `UPDATE usage_settlement_receipts SET accounting_date='2026-09-17' WHERE id=2;
+ UPDATE usage_settlement_receipts SET accounting_date='2026-09-25',group_id=4 WHERE id=5;
+ INSERT INTO usage_logs(id,user_id,api_key_id,account_id,request_id,model,input_tokens,output_tokens,total_cost,actual_cost,billing_type,subscription_id,group_id,created_at) VALUES
+ (20,1,2,3,'sub-20','fixture',1,2,3,3,1,77,5,'2026-09-22 10:00:00+08'),(21,1,2,3,'sub-21','fixture',1,2,4,4,1,77,5,'2026-09-23 10:00:00+08');
+ INSERT INTO subscription_requests(id,request_key,subscription_id,api_key_id,status,lots,admitted_at,settled_at,billing_request_id) VALUES
+ (1,'rk-20',77,2,'settled','[]','2026-09-22 09:59:00+08','2026-09-22 10:00:00+08','sub-20'),(2,'rk-21',77,2,'admitted','[]','2026-09-23 09:59:00+08',NULL,'sub-21');
+ INSERT INTO subscription_request_contracts(request_key,term_id,usage_date) VALUES('rk-20','term','2026-09-22');`)
+	require.NoError(t, seed.Commit())
+	financialRollupPublish(t, schema)
+	read := financialRollupTestTx(t, schema)
+	financialRollupAssertOracle(t, read)
+	var cov time.Time
+	require.NoError(t, read.QueryRow(`SELECT coverage_start FROM usage_financial_fact_state`).Scan(&cov))
+	require.Equal(t, "2026-09-19", cov.Format("2006-01-02"))
+	require.NoError(t, read.Commit())
+	edits := []string{
+		`UPDATE subscription_request_contracts SET usage_date='2026-09-12' WHERE request_key='rk-20'`,
+		`UPDATE subscription_requests SET status='settled',settled_at='2026-09-23 10:00:00+08',admitted_at='2026-09-26 01:00:00+08' WHERE id=2`,
+		`DELETE FROM subscription_request_contracts WHERE request_key='rk-20'`,
+		`UPDATE usage_settlement_receipts SET accounting_date='2026-09-26' WHERE id=2`,
+		`UPDATE usage_settlement_receipts SET completed_at='2026-09-10 12:00:00+08',settled_at='2026-09-10 12:00:00+08' WHERE id=5`,
+		`UPDATE usage_logs SET created_at='2026-09-25 12:00:00+08',actual_cost=11 WHERE id=1`,
+		`DELETE FROM usage_logs WHERE id=4`,
+	}
+	for _, q := range edits {
+		change := financialRollupTestTx(t, schema)
+		financialRollupExec(t, change, q)
+		require.NoError(t, change.Commit())
+		dirty := financialRollupTestTx(t, schema)
+		var pending int
+		require.NoError(t, dirty.QueryRow(`SELECT COUNT(*) FROM usage_financial_rollup_events`).Scan(&pending))
+		require.Positive(t, pending, q)
+		financialRollupAssertOracle(t, dirty)
+		require.NoError(t, dirty.Commit())
+		financialRollupPublish(t, schema)
+		clean := financialRollupTestTx(t, schema)
+		financialRollupAssertOracle(t, clean)
+		require.NoError(t, clean.Commit())
+	}
+	// Moving today forward trims the window; resizing it trims or backfills.
+	for _, days := range []string{"8", "3", "20"} {
+		t.Setenv("GEILI_FINANCIAL_FACT_DAYS", days)
+		for i := 0; i < 30; i++ {
+			step := financialRollupTestTx(t, schema)
+			more, err := newDashboardAggregationRepositoryWithSQL(step).syncFinancialRollupStep(context.Background(), time.Date(2026, 9, 29, 0, 0, 0, 0, financialBeijing))
+			require.NoError(t, err)
+			require.NoError(t, step.Commit())
+			if !more {
+				break
+			}
+		}
+		check := financialRollupTestTx(t, schema)
+		require.NoError(t, check.QueryRow(`SELECT coverage_start FROM usage_financial_fact_state`).Scan(&cov))
+		n, _ := strconv.Atoi(days)
+		require.Equal(t, time.Date(2026, 9, 30-n, 0, 0, 0, 0, financialBeijing).Format("2006-01-02"), cov.Format("2006-01-02"))
+		financialFactsAssertOracle(t, check)
+		require.NoError(t, check.Commit())
+	}
 }
