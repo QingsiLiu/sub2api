@@ -1003,6 +1003,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		}
 	}
 	return &service.Group{
+		GroupSchedulingEnabled:          g.GroupSchedulingEnabled,
+		GroupSchedulingVersion:          g.GroupSchedulingVersion,
 		ID:                              g.ID,
 		Name:                            g.Name,
 		Description:                     derefString(g.Description),

@@ -21,6 +21,9 @@ import (
 )
 
 type Account struct {
+	// geili hook: request-local projection; never written back to account caches.
+	groupPriorityBase       *int
+	groupPriorityApplied    bool
 	ID                      int64
 	Name                    string
 	Notes                   *string

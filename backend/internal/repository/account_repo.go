@@ -147,7 +147,7 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
 		SetConcurrency(account.Concurrency).
-		SetPriority(account.Priority).
+		SetPriority(account.DefaultSchedulingPriority()).
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
@@ -541,7 +541,7 @@ func (r *accountRepository) updateLockedAccount(
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(extra).
 		SetConcurrency(account.Concurrency).
-		SetPriority(account.Priority).
+		SetPriority(account.DefaultSchedulingPriority()).
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(schedulable).
@@ -1951,6 +1951,16 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		return err
 	}
 
+	// geili hook: a group_ids edit must not erase fixed/automatic group priorities.
+	previousBindings, err := txClient.AccountGroup.Query().Where(dbaccountgroup.AccountIDEQ(accountID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	previous := make(map[int64]*dbent.AccountGroup, len(previousBindings))
+	for _, binding := range previousBindings {
+		previous[binding.GroupID] = binding
+	}
+
 	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
 		return err
 	}
@@ -1964,11 +1974,11 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 
 	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
 	for i, groupID := range groupIDs {
-		builders = append(builders, txClient.AccountGroup.Create().
-			SetAccountID(accountID).
-			SetGroupID(groupID).
-			SetPriority(i+1),
-		)
+		priority, mode := i+1, service.GroupPriorityInherit
+		if old := previous[groupID]; old != nil && old.PriorityMode != service.GroupPriorityInherit {
+			priority, mode = old.Priority, old.PriorityMode
+		}
+		builders = append(builders, txClient.AccountGroup.Create().SetAccountID(accountID).SetGroupID(groupID).SetPriority(priority).SetPriorityMode(mode))
 	}
 
 	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
@@ -3501,9 +3511,17 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 		for _, ag := range entries {
 			groupSvc := groupMap[ag.GroupID]
 			agSvc := service.AccountGroup{
-				AccountID: ag.AccountID,
-				GroupID:   ag.GroupID,
-				Priority:  ag.Priority,
+				AccountID:       ag.AccountID,
+				GroupID:         ag.GroupID,
+				Priority:        ag.Priority,
+				PriorityMode:    ag.PriorityMode,
+				PriorityEnabled: groupSvc != nil && groupSvc.GroupSchedulingEnabled,
+				PriorityVersion: func() int64 {
+					if groupSvc != nil {
+						return groupSvc.GroupSchedulingVersion
+					}
+					return 0
+				}(),
 				CreatedAt: ag.CreatedAt,
 				Group:     groupSvc,
 			}

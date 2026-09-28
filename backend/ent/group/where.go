@@ -70,6 +70,16 @@ func DeletedAt(v time.Time) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDeletedAt, v))
 }
 
+// GroupSchedulingEnabled applies equality check predicate on the "group_scheduling_enabled" field. It's identical to GroupSchedulingEnabledEQ.
+func GroupSchedulingEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGroupSchedulingEnabled, v))
+}
+
+// GroupSchedulingVersion applies equality check predicate on the "group_scheduling_version" field. It's identical to GroupSchedulingVersionEQ.
+func GroupSchedulingVersion(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGroupSchedulingVersion, v))
+}
+
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldName, v))
@@ -488,6 +498,56 @@ func DeletedAtIsNil() predicate.Group {
 // DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
 func DeletedAtNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// GroupSchedulingEnabledEQ applies the EQ predicate on the "group_scheduling_enabled" field.
+func GroupSchedulingEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGroupSchedulingEnabled, v))
+}
+
+// GroupSchedulingEnabledNEQ applies the NEQ predicate on the "group_scheduling_enabled" field.
+func GroupSchedulingEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGroupSchedulingEnabled, v))
+}
+
+// GroupSchedulingVersionEQ applies the EQ predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGroupSchedulingVersion, v))
+}
+
+// GroupSchedulingVersionNEQ applies the NEQ predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionNEQ(v int64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGroupSchedulingVersion, v))
+}
+
+// GroupSchedulingVersionIn applies the In predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldGroupSchedulingVersion, vs...))
+}
+
+// GroupSchedulingVersionNotIn applies the NotIn predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionNotIn(vs ...int64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldGroupSchedulingVersion, vs...))
+}
+
+// GroupSchedulingVersionGT applies the GT predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionGT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldGroupSchedulingVersion, v))
+}
+
+// GroupSchedulingVersionGTE applies the GTE predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionGTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldGroupSchedulingVersion, v))
+}
+
+// GroupSchedulingVersionLT applies the LT predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionLT(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldGroupSchedulingVersion, v))
+}
+
+// GroupSchedulingVersionLTE applies the LTE predicate on the "group_scheduling_version" field.
+func GroupSchedulingVersionLTE(v int64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldGroupSchedulingVersion, v))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.

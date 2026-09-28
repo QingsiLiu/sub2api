@@ -78,6 +78,20 @@ func (_u *AccountGroupUpdate) AddPriority(v int) *AccountGroupUpdate {
 	return _u
 }
 
+// SetPriorityMode sets the "priority_mode" field.
+func (_u *AccountGroupUpdate) SetPriorityMode(v string) *AccountGroupUpdate {
+	_u.mutation.SetPriorityMode(v)
+	return _u
+}
+
+// SetNillablePriorityMode sets the "priority_mode" field if the given value is not nil.
+func (_u *AccountGroupUpdate) SetNillablePriorityMode(v *string) *AccountGroupUpdate {
+	if v != nil {
+		_u.SetPriorityMode(*v)
+	}
+	return _u
+}
+
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdate) SetAccount(v *Account) *AccountGroupUpdate {
 	return _u.SetAccountID(v.ID)
@@ -160,6 +174,9 @@ func (_u *AccountGroupUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PriorityMode(); ok {
+		_spec.SetField(accountgroup.FieldPriorityMode, field.TypeString, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -288,6 +305,20 @@ func (_u *AccountGroupUpdateOne) AddPriority(v int) *AccountGroupUpdateOne {
 	return _u
 }
 
+// SetPriorityMode sets the "priority_mode" field.
+func (_u *AccountGroupUpdateOne) SetPriorityMode(v string) *AccountGroupUpdateOne {
+	_u.mutation.SetPriorityMode(v)
+	return _u
+}
+
+// SetNillablePriorityMode sets the "priority_mode" field if the given value is not nil.
+func (_u *AccountGroupUpdateOne) SetNillablePriorityMode(v *string) *AccountGroupUpdateOne {
+	if v != nil {
+		_u.SetPriorityMode(*v)
+	}
+	return _u
+}
+
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdateOne) SetAccount(v *Account) *AccountGroupUpdateOne {
 	return _u.SetAccountID(v.ID)
@@ -402,6 +433,9 @@ func (_u *AccountGroupUpdateOne) sqlSave(ctx context.Context) (_node *AccountGro
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.PriorityMode(); ok {
+		_spec.SetField(accountgroup.FieldPriorityMode, field.TypeString, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{

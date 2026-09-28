@@ -1059,7 +1059,7 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
 	req OpenAIAccountScheduleRequest,
 	plan openAIAccountLoadPlan,
 ) []openAIAccountCandidateScore {
-	buildSelectionOrder := func(pool []openAIAccountCandidateScore) []openAIAccountCandidateScore {
+	buildTierOrder := func(pool []openAIAccountCandidateScore) []openAIAccountCandidateScore {
 		if len(pool) == 0 || plan.topK <= 0 {
 			return nil
 		}
@@ -1089,7 +1089,7 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
 		if len(primary) == 0 {
 			primary = buildOpenAIWeightedSelectionOrder(ranked, req)
 		}
-		if !plan.includeOverflowFallback || groupTopK >= len(pool) {
+		if (!plan.includeOverflowFallback && !pool[0].account.groupPriorityApplied) || groupTopK >= len(pool) {
 			return primary
 		}
 
@@ -1107,6 +1107,35 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
 			return isOpenAIAccountCandidateBetter(overflow[i], overflow[j])
 		})
 		return append(primary, overflow...)
+	}
+
+	// geili hook: priority is a strict layer only for opt-in group-local pools.
+	buildSelectionOrder := func(pool []openAIAccountCandidateScore) []openAIAccountCandidateScore {
+		managed := false
+		for _, item := range pool {
+			if item.account.groupPriorityApplied {
+				managed = true
+				break
+			}
+		}
+		if !managed {
+			return buildTierOrder(pool)
+		}
+		layers := map[int][]openAIAccountCandidateScore{}
+		priorities := []int{}
+		for _, item := range pool {
+			p := item.account.Priority
+			if _, ok := layers[p]; !ok {
+				priorities = append(priorities, p)
+			}
+			layers[p] = append(layers[p], item)
+		}
+		sort.Ints(priorities)
+		result := make([]openAIAccountCandidateScore, 0, len(pool))
+		for _, p := range priorities {
+			result = append(result, buildTierOrder(layers[p])...)
+		}
+		return result
 	}
 
 	if openAIScheduleRequiresCompaction(req) {

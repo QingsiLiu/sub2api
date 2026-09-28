@@ -50,6 +50,20 @@ func (_c *AccountGroupCreate) SetNillablePriority(v *int) *AccountGroupCreate {
 	return _c
 }
 
+// SetPriorityMode sets the "priority_mode" field.
+func (_c *AccountGroupCreate) SetPriorityMode(v string) *AccountGroupCreate {
+	_c.mutation.SetPriorityMode(v)
+	return _c
+}
+
+// SetNillablePriorityMode sets the "priority_mode" field if the given value is not nil.
+func (_c *AccountGroupCreate) SetNillablePriorityMode(v *string) *AccountGroupCreate {
+	if v != nil {
+		_c.SetPriorityMode(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *AccountGroupCreate) SetCreatedAt(v time.Time) *AccountGroupCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -113,6 +127,10 @@ func (_c *AccountGroupCreate) defaults() {
 		v := accountgroup.DefaultPriority
 		_c.mutation.SetPriority(v)
 	}
+	if _, ok := _c.mutation.PriorityMode(); !ok {
+		v := accountgroup.DefaultPriorityMode
+		_c.mutation.SetPriorityMode(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := accountgroup.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -129,6 +147,9 @@ func (_c *AccountGroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "AccountGroup.priority"`)}
+	}
+	if _, ok := _c.mutation.PriorityMode(); !ok {
+		return &ValidationError{Name: "priority_mode", err: errors.New(`ent: missing required field "AccountGroup.priority_mode"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AccountGroup.created_at"`)}
@@ -165,6 +186,10 @@ func (_c *AccountGroupCreate) createSpec() (*AccountGroup, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(accountgroup.FieldPriority, field.TypeInt, value)
 		_node.Priority = value
+	}
+	if value, ok := _c.mutation.PriorityMode(); ok {
+		_spec.SetField(accountgroup.FieldPriorityMode, field.TypeString, value)
+		_node.PriorityMode = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(accountgroup.FieldCreatedAt, field.TypeTime, value)
@@ -298,6 +323,18 @@ func (u *AccountGroupUpsert) AddPriority(v int) *AccountGroupUpsert {
 	return u
 }
 
+// SetPriorityMode sets the "priority_mode" field.
+func (u *AccountGroupUpsert) SetPriorityMode(v string) *AccountGroupUpsert {
+	u.Set(accountgroup.FieldPriorityMode, v)
+	return u
+}
+
+// UpdatePriorityMode sets the "priority_mode" field to the value that was provided on create.
+func (u *AccountGroupUpsert) UpdatePriorityMode() *AccountGroupUpsert {
+	u.SetExcluded(accountgroup.FieldPriorityMode)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -389,6 +426,20 @@ func (u *AccountGroupUpsertOne) AddPriority(v int) *AccountGroupUpsertOne {
 func (u *AccountGroupUpsertOne) UpdatePriority() *AccountGroupUpsertOne {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetPriorityMode sets the "priority_mode" field.
+func (u *AccountGroupUpsertOne) SetPriorityMode(v string) *AccountGroupUpsertOne {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.SetPriorityMode(v)
+	})
+}
+
+// UpdatePriorityMode sets the "priority_mode" field to the value that was provided on create.
+func (u *AccountGroupUpsertOne) UpdatePriorityMode() *AccountGroupUpsertOne {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.UpdatePriorityMode()
 	})
 }
 
@@ -626,6 +677,20 @@ func (u *AccountGroupUpsertBulk) AddPriority(v int) *AccountGroupUpsertBulk {
 func (u *AccountGroupUpsertBulk) UpdatePriority() *AccountGroupUpsertBulk {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetPriorityMode sets the "priority_mode" field.
+func (u *AccountGroupUpsertBulk) SetPriorityMode(v string) *AccountGroupUpsertBulk {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.SetPriorityMode(v)
+	})
+}
+
+// UpdatePriorityMode sets the "priority_mode" field to the value that was provided on create.
+func (u *AccountGroupUpsertBulk) UpdatePriorityMode() *AccountGroupUpsertBulk {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.UpdatePriorityMode()
 	})
 }
 

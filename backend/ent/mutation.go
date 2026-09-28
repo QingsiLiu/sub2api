@@ -5484,6 +5484,7 @@ type AccountGroupMutation struct {
 	typ            string
 	priority       *int
 	addpriority    *int
+	priority_mode  *string
 	created_at     *time.Time
 	clearedFields  map[string]struct{}
 	account        *int64
@@ -5610,6 +5611,25 @@ func (m *AccountGroupMutation) ResetPriority() {
 	m.addpriority = nil
 }
 
+// SetPriorityMode sets the "priority_mode" field.
+func (m *AccountGroupMutation) SetPriorityMode(s string) {
+	m.priority_mode = &s
+}
+
+// PriorityMode returns the value of the "priority_mode" field in the mutation.
+func (m *AccountGroupMutation) PriorityMode() (r string, exists bool) {
+	v := m.priority_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriorityMode resets all changes to the "priority_mode" field.
+func (m *AccountGroupMutation) ResetPriorityMode() {
+	m.priority_mode = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *AccountGroupMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5717,7 +5737,7 @@ func (m *AccountGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountGroupMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.account != nil {
 		fields = append(fields, accountgroup.FieldAccountID)
 	}
@@ -5726,6 +5746,9 @@ func (m *AccountGroupMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, accountgroup.FieldPriority)
+	}
+	if m.priority_mode != nil {
+		fields = append(fields, accountgroup.FieldPriorityMode)
 	}
 	if m.created_at != nil {
 		fields = append(fields, accountgroup.FieldCreatedAt)
@@ -5744,6 +5767,8 @@ func (m *AccountGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case accountgroup.FieldPriority:
 		return m.Priority()
+	case accountgroup.FieldPriorityMode:
+		return m.PriorityMode()
 	case accountgroup.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -5782,6 +5807,13 @@ func (m *AccountGroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPriority(v)
+		return nil
+	case accountgroup.FieldPriorityMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriorityMode(v)
 		return nil
 	case accountgroup.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -5862,6 +5894,9 @@ func (m *AccountGroupMutation) ResetField(name string) error {
 		return nil
 	case accountgroup.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case accountgroup.FieldPriorityMode:
+		m.ResetPriorityMode()
 		return nil
 	case accountgroup.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -22637,6 +22672,9 @@ type GroupMutation struct {
 	created_at                              *time.Time
 	updated_at                              *time.Time
 	deleted_at                              *time.Time
+	group_scheduling_enabled                *bool
+	group_scheduling_version                *int64
+	addgroup_scheduling_version             *int64
 	name                                    *string
 	description                             *string
 	rate_multiplier                         *float64
@@ -22982,6 +23020,98 @@ func (m *GroupMutation) DeletedAtCleared() bool {
 func (m *GroupMutation) ResetDeletedAt() {
 	m.deleted_at = nil
 	delete(m.clearedFields, group.FieldDeletedAt)
+}
+
+// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
+func (m *GroupMutation) SetGroupSchedulingEnabled(b bool) {
+	m.group_scheduling_enabled = &b
+}
+
+// GroupSchedulingEnabled returns the value of the "group_scheduling_enabled" field in the mutation.
+func (m *GroupMutation) GroupSchedulingEnabled() (r bool, exists bool) {
+	v := m.group_scheduling_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupSchedulingEnabled returns the old "group_scheduling_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGroupSchedulingEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupSchedulingEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupSchedulingEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupSchedulingEnabled: %w", err)
+	}
+	return oldValue.GroupSchedulingEnabled, nil
+}
+
+// ResetGroupSchedulingEnabled resets all changes to the "group_scheduling_enabled" field.
+func (m *GroupMutation) ResetGroupSchedulingEnabled() {
+	m.group_scheduling_enabled = nil
+}
+
+// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
+func (m *GroupMutation) SetGroupSchedulingVersion(i int64) {
+	m.group_scheduling_version = &i
+	m.addgroup_scheduling_version = nil
+}
+
+// GroupSchedulingVersion returns the value of the "group_scheduling_version" field in the mutation.
+func (m *GroupMutation) GroupSchedulingVersion() (r int64, exists bool) {
+	v := m.group_scheduling_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupSchedulingVersion returns the old "group_scheduling_version" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGroupSchedulingVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupSchedulingVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupSchedulingVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupSchedulingVersion: %w", err)
+	}
+	return oldValue.GroupSchedulingVersion, nil
+}
+
+// AddGroupSchedulingVersion adds i to the "group_scheduling_version" field.
+func (m *GroupMutation) AddGroupSchedulingVersion(i int64) {
+	if m.addgroup_scheduling_version != nil {
+		*m.addgroup_scheduling_version += i
+	} else {
+		m.addgroup_scheduling_version = &i
+	}
+}
+
+// AddedGroupSchedulingVersion returns the value that was added to the "group_scheduling_version" field in this mutation.
+func (m *GroupMutation) AddedGroupSchedulingVersion() (r int64, exists bool) {
+	v := m.addgroup_scheduling_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetGroupSchedulingVersion resets all changes to the "group_scheduling_version" field.
+func (m *GroupMutation) ResetGroupSchedulingVersion() {
+	m.group_scheduling_version = nil
+	m.addgroup_scheduling_version = nil
 }
 
 // SetName sets the "name" field.
@@ -26757,7 +26887,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 70)
+	fields := make([]string, 0, 72)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26766,6 +26896,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, group.FieldDeletedAt)
+	}
+	if m.group_scheduling_enabled != nil {
+		fields = append(fields, group.FieldGroupSchedulingEnabled)
+	}
+	if m.group_scheduling_version != nil {
+		fields = append(fields, group.FieldGroupSchedulingVersion)
 	}
 	if m.name != nil {
 		fields = append(fields, group.FieldName)
@@ -26982,6 +27118,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case group.FieldDeletedAt:
 		return m.DeletedAt()
+	case group.FieldGroupSchedulingEnabled:
+		return m.GroupSchedulingEnabled()
+	case group.FieldGroupSchedulingVersion:
+		return m.GroupSchedulingVersion()
 	case group.FieldName:
 		return m.Name()
 	case group.FieldDescription:
@@ -27131,6 +27271,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldUpdatedAt(ctx)
 	case group.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case group.FieldGroupSchedulingEnabled:
+		return m.OldGroupSchedulingEnabled(ctx)
+	case group.FieldGroupSchedulingVersion:
+		return m.OldGroupSchedulingVersion(ctx)
 	case group.FieldName:
 		return m.OldName(ctx)
 	case group.FieldDescription:
@@ -27294,6 +27438,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDeletedAt(v)
+		return nil
+	case group.FieldGroupSchedulingEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupSchedulingEnabled(v)
+		return nil
+	case group.FieldGroupSchedulingVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupSchedulingVersion(v)
 		return nil
 	case group.FieldName:
 		v, ok := value.(string)
@@ -27772,6 +27930,9 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *GroupMutation) AddedFields() []string {
 	var fields []string
+	if m.addgroup_scheduling_version != nil {
+		fields = append(fields, group.FieldGroupSchedulingVersion)
+	}
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
@@ -27864,6 +28025,8 @@ func (m *GroupMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case group.FieldGroupSchedulingVersion:
+		return m.AddedGroupSchedulingVersion()
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
 	case group.FieldSubscriptionRateMultiplier:
@@ -27929,6 +28092,13 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *GroupMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case group.FieldGroupSchedulingVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGroupSchedulingVersion(v)
+		return nil
 	case group.FieldRateMultiplier:
 		v, ok := value.(float64)
 		if !ok {
@@ -28295,6 +28465,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case group.FieldGroupSchedulingEnabled:
+		m.ResetGroupSchedulingEnabled()
+		return nil
+	case group.FieldGroupSchedulingVersion:
+		m.ResetGroupSchedulingVersion()
 		return nil
 	case group.FieldName:
 		m.ResetName()
