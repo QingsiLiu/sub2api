@@ -1900,6 +1900,10 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
 	// pendingLines 在首个可见输出前保留前导事件，确保无输出失败仍可安全 failover。
 	pendingLines := make([]string, 0, 8)
+	// geili hook: Codex remote compaction v2 only counts compaction
+	// output_item.done events. Hold the buffered chat reply until one arrives.
+	nativeCompactionV2 := isOpenAINativeCompactionV2(c) && account != nil && account.Platform == PlatformOpenAI
+	passthroughDoneItems := newResponsesStreamOutputItems()
 
 	// ── 首个可见输出之前的下游 keepalive ──────────────────────────────────
 	//
@@ -2162,7 +2166,13 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				trimmedData = strings.TrimSpace(string(sanitizedData))
 				line = "data: " + string(sanitizedData)
 			}
+			if nativeCompactionV2 && eventType == "response.output_item.done" {
+				passthroughDoneItems.Observe(dataBytes)
+			}
 			lineStartsClientOutput = forceFlushFailedEvent || openAIStreamDataStartsClientOutput(trimmedData, eventType)
+			if nativeCompactionV2 && !passthroughDoneItems.HasCompactionItem() && !sawFailedEvent && !clientOutputStarted && !openAIStreamEventTypeIsTerminal(eventType) {
+				lineStartsClientOutput = false
+			}
 			if lineStartsClientOutput && trimmedData != "[DONE]" && !openAIStreamEventTypeIsTerminal(eventType) {
 				semanticOutputSeen = true
 			}
@@ -2174,6 +2184,10 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				!sawFailedEvent && !semanticOutputSeen && !clientOutputStarted &&
 				openAIResponsesCompletedEventIsEmpty(dataBytes, usage) {
 				return resultWithUsage(), newOpenAIResponsesEmptyCompletedFailoverError(c, account, upstreamRequestID)
+			}
+			if nativeCompactionV2 && !passthroughDoneItems.HasCompactionItem() && !sawFailedEvent && !clientOutputStarted &&
+				(openAIStreamEventTypeIsTerminal(eventType) || trimmedData == "[DONE]") {
+				return resultWithUsage(), newOpenAINativeCompactionMissingItemFailoverError(c, account, upstreamRequestID)
 			}
 			if firstTokenMs == nil && openAIStreamDataStartsTTFT(trimmedData, eventType, forceFlushFailedEvent, ttftMode) {
 				ms := int(time.Since(startTime).Milliseconds())
@@ -2280,6 +2294,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 		s.recordOpenAIProxyStreamDisconnect(account, errors.New("stream ended before terminal event"), upstreamRequestID)
 		return resultWithUsage(), errors.New("stream usage incomplete: missing terminal event")
+	}
+	if nativeCompactionV2 && !passthroughDoneItems.HasCompactionItem() && !sawFailedEvent && !clientOutputStarted {
+		return resultWithUsage(), newOpenAINativeCompactionMissingItemFailoverError(c, account, upstreamRequestID)
 	}
 	if (sawDone || sawTerminalEvent) && !sawFailedEvent {
 		s.clearOpenAIProxyStreamDisconnect(account)

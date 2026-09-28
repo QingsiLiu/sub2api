@@ -615,6 +615,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		c.Request.Context(), c, sessionHashBody, reqModel,
 	))
 	requireCompact := legacyCompact
+	// geili hook: native compaction v2 must avoid known-unsupported accounts.
+	// Forward-model context stays legacy-only, so this does not enable
+	// compact_model_mapping.
+	requireCompactionCapability := nativeV2 || legacyCompact
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -662,7 +666,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 			requiredCapability,
-			requireCompact,
+			requireCompactionCapability,
 			false,
 			!imageIntent,
 			requestPlatform,

@@ -454,6 +454,21 @@ func openAICompatibleAccountEligibilityFailureReasonBeforeProfit(ctx context.Con
 	return ""
 }
 
+// openAIScheduleRequiresCompaction reports whether this selection must land on
+// an account that can emit a Codex compaction item. Either flag is enough.
+// compact_model_mapping stays owned by RequireCompact and the forward-model
+// context, so native remote compaction v2 does not inherit that mapping.
+func openAIScheduleRequiresCompaction(req OpenAIAccountScheduleRequest) bool {
+	return req.RequireCompact || req.RequireCompactionCapability
+}
+
+// openAIAccountSupportsScheduledCompaction reports whether a sticky account may
+// keep a compaction request. Unknown capability stays eligible; only an explicit
+// unsupported probe or force_off releases the binding.
+func openAIAccountSupportsScheduledCompaction(account *Account, req OpenAIAccountScheduleRequest) bool {
+	return !openAIScheduleRequiresCompaction(req) || openAICompactSupportTier(account) != 0
+}
+
 type openAIQuotaAutoPauseDecision struct {
 	window      string
 	threshold   float64
@@ -1211,7 +1226,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if clearSticky {
 					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 				}
-				if !clearSticky && isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) {
+				if !clearSticky && isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, requireCompact, requiredCapability) {
 					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, groupID, platform, requestedModel, requireCompact, requiredCapability)
 					if account == nil {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)

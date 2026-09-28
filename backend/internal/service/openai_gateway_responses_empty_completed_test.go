@@ -82,6 +82,71 @@ func TestOpenAIResponsesEmptyCompletedWithOutputSucceeds(t *testing.T) {
 	require.Equal(t, 5, result.Usage.OutputTokens)
 }
 
+func TestOpenAINativeCompactionMissingItemFailsOverBeforeCommit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_chat\",\"object\":\"response\",\"status\":\"in_progress\"}}\n\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\"not a compaction\"}\n\n" +
+				"data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"not a compaction\"}]}}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_chat\",\"object\":\"response\",\"status\":\"completed\",\"output\":[{\"id\":\"msg_1\",\"type\":\"message\"}],\"usage\":{\"input_tokens\":153154,\"output_tokens\":269,\"total_tokens\":153423}}}\n\n",
+		)),
+	}}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	c, recorder := newOpenAIImageGenerationControlTestContext(true, "Codex Desktop/0.155.0-alpha.16.3")
+	c.Request.URL.Path = "/v1/responses"
+	MarkOpenAINativeCompactionV2(c)
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Extra = map[string]any{"openai_passthrough": true}
+
+	body := []byte(`{
+		"model":"gpt-6-astra",
+		"stream":true,
+		"input":[{"type":"compaction_trigger"}]
+	}`)
+
+	_, err := svc.Forward(context.Background(), c, account, body)
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.True(t, errors.As(err, &failoverErr), "missing compaction item must fail over, got: %v", err)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Empty(t, recorder.Body.String(), "ordinary chat output must not reach Codex")
+}
+
+func TestOpenAINativeCompactionItemReachesClient(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"cmp_1\",\"type\":\"compaction\",\"encrypted_content\":\"opaque-compaction\"}}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_cmp\",\"object\":\"response\",\"status\":\"completed\",\"output\":[{\"id\":\"cmp_1\",\"type\":\"compaction\",\"encrypted_content\":\"opaque-compaction\"}],\"usage\":{\"input_tokens\":12,\"output_tokens\":4,\"total_tokens\":16}}}\n\n",
+		)),
+	}}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	c, recorder := newOpenAIImageGenerationControlTestContext(true, "Codex Desktop/0.155.0-alpha.16.3")
+	c.Request.URL.Path = "/v1/responses"
+	MarkOpenAINativeCompactionV2(c)
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Extra = map[string]any{"openai_passthrough": true}
+
+	body := []byte(`{
+		"model":"gpt-6-astra",
+		"stream":true,
+		"input":[{"type":"compaction_trigger"}]
+	}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, recorder.Body.String(), `"type":"compaction"`)
+	require.Contains(t, recorder.Body.String(), "opaque-compaction")
+}
+
 // TestOpenAIResponsesEmptyCompletedWithUsageSucceeds ensures a completed event
 // carrying usage is not mistaken for a silent refusal even without output.
 func TestOpenAIResponsesEmptyCompletedWithUsageSucceeds(t *testing.T) {

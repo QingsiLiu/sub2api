@@ -277,6 +277,13 @@ func TestResolveOpenAIForwardMappedModels_CompactMappingPrecedence(t *testing.T)
 			wantBilling:    "gpt-5.4",
 			wantUpstream:   "gpt-5.4",
 		},
+		{
+			name: "native compaction capability does not apply compact mapping",
+			account: &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+				Credentials: conflictingMappings},
+			wantBilling:  "gpt-5.4",
+			wantUpstream: "gpt-5.4",
+		},
 	}
 
 	for _, tt := range tests {

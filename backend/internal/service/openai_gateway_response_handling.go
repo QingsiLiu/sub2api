@@ -371,7 +371,26 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		clientOutputStarted = true
 		lastDownstreamWriteAt = time.Now()
 	}
+	// geili hook: Codex remote compaction v2 only accepts a stream that emits
+	// exactly one compaction output_item.done. A relay that answers with a
+	// normal chat item must be failed over before those bytes leave the stage.
+	nativeCompactionV2 := isOpenAINativeCompactionV2(c) && account != nil && account.Platform == PlatformOpenAI
+	nativeCompactionMissingItem := func() bool {
+		return nativeCompactionV2 && !streamDoneItems.HasCompactionItem() && !sawFailedEvent && !clientOutputStarted &&
+			(firstOutputStage == nil || !firstOutputStage.closed)
+	}
+	failNativeCompactionMissingItem := func() bool {
+		if !nativeCompactionMissingItem() {
+			return false
+		}
+		streamEarlyErr = newOpenAINativeCompactionMissingItemFailoverError(c, account, upstreamRequestID)
+		_ = resp.Body.Close()
+		return true
+	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
+		if failNativeCompactionMissingItem() {
+			return resultWithUsage(), streamEarlyErr
+		}
 		if stageFirstOutput && eventInProgress {
 			// EOF dispatches the final SSE event even without a trailing blank line.
 			completeGuardedEvent(true)
@@ -684,6 +703,16 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			if startsClientOutput && !openAIStreamEventTypeIsTerminal(eventType) {
 				responsesSemanticOutputSeen = true
 			}
+			// geili hook: hold a native compaction stream that has not yet
+			// produced a compaction item. A message delta would otherwise flush
+			// the stage and make the wrong answer un-retryable.
+			if nativeCompactionMissingItem() && !openAIStreamEventTypeIsTerminal(eventType) {
+				startsClientOutput = false
+				startsVisibleOutput = false
+				startsTTFTOutput = false
+				eventStartsClientOutput = false
+				eventStartsTTFTOutput = false
+			}
 			// OpenAI Responses streams that terminate with an empty
 			// response.completed (no output, no usage, no error, nothing sent
 			// to the client) are silent upstream refusals: fail over instead of
@@ -694,6 +723,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				openAIResponsesCompletedEventIsEmpty(dataBytes, usage) {
 				sawTerminalEvent = true
 				streamEarlyErr = newOpenAIResponsesEmptyCompletedFailoverError(c, account, upstreamRequestID)
+				return
+			}
+			if openAIStreamEventTypeIsTerminal(eventType) && failNativeCompactionMissingItem() {
+				sawTerminalEvent = true
 				return
 			}
 
@@ -2042,7 +2075,8 @@ func normalizeCompletedImageGenerationStatus(data []byte) ([]byte, bool) {
 // item types it does not know about. The streaming path had no equivalent
 // because it never sees the whole body at once; this collector gives it one.
 type responsesStreamOutputItems struct {
-	items map[int]json.RawMessage
+	items         map[int]json.RawMessage
+	sawCompaction bool
 }
 
 func newResponsesStreamOutputItems() *responsesStreamOutputItems {
@@ -2065,10 +2099,20 @@ func (r *responsesStreamOutputItems) Observe(data []byte) {
 	}
 	index := int(gjson.GetBytes(data, "output_index").Int())
 	r.items[index] = json.RawMessage(append([]byte(nil), item.Raw...))
+	if isResponsesCompactionItemType(item.Get("type").String()) {
+		r.sawCompaction = true
+	}
 }
 
 func (r *responsesStreamOutputItems) HasItems() bool {
 	return r != nil && len(r.items) > 0
+}
+
+// HasCompactionItem reports whether a response.output_item.done event carried
+// a Codex compaction item. Native remote compaction v2 counts only those done
+// events, so a terminal output array is not enough.
+func (r *responsesStreamOutputItems) HasCompactionItem() bool {
+	return r != nil && r.sawCompaction
 }
 
 // Count reports how many distinct output items the stream reported as done.

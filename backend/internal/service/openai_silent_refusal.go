@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	openAISilentRefusalMinRequestBodyBytes = 64 * 1024
-	openAISilentRefusalErrorCode           = "openai_silent_refusal"
-	openAISilentRefusalUpstreamMessage     = "OpenAI upstream returned an empty completion stream with finish_reason=stop and no usage"
-	openAISilentRefusalClientMessage       = "Upstream returned an empty completion without usage; no fallback account was available"
-	openAIResponsesEmptyCompletedMessage   = "OpenAI upstream returned an empty response.completed stream with no output and no usage"
+	openAISilentRefusalMinRequestBodyBytes   = 64 * 1024
+	openAISilentRefusalErrorCode             = "openai_silent_refusal"
+	openAISilentRefusalUpstreamMessage       = "OpenAI upstream returned an empty completion stream with finish_reason=stop and no usage"
+	openAISilentRefusalClientMessage         = "Upstream returned an empty completion without usage; no fallback account was available"
+	openAIResponsesEmptyCompletedMessage     = "OpenAI upstream returned an empty response.completed stream with no output and no usage"
+	openAINativeCompactionMissingItemMessage = "upstream returned no compaction output item"
 )
 
 type openAIChatSilentRefusalDetector struct {
@@ -295,6 +296,44 @@ func newOpenAIResponsesEmptyCompletedFailoverError(c *gin.Context, account *Acco
 		UpstreamRequestID:  upstreamRequestID,
 		Kind:               "failover",
 		Message:            openAIResponsesEmptyCompletedMessage,
+	})
+
+	headers := http.Header{}
+	if strings.TrimSpace(upstreamRequestID) != "" {
+		headers.Set("x-request-id", strings.TrimSpace(upstreamRequestID))
+	}
+	return &UpstreamFailoverError{
+		StatusCode:      http.StatusBadGateway,
+		ResponseBody:    openAISilentRefusalErrorBody(),
+		ResponseHeaders: headers,
+	}
+}
+
+// newOpenAINativeCompactionMissingItemFailoverError marks a native remote
+// compaction v2 stream that finished without a compaction output_item.done.
+// Codex treats that as a fatal compact failure, so the buffered ordinary chat
+// reply must be discarded and another account tried before anything is billed.
+func newOpenAINativeCompactionMissingItemFailoverError(c *gin.Context, account *Account, upstreamRequestID string) *UpstreamFailoverError {
+	accountID := int64(0)
+	accountName := ""
+	platform := PlatformOpenAI
+	if account != nil {
+		accountID = account.ID
+		accountName = account.Name
+		platform = account.Platform
+	}
+
+	setOpsUpstreamError(c, http.StatusBadGateway, openAINativeCompactionMissingItemMessage, "")
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		ProxyID:            opsUpstreamProxyID(account),
+		ProxyName:          opsUpstreamProxyName(account),
+		Platform:           platform,
+		AccountID:          accountID,
+		AccountName:        accountName,
+		UpstreamStatusCode: http.StatusBadGateway,
+		UpstreamRequestID:  upstreamRequestID,
+		Kind:               "failover",
+		Message:            openAINativeCompactionMissingItemMessage,
 	})
 
 	headers := http.Header{}
