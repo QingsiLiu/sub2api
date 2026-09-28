@@ -24,6 +24,13 @@ func TestKeyRouteWriterRetriesOnlyUncommittedUpstreamFailures(t *testing.T) {
 	}{
 		{"unavailable", 503, `{"error":{"type":"api_error"}}`, false, true},
 		{"upstream limit", 429, `{"error":{"type":"upstream_error"}}`, false, true},
+		{"mapped upstream limit", 429, `{"error":{"type":"rate_limit_error","message":"Upstream rate limit exceeded, please retry later"}}`, false, true},
+		{"anthropic mapped upstream limit", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"Upstream rate limit exceeded, please retry later"}}`, false, true},
+		{"all accounts rate limited", 429, `{"error":{"type":"rate_limit_error","message":"All available accounts are currently rate-limited. Please retry later."}}`, false, true},
+		{"unknown rate limit", 429, `{"error":{"type":"rate_limit_error","message":"slow down"}}`, false, false},
+		{"queue full", 429, `{"error":{"type":"rate_limit_error","code":"gateway_queue_full","message":"Too many pending requests, please retry later"}}`, false, false},
+		{"concurrency limit", 429, `{"error":{"type":"rate_limit_error","code":"gateway_concurrency_limit","message":"Upstream rate limit exceeded, please retry later"}}`, false, false},
+		{"user rpm", 429, `{"error":{"code":"USER_RPM_EXCEEDED","message":"user requests-per-minute limit exceeded"}}`, false, false},
 		{"subscription limit", 429, `{"error":{"code":"SUBSCRIPTION_QUOTA_EXCEEDED"}}`, false, false},
 		{"local request failure", 503, `{"error":{"type":"invalid_request_error"}}`, false, false},
 		{"invalid parameters", 400, `{"error":{"type":"invalid_request_error"}}`, false, false},

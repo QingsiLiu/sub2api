@@ -392,8 +392,22 @@ func (w *keyRouteWriter) canRetry() bool {
 	case 502, 503, 504:
 		return true
 	case 429:
-		return kind == "upstream_error" || kind == "overloaded_error" || code == "no_available_accounts" || code == "upstream_rate_limited"
+		return kind == "upstream_error" || kind == "overloaded_error" || code == "no_available_accounts" || code == "upstream_rate_limited" ||
+			isUpstreamSideRateLimit(kind, code, gjson.GetBytes(body, "error.message").String())
 	default:
 		return false
 	}
+}
+
+// Gateway handlers map an exhausted upstream 429 to a generic rate_limit_error
+// without a code. Only these upstream-side messages may try the next group;
+// local concurrency/RPM/quota 429s carry a code and remain final.
+var upstreamSideRateLimitMessages = map[string]bool{
+	"Upstream rate limit exceeded, please retry later":                       true,
+	"Upstream rate limit exceeded":                                           true,
+	"All available accounts are currently rate-limited. Please retry later.": true,
+}
+
+func isUpstreamSideRateLimit(kind, code, message string) bool {
+	return kind == "rate_limit_error" && code == "" && upstreamSideRateLimitMessages[strings.TrimSpace(message)]
 }
