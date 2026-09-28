@@ -15,9 +15,18 @@ import (
 func TestGroupSchedulingGeiliAtomicModesAndMembership(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
+	createdGroups := []int64{}
+	t.Cleanup(func() {
+		for _, gid := range createdGroups {
+			_, _ = integrationDB.Exec(`DELETE FROM groups WHERE id=$1`, gid)
+		}
+	})
 	for _, gid := range []int64{4, 126} {
-		_, err := integrationDB.ExecContext(ctx, `INSERT INTO groups(id,name,platform) VALUES($1,$2,'openai') ON CONFLICT(id) DO NOTHING`, gid, fmt.Sprintf("group-priority-test-%d", gid))
+		result, err := integrationDB.ExecContext(ctx, `INSERT INTO groups(id,name,platform) VALUES($1,$2,'openai') ON CONFLICT(id) DO NOTHING`, gid, fmt.Sprintf("group-priority-test-%d", gid))
 		require.NoError(t, err)
+		if n, err := result.RowsAffected(); err == nil && n > 0 {
+			createdGroups = append(createdGroups, gid)
+		}
 	}
 	repo := NewAccountRepository(client, integrationDB, nil).(*accountRepository)
 	a := &service.Account{Name: "group-priority-a", Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true, Priority: 70, Concurrency: 1}
