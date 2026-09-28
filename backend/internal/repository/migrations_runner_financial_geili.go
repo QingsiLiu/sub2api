@@ -9,6 +9,7 @@ const financialUsageIndexesMigration = "262_usage_financial_indexes_notx.sql"
 const financialLookupIndexMigration = "267_subscription_billing_lookup_notx.sql"
 const financialLookupIndexName = "subscription_requests_settled_identity_lookup_geili"
 const financialRollupTriggerMigration = "260_group_usage_rollup_invalidation_queue.sql"
+const financialRollupRetireMigration = "274_usage_financial_rollup_retire.sql"
 const financialFactPageIndexMigration = "272_usage_financial_facts_page_indexes_notx.sql"
 
 var financialFactPageIndexes = []string{"usage_financial_facts_created_geili", "usage_financial_facts_user_created_geili"}

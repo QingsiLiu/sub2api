@@ -306,7 +306,7 @@ describe('admin UsageTable tooltip', () => {
     wrapper.unmount()
   })
 
-  it('shows unknown rather than zero for missing cost evidence', async () => {
+  it('uses eight decimal places for missing cost values', async () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{ ...baseImageRow, billing_mode: 'per_request', image_count: 0, total_cost: undefined, actual_cost: undefined }],
@@ -318,8 +318,7 @@ describe('admin UsageTable tooltip', () => {
     const triggers = wrapper.findAll('.group.relative')
     await triggers[triggers.length - 1].trigger('mouseenter')
     const amounts = wrapper.get('.fixed').findAll('span').map(span => span.text()).filter(text => text.startsWith('$'))
-    expect(amounts).toEqual([])
-    expect(wrapper.get('.fixed').text()).toContain('financial.unknown')
+    expect(amounts).toEqual(['$0.00000000', '$0.00000000', '$0.00000000', '$0.00000000'])
     wrapper.unmount()
   })
 
@@ -853,49 +852,5 @@ describe('admin UsageTable deleted-user badge', () => {
 
     expect(wrapper.text()).not.toContain('Deleted')
     expect(wrapper.text()).toContain('active@test.com')
-  })
-})
-
-
-describe('financial recovery evidence', () => {
-  it('renders recovered money while preserving unknown model, tokens and rates', () => {
-    const wrapper = mount(UsageTable, {
-      props: { data: [{ ...baseImageRow, model: null, input_tokens: null, output_tokens: null, total_cost: null, actual_cost: 10.84225728, rate_multiplier: null, image_count: null, billing_mode: null, record_source: 'historical_recovery', record_completeness: 'partial', unknown_fields: ['model', 'input_tokens', 'billing_mode'] }], columns: [] },
-      global: { stubs: { DataTable: DataTableStub, Icon: true, Teleport: true } },
-    })
-    expect(wrapper.text()).toContain('$10.842257')
-    expect(wrapper.text()).toContain('financial.unknown')
-    expect(wrapper.text()).toContain('financial.sourceRecovery')
-    expect(wrapper.text()).toContain('financial.partial')
-    wrapper.unmount()
-  })
-  it('does not present unverified historical amounts as free calls', () => {
-    const wrapper = mount(UsageTable, {
-      props: { data: [{ ...baseImageRow, actual_cost: null, total_cost: null, record_source: 'historical_recovery', record_completeness: 'amount_unknown' }], columns: [] },
-      global: { stubs: { DataTable: DataTableStub, Icon: true, Teleport: true } },
-    })
-    expect(wrapper.text()).toContain('financial.amountPending')
-    expect(wrapper.text()).not.toContain('$0.000000')
-    wrapper.unmount()
-  })
-})
-
-describe('usage time cell', () => {
-  const TimeStub = { props: ['data'], template: '<div><div v-for="row in data" :key="row.request_id"><slot name="cell-created_at" :row="row" /></div></div>' }
-  const mountTime = (row: Record<string, unknown>) => mount(UsageTable, {
-    props: { data: [{ ...baseImageRow, ...row }], columns: [] },
-    global: { stubs: { DataTable: TimeStub, Icon: true, Teleport: true } },
-  })
-  it('shows only the primary time when financial times agree', () => {
-    const wrapper = mountTime({ created_at: '2026-09-27T06:00:00Z', accounting_date: '2026-09-27', completed_at: '2026-09-27T06:00:00Z', settled_at: '2026-09-27T06:00:01Z' })
-    expect(wrapper.findAll('p')).toHaveLength(1)
-    expect(wrapper.text()).not.toContain('financial.')
-    wrapper.unmount()
-  })
-  it('explains a cross-midnight accounting day', () => {
-    const wrapper = mountTime({ created_at: '2026-09-27T16:00:30Z', accounting_date: '2026-09-27', completed_at: '2026-09-27T16:00:30Z', settled_at: '2026-09-27T16:00:30Z' })
-    expect(wrapper.text()).toContain('financial.accountingDate: 2026-09-27')
-    expect(wrapper.text()).not.toContain('financial.settledAt')
-    wrapper.unmount()
   })
 })

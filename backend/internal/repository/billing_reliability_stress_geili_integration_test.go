@@ -508,13 +508,11 @@ func TestBillingReliabilityMixedStressGeili(t *testing.T) {
 				require.Zero(t, paidUsed, "gift-first rule unchanged")
 			}
 		}
-		stats, err := api.GetFinancialUsageStats(context.Background(), usagestats.UsageLogFilters{UserID: f.userID, DateBasis: usagestats.FinancialDateAccounting})
+		stats, err := api.GetStatsWithFilters(context.Background(), usagestats.UsageLogFilters{UserID: f.userID})
 		require.NoError(t, err)
 		require.Equal(t, count, stats.TotalRequests)
 		require.InDelta(t, expected, stats.TotalActualCost, 1e-8)
-		require.Zero(t, stats.DetailPendingCount)
-		require.Zero(t, stats.UnknownAmountCount)
-		report.Checks[fmt.Sprintf("%s_user_%d", f.kind, f.userID)] = map[string]any{"requests": count, "amount": amount, "logs": logCount, "dedup": dedupCount, "finance_api_amount": stats.TotalActualCost}
+		report.Checks[fmt.Sprintf("%s_user_%d", f.kind, f.userID)] = map[string]any{"requests": count, "amount": amount, "logs": logCount, "dedup": dedupCount, "usage_api_amount": stats.TotalActualCost}
 	}
 	var mismatches int64
 	require.NoError(t, integrationDB.QueryRow(`SELECT COUNT(*) FROM usage_settlement_receipts r LEFT JOIN usage_logs u ON u.id=r.usage_log_id WHERE u.id IS NULL OR u.request_id<>r.usage_request_id OR u.api_key_id<>r.api_key_id OR u.user_id<>r.user_id OR u.actual_cost<>r.charged_amount`).Scan(&mismatches))

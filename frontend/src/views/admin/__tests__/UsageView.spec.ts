@@ -42,9 +42,12 @@ const messages: Record<string, string> = {
 	'common.no': 'No',
 }
 
-// Independent calendar expectation: UTC instant plus the fixed Beijing offset.
-const formatAccountingDate = (date: Date): string =>
-  new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
@@ -401,9 +404,7 @@ describe('admin UsageView distribution metric toggles', () => {
     expect((wrapper.vm as any).requestedModelStats).toEqual([{ model: 'B', total_tokens: 20 }])
   })
 
-  it.each(['2026-09-25T15:59:00Z', '2026-09-25T16:01:00Z'])(
-    'keeps metric toggles independent and Beijing accounting dates at %s', async (instant) => {
-    vi.setSystemTime(new Date(instant))
+  it('keeps model and group metric toggles independent without refetching chart data', async () => {
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
@@ -433,10 +434,8 @@ describe('admin UsageView distribution metric toggles', () => {
     const now = new Date()
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatAccountingDate(yesterday),
-      end_date: formatAccountingDate(now),
-      date_basis: 'accounting',
-      timezone: 'Asia/Shanghai',
+      start_date: formatLocalDate(yesterday),
+      end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
 
@@ -773,27 +772,6 @@ describe('admin UsageView model audit export', () => {
 
 	afterEach(() => {
 		vi.useRealTimers()
-	})
-
-	it('exports unverified fields as blank and neutralizes spreadsheet formula prefixes', async () => {
-		exportList.mockResolvedValue({ items: [{ id: -9, created_at: null, model: null, actual_cost: null, total_cost: null, input_tokens: null, output_tokens: null, rate_multiplier: null, record_source: 'historical_recovery', record_completeness: 'amount_unknown', accounting_date: '2026-09-25', unknown_fields: ['model', 'actual_cost'], request_id: '  =1+1', api_key: { name: '@SUM(A1)' } }], total: 1, pages: 1 })
-		const wrapper = mountRouteFilteredUsageView()
-		vi.advanceTimersByTime(120)
-		await flushPromises()
-		await (wrapper.vm as any).exportToExcel()
-		const headers = aoaToSheet.mock.calls[0][0][0]
-		const row = sheetAddAoa.mock.calls[0][1][0]
-		expect(row[0]).toBe('')
-		expect(row[2]).toBe("'@SUM(A1)")
-		expect(row[4]).toBe('')
-		expect(row[14]).toBe('')
-		expect(row).toContain("'  =1+1")
-		expect(row).toContain('historical_recovery')
-		expect(row).toContain('amount_unknown')
-		expect(row[headers.indexOf('financial.accountingDate')]).toBe('2026-09-25')
-		expect(row[headers.indexOf('financial.dateBasis')]).toBe('accounting')
-		expect(row).not.toContain('0.000000')
-		wrapper.unmount()
 	})
 
 	it('exports requested, sent, response, and mismatch as separate admin columns', async () => {

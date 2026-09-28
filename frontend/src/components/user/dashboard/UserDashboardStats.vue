@@ -1,6 +1,6 @@
 <template>
   <!-- Row 1: Core Stats -->
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
     <!-- Balance -->
     <div v-if="!isSimple" class="card p-4">
       <div class="flex items-center gap-3">
@@ -52,27 +52,15 @@
           <Icon name="dollar" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
         </div>
         <div>
-          <p class="flex items-center text-xs font-medium text-gray-500 dark:text-gray-400">
-            {{ t('dashboard.todayCost') }}
-            <!-- geili hook: balance/subscription split stays one hover away so the card matches its neighbours. -->
-            <HelpTooltip v-if="hasSpendingSplit" width-class="w-60">
-              <div class="space-y-1" data-testid="today-financial-spending-split">
-                <p>{{ t('financial.balanceSpending') }}: {{ financialMoney(stats.today_balance_actual_cost, t('financial.unknown')) }}</p>
-                <p>{{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.today_subscription_actual_cost, t('financial.unknown')) }}</p>
-                <p class="pt-1 text-gray-300">{{ t('common.total') }} · {{ t('financial.balanceSpending') }}: {{ financialMoney(stats.total_balance_actual_cost, t('financial.unknown')) }}</p>
-                <p class="text-gray-300">{{ t('common.total') }} · {{ t('financial.subscriptionSpending') }}: {{ financialMoney(stats.total_subscription_actual_cost, t('financial.unknown')) }}</p>
-                <p v-if="stats.today_unknown_amount_count" class="text-amber-300">{{ t('financial.knownAmount') }}</p>
-              </div>
-            </HelpTooltip>
-          </p>
+          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</p>
           <p class="text-xl font-bold text-gray-900 dark:text-white">
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">{{ financialMoney(stats?.today_actual_cost, t('financial.unknown')) }}</span>
-            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / {{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_cost, t('financial.unknown')) }}</span>
+            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.today_actual_cost || 0) }}</span>
+            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.today_cost || 0) }}</span>
           </p>
           <p class="text-xs">
             <span class="text-gray-500 dark:text-gray-400">{{ t('common.total') }}: </span>
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">{{ financialMoney(stats?.total_actual_cost, t('financial.unknown')) }}</span>
-            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / {{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_cost, t('financial.unknown')) }}</span>
+            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.total_actual_cost || 0) }}</span>
+            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.total_cost || 0) }}</span>
           </p>
         </div>
       </div>
@@ -80,7 +68,7 @@
   </div>
 
   <!-- Row 2: Token Stats -->
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
     <!-- Today Tokens -->
     <div class="card p-4">
       <div class="flex items-center gap-3">
@@ -89,8 +77,8 @@
         </div>
         <div>
           <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayTokens') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.today_tokens || 0) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.today_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.today_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens((stats?.today_cache_creation_tokens || 0) + (stats?.today_cache_read_tokens || 0)) }}</p>
+          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(stats?.today_tokens || 0) }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ formatTokens(stats?.today_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ formatTokens(stats?.today_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ formatTokens((stats?.today_cache_creation_tokens || 0) + (stats?.today_cache_read_tokens || 0)) }}</p>
         </div>
       </div>
     </div>
@@ -103,8 +91,8 @@
         </div>
         <div>
           <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.totalTokens') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.total_tokens || 0) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.total_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats?.total_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens((stats?.total_cache_creation_tokens || 0) + (stats?.total_cache_read_tokens || 0)) }}</p>
+          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(stats?.total_tokens || 0) }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ formatTokens(stats?.total_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ formatTokens(stats?.total_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ formatTokens((stats?.total_cache_creation_tokens || 0) + (stats?.total_cache_read_tokens || 0)) }}</p>
         </div>
       </div>
     </div>
@@ -187,7 +175,7 @@
           <div class="flex items-center justify-between">
             <span class="text-gray-500 dark:text-gray-400">{{ t('dashboard.tokens') }}</span>
             <span class="font-mono text-gray-700 dark:text-gray-300">
-              {{ stats.total_token_counts_complete === false ? t('financial.unknown') : (item.total_tokens > 0 ? formatTokens(item.total_tokens) : '-') }}
+              {{ item.total_tokens > 0 ? formatTokens(item.total_tokens) : '-' }}
             </span>
           </div>
         </div>
@@ -239,8 +227,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import HelpTooltip from '@/components/common/HelpTooltip.vue'
-import { financialMoney } from '@/utils/financialUsage'
 import Icon from '@/components/icons/Icon.vue'
 import type { PlatformDashboardStats, UserDashboardStats as UserStatsType } from '@/api/usage'
 import type { PlatformQuotaItem } from '@/types'
@@ -263,8 +249,6 @@ const props = defineProps<{
 }>()
 const { t } = useI18n()
 
-const hasSpendingSplit = computed(() => [props.stats.today_balance_actual_cost, props.stats.today_subscription_actual_cost, props.stats.total_balance_actual_cost, props.stats.total_subscription_actual_cost].some((v) => v != null))
-
 const PLATFORM_LABELS: Record<string, string> = {
   anthropic: 'Claude',
   openai: 'OpenAI',
@@ -277,7 +261,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   minimax: 'MiniMax',
 }
 
-const platformLabel = (p: string) => p === 'unknown' ? t('financial.unknown') : (PLATFORM_LABELS[p] ?? p)
+const platformLabel = (p: string) => PLATFORM_LABELS[p] ?? p
 
 // 处理"各平台之和 < 总值"的差值：后端按平台聚合时过滤了无法归属平台的行
 // （group 与 account 都缺 platform）。这里把差值作为"其他"卡片显式展示，

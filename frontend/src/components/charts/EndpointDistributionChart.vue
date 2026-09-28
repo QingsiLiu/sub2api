@@ -104,13 +104,13 @@
                   {{ formatNumber(item.requests) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
-                  {{ item.token_counts_complete === false ? t('financial.unknown') : formatTokens(item.total_tokens) }}
+                  {{ formatTokens(item.total_tokens) }}
                 </td>
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
-                  ${{ formatCost(item.actual_cost) }}<span v-if="item.unknown_amount_count" class="ml-1 text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
+                  ${{ formatCost(item.actual_cost) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
-                  {{ item.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(item.cost) }}
+                  ${{ formatCost(item.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === item.endpoint">

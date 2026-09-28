@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
-
-	"golang.org/x/sync/singleflight"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -42,19 +40,17 @@ type dashboardStatsCacheEntry struct {
 
 // DashboardService 提供管理员仪表盘统计服务。
 type DashboardService struct {
-	// geili: collapse concurrent cold financial-total scans per process.
-	financialRefresh singleflight.Group
-	usageRepo        UsageLogRepository
-	aggRepo          DashboardAggregationRepository
-	cache            DashboardStatsCache
-	cacheFreshTTL    time.Duration
-	cacheTTL         time.Duration
-	refreshTimeout   time.Duration
-	refreshing       int32
-	aggEnabled       bool
-	aggInterval      time.Duration
-	aggLookback      time.Duration
-	aggUsageDays     int
+	usageRepo      UsageLogRepository
+	aggRepo        DashboardAggregationRepository
+	cache          DashboardStatsCache
+	cacheFreshTTL  time.Duration
+	cacheTTL       time.Duration
+	refreshTimeout time.Duration
+	refreshing     int32
+	aggEnabled     bool
+	aggInterval    time.Duration
+	aggLookback    time.Duration
+	aggUsageDays   int
 }
 
 func NewDashboardService(usageRepo UsageLogRepository, aggRepo DashboardAggregationRepository, cache DashboardStatsCache, cfg *config.Config) *DashboardService {
@@ -107,17 +103,6 @@ func NewDashboardService(usageRepo UsageLogRepository, aggRepo DashboardAggregat
 }
 
 func (s *DashboardService) GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error) {
-	// geili: exact financial buckets already provide bounded aggregation. A TTL
-	// response cache would hide receipt/log changes and bypass dirty-bucket checks.
-	if _, financial := s.usageRepo.(FinancialAdminUsageRepository); financial {
-		stats, err := s.fetchDashboardStats(ctx)
-		if err != nil {
-			return nil, err
-		}
-		stats.StatsUpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		stats.StatsStale = false // includes raw fallback for every dirty/unbuilt bucket
-		return stats, nil
-	}
 	if s.cache != nil {
 		cached, fresh, err := s.getCachedDashboardStats(ctx)
 		if err == nil && cached != nil {
@@ -140,10 +125,6 @@ func (s *DashboardService) GetDashboardStats(ctx context.Context) (*usagestats.D
 }
 
 func (s *DashboardService) GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) ([]usagestats.TrendDataPoint, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialTrend(ctx, startTime, endTime, granularity, usagestats.UsageLogFilters{UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, GroupID: groupID, Model: model, RequestType: requestType, Stream: stream, BillingType: billingType})
-	}
 	trend, err := s.usageRepo.GetUsageTrendWithFilters(ctx, startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, billingType)
 	if err != nil {
 		return nil, fmt.Errorf("get usage trend with filters: %w", err)
@@ -152,10 +133,6 @@ func (s *DashboardService) GetUsageTrendWithFilters(ctx context.Context, startTi
 }
 
 func (s *DashboardService) GetUsageTrendWithUsageFilters(ctx context.Context, startTime, endTime time.Time, granularity string, filters usagestats.UsageLogFilters) ([]usagestats.TrendDataPoint, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialTrend(ctx, startTime, endTime, granularity, filters)
-	}
 	type usageTrendWithFiltersRepo interface {
 		GetUsageTrendWithUsageFilters(context.Context, time.Time, time.Time, string, usagestats.UsageLogFilters) ([]usagestats.TrendDataPoint, error)
 	}
@@ -170,10 +147,6 @@ func (s *DashboardService) GetUsageTrendWithUsageFilters(ctx context.Context, st
 }
 
 func (s *DashboardService) GetModelStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, requestType *int16, stream *bool, billingType *int8) ([]usagestats.ModelStat, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialModels(ctx, startTime, endTime, usagestats.UsageLogFilters{UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, GroupID: groupID, RequestType: requestType, Stream: stream, BillingType: billingType}, usagestats.ModelSourceRequested)
-	}
 	stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
 	if err != nil {
 		return nil, fmt.Errorf("get model stats with filters: %w", err)
@@ -182,10 +155,6 @@ func (s *DashboardService) GetModelStatsWithFilters(ctx context.Context, startTi
 }
 
 func (s *DashboardService) GetModelStatsWithFiltersBySource(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, requestType *int16, stream *bool, billingType *int8, modelSource string) ([]usagestats.ModelStat, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialModels(ctx, startTime, endTime, usagestats.UsageLogFilters{UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, GroupID: groupID, RequestType: requestType, Stream: stream, BillingType: billingType}, modelSource)
-	}
 	normalizedSource := usagestats.NormalizeModelSource(modelSource)
 	if normalizedSource == usagestats.ModelSourceRequested {
 		return s.GetModelStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
@@ -207,10 +176,6 @@ func (s *DashboardService) GetModelStatsWithFiltersBySource(ctx context.Context,
 }
 
 func (s *DashboardService) GetModelStatsWithUsageFiltersBySource(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters, modelSource string) ([]usagestats.ModelStat, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialModels(ctx, startTime, endTime, filters, modelSource)
-	}
 	normalizedSource := usagestats.NormalizeModelSource(modelSource)
 	type modelStatsWithFiltersRepo interface {
 		GetModelStatsWithUsageFiltersBySource(context.Context, time.Time, time.Time, usagestats.UsageLogFilters, string) ([]usagestats.ModelStat, error)
@@ -226,10 +191,6 @@ func (s *DashboardService) GetModelStatsWithUsageFiltersBySource(ctx context.Con
 }
 
 func (s *DashboardService) GetGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, requestType *int16, stream *bool, billingType *int8) ([]usagestats.GroupStat, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialGroups(ctx, startTime, endTime, usagestats.UsageLogFilters{UserID: userID, APIKeyID: apiKeyID, AccountID: accountID, GroupID: groupID, RequestType: requestType, Stream: stream, BillingType: billingType})
-	}
 	stats, err := s.usageRepo.GetGroupStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
 	if err != nil {
 		return nil, fmt.Errorf("get group stats with filters: %w", err)
@@ -238,10 +199,6 @@ func (s *DashboardService) GetGroupStatsWithFilters(ctx context.Context, startTi
 }
 
 func (s *DashboardService) GetGroupStatsWithUsageFilters(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) ([]usagestats.GroupStat, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialGroups(ctx, startTime, endTime, filters)
-	}
 	type groupStatsWithFiltersRepo interface {
 		GetGroupStatsWithUsageFilters(context.Context, time.Time, time.Time, usagestats.UsageLogFilters) ([]usagestats.GroupStat, error)
 	}
@@ -257,10 +214,6 @@ func (s *DashboardService) GetGroupStatsWithUsageFilters(ctx context.Context, st
 
 // GetGroupUsageSummary returns today's, yesterday's, and cumulative cost for all groups.
 func (s *DashboardService) GetGroupUsageSummary(ctx context.Context, todayStart time.Time) ([]usagestats.GroupUsageSummary, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialGroupSummary(ctx, todayStart)
-	}
 	results, err := s.usageRepo.GetAllGroupUsageSummary(ctx, todayStart)
 	if err != nil {
 		return nil, fmt.Errorf("get group usage summary: %w", err)
@@ -284,10 +237,6 @@ func (s *DashboardService) getCachedDashboardStats(ctx context.Context) (*usages
 		return nil, false, ErrDashboardStatsCacheMiss
 	}
 
-	// geili: cached pre-receipt totals have a different accounting contract.
-	if _, financial := s.usageRepo.(FinancialAdminUsageRepository); financial && entry.Stats.DateBasis != usagestats.FinancialDateAccounting {
-		return nil, false, ErrDashboardStatsCacheMiss
-	}
 	age := time.Since(time.Unix(entry.UpdatedAt, 0))
 	return entry.Stats, age <= s.cacheFreshTTL, nil
 }
@@ -331,15 +280,6 @@ func (s *DashboardService) refreshDashboardStatsAsync() {
 }
 
 func (s *DashboardService) fetchDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		result, err, _ := s.financialRefresh.Do("financial-dashboard", func() (any, error) { return financial.GetFinancialAdminDashboardStats(ctx) })
-		if err != nil {
-			return nil, err
-		}
-		value := *result.(*usagestats.DashboardStats)
-		return &value, nil
-	}
 	if !s.aggEnabled {
 		if fetcher, ok := s.usageRepo.(dashboardStatsRangeFetcher); ok {
 			now := time.Now().UTC()
@@ -445,10 +385,6 @@ func parseStatsUpdatedAt(raw string) time.Time {
 }
 
 func (s *DashboardService) GetAPIKeyUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) ([]usagestats.APIKeyUsageTrendPoint, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialKeyTrend(ctx, startTime, endTime, granularity, limit)
-	}
 	trend, err := s.usageRepo.GetAPIKeyUsageTrend(ctx, startTime, endTime, granularity, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get api key usage trend: %w", err)
@@ -457,10 +393,6 @@ func (s *DashboardService) GetAPIKeyUsageTrend(ctx context.Context, startTime, e
 }
 
 func (s *DashboardService) GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) ([]usagestats.UserUsageTrendPoint, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialUserTrend(ctx, startTime, endTime, granularity, limit)
-	}
 	trend, err := s.usageRepo.GetUserUsageTrend(ctx, startTime, endTime, granularity, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get user usage trend: %w", err)
@@ -469,10 +401,6 @@ func (s *DashboardService) GetUserUsageTrend(ctx context.Context, startTime, end
 }
 
 func (s *DashboardService) GetUserSpendingRanking(ctx context.Context, startTime, endTime time.Time, limit int) (*usagestats.UserSpendingRankingResponse, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialUserRanking(ctx, startTime, endTime, limit)
-	}
 	ranking, err := s.usageRepo.GetUserSpendingRanking(ctx, startTime, endTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get user spending ranking: %w", err)
@@ -481,10 +409,6 @@ func (s *DashboardService) GetUserSpendingRanking(ctx context.Context, startTime
 }
 
 func (s *DashboardService) GetUserBreakdownStats(ctx context.Context, startTime, endTime time.Time, dim usagestats.UserBreakdownDimension, limit int) ([]usagestats.UserBreakdownItem, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialUserBreakdown(ctx, startTime, endTime, dim, limit)
-	}
 	stats, err := s.usageRepo.GetUserBreakdownStats(ctx, startTime, endTime, dim, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get user breakdown stats: %w", err)
@@ -493,10 +417,6 @@ func (s *DashboardService) GetUserBreakdownStats(ctx context.Context, startTime,
 }
 
 func (s *DashboardService) GetBatchUserUsageStats(ctx context.Context, userIDs []int64, startTime, endTime time.Time) (map[int64]*usagestats.BatchUserUsageStats, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialAdminUsageRepository); ok {
-		return financial.GetFinancialBatchUserStats(ctx, userIDs, startTime, endTime)
-	}
 	stats, err := s.usageRepo.GetBatchUserUsageStats(ctx, userIDs, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("get batch user usage stats: %w", err)
@@ -505,10 +425,6 @@ func (s *DashboardService) GetBatchUserUsageStats(ctx context.Context, userIDs [
 }
 
 func (s *DashboardService) GetBatchAPIKeyUsageStats(ctx context.Context, apiKeyIDs []int64, startTime, endTime time.Time) (map[int64]*usagestats.BatchAPIKeyUsageStats, error) {
-	// geili hook: financial reports use receipts, not asynchronous log totals.
-	if financial, ok := s.usageRepo.(FinancialUsageRepository); ok {
-		return financial.GetFinancialBatchAPIKeyStats(ctx, apiKeyIDs, startTime, endTime)
-	}
 	stats, err := s.usageRepo.GetBatchAPIKeyUsageStats(ctx, apiKeyIDs, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("get batch api key usage stats: %w", err)

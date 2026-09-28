@@ -1,4 +1,3 @@
-import financial from './financial'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -10,7 +9,6 @@ import misc from './misc'
 import subscriptionRights from './subscriptionRights'
 
 export default {
-  ...financial,
   ...subscriptionRights,
   ...landing,
   ...common,
