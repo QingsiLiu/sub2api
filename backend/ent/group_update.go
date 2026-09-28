@@ -65,41 +65,6 @@ func (_u *GroupUpdate) ClearDeletedAt() *GroupUpdate {
 	return _u
 }
 
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (_u *GroupUpdate) SetGroupSchedulingEnabled(v bool) *GroupUpdate {
-	_u.mutation.SetGroupSchedulingEnabled(v)
-	return _u
-}
-
-// SetNillableGroupSchedulingEnabled sets the "group_scheduling_enabled" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableGroupSchedulingEnabled(v *bool) *GroupUpdate {
-	if v != nil {
-		_u.SetGroupSchedulingEnabled(*v)
-	}
-	return _u
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (_u *GroupUpdate) SetGroupSchedulingVersion(v int64) *GroupUpdate {
-	_u.mutation.ResetGroupSchedulingVersion()
-	_u.mutation.SetGroupSchedulingVersion(v)
-	return _u
-}
-
-// SetNillableGroupSchedulingVersion sets the "group_scheduling_version" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableGroupSchedulingVersion(v *int64) *GroupUpdate {
-	if v != nil {
-		_u.SetGroupSchedulingVersion(*v)
-	}
-	return _u
-}
-
-// AddGroupSchedulingVersion adds value to the "group_scheduling_version" field.
-func (_u *GroupUpdate) AddGroupSchedulingVersion(v int64) *GroupUpdate {
-	_u.mutation.AddGroupSchedulingVersion(v)
-	return _u
-}
-
 // SetName sets the "name" field.
 func (_u *GroupUpdate) SetName(v string) *GroupUpdate {
 	_u.mutation.SetName(v)
@@ -1749,15 +1714,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(group.FieldDeletedAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.GroupSchedulingEnabled(); ok {
-		_spec.SetField(group.FieldGroupSchedulingEnabled, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.GroupSchedulingVersion(); ok {
-		_spec.SetField(group.FieldGroupSchedulingVersion, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupSchedulingVersion(); ok {
-		_spec.AddField(group.FieldGroupSchedulingVersion, field.TypeInt64, value)
-	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
 	}
@@ -2545,41 +2501,6 @@ func (_u *GroupUpdateOne) SetNillableDeletedAt(v *time.Time) *GroupUpdateOne {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (_u *GroupUpdateOne) ClearDeletedAt() *GroupUpdateOne {
 	_u.mutation.ClearDeletedAt()
-	return _u
-}
-
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (_u *GroupUpdateOne) SetGroupSchedulingEnabled(v bool) *GroupUpdateOne {
-	_u.mutation.SetGroupSchedulingEnabled(v)
-	return _u
-}
-
-// SetNillableGroupSchedulingEnabled sets the "group_scheduling_enabled" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableGroupSchedulingEnabled(v *bool) *GroupUpdateOne {
-	if v != nil {
-		_u.SetGroupSchedulingEnabled(*v)
-	}
-	return _u
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (_u *GroupUpdateOne) SetGroupSchedulingVersion(v int64) *GroupUpdateOne {
-	_u.mutation.ResetGroupSchedulingVersion()
-	_u.mutation.SetGroupSchedulingVersion(v)
-	return _u
-}
-
-// SetNillableGroupSchedulingVersion sets the "group_scheduling_version" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableGroupSchedulingVersion(v *int64) *GroupUpdateOne {
-	if v != nil {
-		_u.SetGroupSchedulingVersion(*v)
-	}
-	return _u
-}
-
-// AddGroupSchedulingVersion adds value to the "group_scheduling_version" field.
-func (_u *GroupUpdateOne) AddGroupSchedulingVersion(v int64) *GroupUpdateOne {
-	_u.mutation.AddGroupSchedulingVersion(v)
 	return _u
 }
 
@@ -4261,15 +4182,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(group.FieldDeletedAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.GroupSchedulingEnabled(); ok {
-		_spec.SetField(group.FieldGroupSchedulingEnabled, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.GroupSchedulingVersion(); ok {
-		_spec.SetField(group.FieldGroupSchedulingVersion, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupSchedulingVersion(); ok {
-		_spec.AddField(group.FieldGroupSchedulingVersion, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)

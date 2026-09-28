@@ -74,34 +74,6 @@ func (_c *GroupCreate) SetNillableDeletedAt(v *time.Time) *GroupCreate {
 	return _c
 }
 
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (_c *GroupCreate) SetGroupSchedulingEnabled(v bool) *GroupCreate {
-	_c.mutation.SetGroupSchedulingEnabled(v)
-	return _c
-}
-
-// SetNillableGroupSchedulingEnabled sets the "group_scheduling_enabled" field if the given value is not nil.
-func (_c *GroupCreate) SetNillableGroupSchedulingEnabled(v *bool) *GroupCreate {
-	if v != nil {
-		_c.SetGroupSchedulingEnabled(*v)
-	}
-	return _c
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (_c *GroupCreate) SetGroupSchedulingVersion(v int64) *GroupCreate {
-	_c.mutation.SetGroupSchedulingVersion(v)
-	return _c
-}
-
-// SetNillableGroupSchedulingVersion sets the "group_scheduling_version" field if the given value is not nil.
-func (_c *GroupCreate) SetNillableGroupSchedulingVersion(v *int64) *GroupCreate {
-	if v != nil {
-		_c.SetGroupSchedulingVersion(*v)
-	}
-	return _c
-}
-
 // SetName sets the "name" field.
 func (_c *GroupCreate) SetName(v string) *GroupCreate {
 	_c.mutation.SetName(v)
@@ -1163,14 +1135,6 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := _c.mutation.GroupSchedulingEnabled(); !ok {
-		v := group.DefaultGroupSchedulingEnabled
-		_c.mutation.SetGroupSchedulingEnabled(v)
-	}
-	if _, ok := _c.mutation.GroupSchedulingVersion(); !ok {
-		v := group.DefaultGroupSchedulingVersion
-		_c.mutation.SetGroupSchedulingVersion(v)
-	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
@@ -1361,12 +1325,6 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Group.updated_at"`)}
-	}
-	if _, ok := _c.mutation.GroupSchedulingEnabled(); !ok {
-		return &ValidationError{Name: "group_scheduling_enabled", err: errors.New(`ent: missing required field "Group.group_scheduling_enabled"`)}
-	}
-	if _, ok := _c.mutation.GroupSchedulingVersion(); !ok {
-		return &ValidationError{Name: "group_scheduling_version", err: errors.New(`ent: missing required field "Group.group_scheduling_version"`)}
 	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Group.name"`)}
@@ -1619,14 +1577,6 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(group.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
-	}
-	if value, ok := _c.mutation.GroupSchedulingEnabled(); ok {
-		_spec.SetField(group.FieldGroupSchedulingEnabled, field.TypeBool, value)
-		_node.GroupSchedulingEnabled = value
-	}
-	if value, ok := _c.mutation.GroupSchedulingVersion(); ok {
-		_spec.SetField(group.FieldGroupSchedulingVersion, field.TypeInt64, value)
-		_node.GroupSchedulingVersion = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(group.FieldName, field.TypeString, value)
@@ -2111,36 +2061,6 @@ func (u *GroupUpsert) UpdateDeletedAt() *GroupUpsert {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (u *GroupUpsert) ClearDeletedAt() *GroupUpsert {
 	u.SetNull(group.FieldDeletedAt)
-	return u
-}
-
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (u *GroupUpsert) SetGroupSchedulingEnabled(v bool) *GroupUpsert {
-	u.Set(group.FieldGroupSchedulingEnabled, v)
-	return u
-}
-
-// UpdateGroupSchedulingEnabled sets the "group_scheduling_enabled" field to the value that was provided on create.
-func (u *GroupUpsert) UpdateGroupSchedulingEnabled() *GroupUpsert {
-	u.SetExcluded(group.FieldGroupSchedulingEnabled)
-	return u
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (u *GroupUpsert) SetGroupSchedulingVersion(v int64) *GroupUpsert {
-	u.Set(group.FieldGroupSchedulingVersion, v)
-	return u
-}
-
-// UpdateGroupSchedulingVersion sets the "group_scheduling_version" field to the value that was provided on create.
-func (u *GroupUpsert) UpdateGroupSchedulingVersion() *GroupUpsert {
-	u.SetExcluded(group.FieldGroupSchedulingVersion)
-	return u
-}
-
-// AddGroupSchedulingVersion adds v to the "group_scheduling_version" field.
-func (u *GroupUpsert) AddGroupSchedulingVersion(v int64) *GroupUpsert {
-	u.Add(group.FieldGroupSchedulingVersion, v)
 	return u
 }
 
@@ -3304,41 +3224,6 @@ func (u *GroupUpsertOne) UpdateDeletedAt() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearDeletedAt() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDeletedAt()
-	})
-}
-
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (u *GroupUpsertOne) SetGroupSchedulingEnabled(v bool) *GroupUpsertOne {
-	return u.Update(func(s *GroupUpsert) {
-		s.SetGroupSchedulingEnabled(v)
-	})
-}
-
-// UpdateGroupSchedulingEnabled sets the "group_scheduling_enabled" field to the value that was provided on create.
-func (u *GroupUpsertOne) UpdateGroupSchedulingEnabled() *GroupUpsertOne {
-	return u.Update(func(s *GroupUpsert) {
-		s.UpdateGroupSchedulingEnabled()
-	})
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (u *GroupUpsertOne) SetGroupSchedulingVersion(v int64) *GroupUpsertOne {
-	return u.Update(func(s *GroupUpsert) {
-		s.SetGroupSchedulingVersion(v)
-	})
-}
-
-// AddGroupSchedulingVersion adds v to the "group_scheduling_version" field.
-func (u *GroupUpsertOne) AddGroupSchedulingVersion(v int64) *GroupUpsertOne {
-	return u.Update(func(s *GroupUpsert) {
-		s.AddGroupSchedulingVersion(v)
-	})
-}
-
-// UpdateGroupSchedulingVersion sets the "group_scheduling_version" field to the value that was provided on create.
-func (u *GroupUpsertOne) UpdateGroupSchedulingVersion() *GroupUpsertOne {
-	return u.Update(func(s *GroupUpsert) {
-		s.UpdateGroupSchedulingVersion()
 	})
 }
 
@@ -4848,41 +4733,6 @@ func (u *GroupUpsertBulk) UpdateDeletedAt() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearDeletedAt() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDeletedAt()
-	})
-}
-
-// SetGroupSchedulingEnabled sets the "group_scheduling_enabled" field.
-func (u *GroupUpsertBulk) SetGroupSchedulingEnabled(v bool) *GroupUpsertBulk {
-	return u.Update(func(s *GroupUpsert) {
-		s.SetGroupSchedulingEnabled(v)
-	})
-}
-
-// UpdateGroupSchedulingEnabled sets the "group_scheduling_enabled" field to the value that was provided on create.
-func (u *GroupUpsertBulk) UpdateGroupSchedulingEnabled() *GroupUpsertBulk {
-	return u.Update(func(s *GroupUpsert) {
-		s.UpdateGroupSchedulingEnabled()
-	})
-}
-
-// SetGroupSchedulingVersion sets the "group_scheduling_version" field.
-func (u *GroupUpsertBulk) SetGroupSchedulingVersion(v int64) *GroupUpsertBulk {
-	return u.Update(func(s *GroupUpsert) {
-		s.SetGroupSchedulingVersion(v)
-	})
-}
-
-// AddGroupSchedulingVersion adds v to the "group_scheduling_version" field.
-func (u *GroupUpsertBulk) AddGroupSchedulingVersion(v int64) *GroupUpsertBulk {
-	return u.Update(func(s *GroupUpsert) {
-		s.AddGroupSchedulingVersion(v)
-	})
-}
-
-// UpdateGroupSchedulingVersion sets the "group_scheduling_version" field to the value that was provided on create.
-func (u *GroupUpsertBulk) UpdateGroupSchedulingVersion() *GroupUpsertBulk {
-	return u.Update(func(s *GroupUpsert) {
-		s.UpdateGroupSchedulingVersion()
 	})
 }
 

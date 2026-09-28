@@ -22,10 +22,6 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
-	// FieldGroupSchedulingEnabled holds the string denoting the group_scheduling_enabled field in the database.
-	FieldGroupSchedulingEnabled = "group_scheduling_enabled"
-	// FieldGroupSchedulingVersion holds the string denoting the group_scheduling_version field in the database.
-	FieldGroupSchedulingVersion = "group_scheduling_version"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
@@ -256,8 +252,6 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldDeletedAt,
-	FieldGroupSchedulingEnabled,
-	FieldGroupSchedulingVersion,
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
@@ -360,10 +354,6 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// DefaultGroupSchedulingEnabled holds the default value on creation for the "group_scheduling_enabled" field.
-	DefaultGroupSchedulingEnabled bool
-	// DefaultGroupSchedulingVersion holds the default value on creation for the "group_scheduling_version" field.
-	DefaultGroupSchedulingVersion int64
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
@@ -507,16 +497,6 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
-}
-
-// ByGroupSchedulingEnabled orders the results by the group_scheduling_enabled field.
-func ByGroupSchedulingEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldGroupSchedulingEnabled, opts...).ToFunc()
-}
-
-// ByGroupSchedulingVersion orders the results by the group_scheduling_version field.
-func ByGroupSchedulingVersion(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldGroupSchedulingVersion, opts...).ToFunc()
 }
 
 // ByName orders the results by the name field.

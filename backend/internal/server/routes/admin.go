@@ -42,10 +42,6 @@ func RegisterAdminRoutes(
 
 		// 分组管理
 		registerGroupRoutes(admin, h)
-		// geili hook: one authoritative group-priority contract for S2A and the admin UI.
-		admin.GET("/group-scheduling", h.Admin.Group.GroupSchedulingSnapshotGeili)
-		admin.PUT("/groups/:id/scheduling-priorities", h.Admin.Group.UpdateGroupSchedulingGeili)
-		admin.POST("/groups/:id/scheduling-preview", h.Admin.Group.PreviewGroupSchedulingGeili)
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)

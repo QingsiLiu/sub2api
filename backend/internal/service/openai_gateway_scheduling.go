@@ -1092,9 +1092,6 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		if requireCompact && compactTiers[a.ID] != compactTiers[b.ID] {
 			return compactTiers[a.ID] > compactTiers[b.ID]
 		}
-		if (a.groupPriorityApplied || b.groupPriorityApplied) && a.Priority != b.Priority {
-			return a.Priority < b.Priority
-		}
 		if rateCmp := rateOrder.compare(a, b); rateCmp != 0 {
 			return rateCmp < 0
 		}
@@ -1187,39 +1184,6 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 					MaxWaiting:     cfg.StickySessionMaxWaiting,
 				})
 				return markStickySessionHit(selection, stickyHit), selectErr
-			}
-		}
-		// geili hook: managed groups spill over to the next tier before ordinary
-		// fallback queueing, including installations with load batching disabled.
-		// Mandatory sticky bindings retain the existing bounded-wait semantics above.
-		if groupID != nil && !stickyHit {
-			_, mode := EffectiveGroupPriority(account, *groupID)
-			managed := mode != GroupPriorityInherit
-			for _, binding := range account.AccountGroups {
-				if binding.GroupID == *groupID && binding.PriorityEnabled {
-					managed = true
-				}
-			}
-			if managed {
-				excluded := cloneExcludedAccountIDs(excludedIDs)
-				if excluded == nil {
-					excluded = map[int64]struct{}{}
-				}
-				excluded[account.ID] = struct{}{}
-				for attempt := 0; attempt < openAIAccountSelectionProbeLimit; attempt++ {
-					candidate, _, nextErr := s.selectAccountForModelWithExclusionsStickyHit(ctx, groupID, platform, "", requestedModel, excluded, requireCompact, 0, requiredCapability, preferLowUpstreamRate)
-					if nextErr != nil || candidate == nil {
-						break
-					}
-					if _, seen := excluded[candidate.ID]; seen {
-						break
-					}
-					excluded[candidate.ID] = struct{}{}
-					acquired, acquireErr := s.tryAcquireAccountSlot(ctx, candidate.ID, candidate.Concurrency)
-					if acquireErr == nil && acquired != nil && acquired.Acquired {
-						return s.newAcquiredSelectionResult(ctx, candidate, acquired.ReleaseFunc)
-					}
-				}
 			}
 		}
 		selection, selectErr := s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
@@ -1406,11 +1370,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		shuffleWithinSortGroups(available)
 		if rateOrder.enabled {
 			sort.SliceStable(available, func(i, j int) bool {
-				a, b := available[i].account, available[j].account
-				if (a.groupPriorityApplied || b.groupPriorityApplied) && a.Priority != b.Priority {
-					return a.Priority < b.Priority
-				}
-				return rateOrder.compare(a, b) < 0
+				return rateOrder.compare(available[i].account, available[j].account) < 0
 			})
 		}
 
@@ -1466,11 +1426,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		sortAccountsByPriorityAndLastUsed(ordered, false)
 		if rateOrder.enabled {
 			sort.SliceStable(ordered, func(i, j int) bool {
-				a, b := ordered[i], ordered[j]
-				if (a.groupPriorityApplied || b.groupPriorityApplied) && a.Priority != b.Priority {
-					return a.Priority < b.Priority
-				}
-				return rateOrder.compare(a, b) < 0
+				return rateOrder.compare(ordered[i], ordered[j]) < 0
 			})
 		}
 		if requireCompact {
@@ -1520,11 +1476,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	sortAccountsByPriorityAndLastUsed(candidates, false)
 	if rateOrder.enabled {
 		sort.SliceStable(candidates, func(i, j int) bool {
-			a, b := candidates[i], candidates[j]
-			if (a.groupPriorityApplied || b.groupPriorityApplied) && a.Priority != b.Priority {
-				return a.Priority < b.Priority
-			}
-			return rateOrder.compare(a, b) < 0
+			return rateOrder.compare(candidates[i], candidates[j]) < 0
 		})
 	}
 	if requireCompact {
@@ -1567,7 +1519,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		if platform == PlatformGrok {
 			accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 		}
-		return projectGroupPrioritiesGeili(accounts, groupID), nil
+		return accounts, nil
 	}
 	var accounts []Account
 	var err error
@@ -1585,7 +1537,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 	if platform == PlatformGrok {
 		accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 	}
-	return projectGroupPrioritiesGeili(accounts, groupID), nil
+	return accounts, nil
 }
 
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {

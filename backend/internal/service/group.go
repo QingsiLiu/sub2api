@@ -22,8 +22,6 @@ const (
 )
 
 type Group struct {
-	GroupSchedulingEnabled     bool
-	GroupSchedulingVersion     int64
 	SubscriptionEnabled        bool
 	ID                         int64
 	Name                       string

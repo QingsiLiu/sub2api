@@ -378,13 +378,8 @@
               @probe="handleProbeUpstreamBilling(row)"
             />
           </template>
-          <template #cell-priority="{ row, value }">
-            <div v-if="Number(params.group) > 0" class="flex flex-col text-sm text-gray-700 dark:text-gray-300">
-              <span>{{ groupSchedulingRows[row.id]?.effective_priority ?? '—' }}</span>
-              <span class="text-xs text-gray-500">{{ groupSchedulingRows[row.id]?.cache_pending ? '待生效' : groupSchedulingUnavailable ? '调度状态暂不可用' : ({auto: '本组自动', fixed: '本组固定', inherit: '继承账号'})[groupSchedulingRows[row.id]?.effective_mode || 'inherit'] }}</span>
-              <span class="text-xs text-gray-500">全局默认 {{ value }}</span>
-            </div>
-            <span v-else class="text-sm text-gray-700 dark:text-gray-300">{{ value }}</span>
+          <template #cell-priority="{ value }">
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ value }}</span>
           </template>
           <template #header-scheduler_score="{ column }">
             <div class="flex items-center">
@@ -491,7 +486,6 @@
 </template>
 
 <script setup lang="ts">
-import { useGroupSchedulingGeili } from '@/features/account-group-scheduling-geili'
 import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
@@ -1097,8 +1091,6 @@ const {
     sort_order: sortState.sort_order
   }
 })
-
-const {rows: groupSchedulingRows, unavailable: groupSchedulingUnavailable} = useGroupSchedulingGeili(() => String(params.group || ''), accounts)
 
 const {
   selectedSet,
@@ -1804,7 +1796,7 @@ const allColumns = computed(() => {
   c.push({ key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false })
   c.push(
     { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
-    { key: 'priority', label: Number(params.group) > 0 ? '生效优先级' : '账号优先级（全局默认）', sortable: Number(params.group) <= 0 },
+    { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },
     { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true },
     { key: 'upstream_billing_rate', label: t('admin.accounts.columns.upstreamBillingRate'), sortable: true },

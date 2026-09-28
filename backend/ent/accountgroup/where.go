@@ -25,11 +25,6 @@ func Priority(v int) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldPriority, v))
 }
 
-// PriorityMode applies equality check predicate on the "priority_mode" field. It's identical to PriorityModeEQ.
-func PriorityMode(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldEQ(FieldPriorityMode, v))
-}
-
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldCreatedAt, v))
@@ -113,71 +108,6 @@ func PriorityLT(v int) predicate.AccountGroup {
 // PriorityLTE applies the LTE predicate on the "priority" field.
 func PriorityLTE(v int) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldLTE(FieldPriority, v))
-}
-
-// PriorityModeEQ applies the EQ predicate on the "priority_mode" field.
-func PriorityModeEQ(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldEQ(FieldPriorityMode, v))
-}
-
-// PriorityModeNEQ applies the NEQ predicate on the "priority_mode" field.
-func PriorityModeNEQ(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldNEQ(FieldPriorityMode, v))
-}
-
-// PriorityModeIn applies the In predicate on the "priority_mode" field.
-func PriorityModeIn(vs ...string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldIn(FieldPriorityMode, vs...))
-}
-
-// PriorityModeNotIn applies the NotIn predicate on the "priority_mode" field.
-func PriorityModeNotIn(vs ...string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldNotIn(FieldPriorityMode, vs...))
-}
-
-// PriorityModeGT applies the GT predicate on the "priority_mode" field.
-func PriorityModeGT(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldGT(FieldPriorityMode, v))
-}
-
-// PriorityModeGTE applies the GTE predicate on the "priority_mode" field.
-func PriorityModeGTE(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldGTE(FieldPriorityMode, v))
-}
-
-// PriorityModeLT applies the LT predicate on the "priority_mode" field.
-func PriorityModeLT(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldLT(FieldPriorityMode, v))
-}
-
-// PriorityModeLTE applies the LTE predicate on the "priority_mode" field.
-func PriorityModeLTE(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldLTE(FieldPriorityMode, v))
-}
-
-// PriorityModeContains applies the Contains predicate on the "priority_mode" field.
-func PriorityModeContains(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldContains(FieldPriorityMode, v))
-}
-
-// PriorityModeHasPrefix applies the HasPrefix predicate on the "priority_mode" field.
-func PriorityModeHasPrefix(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldHasPrefix(FieldPriorityMode, v))
-}
-
-// PriorityModeHasSuffix applies the HasSuffix predicate on the "priority_mode" field.
-func PriorityModeHasSuffix(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldHasSuffix(FieldPriorityMode, v))
-}
-
-// PriorityModeEqualFold applies the EqualFold predicate on the "priority_mode" field.
-func PriorityModeEqualFold(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldEqualFold(FieldPriorityMode, v))
-}
-
-// PriorityModeContainsFold applies the ContainsFold predicate on the "priority_mode" field.
-func PriorityModeContainsFold(v string) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldContainsFold(FieldPriorityMode, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

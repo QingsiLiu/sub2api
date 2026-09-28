@@ -870,7 +870,7 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		Type:                    account.Type,
 		Concurrency:             account.Concurrency,
 		LoadFactor:              account.LoadFactor,
-		Priority:                account.DefaultSchedulingPriority(),
+		Priority:                account.Priority,
 		RateMultiplier:          account.RateMultiplier,
 		Status:                  account.Status,
 		LastUsedAt:              account.LastUsedAt,
@@ -905,13 +905,10 @@ func filterSchedulerAccountGroups(accountGroups []service.AccountGroup) []servic
 			continue
 		}
 		filtered = append(filtered, service.AccountGroup{
-			AccountID:       ag.AccountID,
-			GroupID:         ag.GroupID,
-			Priority:        ag.Priority,
-			PriorityMode:    ag.PriorityMode,
-			PriorityEnabled: ag.PriorityEnabled,
-			PriorityVersion: ag.PriorityVersion,
-			CreatedAt:       ag.CreatedAt,
+			AccountID: ag.AccountID,
+			GroupID:   ag.GroupID,
+			Priority:  ag.Priority,
+			CreatedAt: ag.CreatedAt,
 		})
 	}
 	if len(filtered) == 0 {
