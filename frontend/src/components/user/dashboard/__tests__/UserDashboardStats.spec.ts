@@ -165,10 +165,12 @@ describe('financial dashboard evidence', () => {
     expect(wrapper.text()).not.toContain('financial.accountingShort')
     expect(wrapper.text()).not.toContain('financial.overrunHint')
   })
-  it('exposes missing history and does not render incomplete token counts as exact', () => {
-    const wrapper = mountStats(makeStats({ today_tokens: 87654321, today_token_counts_complete: false, total_unknown_amount_count: 2, total_standard_cost_complete: false }))
+  it('does not render incomplete token counts as exact or show internal backfill notices', () => {
+    const wrapper = mountStats(makeStats({ today_tokens: 87654321, today_token_counts_complete: false, today_detail_pending_count: 1, total_detail_pending_count: 1, total_unknown_amount_count: 2, total_standard_cost_complete: false }))
     expect(wrapper.text()).toContain('financial.unknown')
-    expect(wrapper.text()).toContain('financial.amountUnknown')
+    expect(wrapper.text()).not.toContain('financial.amountUnknown')
+    expect(wrapper.text()).not.toContain('financial.detailPending')
+    expect(wrapper.text()).not.toContain('financial.totalHistory')
     expect(wrapper.text()).not.toContain('87.7M')
   })
 })

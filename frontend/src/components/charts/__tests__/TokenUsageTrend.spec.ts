@@ -126,5 +126,5 @@ it('leaves gaps for unknown historical tokens instead of plotting an exact zero'
   })
   const chartData = JSON.parse(wrapper.get('.chart-data').text())
   expect(chartData.datasets.every((dataset: { data: unknown[] }) => dataset.data[0] === null)).toBe(true)
-  expect(wrapper.text()).toContain('financial.partialTotal')
+  expect(wrapper.text()).not.toContain('financial.partialTotal')
 })

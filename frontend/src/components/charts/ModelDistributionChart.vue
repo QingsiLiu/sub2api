@@ -1,6 +1,5 @@
 <template>
   <div class="card p-4">
-    <p v-if="displayModelStats.some(row => row.token_counts_complete === false || row.standard_cost_complete === false || row.unknown_amount_count)" class="mb-3 text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('financial.partialTotal') }}</p>
     <div class="mb-4 flex items-center justify-between gap-3">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
         {{ !enableRankingView || activeView === 'model_distribution'
@@ -105,8 +104,7 @@
       class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6"
     >
       <div class="h-48 w-48 shrink-0">
-        <Doughnut v-if="metric !== 'tokens' || !displayModelStats.some(row => row.token_counts_complete === false)" :data="chartData" :options="doughnutOptions" />
-        <p v-else class="flex h-full items-center text-center text-xs text-amber-700 dark:text-amber-300">{{ t('financial.partialTotal') }}</p>
+        <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
       <div class="max-h-48 w-full min-w-0 flex-1 overflow-auto">
         <table class="w-full text-xs">

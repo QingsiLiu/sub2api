@@ -1,4 +1,4 @@
-import type { AdminUsageLog, FinancialDashboardMetadata, FinancialStatsMetadata, UsageDateBasis, UsageLog } from '@/types'
+import type { AdminUsageLog, UsageDateBasis, UsageLog } from '@/types'
 
 // geili hook: missing evidence is not a zero-priced request.
 export const finiteFinancialNumber = (value: unknown): value is number =>
@@ -53,19 +53,6 @@ export function financialDate(date: Date = new Date(), _basis: UsageDateBasis = 
 }
 
 export const financialTimezone = (_basis: UsageDateBasis): string => 'Asia/Shanghai'
-
-export function dashboardFinancialMetadata(stats: FinancialDashboardMetadata, period: 'today' | 'total'): FinancialStatsMetadata {
-  return {
-    date_basis: stats.date_basis,
-    balance_actual_cost: stats[`${period}_balance_actual_cost`],
-    subscription_actual_cost: stats[`${period}_subscription_actual_cost`],
-    detail_pending_count: stats[`${period}_detail_pending_count`],
-    unknown_amount_count: stats[`${period}_unknown_amount_count`],
-    incomplete_record_count: stats[`${period}_incomplete_record_count`],
-    standard_cost_complete: stats[`${period}_standard_cost_complete`],
-    token_counts_complete: stats[`${period}_token_counts_complete`],
-  }
-}
 
 export type FinancialTimeExtra = { key: 'accountingDate' | 'completedAt' | 'settledAt'; value: string | null; time: boolean }
 

@@ -3,7 +3,6 @@
     <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
       {{ t('admin.dashboard.tokenUsageTrend') }}
     </h3>
-    <p v-if="trendData.some(row => row.token_counts_complete === false)" class="mb-3 text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('financial.partialTotal') }}</p>
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />
     </div>

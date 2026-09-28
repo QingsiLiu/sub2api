@@ -14,10 +14,6 @@ export default {
     balanceSpending: 'Balance charged',
     subscriptionSpending: 'Subscription quota used',
     knownAmount: 'Known amount subtotal',
-    partialTotal: 'Some records incomplete',
-    detailPending: '{count} settled requests await detail delivery; this does not charge you again.',
-    amountUnknown: '{count} historical amounts are unverified and excluded from totals, not free requests.',
-    incomplete: '{count} records have unrecoverable details; models, tokens or standard prices may be unknown.',
     overrunHint: 'Insufficient quota blocks subsequent requests. The final admitted request may settle slightly above the daily limit.',
     recordSource: 'Record source',
     recordCompleteness: 'Record completeness',
@@ -29,6 +25,5 @@ export default {
     amountPending: 'Amount unverified',
     pending: 'Details pending',
     unknownFields: 'Unknown fields',
-    totalHistory: 'All-time history',
   },
 }

@@ -95,7 +95,6 @@
       <div><p class="text-xs font-medium text-gray-500">{{ t('usage.avgDuration') }}</p><p class="text-xl font-bold">{{ formatDuration(stats?.average_duration_ms || 0) }}</p></div>
     </div>
   </div>
-  <FinancialUsageNotice v-if="stats" :stats="stats" class="mt-3" />
 </template>
 
 <script setup lang="ts">
@@ -103,7 +102,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import type { UsageStatsResponse } from '@/types'
-import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
 import { financialMoney } from '@/utils/financialUsage'
 import Icon from '@/components/icons/Icon.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'

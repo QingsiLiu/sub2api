@@ -223,9 +223,6 @@
           </div>
         </div>
 
-        <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'today')" />
-        <FinancialUsageNotice :stats="dashboardFinancialMetadata(stats, 'total')" :label="t('financial.totalHistory')" />
-
         <!-- Quick Actions -->
         <div class="card p-4">
           <div class="mb-3 flex items-center justify-between">
@@ -365,8 +362,7 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
-import FinancialUsageNotice from '@/components/common/FinancialUsageNotice.vue'
-import { dashboardFinancialMetadata, financialMoney, financialDate } from '@/utils/financialUsage'
+import { financialMoney, financialDate } from '@/utils/financialUsage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'

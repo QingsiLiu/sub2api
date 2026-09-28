@@ -14,10 +14,6 @@ export default {
     balanceSpending: '余额扣款',
     subscriptionSpending: '订阅额度消耗',
     knownAmount: '已知金额合计',
-    partialTotal: '部分记录缺失',
-    detailPending: '{count} 笔已结算，明细正在补写；不会重复扣费。',
-    amountUnknown: '{count} 笔历史记录金额待核实，未计入金额合计；不是免费调用。',
-    incomplete: '{count} 笔记录部分明细不可恢复，模型、Token 或标准价可能未知。',
     overrunHint: '额度不足会阻止后续请求；最后一笔已准入请求结算后，实际消耗可能略超每日额度。',
     recordSource: '记录来源',
     recordCompleteness: '明细完整性',
@@ -29,6 +25,5 @@ export default {
     amountPending: '金额待核实',
     pending: '明细补写中',
     unknownFields: '未知字段',
-    totalHistory: '历史累计',
   },
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountFinancialCost, dashboardFinancialMetadata, escapeFinancialCSV, financialDate, financialExportNumber, financialMoney, financialTokenTotal, financialTimeExtras, financialTimezone, safeSpreadsheetCell } from '../financialUsage'
+import { accountFinancialCost, escapeFinancialCSV, financialDate, financialExportNumber, financialMoney, financialTokenTotal, financialTimeExtras, financialTimezone, safeSpreadsheetCell } from '../financialUsage'
 
 describe('financial evidence presentation', () => {
   it('keeps exact zero distinct from unknown or nonfinite money', () => {
@@ -32,11 +32,6 @@ describe('financial evidence presentation', () => {
     expect(financialDate(new Date('2026-09-25T15:59:59Z'))).toBe('2026-09-25')
     expect(financialDate(new Date('2026-09-25T16:00:00Z'))).toBe('2026-09-26')
     expect(financialTimezone('accounting')).toBe('Asia/Shanghai')
-  })
-  it('maps dashboard periods without mixing current day with all-time missing records', () => {
-    const stats = { today_subscription_actual_cost: 90, total_subscription_actual_cost: 100, today_unknown_amount_count: 0, total_unknown_amount_count: 3 }
-    expect(dashboardFinancialMetadata(stats, 'today')).toMatchObject({ subscription_actual_cost: 90, unknown_amount_count: 0 })
-    expect(dashboardFinancialMetadata(stats, 'total')).toMatchObject({ subscription_actual_cost: 100, unknown_amount_count: 3 })
   })
 })
 

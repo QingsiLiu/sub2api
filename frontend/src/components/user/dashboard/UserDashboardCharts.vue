@@ -26,12 +26,11 @@
         <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-sm dark:bg-dark-800/50">
           <LoadingSpinner size="md" />
         </div>
-        <p v-if="models.some(row => row.token_counts_complete === false || row.standard_cost_complete === false || row.unknown_amount_count)" class="mb-3 text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('financial.partialTotal') }}</p>
         <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard.modelDistribution') }}</h3>
         <div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
           <div class="h-48 w-48 shrink-0">
-            <Doughnut v-if="modelData && !models.some(row => row.token_counts_complete === false)" :data="modelData" :options="doughnutOptions" />
-            <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">{{ models.some(row => row.token_counts_complete === false) ? t('financial.partialTotal') : t('dashboard.noDataAvailable') }}</div>
+            <Doughnut v-if="modelData" :data="modelData" :options="doughnutOptions" />
+            <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">{{ t('dashboard.noDataAvailable') }}</div>
           </div>
           <div class="max-h-48 w-full min-w-0 flex-1 overflow-auto">
             <table class="w-full text-xs">
