@@ -120,7 +120,7 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedUsesTransac
 	repo.clock = func() time.Time { return now }
 	mock.ExpectQuery(`SELECT EXISTS`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectBegin()
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).WithArgs(cutoff, usageLogsCleanupBatchSize).WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(cutoff.Add(-time.Hour)))
+	expectCompactUsageDeleteGeili(mock, 1, nil, cutoff, usageLogsCleanupBatchSize)
 	mock.ExpectCommit()
 	expectGroupRollupNoop(mock, service.GroupUsageTodayStart(now), cutoff, "Asia/Shanghai")
 	require.NoError(t, repo.CleanupUsageLogs(context.Background(), cutoff))
@@ -131,7 +131,7 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedFailureRoll
 	cutoff := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	mock.ExpectQuery(`SELECT EXISTS`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectBegin()
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).WithArgs(cutoff, usageLogsCleanupBatchSize).WillReturnError(sql.ErrConnDone)
+	expectCompactUsageDeleteGeili(mock, 0, sql.ErrConnDone, cutoff, usageLogsCleanupBatchSize)
 	mock.ExpectRollback()
 	require.ErrorIs(t, newDashboardAggregationRepositoryWithSQL(db).CleanupUsageLogs(context.Background(), cutoff), sql.ErrConnDone)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -154,7 +154,7 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionedSortsAndInvali
 		mock.ExpectCommit()
 	}
 	mock.ExpectBegin()
-	mock.ExpectQuery(`(?s)SELECT tableoid, ctid.*WHERE created_at < \$1.*WHERE \(tableoid, ctid\) IN.*RETURNING created_at`).WithArgs(cutoff, usageLogsCleanupBatchSize).WillReturnRows(sqlmock.NewRows([]string{"created_at"}))
+	expectCompactUsageDeleteGeili(mock, 0, nil, cutoff, usageLogsCleanupBatchSize)
 	mock.ExpectCommit()
 	expectGroupRollupNoop(mock, service.GroupUsageTodayStart(now), cutoff, "Asia/Shanghai")
 	require.NoError(t, repo.CleanupUsageLogs(context.Background(), cutoff))

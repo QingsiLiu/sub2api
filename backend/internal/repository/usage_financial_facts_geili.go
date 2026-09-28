@@ -178,11 +178,14 @@ type financialFactView struct {
 }
 
 // financialFactSnapshot returns nil when facts cannot be used exactly in the
-// current snapshot (not seeded, partition invalidation or large backlog).
+// current snapshot (not seeded, large backlog, or a bulk-deleted day that still
+// has materialized legacy rows). 'day' events only remove source rows, so a day
+// without kind=2 facts (retention far outside the window) cannot make facts stale.
 func (r *usageLogRepository) financialFactSnapshot(ctx context.Context) (*financialFactView, error) {
 	var cov sql.NullTime
 	var pending, days int64
-	if err := scanSingleRow(ctx, r.sql, `SELECT (SELECT coverage_start FROM usage_financial_fact_state WHERE id=1),(SELECT COUNT(*) FROM usage_financial_rollup_events),(SELECT COUNT(*) FROM usage_financial_rollup_events WHERE source='day')`, nil, &cov, &pending, &days); err != nil {
+	if err := scanSingleRow(ctx, r.sql, `SELECT (SELECT coverage_start FROM usage_financial_fact_state WHERE id=1),(SELECT COUNT(*) FROM usage_financial_rollup_events),
+ (SELECT COUNT(*) FROM usage_financial_rollup_events e WHERE e.source='day' AND EXISTS(SELECT 1 FROM usage_financial_facts f WHERE f.fact_kind=2 AND f.created_at >= (e.new_identity->>'at')::timestamptz AND f.created_at < (e.new_identity->>'at')::timestamptz + INTERVAL '1 day'))`, nil, &cov, &pending, &days); err != nil {
 		return nil, err
 	}
 	if !cov.Valid || days > 0 || pending > financialFactPendingLimit {

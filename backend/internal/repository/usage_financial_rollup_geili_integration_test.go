@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/google/uuid"
@@ -37,9 +38,10 @@ func financialRollupTestSchema(t *testing.T) string {
  CREATE TABLE usage_settlement_receipts(LIKE public.usage_settlement_receipts INCLUDING DEFAULTS);
  CREATE UNIQUE INDEX ON usage_settlement_receipts(id);CREATE INDEX ON usage_settlement_receipts(usage_request_id,api_key_id);CREATE INDEX ON usage_settlement_receipts(usage_log_id);
  CREATE TABLE subscription_requests(LIKE public.subscription_requests INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);
- CREATE TABLE subscription_request_contracts(LIKE public.subscription_request_contracts INCLUDING DEFAULTS INCLUDING INDEXES);`)
+ CREATE TABLE subscription_request_contracts(LIKE public.subscription_request_contracts INCLUDING DEFAULTS INCLUDING INDEXES);
+ CREATE TABLE usage_group_rollup_invalidations(LIKE public.usage_group_rollup_invalidations INCLUDING DEFAULTS);`)
 	require.NoError(t, err)
-	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql", "269_usage_financial_statistics_decode.sql", "271_usage_financial_facts.sql"} {
+	for _, file := range []string{"261_usage_financial_projection.sql", "265_usage_financial_daily_rollups.sql", "266_usage_financial_rollup_time_columns.sql", "268_usage_financial_page_projection.sql", "269_usage_financial_statistics_decode.sql", "271_usage_financial_facts.sql", "273_usage_bulk_delete_compact_invalidation.sql"} {
 		body, e := migrations.FS.ReadFile(file)
 		require.NoError(t, e)
 		_, e = tx.ExecContext(ctx, string(body))
@@ -480,4 +482,117 @@ func TestFinancialFactsWindowSubscriptionAndPendingOverlay(t *testing.T) {
 		financialFactsAssertOracle(t, check)
 		require.NoError(t, check.Commit())
 	}
+}
+
+func setGroupUsageRollupTestTimezone(t *testing.T) {
+	t.Helper()
+	require.NoError(t, timezone.Init("Asia/Shanghai"))
+	t.Cleanup(func() { require.NoError(t, timezone.Init("UTC")) })
+}
+
+func TestFinancialRollupBulkDeleteQueuesCompactDayEvents(t *testing.T) {
+	setGroupUsageRollupTestTimezone(t)
+	restore := usageBulkDeleteNowGeili
+	usageBulkDeleteNowGeili = func() time.Time { return time.Date(2026, 9, 26, 15, 0, 0, 0, financialBeijing) }
+	t.Cleanup(func() { usageBulkDeleteNowGeili = restore })
+	schema := financialRollupTestSchema(t)
+	seed := financialRollupTestTx(t, schema)
+	for id, d := range map[int64]string{1: "2026-09-10 01:00:00+08", 2: "2026-09-10 23:00:00+08", 3: "2026-09-11 12:00:00+08", 4: "2026-09-12 12:00:00+08", 5: "2026-09-13 12:00:00+08", 6: "2026-09-22 12:00:00+08", 7: "2026-09-24 12:00:00+08"} {
+		financialRollupSeedLog(t, seed, id, d, float64(id))
+	}
+	// Old receipt (compact day), and an old log whose receipt is inside the window (exact).
+	financialRollupSeedReceipt(t, seed, 3, "2026-09-11 12:05:00+08", 30)
+	financialRollupSeedReceipt(t, seed, 5, "2026-09-24 13:00:00+08", 50)
+	financialRollupExec(t, seed, `UPDATE usage_settlement_receipts SET accounting_date='2026-09-11' WHERE id=3; UPDATE usage_logs SET group_id=9 WHERE id IN (1,2,4,6)`)
+	require.NoError(t, seed.Commit())
+	financialRollupPublish(t, schema)
+
+	ctx := context.Background()
+	retention := financialRollupTestTx(t, schema)
+	deleted, err := deleteUsageLogsCompactGeili(ctx, retention, `victims AS (SELECT tableoid, ctid FROM usage_logs WHERE created_at < $1 ORDER BY created_at ASC, id ASC LIMIT $2)`,
+		`DELETE FROM usage_logs WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM victims)`, []any{time.Date(2026, 9, 15, 0, 0, 0, 0, financialBeijing), 100})
+	require.NoError(t, err)
+	require.Equal(t, int64(5), deleted)
+	var bulk string
+	require.NoError(t, retention.QueryRow(`SELECT current_setting('geili.usage_bulk_delete', true)`).Scan(&bulk))
+	require.Equal(t, "off", bulk, "later statements in the transaction keep per-row triggers")
+	require.NoError(t, retention.Commit())
+
+	queued := financialRollupTestTx(t, schema)
+	var events []string
+	rows, err := queued.Query(`SELECT source||':'||COALESCE(old_identity->>'id',to_char(((new_identity->>'at')::timestamptz AT TIME ZONE 'Asia/Shanghai'),'MM-DD')) FROM usage_financial_rollup_events ORDER BY 1`)
+	require.NoError(t, err)
+	for rows.Next() {
+		var e string
+		require.NoError(t, rows.Scan(&e))
+		events = append(events, e)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []string{"day:09-10", "day:09-11", "day:09-12", "log:5"}, events)
+	var groups []string
+	rows, err = queued.Query(`SELECT to_char(affected_at AT TIME ZONE 'Asia/Shanghai','MM-DD HH24:MI')||':'||COALESCE(group_id::text,'all') FROM usage_group_rollup_invalidations ORDER BY 1`)
+	require.NoError(t, err)
+	for rows.Next() {
+		var g string
+		require.NoError(t, rows.Scan(&g))
+		groups = append(groups, g)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []string{"09-10 00:00:all", "09-12 00:00:all"}, groups)
+	// Old days have no materialized legacy rows: readers keep using facts.
+	view, err := (&usageLogRepository{sql: queued}).financialFactSnapshot(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	financialRollupAssertOracle(t, queued)
+	require.NoError(t, queued.Commit())
+
+	// Admin cleanup inside the window keeps exact per-log events.
+	cleanup := financialRollupTestTx(t, schema)
+	deleted, err = deleteUsageLogsCompactGeili(ctx, cleanup, `target AS (SELECT id FROM usage_logs WHERE id=$1 LIMIT $2)`, `DELETE FROM usage_logs WHERE id IN (SELECT id FROM target)`, []any{6, 10})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), deleted)
+	var dayEvents, logEvents int
+	require.NoError(t, cleanup.QueryRow(`SELECT COUNT(*) FILTER(WHERE source='day'),COUNT(*) FILTER(WHERE source='log' AND old_identity->>'id'='6') FROM usage_financial_rollup_events`).Scan(&dayEvents, &logEvents))
+	require.Equal(t, 3, dayEvents)
+	require.Equal(t, 1, logEvents)
+	require.NoError(t, cleanup.Commit())
+	dirty := financialRollupTestTx(t, schema)
+	financialRollupAssertOracle(t, dirty)
+	require.NoError(t, dirty.Commit())
+
+	financialRollupPublish(t, schema)
+	final := financialRollupTestTx(t, schema)
+	var pending int
+	require.NoError(t, final.QueryRow(`SELECT COUNT(*) FROM usage_financial_rollup_events`).Scan(&pending))
+	require.Zero(t, pending)
+	financialRollupAssertOracle(t, final)
+}
+
+func TestFinancialFactSnapshotWaitsForDayWithMaterializedLegacyRows(t *testing.T) {
+	restore := usageBulkDeleteNowGeili
+	// A clock far in the future turns in-window rows into compact day events.
+	usageBulkDeleteNowGeili = func() time.Time { return time.Date(2026, 12, 31, 0, 0, 0, 0, financialBeijing) }
+	t.Cleanup(func() { usageBulkDeleteNowGeili = restore })
+	schema := financialRollupTestSchema(t)
+	seed := financialRollupTestTx(t, schema)
+	financialRollupSeedLog(t, seed, 1, "2026-09-24 12:00:00+08", 1)
+	financialRollupSeedLog(t, seed, 2, "2026-09-24 13:00:00+08", 2)
+	require.NoError(t, seed.Commit())
+	financialRollupPublish(t, schema)
+	remove := financialRollupTestTx(t, schema)
+	_, err := deleteUsageLogsCompactGeili(context.Background(), remove, `target AS (SELECT id FROM usage_logs WHERE id=$1 LIMIT $2)`, `DELETE FROM usage_logs WHERE id IN (SELECT id FROM target)`, []any{1, 10})
+	require.NoError(t, err)
+	require.NoError(t, remove.Commit())
+	read := financialRollupTestTx(t, schema)
+	view, err := (&usageLogRepository{sql: read}).financialFactSnapshot(context.Background())
+	require.NoError(t, err)
+	require.Nil(t, view, "stale legacy facts on a queued day must not be read")
+	financialRollupAssertOracle(t, read)
+	require.NoError(t, read.Commit())
+	financialRollupPublish(t, schema)
+	final := financialRollupTestTx(t, schema)
+	view, err = (&usageLogRepository{sql: final}).financialFactSnapshot(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, view)
+	financialRollupAssertOracle(t, final)
 }

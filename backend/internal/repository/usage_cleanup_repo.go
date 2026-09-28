@@ -333,41 +333,20 @@ func (r *usageCleanupRepository) deleteUsageLogsBatchWithRollupInvalidation(ctx 
 		return 0, err
 	}
 
-	query := fmt.Sprintf(`
-		WITH target AS (
+	// geili hook: compact per-day invalidations instead of per-row triggers.
+	deleted, err := deleteUsageLogsCompactGeili(ctx, tx, fmt.Sprintf(`target AS (
 			SELECT id
 			FROM usage_logs
 			WHERE %s
 			ORDER BY created_at ASC, id ASC
 			LIMIT $%d
-		)
-		DELETE FROM usage_logs
-		WHERE id IN (SELECT id FROM target)
-		RETURNING created_at
-	`, whereClause, len(args))
-	rows, err := tx.QueryContext(ctx, query, args...)
+		)`, whereClause, len(args)), `DELETE FROM usage_logs
+		WHERE id IN (SELECT id FROM target)`, args)
 	if err != nil {
 		return rollback(err)
 	}
 
-	var deleted int64
-	for rows.Next() {
-		var deletedAt time.Time
-		if err := rows.Scan(&deletedAt); err != nil {
-			_ = rows.Close()
-			return rollback(err)
-		}
-		deleted++
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return rollback(err)
-	}
-	if err := rows.Close(); err != nil {
-		return rollback(err)
-	}
-
-	// geili: DELETE triggers append invalidations in this same transaction,
+	// geili: the DELETE statement appends invalidations in this same transaction,
 	// without locking the rollup publisher or relying on an earliest-date guess.
 	if err := tx.Commit(); err != nil {
 		return 0, err

@@ -293,39 +293,19 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 		return 0, err
 	}
 
-	rows, err := tx.QueryContext(ctx, `
-		WITH victims AS (
+	// geili hook: compact per-day invalidations instead of per-row triggers.
+	affected, err := deleteUsageLogsCompactGeili(ctx, tx, `victims AS (
 			SELECT tableoid, ctid
 			FROM usage_logs
 			WHERE created_at < $1
 			ORDER BY created_at ASC, id ASC
 			LIMIT $2
-		)
-		DELETE FROM usage_logs
-		WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM victims)
-		RETURNING created_at
-	`, cutoff.UTC(), usageLogsCleanupBatchSize)
+		)`, `DELETE FROM usage_logs
+		WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM victims)`, []any{cutoff.UTC(), usageLogsCleanupBatchSize})
 	if err != nil {
 		return rollback(err)
 	}
-
-	var affected int64
-	for rows.Next() {
-		var deletedAt time.Time
-		if err := rows.Scan(&deletedAt); err != nil {
-			_ = rows.Close()
-			return rollback(err)
-		}
-		affected++
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return rollback(err)
-	}
-	if err := rows.Close(); err != nil {
-		return rollback(err)
-	}
-	// geili: source DELETE triggers enqueue exact affected dates atomically.
+	// geili: invalidations are published by the same DELETE statement.
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
