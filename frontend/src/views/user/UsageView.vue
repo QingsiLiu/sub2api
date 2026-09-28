@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" :show-spending-split="true" />
+      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="space-y-4">
         <div class="card p-4">
@@ -9,7 +9,6 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
-                :timezone="financialTimezone('accounting')"
                 v-model:start-date="startDate"
                 v-model:end-date="endDate"
                 @change="onDateRangeChange"
@@ -231,7 +230,6 @@ import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import * as subscriptionsAPI from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { financialDate, financialTimezone, financialExportNumber, escapeFinancialCSV } from '@/utils/financialUsage'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -338,7 +336,8 @@ let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
 
-const formatLocalDate = (date: Date): string => financialDate(date, 'accounting')
+const formatLocalDate = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 const getTodayRangeDates = () => {
   const today = formatLocalDate(new Date())
@@ -441,8 +440,6 @@ const normalizedFilters = computed<UsageQueryParams>(() => {
   const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
   return {
     ...filters.value,
-    date_basis: 'accounting',
-    timezone: financialTimezone('accounting'),
     start_date: startDate.value,
     end_date: endDate.value,
     stream: legacyStream === null ? undefined : legacyStream,
@@ -624,7 +621,6 @@ const handleIpGeoBatchFailed = () => {
 }
 
 const getRequestTypeExportText = (log: UsageLog): string => {
-  if (log.unknown_fields?.includes('request_type')) return ''
   const requestType = resolveUsageRequestType(log)
   if (requestType === 'cyber') return 'Cyber'
   if (requestType === 'live') return 'Live'
@@ -638,7 +634,15 @@ const getDisplayBillingMode = (
   row: Pick<UsageLog, 'billing_mode' | 'image_count'> | null | undefined
 ): string | null | undefined => resolveDisplayBillingMode(row)
 
-const escapeCSVValue = escapeFinancialCSV
+const escapeCSVValue = (value: unknown): string => {
+  if (value == null) return ''
+  const str = String(value)
+  const escaped = str.replace(/"/g, '""')
+  if (str === '-') return str
+  if (/^[=+\-@\t\r]/.test(str)) return `"\'${escaped}"`
+  if (/[,"\n\r]/.test(str)) return `"${escaped}"`
+  return str
+}
 
 const exportToCSV = async () => {
   if (pagination.total === 0) {
@@ -651,12 +655,10 @@ const exportToCSV = async () => {
     const allLogs: UsageLog[] = []
     const pageSize = 100
     const exportParams = buildUsageListParams(1, pageSize)
-    // Fast list totals only indicate whether another page exists. Never use
-    // that lower bound to truncate exports.
-    for (let page = 1; ; page++) {
+    const totalPages = Math.ceil(pagination.total / pageSize)
+    for (let page = 1; page <= totalPages; page++) {
       const response = await usageAPI.query({ ...exportParams, page })
       allLogs.push(...response.items)
-      if (response.items.length < pageSize || allLogs.length >= response.total) break
     }
     if (allLogs.length === 0) {
       appStore.showWarning(t('usage.noDataToExport'))
@@ -680,7 +682,6 @@ const exportToCSV = async () => {
       'Original Cost',
       'First Token (ms)',
       'Duration (ms)',
-      'Accounting Date', 'Settled At', 'Completed At', 'Record Source', 'Record Completeness', 'Detail Pending', 'Unknown Fields', 'Date Basis',
     ]
     const rows = allLogs.map((log) => [
       log.created_at,
@@ -690,17 +691,16 @@ const exportToCSV = async () => {
       log.inbound_endpoint || '',
       log.ip_address || '',
       getRequestTypeExportText(log),
-      (log.unknown_fields?.includes('billing_mode') || (!log.billing_mode && log.record_completeness && log.record_completeness !== 'complete')) ? '' : getBillingModeLabel(getDisplayBillingMode(log), t),
+      getBillingModeLabel(getDisplayBillingMode(log), t),
       log.input_tokens,
       log.output_tokens,
       log.cache_read_tokens,
       log.cache_creation_tokens,
       log.rate_multiplier,
-      financialExportNumber(log.actual_cost, 8),
-      financialExportNumber(log.total_cost, 8),
+      log.actual_cost.toFixed(8),
+      log.total_cost.toFixed(8),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
-      log.accounting_date, log.settled_at, log.completed_at, log.record_source, log.record_completeness, log.detail_pending, log.unknown_fields?.join('; '), exportParams.date_basis,
     ].map(escapeCSVValue))
     const csvContent = [
       headers.map(escapeCSVValue).join(','),

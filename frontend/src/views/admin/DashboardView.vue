@@ -115,7 +115,7 @@
                   {{ t('admin.dashboard.todayTokens') }}
                 </p>
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.today_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats.today_tokens) }}
+                  {{ formatTokens(stats.today_tokens) }}
                 </p>
                 <p class="text-xs">
                   <span
@@ -127,13 +127,13 @@
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
-                    >{{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_account_cost, t('financial.unknown')) }}</span
+                    >${{ formatCost(stats.today_account_cost) }}</span
                   >
                   <span class="text-gray-400 dark:text-gray-500"> / </span>
                   <span
                     class="text-gray-400 dark:text-gray-500"
                     :title="t('admin.dashboard.standard')"
-                    >{{ stats.today_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.today_cost, t('financial.unknown')) }}</span
+                    >${{ formatCost(stats.today_cost) }}</span
                   >
                 </p>
               </div>
@@ -151,7 +151,7 @@
                   {{ t('admin.dashboard.totalTokens') }}
                 </p>
                 <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_token_counts_complete === false ? t('financial.unknown') : formatTokens(stats.total_tokens) }}
+                  {{ formatTokens(stats.total_tokens) }}
                 </p>
                 <p class="text-xs">
                   <span
@@ -163,13 +163,13 @@
                   <span
                     class="text-orange-500 dark:text-orange-400"
                     :title="t('admin.dashboard.accountCost')"
-                    >{{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_account_cost, t('financial.unknown')) }}</span
+                    >${{ formatCost(stats.total_account_cost) }}</span
                   >
                   <span class="text-gray-400 dark:text-gray-500"> / </span>
                   <span
                     class="text-gray-400 dark:text-gray-500"
                     :title="t('admin.dashboard.standard')"
-                    >{{ stats.total_standard_cost_complete === false ? t('financial.unknown') : financialMoney(stats.total_cost, t('financial.unknown')) }}</span
+                    >${{ formatCost(stats.total_cost) }}</span
                   >
                 </p>
               </div>
@@ -280,7 +280,7 @@
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.timeRange') }}:</span
                 >
-                <DateRangePicker timezone="Asia/Shanghai"
+                <DateRangePicker
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
                   @change="onDateRangeChange"
@@ -362,7 +362,6 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
-import { financialMoney, financialDate } from '@/utils/financialUsage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -420,7 +419,7 @@ const rankingLimit = 12
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
-  return financialDate(date)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 const getLast24HoursRangeDates = (): { start: string; end: string } => {
@@ -660,8 +659,6 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
   chartsLoading.value = true
   try {
     const response = await adminAPI.dashboard.getSnapshotV2({
-      date_basis: 'accounting',
-      timezone: 'Asia/Shanghai',
       start_date: startDate.value,
       end_date: endDate.value,
       granularity: granularity.value,

@@ -56,8 +56,7 @@ apiClient.interceptors.request.use(
       if (!config.params) {
         config.params = {}
       }
-      // geili hook: accounting reports explicitly select Beijing, not browser time.
-      if (!config.params.timezone) config.params.timezone = getUserTimezone()
+      config.params.timezone = getUserTimezone()
     }
 
     if (config.headers) {

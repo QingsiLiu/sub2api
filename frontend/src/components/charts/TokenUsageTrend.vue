@@ -76,7 +76,7 @@ const chartData = computed(() => {
     datasets: [
       {
         label: 'Input',
-        data: props.trendData.map((d) => d.token_counts_complete === false ? null : d.input_tokens),
+        data: props.trendData.map((d) => d.input_tokens),
         borderColor: chartColors.value.input,
         backgroundColor: `${chartColors.value.input}20`,
         fill: true,
@@ -84,7 +84,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Output',
-        data: props.trendData.map((d) => d.token_counts_complete === false ? null : d.output_tokens),
+        data: props.trendData.map((d) => d.output_tokens),
         borderColor: chartColors.value.output,
         backgroundColor: `${chartColors.value.output}20`,
         fill: true,
@@ -92,7 +92,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Cache Creation',
-        data: props.trendData.map((d) => d.token_counts_complete === false ? null : d.cache_creation_tokens),
+        data: props.trendData.map((d) => d.cache_creation_tokens),
         borderColor: chartColors.value.cacheCreation,
         backgroundColor: `${chartColors.value.cacheCreation}20`,
         fill: true,
@@ -100,7 +100,7 @@ const chartData = computed(() => {
       },
       {
         label: 'Cache Read',
-        data: props.trendData.map((d) => d.token_counts_complete === false ? null : d.cache_read_tokens),
+        data: props.trendData.map((d) => d.cache_read_tokens),
         borderColor: chartColors.value.cacheRead,
         backgroundColor: `${chartColors.value.cacheRead}20`,
         fill: true,
@@ -109,7 +109,6 @@ const chartData = computed(() => {
       {
         label: 'Cache Hit Rate',
         data: props.trendData.map((d) => {
-          if (d.token_counts_complete === false) return null
           const totalPromptTokens = d.input_tokens + d.cache_read_tokens + d.cache_creation_tokens
           return totalPromptTokens > 0 ? (d.cache_read_tokens / totalPromptTokens) * 100 : 0
         }),

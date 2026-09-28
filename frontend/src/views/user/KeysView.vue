@@ -1781,7 +1781,7 @@ const loadApiKeys = async () => {
     pagination.value.total = response.total
     pagination.value.pages = response.pages
 
-    // geili hook: the key list is usable as soon as it arrives. A slow financial
+    // geili hook: the key list is usable as soon as it arrives. A slow usage
     // summary must not block copying, editing or creating keys, or look like $0.
     usageStats.value = {}
     loading.value = false

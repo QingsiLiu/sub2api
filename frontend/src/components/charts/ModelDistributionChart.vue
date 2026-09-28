@@ -133,23 +133,23 @@
                   <span class="inline-flex items-center gap-1">
                     <svg v-if="enableBreakdown && expandedKey === `model-${model.model}`" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     <svg v-else-if="enableBreakdown" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    {{ model.model || t('financial.unknown') }}
+                    {{ model.model }}
                   </span>
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
                   {{ formatNumber(model.requests) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
-                  {{ model.token_counts_complete === false ? t('financial.unknown') : formatTokens(model.total_tokens) }}
+                  {{ formatTokens(model.total_tokens) }}
                 </td>
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
-                  ${{ formatCost(model.actual_cost) }}<span v-if="model.unknown_amount_count" class="ml-1 text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
+                  ${{ formatCost(model.actual_cost) }}
                 </td>
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
-                  {{ model.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(model.account_cost) }}
+                  ${{ formatCost(model.account_cost) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
-                  {{ model.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(model.cost) }}
+                  ${{ formatCost(model.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === `model-${model.model}`">

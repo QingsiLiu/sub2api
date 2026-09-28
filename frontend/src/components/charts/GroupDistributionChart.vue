@@ -71,16 +71,16 @@
                   {{ formatNumber(group.requests) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
-                  {{ group.token_counts_complete === false ? t('financial.unknown') : formatTokens(group.total_tokens) }}
+                  {{ formatTokens(group.total_tokens) }}
                 </td>
                 <td class="py-1.5 text-right text-green-600 dark:text-green-400">
-                  ${{ formatCost(group.actual_cost) }}<span v-if="group.unknown_amount_count" class="ml-1 text-amber-700 dark:text-amber-300">{{ t('financial.knownAmount') }}</span>
+                  ${{ formatCost(group.actual_cost) }}
                 </td>
                 <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
-                  {{ group.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(group.account_cost) }}
+                  ${{ formatCost(group.account_cost) }}
                 </td>
                 <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
-                  {{ group.standard_cost_complete === false ? t('financial.unknown') : '$' + formatCost(group.cost) }}
+                  ${{ formatCost(group.cost) }}
                 </td>
               </tr>
               <!-- User breakdown sub-rows -->

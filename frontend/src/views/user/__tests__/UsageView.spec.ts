@@ -222,16 +222,6 @@ describe('user UsageView', () => {
 
   afterEach(() => { vi.useRealTimers() })
 
-  it('uses Beijing accounting for every financial query', async () => {
-    const wrapper = mountUsageView()
-    await flushPromises()
-    expect(query).toHaveBeenCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }), expect.anything())
-    expect(getStats).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
-    expect(getDashboardModels).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
-    expect(getDashboardSnapshotV2).toHaveBeenLastCalledWith(expect.objectContaining({ date_basis: 'accounting', timezone: 'Asia/Shanghai' }))
-    wrapper.unmount()
-  })
-
   it('loads logs, stats, model stats, and snapshot for today on first render', async () => {
     mountUsageView()
     await flushPromises()
@@ -440,8 +430,8 @@ describe('user UsageView', () => {
     expect(showSuccess).toHaveBeenCalled()
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
     expect(csvContent.slice(1)).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Accounting Date,Settled At,Completed At,Record Source,Record Completeness,Detail Pending,Unknown Fields,Date Basis',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345,,,,,,,,accounting',
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
+      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
     ].join('\n'))
     expect(csvContent).toContain('IP Address')
     expect(csvContent).toContain('203.0.113.10')
@@ -455,41 +445,6 @@ describe('user UsageView', () => {
     window.URL.revokeObjectURL = originalRevokeObjectURL
     vi.unstubAllGlobals()
     clickSpy.mockRestore()
-  })
-
-  it('exports recovered amounts without inventing unknown model or token values', async () => {
-    query.mockResolvedValue({ items: [{ ...usageLog, created_at: null, model: null, input_tokens: null, output_tokens: null, cache_read_tokens: null, cache_creation_tokens: null, total_cost: null, actual_cost: 10.84225728, rate_multiplier: null, record_source: 'historical_recovery', record_completeness: 'partial', accounting_date: '2026-09-25', completed_at: null, unknown_fields: ['model', 'input_tokens', 'request_type', 'billing_mode'] }], total: 1, pages: 1 })
-    const wrapper = mountUsageView()
-    await flushPromises()
-    let csvContent = ''
-    const OriginalBlob = globalThis.Blob
-    vi.stubGlobal('Blob', vi.fn((parts: BlobPart[], options?: BlobPropertyBag) => {
-      csvContent = parts.map(String).join('')
-      return new OriginalBlob(parts, options)
-    }))
-    const originalCreateObjectURL = window.URL.createObjectURL
-    const originalRevokeObjectURL = window.URL.revokeObjectURL
-    window.URL.createObjectURL = vi.fn(() => 'blob:usage-export')
-    window.URL.revokeObjectURL = vi.fn()
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    try {
-      await (wrapper.vm as any).exportToCSV()
-      const [header, data] = csvContent.slice(1).split('\n').map(row => row.split(','))
-      expect(data[header.indexOf('Model')]).toBe('')
-      expect(data[header.indexOf('Input Tokens')]).toBe('')
-      expect(data[header.indexOf('Original Cost')]).toBe('')
-      expect(data[header.indexOf('Billed Cost')]).toBe('10.84225728')
-      expect(data[header.indexOf('Accounting Date')]).toBe('2026-09-25')
-      expect(data[header.indexOf('Completed At')]).toBe('')
-      expect(data[header.indexOf('Record Source')]).toBe('historical_recovery')
-      expect(data[header.indexOf('Record Completeness')]).toBe('partial')
-    } finally {
-      window.URL.createObjectURL = originalCreateObjectURL
-      window.URL.revokeObjectURL = originalRevokeObjectURL
-      vi.unstubAllGlobals()
-      clickSpy.mockRestore()
-      wrapper.unmount()
-    }
   })
 
   it('keeps formula-injection protection for dangerous exported values', async () => {
@@ -526,7 +481,7 @@ describe('user UsageView', () => {
   })
 
   it('keeps the initial filters, sort, and filename while exporting multiple pages', async () => {
-    const pageResponse = { items: [usageLog], total: 21, pages: 2 }
+    const pageResponse = { items: [usageLog], total: 101, pages: 2 }
     query.mockResolvedValue(pageResponse)
     const wrapper = mountUsageView()
     await flushPromises()
@@ -571,7 +526,7 @@ describe('user UsageView', () => {
         sort_by: 'actual_cost', sort_order: 'asc',
       }), expect.anything())
 
-      resolveFirstPage({ items: Array.from({ length: 100 }, (_, id) => ({ ...usageLog, id })), total: 101, pages: 2 })
+      resolveFirstPage(pageResponse)
       await flushPromises()
 
       const exportCalls = query.mock.calls.filter((call) => call.length === 1)
