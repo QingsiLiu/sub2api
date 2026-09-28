@@ -24,8 +24,6 @@ type userUsageFilters struct {
 }
 
 type userModelStat struct {
-	usagestats.FinancialSummary
-
 	Model               string  `json:"model"`
 	Requests            int64   `json:"requests"`
 	InputTokens         int64   `json:"input_tokens"`
@@ -38,8 +36,6 @@ type userModelStat struct {
 }
 
 type userGroupStat struct {
-	usagestats.FinancialSummary
-
 	GroupID     int64   `json:"group_id"`
 	GroupName   string  `json:"group_name"`
 	Requests    int64   `json:"requests"`
@@ -72,12 +68,6 @@ func NewUsageHandler(
 }
 
 func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) (*userUsageFilters, bool) {
-	dateBasis := strings.TrimSpace(c.Query("date_basis"))
-	if !usagestats.ValidFinancialDateBasis(dateBasis) {
-		response.BadRequest(c, "Invalid date_basis, use accounting or completed")
-		return nil, false
-	}
-	dateBasis = usagestats.NormalizeFinancialDateBasis(dateBasis)
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not authenticated")
@@ -173,9 +163,6 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 	}
 
 	userTZ := c.Query("timezone")
-	if dateBasis == usagestats.FinancialDateAccounting {
-		userTZ = "Asia/Shanghai"
-	}
 	now := timezone.NowInUserLocation(userTZ)
 	var startTime, endTime time.Time
 	var startPtr, endPtr *time.Time
@@ -227,7 +214,6 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 
 	return &userUsageFilters{
 		Filters: usagestats.UsageLogFilters{
-			DateBasis:          dateBasis,
 			UserID:             subject.UserID,
 			APIKeyID:           apiKeyID,
 			GroupID:            groupID,
@@ -479,12 +465,7 @@ func (h *UsageHandler) DashboardStats(c *gin.Context) {
 		return
 	}
 
-	dateBasis := strings.TrimSpace(c.Query("date_basis"))
-	if !usagestats.ValidFinancialDateBasis(dateBasis) {
-		response.BadRequest(c, "Invalid date_basis, use accounting or completed")
-		return
-	}
-	stats, err := h.usageService.GetUserFinancialDashboardStats(c.Request.Context(), subject.UserID, dateBasis, c.Query("timezone"))
+	stats, err := h.usageService.GetUserDashboardStats(c.Request.Context(), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -607,7 +588,6 @@ func userModelStatsFromUsageStats(stats []usagestats.ModelStat) []userModelStat 
 	out := make([]userModelStat, 0, len(stats))
 	for _, stat := range stats {
 		out = append(out, userModelStat{
-			FinancialSummary:    stat.FinancialSummary,
 			Model:               stat.Model,
 			Requests:            stat.Requests,
 			InputTokens:         stat.InputTokens,
@@ -626,13 +606,12 @@ func userGroupStatsFromUsageStats(stats []usagestats.GroupStat) []userGroupStat 
 	out := make([]userGroupStat, 0, len(stats))
 	for _, stat := range stats {
 		out = append(out, userGroupStat{
-			FinancialSummary: stat.FinancialSummary,
-			GroupID:          stat.GroupID,
-			GroupName:        stat.GroupName,
-			Requests:         stat.Requests,
-			TotalTokens:      stat.TotalTokens,
-			Cost:             stat.Cost,
-			ActualCost:       stat.ActualCost,
+			GroupID:     stat.GroupID,
+			GroupName:   stat.GroupName,
+			Requests:    stat.Requests,
+			TotalTokens: stat.TotalTokens,
+			Cost:        stat.Cost,
+			ActualCost:  stat.ActualCost,
 		})
 	}
 	return out
@@ -738,7 +717,7 @@ func (h *UsageHandler) GetMyAPIKeyDailyUsage(c *gin.Context) {
 		return
 	}
 
-	userTZ := "Asia/Shanghai" // geili: API key daily amounts use accounting days.
+	userTZ := c.Query("timezone")
 	startTime, endTime := apiKeyDailyUsageRange(days, userTZ)
 	items, err := h.usageService.GetAPIKeyDailyUsage(c.Request.Context(), subject.UserID, apiKeyID, startTime, endTime)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -65,10 +64,4 @@ func TestBuildUsageLogBatchInsertQuery_UsesConflictDoNothing(t *testing.T) {
 
 	require.Contains(t, query, "ON CONFLICT (request_id, api_key_id) DO NOTHING")
 	require.NotContains(t, strings.ToUpper(query), "DO UPDATE")
-}
-
-func TestShouldUseFastUsageLogTotalDefaultsToBoundedPagination(t *testing.T) {
-	require.True(t, shouldUseFastUsageLogTotal(usagestats.UsageLogFilters{UserID: 42}))
-	require.True(t, shouldUseFastUsageLogTotal(usagestats.UsageLogFilters{APIKeyID: 7, DateBasis: usagestats.FinancialDateAccounting}))
-	require.False(t, shouldUseFastUsageLogTotal(usagestats.UsageLogFilters{UserID: 42, ExactTotal: true}))
 }

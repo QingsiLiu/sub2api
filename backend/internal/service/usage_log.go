@@ -102,8 +102,6 @@ func ApplyLegacyRequestFields(requestType RequestType, fallbackStream bool, fall
 }
 
 type UsageLog struct {
-	// geili hook: read-only financial provenance, never persisted as usage metadata.
-	Financial            *UsageFinancialMetadata
 	RouteBillingSnapshot *RouteBillingSnapshot
 	ID                   int64
 	UserID               int64
