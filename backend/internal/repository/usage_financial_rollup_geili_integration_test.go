@@ -596,3 +596,43 @@ func TestFinancialFactSnapshotWaitsForDayWithMaterializedLegacyRows(t *testing.T
 	require.NotNil(t, view)
 	financialRollupAssertOracle(t, final)
 }
+
+func TestFinancialRollupConsumerSkipsWhileAnotherInstanceHoldsState(t *testing.T) {
+	holder, err := integrationDB.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = holder.Rollback() })
+	_, err = holder.Exec(`SELECT 1 FROM public.usage_financial_rollup_state WHERE id=1 FOR UPDATE`)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	started := time.Now()
+	require.NoError(t, newDashboardAggregationRepositoryWithSQL(integrationDB).SyncFinancialUsageRollups(ctx, time.Now()))
+	require.Less(t, time.Since(started), 3*time.Second)
+}
+
+func TestFinancialRollupHealthReportsBacklogAndLag(t *testing.T) {
+	schema := financialRollupTestSchema(t)
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, financialBeijing)
+	seed := financialRollupTestTx(t, schema)
+	financialRollupSeedLog(t, seed, 1, "2026-09-22 12:00:00+08", 1)
+	financialRollupExec(t, seed, `UPDATE usage_financial_rollup_events SET created_at=$1`, now.Add(-20*time.Minute))
+	require.NoError(t, seed.Commit())
+	read := financialRollupTestTx(t, schema)
+	h, err := newDashboardAggregationRepositoryWithSQL(read).FinancialRollupHealth(context.Background(), now)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), h.Pending)
+	require.Equal(t, 20*time.Minute, h.OldestEventAge)
+	require.Nil(t, h.ClosedBefore)
+	require.Nil(t, h.CoverageStart)
+	require.True(t, h.Lagging())
+	require.Equal(t, "2026-09-19", h.CoverageTarget.Format("2006-01-02"))
+	require.NoError(t, read.Commit())
+
+	financialRollupPublish(t, schema)
+	read = financialRollupTestTx(t, schema)
+	h, err = newDashboardAggregationRepositoryWithSQL(read).FinancialRollupHealth(context.Background(), now)
+	require.NoError(t, err)
+	require.Zero(t, h.Pending)
+	require.Zero(t, h.OldestEventAge)
+	require.False(t, h.Lagging(), "%+v", h)
+}

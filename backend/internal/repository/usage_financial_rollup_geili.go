@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/lib/pq"
 )
@@ -164,6 +165,16 @@ func financialRollupDay(at time.Time) time.Time {
 	return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, financialBeijing)
 }
 
+// A run starts steps for at most financialRollupRunBudget and then yields to
+// the next tick; each step has its own deadline. Previously one 2m context
+// covered the whole run, so a step that alone needed more than the remaining
+// budget (backfill of a busy day) was cancelled and restarted forever.
+const (
+	financialRollupRunBudget   = 2 * time.Minute
+	financialRollupStepTimeout = 10 * time.Minute
+	financialRollupSlowStep    = 30 * time.Second
+)
+
 // SyncFinancialUsageRollups commits after each historical day and small source
 // event batch. Only consumers lock state; writers append unrelated event rows.
 func (r *dashboardAggregationRepository) SyncFinancialUsageRollups(ctx context.Context, now time.Time) error {
@@ -174,25 +185,19 @@ func (r *dashboardAggregationRepository) SyncFinancialUsageRollups(ctx context.C
 		_, err := r.syncFinancialRollupStep(ctx, today)
 		return err
 	}
+	started := time.Now()
 	retries := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
-		if err != nil {
-			return err
+		if time.Since(started) >= financialRollupRunBudget {
+			return nil
 		}
-		// JIT compiles the canonical views per worker: on production the
-		// today seed took 119s with JIT and 22s without, against a 2m step.
-		more := false
-		if _, err = tx.ExecContext(ctx, "SET LOCAL jit=off"); err == nil {
-			more, err = newDashboardAggregationRepositoryWithSQL(tx).syncFinancialRollupStep(ctx, today)
-		}
-		if err == nil {
-			err = tx.Commit()
-		} else {
-			_ = tx.Rollback()
+		stepStarted := time.Now()
+		more, busy, err := syncFinancialRollupStepTx(ctx, db, today)
+		if elapsed := time.Since(stepStarted); elapsed >= financialRollupSlowStep {
+			logger.LegacyPrintf("repository.financial_rollup", "[FinancialRollup] slow step: duration=%s more=%t err=%v", elapsed.Round(time.Millisecond), more, err)
 		}
 		if err != nil {
 			var pg *pq.Error
@@ -203,10 +208,41 @@ func (r *dashboardAggregationRepository) SyncFinancialUsageRollups(ctx context.C
 			return err
 		}
 		retries = 0
-		if !more {
+		if busy || !more {
 			return nil
 		}
 	}
+}
+
+// syncFinancialRollupStepTx runs one step in its own RR transaction and
+// deadline. busy means another instance holds the state lock right now.
+func syncFinancialRollupStepTx(ctx context.Context, db *sql.DB, today time.Time) (more, busy bool, err error) {
+	stepCtx, cancel := context.WithTimeout(ctx, financialRollupStepTimeout)
+	defer cancel()
+	tx, err := db.BeginTx(stepCtx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return false, false, err
+	}
+	// JIT compiles the canonical views per worker: on production the
+	// today seed took 119s with JIT and 22s without, against a 2m step.
+	if _, err = tx.ExecContext(stepCtx, "SET LOCAL jit=off"); err == nil {
+		// Do not queue behind another instance for a whole step.
+		_, err = tx.ExecContext(stepCtx, `SELECT 1 FROM usage_financial_rollup_state WHERE id=1 FOR UPDATE NOWAIT`)
+		var pg *pq.Error
+		if errors.As(err, &pg) && pg.Code == "55P03" {
+			_ = tx.Rollback()
+			return false, true, nil
+		}
+	}
+	if err == nil {
+		more, err = newDashboardAggregationRepositoryWithSQL(tx).syncFinancialRollupStep(stepCtx, today)
+	}
+	if err == nil {
+		err = tx.Commit()
+	} else {
+		_ = tx.Rollback()
+	}
+	return more, false, err
 }
 
 func (r *dashboardAggregationRepository) syncFinancialRollupStep(ctx context.Context, today time.Time) (bool, error) {

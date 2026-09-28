@@ -83,3 +83,35 @@ func TestFinancialDashboardBypassesTTLResponseCache(t *testing.T) {
 	require.Equal(t, 2, repo.calls)
 	require.Equal(t, int32(0), atomic.LoadInt32(&cache.getCalls))
 }
+
+func TestFinancialRollupAlertGeili(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	today := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+	target := today.AddDate(0, 0, -7)
+	healthy := FinancialRollupHealth{Today: today, ClosedBefore: &today, CoverageStart: &target, CoverageTarget: target}
+	require.False(t, healthy.Lagging())
+	require.Equal(t, "", financialRollupAlert(healthy, time.Time{}, now))
+
+	queued := healthy
+	queued.OldestEventAge = 14 * time.Minute
+	require.Equal(t, "", financialRollupAlert(queued, time.Time{}, now))
+	queued.OldestEventAge = 15 * time.Minute
+	require.Equal(t, "delayed", financialRollupAlert(queued, time.Time{}, now))
+	queued.OldestEventAge = time.Hour
+	require.Equal(t, "stalled", financialRollupAlert(queued, time.Time{}, now))
+
+	yesterday := today.AddDate(0, 0, -1)
+	late := target.AddDate(0, 0, 3)
+	for _, h := range []FinancialRollupHealth{
+		{Today: today, ClosedBefore: &yesterday, CoverageStart: &target, CoverageTarget: target},
+		{Today: today, ClosedBefore: &today, CoverageStart: &late, CoverageTarget: target},
+		{Today: today, ClosedBefore: &today, CoverageTarget: target},
+		{Today: today, CoverageStart: &target, CoverageTarget: target},
+	} {
+		require.True(t, h.Lagging())
+		// Backfill right after a release or at midnight is expected to lag briefly.
+		require.Equal(t, "", financialRollupAlert(h, now.Add(-29*time.Minute), now))
+		require.Equal(t, "delayed", financialRollupAlert(h, now.Add(-30*time.Minute), now))
+		require.Equal(t, "stalled", financialRollupAlert(h, now.Add(-time.Hour), now))
+	}
+}
