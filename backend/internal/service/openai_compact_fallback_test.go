@@ -395,7 +395,10 @@ func TestOpenAIGatewayForwardRetriesStreamingCompactFailureBeforeOutput(t *testi
 
 	failed := "event: response.failed\n" +
 		`data: {"type":"response.failed","response":{"status":"failed","error":{"code":"context_length_exceeded","message":"context window exceeded"}}}` + "\n\n"
-	completed := "event: response.completed\n" +
+	// Native compaction v2 only accepts a stream carrying a compaction item.
+	completed := "event: response.output_item.done\n" +
+		`data: {"type":"response.output_item.done","output_index":0,"item":{"id":"cmp_1","type":"compaction","encrypted_content":"opaque-compaction"}}` + "\n\n" +
+		"event: response.completed\n" +
 		`data: {"type":"response.completed","response":{"id":"resp_compact","status":"completed","model":"gpt-5.4","output":[],"usage":{"input_tokens":1,"output_tokens":1}}}` + "\n\n"
 	upstream := &httpUpstreamRecorder{responses: []*http.Response{
 		{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(failed))},
