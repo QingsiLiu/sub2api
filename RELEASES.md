@@ -10,9 +10,9 @@
 - 组合 Key：某分组所有账号都被上游限流（网关返回通用"Upstream rate limit exceeded"或"All available accounts are currently rate-limited"）时，继续尝试组合里的下一个同协议分组；本地并发、排队、RPM、Key 额度、订阅额度、余额类 429 仍立即返回，不换组。
 - Codex 官方客户端（按 UA/originator 识别）的 `/responses`、`/responses/compact` 请求：流式开始前的临时性 429（上游限流、账号全部限流、网关排队/并发满、用户/分组 RPM）改为 503 `slow_down`，并带 `Retry-After`（沿用已有值，否则取「429默认回避」秒数，默认 5，上限 60）。Codex 会按此退避重试，不再直接报 "exceeded retry limit, last status: 429"。额度、订阅、Key 限额、余额类 429 保持原样；其他客户端、其他接口、WebSocket 模式不变；运维错误日志仍记录原始 429。
 
-- revision：待候选构建。
-- 镜像 digest：待候选构建完成后补上。
-- 部署：仅源码。
+- revision：`1cfae01e4a0c3a7e7d7f61706a2136627880d2fb`。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:0a3dca9c25e5134548c94889fe2bfe861eb22774ea6de70c0714ba02a51ed63b`（候选 CI `36453021401`，八项门禁通过）。
+- 部署：2026-09-29 01:21 上 Stage，健康、版本`0.2.9-geili.2`，生产指纹不变；Stage 六套验收通过。Codex 零成本探针（无账号合成分组、RPM=1）确认：超分组 RPM 时 Codex `/responses` 得 503 `slow_down` 且带 `Retry-After`，普通客户端与 `/chat/completions` 仍为 429，运维日志记原始 429；一次极小真实文本调用通过。组合 Key 跨组换组靠契约测试覆盖，未在 Stage 用真实上游限流复现。生产待授权，仍为`.21`。
 
 ## 0.2.9-geili.1
 
@@ -24,9 +24,9 @@
 - 网关可用模型列表：透传账号上的旧模型映射不再收窄公开列表。
 - 其他上游修复：OpenRouter 别名 `claude-opus-5.5`；alpha 搜索仅在成功完成后计费；Free Fast 保留零费用日志；客户端断开记为 499；额度暂停与自动重置修复。
 
-- revision：待候选构建。
-- 镜像 digest：待候选构建完成后补上。
-- 部署：仅源码。
+- revision：`611a84626d8950c2194fde71f917f298be0521f1`。
+- 镜像 digest：不单独发布，随`.2`候选一起验收。
+- 部署：未单独上 Stage；代码包含在`.2`中，随`.2`于 2026-09-29 上 Stage 验收。
 
 ## 0.2.8-geili.22（已撤下，未进入生产）
 
