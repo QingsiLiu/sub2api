@@ -8,9 +8,9 @@
 
 统一 S2A 上游监控与 Sub2API 真实组内调度：面板主表展示独立近 3 分钟账号成功率、有效优先级与来源，4/27/126 GPT 分组支持默认关闭的继承、自动、固定组内优先级；Sub2API 按实际目标组分层选择并保留缓存同步、版本冲突、额度、限流、并发和会话连续性检查。非试点组继续账号全局优先级，智商探测范围不变。合入`.21`手机端用户仪表盘单列修复。
 
-- revision：候选构建后补。
-- 镜像 digest：候选构建后补。
-- 部署：仅源码，待 Stage 验收和用户当次生产授权。
+- revision：`0aa2b1590114a448e845a1af50ccc8450f876200`。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:19a3d31b8ea591dc360534f03fca97fa60b8d32ee15de9f9516b8515902ebf75`（候选 CI `36411757629` 全部门禁通过）。
+- 部署：2026-09-28 19:20 已上 Stage，health 200，版本 `.22`；迁移 275 已应用，14 项组内控制验收通过，测试账号已清理、原分组设置恢复。Stage 备份 `/opt/sub2api-subscription-lab/backups/20260928T112033Z-candidate`，接口验收记录 `/opt/sub2api-subscription-lab/backups/group-scheduling-20260928T112205Z/result.json`。生产容器指纹未变，生产尚未发布，三个试点未在生产启用。限额外部联调和当次生产授权仍为未完成门禁。
 
 ## 0.2.8-geili.21
 
