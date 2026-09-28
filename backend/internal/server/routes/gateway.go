@@ -33,6 +33,7 @@ func RegisterGatewayRoutes(
 	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize)
 	clientRequestID := middleware.ClientRequestID()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
+	opsErrorLogger = codexRetryableRateLimit(settingService, opsErrorLogger) // geili hook: Codex transient 429 -> 503 slow_down, outside Ops.
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver, apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver, apiKeyService)
