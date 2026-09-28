@@ -4,6 +4,16 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.9-geili.2
+
+在`.1`基础上减少 Codex 客户端因上游临时限流而中断，不改账号选择和调度逻辑，无新增迁移。`.1`未上 Stage，其上游 v0.2.9 同步随本版一起验收。
+- 组合 Key：某分组所有账号都被上游限流（网关返回通用"Upstream rate limit exceeded"或"All available accounts are currently rate-limited"）时，继续尝试组合里的下一个同协议分组；本地并发、排队、RPM、Key 额度、订阅额度、余额类 429 仍立即返回，不换组。
+- Codex 官方客户端（按 UA/originator 识别）的 `/responses`、`/responses/compact` 请求：流式开始前的临时性 429（上游限流、账号全部限流、网关排队/并发满、用户/分组 RPM）改为 503 `slow_down`，并带 `Retry-After`（沿用已有值，否则取「429默认回避」秒数，默认 5，上限 60）。Codex 会按此退避重试，不再直接报 "exceeded retry limit, last status: 429"。额度、订阅、Key 限额、余额类 429 保持原样；其他客户端、其他接口、WebSocket 模式不变；运维错误日志仍记录原始 429。
+
+- revision：待候选构建。
+- 镜像 digest：待候选构建完成后补上。
+- 部署：仅源码。
+
 ## 0.2.9-geili.1
 
 同步上游 Wei-Shaw/sub2api `v0.2.9`（`8532ec28b`），Geili 独立结算、多分组 Key、订阅与模型广场挂钩保留不变，无新增迁移。用户可见变化：
