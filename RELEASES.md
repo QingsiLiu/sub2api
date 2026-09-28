@@ -12,7 +12,7 @@
 
 - revision：`1cfae01e4a0c3a7e7d7f61706a2136627880d2fb`。
 - 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:0a3dca9c25e5134548c94889fe2bfe861eb22774ea6de70c0714ba02a51ed63b`（候选 CI `36453021401`，八项门禁通过）。
-- 部署：2026-09-29 01:21 上 Stage，健康、版本`0.2.9-geili.2`，生产指纹不变；Stage 六套验收通过。Codex 零成本探针（无账号合成分组、RPM=1）确认：超分组 RPM 时 Codex `/responses` 得 503 `slow_down` 且带 `Retry-After`，普通客户端与 `/chat/completions` 仍为 429，运维日志记原始 429；一次极小真实文本调用通过。组合 Key 跨组换组靠契约测试覆盖，未在 Stage 用真实上游限流复现。生产待授权，仍为`.21`。
+- 部署：2026-09-29 01:21 上 Stage，健康、版本`0.2.9-geili.2`，生产指纹不变；Stage 六套验收通过。Codex 零成本探针（无账号合成分组、RPM=1）确认：超分组 RPM 时 Codex `/responses` 得 503 `slow_down` 且带 `Retry-After`，普通客户端与 `/chat/completions` 仍为 429，运维日志记原始 429；一次极小真实文本调用通过。组合 Key 跨组换组靠契约测试覆盖，未在 Stage 用真实上游限流复现。2026-09-29 02:43 经用户授权以同一 digest 发布到生产（取代`.21`），应用停机约 10 秒，PG/Redis 未变，发布后只读验收 12 项通过。
 
 ## 0.2.9-geili.1
 
@@ -26,7 +26,7 @@
 
 - revision：`611a84626d8950c2194fde71f917f298be0521f1`。
 - 镜像 digest：不单独发布，随`.2`候选一起验收。
-- 部署：未单独上 Stage；代码包含在`.2`中，随`.2`于 2026-09-29 上 Stage 验收。
+- 部署：未单独上 Stage；代码包含在`.2`中，随`.2`于 2026-09-29 上 Stage 验收并发布到生产。
 
 ## 0.2.8-geili.22（已撤下，未进入生产）
 
