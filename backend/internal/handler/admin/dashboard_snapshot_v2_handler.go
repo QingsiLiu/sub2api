@@ -288,7 +288,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 		g.Go(func() error {
 			readCtx, cancel := context.WithTimeout(gctx, 5*time.Second)
 			defer cancel()
-			usersTrend, _, err := h.getUserUsageTrendCached(readCtx, startTime, endTime, granularity, usersTrendLimit)
+			usersTrend, _, err := h.getUserUsageTrendCached(readCtx, startTime, endTime, granularity, usersTrendLimit, "tokens")
 			if err != nil {
 				return nil
 			}

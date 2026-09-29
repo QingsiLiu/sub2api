@@ -4,6 +4,22 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.10-geili.1
+
+同步上游 Wei-Shaw/sub2api `v0.2.10`（`e8cbebf37`，22 个提交），Geili 独立结算、多分组 Key、订阅、模型广场与 Excel Transport 插件还原挂钩保留不变，无新增迁移（仍 331 条）。用户可见变化：
+- 模型：支持 Claude Sonnet 5.5。
+- 组合 Key：WebSocket 路径按组合路由解析上游模型，同一连接内换成另一个公开模型会被拒绝并要求新建连接；账号级模型路由只调度到显式映射了该公开模型的账号，高级与传统两种调度都一致，避免非所属账号把别名原样转发得到 `model_not_found`。
+- 计费与用量：Anthropic 流式用量归一化，流式 chat 转发上游已收到的用量；避免迟到缓存字段导致的输入 token 歧义扣减。
+- 管理端：Claude 账号可按需查看原生重置额度状态；仪表盘"近期使用"可在 Token 与花费之间切换；新增风控用户白名单；账号模型白名单与映射冲突修复。
+- 用户端：仅限 Claude Code 的分组在使用密钥弹窗里隐藏不支持的客户端；OpenAI 分组的 Codex 配置不再下载或引用模型目录（`model_catalog_json`），默认模型仍为 GPT-6 Astra。
+- 其他：Antigravity 兼容流在首个内容前保活；Anthropic 工具名改写合并为一次 body 遍历。
+- 合并冲突（5 处）：仪表盘快照保留 Geili 的并发读取与 5 秒超时，仅补上游新增的 `metric` 参数；`wire_gen.go` 同时保留 Geili 活动服务与上游 Claude 重置额度服务；使用密钥弹窗保留 Geili 的组合平台判断并接入 `claude_code_only`；Codex 目录相关前端测试改为断言 OpenAI 不出现目录且默认 `gpt-6-astra`；VERSION 取 Geili 版本号。
+- 本地验证：`go build ./...`、`go vet -tags=unit`、前端 `vue-tsc`、eslint、全量 vitest（354 文件 2870 用例）通过；Go 全量与 unit 全量仅剩沙箱限制的用例（本机代理环境与 unix socket 绑定），已在无代理下确认阿里云验证码用例通过，其余交 CI 完整门禁（含集成与竞态）。
+
+- revision：待候选 CI 产出后补。
+- 镜像 digest：待候选 CI 产出后补。
+- 部署：仅源码。
+
 ## 0.2.9-geili.3
 
 在`.2`基础上修正 Excel Transport 插件带来的模型名与写缓存差异，并优化管理员端使用记录的账户多选筛选；不改调度，无新增迁移。
