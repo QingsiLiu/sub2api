@@ -326,7 +326,18 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			clientDisconnected = true
 			return
 		}
-		if _, err := writePendingString("event: error\ndata: " + payload + "\n\n"); err != nil {
+		// geili hook: a bare `error` frame is not a Responses terminal event. Codex
+		// ignores it and reports the generic "stream closed before response.completed";
+		// end the stream with response.failed so the client sees the real cause and
+		// retries. OAuth accounts keep the existing convention of never emitting a
+		// bare error frame to Codex.
+		if !codexFailureTerminal {
+			if _, err := writePendingString("event: error\ndata: " + payload + "\n\n"); err != nil {
+				clientDisconnected = true
+				return
+			}
+		}
+		if _, err := writePendingString(buildOpenAIGatewayStreamFailedSSE(responseID, originalModel, code, message)); err != nil {
 			clientDisconnected = true
 			return
 		}
@@ -489,6 +500,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		}
 		s.recordOpenAIProxyStreamDisconnect(account, scanErr, upstreamRequestID)
 		code, message := classifyOpenAIUpstreamStreamReadError(scanErr)
+		logger.LegacyPrintf("service.openai_gateway", "OpenAI stream read error after client output: account=%d model=%s elapsed=%s reasoning_effort=%s code=%s upstream_request_id=%s error=%s", account.ID, originalModel, time.Since(startTime).Round(time.Second), reasoningEffort, code, upstreamRequestID, sanitizeUpstreamErrorMessage(scanErr.Error()))
 		sendErrorEvent(code, message)
 		return resultWithUsage(), fmt.Errorf("stream read error: %w", scanErr), true
 	}
@@ -951,7 +963,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			if clientDisconnected {
 				return resultWithUsage(), fmt.Errorf("stream usage incomplete after timeout")
 			}
-			logger.LegacyPrintf("service.openai_gateway", "Stream data interval timeout: account=%d model=%s interval=%s", account.ID, originalModel, streamInterval)
+			logger.LegacyPrintf("service.openai_gateway", "Stream data interval timeout: account=%d model=%s interval=%s elapsed=%s reasoning_effort=%s client_output_started=%t upstream_request_id=%s", account.ID, originalModel, streamInterval, time.Since(startTime).Round(time.Second), reasoningEffort, openAIStreamClientOutputStarted(c, clientOutputStarted), upstreamRequestID)
 			// 处理流超时，可能标记账户为临时不可调度或错误状态
 			if s.rateLimitService != nil {
 				s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)

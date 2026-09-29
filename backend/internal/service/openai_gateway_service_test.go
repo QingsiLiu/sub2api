@@ -1610,9 +1610,11 @@ func TestOpenAIStreamingTimeout(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "stream_timeout") {
 		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
 	}
-	payload := strings.TrimSpace(strings.TrimPrefix(rec.Body.String(), "event: error\ndata: "))
+	errorFrame := strings.SplitN(rec.Body.String(), "\n\n", 2)[0]
+	payload := strings.TrimSpace(strings.TrimPrefix(errorFrame, "event: error\ndata: "))
 	require.Equal(t, "stream_timeout", gjson.Get(payload, "code").String())
 	require.False(t, gjson.Get(payload, "error").Exists())
+	require.Contains(t, rec.Body.String(), "event: response.failed\n", "the stream must end with a Responses terminal event")
 	require.True(t, IsResponseCommitted(c))
 }
 
