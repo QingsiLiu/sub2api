@@ -88,10 +88,21 @@
         <div ref="accountSearchRef" class="usage-filter-dropdown relative w-full min-w-0 sm:w-80">
           <label class="input-label">{{ t('admin.usage.account') }}</label>
           <div class="rounded-xl border border-gray-200 bg-white transition-colors focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30 dark:border-dark-600 dark:bg-dark-800">
-            <div v-if="selectedAccounts.length" class="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto px-2.5 pt-2.5">
+            <!-- geili hook: collapse chips to one row so many selections never stretch the filter bar. -->
+            <div
+              v-if="selectedAccounts.length"
+              data-testid="usage-account-chips"
+              :class="[
+                'flex gap-1.5 px-2.5 pt-2.5',
+                accountChipsExpanded && selectedAccounts.length > ACCOUNT_CHIPS_COLLAPSED_LIMIT
+                  ? 'max-h-32 flex-wrap overflow-y-auto'
+                  : 'flex-nowrap overflow-hidden'
+              ]"
+            >
               <span
-                v-for="a in selectedAccounts"
+                v-for="a in visibleAccounts"
                 :key="a.id"
+                data-testid="usage-account-chip"
                 class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-lg border border-primary-100 bg-primary-50 py-0.5 pl-2 pr-0.5 text-xs font-medium text-primary-700 dark:border-primary-800/50 dark:bg-primary-900/30 dark:text-primary-300"
               >
                 <span class="min-w-0 truncate" :title="a.name">{{ a.name }}</span>
@@ -104,6 +115,19 @@
                   <Icon name="x" size="xs" aria-hidden="true" />
                 </button>
               </span>
+              <button
+                v-if="selectedAccounts.length > ACCOUNT_CHIPS_COLLAPSED_LIMIT"
+                type="button"
+                data-testid="usage-account-chips-toggle"
+                class="inline-flex h-7 shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 px-2 text-xs font-medium tabular-nums text-gray-600 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600"
+                :aria-expanded="accountChipsExpanded"
+                :aria-label="accountChipsExpanded
+                  ? t('admin.usage.accountChipsCollapse')
+                  : t('admin.usage.accountChipsExpand', { count: hiddenAccountCount })"
+                @click="accountChipsExpanded = !accountChipsExpanded"
+              >
+                {{ accountChipsExpanded ? t('admin.usage.accountChipsCollapse') : `+${hiddenAccountCount}` }}
+              </button>
             </div>
             <div class="flex items-center gap-2 px-3">
               <Icon name="search" size="sm" class="shrink-0 text-gray-400 dark:text-dark-400" aria-hidden="true" />
@@ -311,6 +335,9 @@ interface SimpleAccount {
 const accountKeyword = ref('')
 const accountResults = ref<SimpleAccount[]>([])
 const showAccountDropdown = ref(false)
+// geili hook: how many selected accounts are shown before folding into "+N".
+const ACCOUNT_CHIPS_COLLAPSED_LIMIT = 2
+const accountChipsExpanded = ref(false)
 let accountSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
 const selectedAccountIDs = computed<number[]>(() => {
@@ -322,6 +349,14 @@ const selectedAccounts = computed<SimpleAccount[]>(() => {
   const byID = new Map(accountResults.value.map((a) => [a.id, a]))
   return selectedAccountIDs.value.map((id) => byID.get(id) || { id, name: `#${id}` })
 })
+const visibleAccounts = computed<SimpleAccount[]>(() =>
+  accountChipsExpanded.value || selectedAccounts.value.length <= ACCOUNT_CHIPS_COLLAPSED_LIMIT
+    ? selectedAccounts.value
+    : selectedAccounts.value.slice(0, ACCOUNT_CHIPS_COLLAPSED_LIMIT)
+)
+const hiddenAccountCount = computed(() =>
+  Math.max(0, selectedAccounts.value.length - ACCOUNT_CHIPS_COLLAPSED_LIMIT)
+)
 
 const modelOptions = computed<SelectOption[]>(() => [
   { value: null, label: t('admin.usage.allModels') },
@@ -508,6 +543,7 @@ const toggleAccount = (a: SimpleAccount) => {
 }
 
 const clearAccount = () => {
+  accountChipsExpanded.value = false
   accountKeyword.value = ''
   accountResults.value = []
   showAccountDropdown.value = false

@@ -14,6 +14,8 @@ const messages: Record<string, string> = {
   'admin.usage.allModels': 'All Models',
   'admin.usage.account': 'Account',
   'admin.usage.searchAccountPlaceholder': 'Search account...',
+  'admin.usage.accountChipsCollapse': 'Less',
+  'admin.usage.accountChipsExpand': 'Show more accounts',
   'usage.type': 'Type',
   'admin.usage.allTypes': 'All Types',
   'usage.ws': 'WS',
@@ -265,6 +267,72 @@ describe('UsageFilters — account multi-select', () => {
     await options[0].trigger('click')
     expect(wrapper.props('modelValue').account_ids).toEqual([22])
     expect(wrapper.emitted('change')?.length).toBe(3)
+  })
+
+  it('folds many selected accounts into one row with a +N toggle', async () => {
+    mockAccountsList.mockResolvedValue({ items: [1, 2, 3, 4, 5].map((id) => ({ id, name: `Account ${id}` })) })
+    const wrapper = mountFilters()
+    const accountInput = wrapper.findAll('input[type="text"]')[2]
+    await accountInput.trigger('focus')
+    await accountInput.setValue('account')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+
+    const options = wrapper.findAll('[data-testid="usage-account-option"]')
+    expect(options).toHaveLength(5)
+    // Two selections fit: no toggle yet.
+    await options[0].trigger('click')
+    await options[1].trigger('click')
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="usage-account-chips-toggle"]').exists()).toBe(false)
+
+    // Five selections: still two chips, remaining three folded into +3.
+    for (const option of options.slice(2)) await option.trigger('click')
+    expect(wrapper.props('modelValue').account_ids).toEqual([1, 2, 3, 4, 5])
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(2)
+    const toggle = wrapper.find('[data-testid="usage-account-chips-toggle"]')
+    expect(toggle.text()).toBe('+3')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[data-testid="usage-account-chips"]').classes()).toContain('flex-nowrap')
+
+    // Expand shows every chip in a height-capped scroll area, then collapse restores.
+    await toggle.trigger('click')
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(5)
+    expect(wrapper.find('[data-testid="usage-account-chips"]').classes()).toEqual(
+      expect.arrayContaining(['max-h-32', 'overflow-y-auto'])
+    )
+    expect(wrapper.find('[data-testid="usage-account-chips-toggle"]').text()).toBe('Less')
+    await wrapper.find('[data-testid="usage-account-chips-toggle"]').trigger('click')
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(2)
+
+    // Removing a chip while folded keeps the summary honest.
+    await options[4].trigger('click')
+    expect(wrapper.find('[data-testid="usage-account-chips-toggle"]').text()).toBe('+2')
+  })
+
+  it('resets the folded state when the account filter is cleared', async () => {
+    mockAccountsList.mockResolvedValue({ items: [1, 2, 3].map((id) => ({ id, name: `Account ${id}` })) })
+    const wrapper = mountFilters()
+    const accountInput = wrapper.findAll('input[type="text"]')[2]
+    await accountInput.trigger('focus')
+    await accountInput.setValue('account')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    for (const option of wrapper.findAll('[data-testid="usage-account-option"]')) await option.trigger('click')
+    await wrapper.find('[data-testid="usage-account-chips-toggle"]').trigger('click')
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(3)
+
+    await wrapper.find('button[aria-label="Clear account filter"]').trigger('click')
+    expect(wrapper.find('[data-testid="usage-account-chips"]').exists()).toBe(false)
+    expect(wrapper.props('modelValue').account_ids).toBeUndefined()
+
+    // Selecting again starts folded, not expanded. Clearing closes the dropdown, so refocus first.
+    await accountInput.trigger('focus')
+    await accountInput.setValue('account')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    for (const option of wrapper.findAll('[data-testid="usage-account-option"]')) await option.trigger('click')
+    expect(wrapper.findAll('[data-testid="usage-account-chip"]')).toHaveLength(2)
   })
 })
 

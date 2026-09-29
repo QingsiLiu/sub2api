@@ -526,6 +526,8 @@ export default {
       upstreamRequestIdCopied: 'Upstream ID copied',
       allModels: 'All Models',
       allAccounts: 'All Accounts',
+      accountChipsCollapse: 'Less',
+      accountChipsExpand: 'Show {count} more accounts',
       allGroups: 'All Groups',
       allTypes: 'All Types',
       inputCost: 'Input Cost',
