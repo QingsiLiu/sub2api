@@ -977,7 +977,8 @@ func (m *PluginManager) RoundTripOpenAIOAuth(ctx context.Context, request *http.
 		}
 		return nil, true, err
 	}
-	return response, true, nil
+	// geili hook: 指定插件的响应还原成普通 OpenAI 形态，用户与下游感知不到插件。
+	return normalizeGeiliPluginOpenAIResponse(route.runtime.installation, request, response), true, nil
 }
 
 // ShouldRouteOpenAIOAuth 判断该账号是否命中当前 OpenAI OAuth 插件绑定。
