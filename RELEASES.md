@@ -16,9 +16,9 @@
 - 合并冲突（5 处）：仪表盘快照保留 Geili 的并发读取与 5 秒超时，仅补上游新增的 `metric` 参数；`wire_gen.go` 同时保留 Geili 活动服务与上游 Claude 重置额度服务；使用密钥弹窗保留 Geili 的组合平台判断并接入 `claude_code_only`；Codex 目录相关前端测试改为断言 OpenAI 不出现目录且默认 `gpt-6-astra`；VERSION 取 Geili 版本号。
 - 本地验证：`go build ./...`、`go vet -tags=unit`、前端 `vue-tsc`、eslint、全量 vitest（354 文件 2870 用例）通过；Go 全量与 unit 全量仅剩沙箱限制的用例（本机代理环境与 unix socket 绑定），已在无代理下确认阿里云验证码用例通过，其余交 CI 完整门禁（含集成与竞态）。
 
-- revision：待候选 CI 产出后补。
-- 镜像 digest：待候选 CI 产出后补。
-- 部署：仅源码。
+- revision：`4e2e6a1ff7f6ddf3be94fdcfa9ed723b4a73d07e`（候选 CI `36613127159` 构建成功；Geili CI、Security Scan 全绿）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:1641d0d2c9cab4c6faf2000466a45f7f72ea6ad670464b1b2f1b26889af64baa`。
+- 部署：2026-09-29 固定 Stage 并通过六套验收、真实文本、官方用量 API、核心页、视觉、双实例与生产保全。2026-09-30 11:12 经用户授权以同一 digest 发布到生产（取代 `0.2.9-geili.3`），应用停机约 11 秒，PG/Redis 未变，无新迁移、无配置改动，发布后只读验收 12 项通过；生产观察到 Excel Transport 插件响应仍被还原，发布后 OAuth 使用记录无写缓存与 `-excel` 模型名。上游新增的客户端版本自动同步已在生产运行。
 
 ## 0.2.9-geili.3
 
