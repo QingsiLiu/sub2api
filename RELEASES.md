@@ -4,6 +4,20 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.10-geili.3
+
+在`.2`基础上，让经 Cloudflare 进入的 Anthropic `/v1/messages` 流式请求在上游迟迟没有响应时不再被 Cloudflare 掐断（用户看到 524）；不设任何总时限，不改重试、换号与计费，无新增迁移。
+- 现象：中转站账号限流时每次约 31 秒才返回 429，网关在账号上重试、换号可能花几分钟，这期间没有任何字节回给客户端，Cloudflare 在约 123 秒（网关入口起算）后主动断开，客户端工作被打断；上游若恰好在此后成功，结果也无人接收。
+- 现改为：只对带 `Cf-Ray` 头（经 Cloudflare 进入）的 POST `…/messages` 流式请求，请求静默满 45 秒后，按 `gateway.stream_keepalive_interval`（默认 10 秒）补发 Anthropic 协议自带的 `event: ping`，让 Cloudflare 与 nginx 一直看到字节在流动；网关不会替客户端放弃，慢请求可以一直等到上游真正返回。
+- 心跳对请求侧不可见：`Size/Written/Status` 扣除心跳，`Header()` 是私有副本，所以「已写出字节则不再换号」的判定、多分组 Key 的跨组重试都不受影响；请求线程开始写真实响应后心跳永久停止，已提交的 200 之后真实流直接接在心跳后面。
+- 45 秒内返回的失败（鉴权、参数、快速限流等，绝大多数情况）仍然是原来的 HTTP 状态码。心跳已发出后才失败的，线上状态码已固化为 200，错误改以 `event: error` 流内帧交付（官方 SDK 据此抛错），错误看板照常记为失败请求。
+- 不受影响：直连域名（无 `Cf-Ray`）、`count_tokens`、非流式请求、其它接口。`gateway.stream_keepalive_interval: 0` 整体关闭。
+- 新增诊断日志：`gateway.edge_keepalive_started`、`gateway.edge_keepalive_error_frame`，以及换号后选不出账号时的 `gateway.select_account_failed_after_failover`（此前该路径完全无日志）。
+- 已知局限：① 用户并发槽等待期间网关自己已发过 ping，之后不再启动心跳；② 心跳提交 200 之后，上游响应头（如 `anthropic-ratelimit-*`）无法再带给客户端；③ 本次只覆盖 `/v1/messages`，`/responses` 与 `/chat/completions` 同样会被 Cloudflare 在约 125 秒掐断（过去 19 小时 910 次，其中 Codex 的 `/responses` 系列 724 次），尚未处理。
+
+- revision：候选构建完成后补上。
+- 部署：仅源码。
+
 ## 0.2.10-geili.2
 
 在`.1`基础上修正 Codex 官方客户端在流式中途失败时的报错，只影响失败路径；不改调度、计费与推理档位处理，无新增迁移。
