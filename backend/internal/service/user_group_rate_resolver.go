@@ -43,6 +43,14 @@ type userGroupRateResolver struct {
 }
 
 func newUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache, cacheTTL time.Duration, sf *singleflight.Group, logComponent string) *userGroupRateResolver {
+	r := newUnregisteredUserGroupRateResolver(repo, cache, cacheTTL, sf, logComponent)
+	userGroupRateResolvers.Store(r, struct{}{})
+	return r
+}
+
+// newUnregisteredUserGroupRateResolver 不进入失效注册表；注册表会强引用，仅用于长期存活的 resolver，
+// 按请求临时构造的兜底 resolver 必须走这里，否则每次请求泄漏一个缓存与 janitor。
+func newUnregisteredUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache, cacheTTL time.Duration, sf *singleflight.Group, logComponent string) *userGroupRateResolver {
 	if cacheTTL <= 0 {
 		cacheTTL = defaultUserGroupRateCacheTTL
 	}
@@ -63,7 +71,6 @@ func newUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache
 		sf:           sf,
 		logComponent: logComponent,
 	}
-	userGroupRateResolvers.Store(r, struct{}{})
 	return r
 }
 

@@ -120,7 +120,7 @@ func (s *OpenAIGatewayService) ResolveUserGroupRateMultiplier(ctx context.Contex
 	}
 	resolver := s.userGroupRateResolver
 	if resolver == nil {
-		resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
+		resolver = newUnregisteredUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
 	}
 	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
 }
