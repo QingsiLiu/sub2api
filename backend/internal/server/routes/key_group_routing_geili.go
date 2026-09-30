@@ -194,7 +194,7 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 				c.JSON(http.StatusGatewayTimeout, gin.H{"error": gin.H{"code": "REQUEST_TIMEOUT", "message": "request timeout budget exhausted"}})
 				return
 			}
-			attempt := c.Copy()
+			attempt := handler.CopyContextForAttempt(c) // geili hook: 与 Cloudflare 保活心跳互斥
 			attempt.Request = c.Request.Clone(c.Request.Context())
 			requestmodel.ResetRequestBody(attempt.Request, body)
 			writer := newKeyRouteWriter(c.Writer)

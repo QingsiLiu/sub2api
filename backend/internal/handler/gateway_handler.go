@@ -644,6 +644,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 	}()
 
+	// geili hook: 经 Cloudflare 进入的流式请求，上游迟迟无响应时由写入器补发心跳，不设总时限。
+	ArmEdgeSSEKeepalive(c, reqStream)
+
 	for {
 		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
 		retryWithFallback := false
@@ -689,6 +692,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					return
 				}
 				action := fs.HandleSelectionExhausted(c.Request.Context())
+				// geili hook: 换号后选不出账号时此前没有任何日志，无法区分"池里没有别的号"与"别的号被门控挡住"。
+				reqLog.Warn("gateway.select_account_failed_after_failover",
+					zap.String("model", reqModel),
+					zap.Int64p("group_id", currentAPIKey.GroupID),
+					zap.Int("excluded_accounts", len(fs.FailedAccountIDs)),
+					zap.Int("switch_count", fs.SwitchCount),
+					zap.Error(err),
+				)
 				switch action {
 				case FailoverContinue:
 					ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())

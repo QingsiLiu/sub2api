@@ -38,6 +38,7 @@ func RegisterGatewayRoutes(
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver, apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver, apiKeyService)
 	explicitRouting := explicitKeyRouting(apiKeyService, compositeResolver, h, cfg)
+	edgeKeepalive := handler.EdgeSSEKeepalive(cfg) // geili hook: Cloudflare 流式请求保活
 
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
@@ -192,6 +193,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	gateway.Use(edgeKeepalive) // 必须先于 explicitRouting：多分组重试期间心跳要一直有效
 	gateway.Use(explicitRouting)
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(compositeTarget)
