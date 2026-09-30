@@ -17,8 +17,9 @@
 - 合并冲突（8 处）：`gateway_handler.go`/`openai_gateway_handler.go` 保留 Geili 持久化用量结算，并接入上游的 `wrapUsageRecordTaskContext`（携带预留引用）；`wire_gen.go` 手工合并（幂等协调器 + Claude 重置额度服务）；`VERSION` 取 Geili 版本号；前端模型白名单及其测试、使用密钥弹窗测试合并；原生 Chat 转发文件去掉上游对 Sol/Luna 的直接 400。
 - 本地验证：`go build ./...`、`gofmt`、`go vet`、默认标签与 `-tags=unit` 全量、前端 typecheck/eslint/全量 vitest（354 文件 2913 用例）通过；仅剩沙箱限制的用例（阿里云验证码、插件 host 的本地网络与 unix socket）与 `TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 的堆增长阈值（在上游原始 `v0.2.11` 整包运行同样越界，单跑通过，属整包堆噪声），其余交 CI 完整门禁（含集成与竞态）。
 
-- revision：候选构建完成后补上。
-- 部署：仅源码。
+- revision：`12f8024c77904492c8f002f407dc9a86967d8f4f`（候选 CI `36728478903` 构建成功，八关全过）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:ae544e22d559ae6c0866026947543c20ba86fd9800555618454beedb31f52aa7`。
+- 部署：2026-10-01 已固定 Stage（health 200，版本 `0.2.11-geili.1`，生产三容器指纹未变）；随后按 owner 授权发布生产，与 Stage 同一 digest。
 
 ## 0.2.10-geili.3
 
