@@ -4,6 +4,22 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.11-geili.1
+
+同步上游 Wei-Shaw/sub2api `v0.2.11`（`881a72234`，17 个提交），并把另一个会话完成的 `0.2.10-geili.3`（Cloudflare 流式保活心跳，见下条）一并带入；Geili 独立结算、多分组 Key、订阅、模型广场与插件还原挂钩保留，无新增迁移（仍 331 条）。用户可见变化：
+- 并发透支保护（上游新增，默认开启）：请求进入前按预估费用在 Redis 里登记「在途余额预留」，结算落库后释放，避免同一用户并发请求把余额刷成负数；预留 TTL 900 秒，Redis 不可用时放行（不影响可用性）。订阅结算的 Key 不预留余额（见下方挂钩修正）。配置项 `billing.inflight_reservation`，关闭生产开关需另行授权。
+- API Key 创建限制（上游新增，默认开启）：每个用户最多 200 个有效 Key、每小时最多创建 60 次（自定义与自动生成都计入，删除 Key 不返还次数）；配置项 `api_key_create.*`，0 表示不限制。
+- 模型：支持 GPT-6.1 Sol（含定价与 Codex 模型元数据）、Astra Ultrafast 能力与价格；Codex 订阅套餐识别更新；使用密钥弹窗的 Codex 配置可选择远程模型目录（`model_catalog_url`），并能按模型拉取。
+- Claude 账号：管理端可在确认后兑换 Claude 原生限额重置，带幂等保护与窗口标签。
+- 仅限 Claude Code 的分组：OpenAI 兼容入口不再直接返回 403，改走降级分组。
+- 并入 `0.2.10-geili.3`：经 Cloudflare 进入的 Anthropic 流式请求静默满 45 秒后补发 `event: ping`，避免被 Cloudflare 在约 123 秒掐断（524）。
+- Geili 挂钩修正：① 订阅结算的 Key（含显式 `billing_source=subscription` 落在余额型分组）不登记余额预留，否则余额不足的订阅用户会被误拦；② 原生 Chat Completions 的工具协议守卫沿用 Geili 的 `responses_required` 换号（Sol/Luna 不再被上游的直接 400 覆盖），GPT-6.1 Sol 的工具调用 400 保留；③ 用户分组倍率解析器的全局登记只给长期实例，估算路径的临时实例不再登记（避免内存随请求增长）；④ 合约测试补上 `gpt-6.1-sol` 出现在同步候选里；精选默认同步清单不变（管理员可在候选中手动勾选）。
+- 合并冲突（8 处）：`gateway_handler.go`/`openai_gateway_handler.go` 保留 Geili 持久化用量结算，并接入上游的 `wrapUsageRecordTaskContext`（携带预留引用）；`wire_gen.go` 手工合并（幂等协调器 + Claude 重置额度服务）；`VERSION` 取 Geili 版本号；前端模型白名单及其测试、使用密钥弹窗测试合并；原生 Chat 转发文件去掉上游对 Sol/Luna 的直接 400。
+- 本地验证：`go build ./...`、`gofmt`、`go vet`、默认标签与 `-tags=unit` 全量、前端 typecheck/eslint/全量 vitest（354 文件 2913 用例）通过；仅剩沙箱限制的用例（阿里云验证码、插件 host 的本地网络与 unix socket）与 `TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 的堆增长阈值（在上游原始 `v0.2.11` 整包运行同样越界，单跑通过，属整包堆噪声），其余交 CI 完整门禁（含集成与竞态）。
+
+- revision：候选构建完成后补上。
+- 部署：仅源码。
+
 ## 0.2.10-geili.3
 
 在`.2`基础上，让经 Cloudflare 进入的 Anthropic `/v1/messages` 流式请求在上游迟迟没有响应时不再被 Cloudflare 掐断（用户看到 524）；不设任何总时限，不改重试、换号与计费，无新增迁移。
@@ -15,8 +31,8 @@
 - 新增诊断日志：`gateway.edge_keepalive_started`、`gateway.edge_keepalive_error_frame`，以及换号后选不出账号时的 `gateway.select_account_failed_after_failover`（此前该路径完全无日志）。
 - 已知局限：① 用户并发槽等待期间网关自己已发过 ping，之后不再启动心跳；② 心跳提交 200 之后，上游响应头（如 `anthropic-ratelimit-*`）无法再带给客户端；③ 本次只覆盖 `/v1/messages`，`/responses` 与 `/chat/completions` 同样会被 Cloudflare 在约 125 秒掐断（过去 19 小时 910 次，其中 Codex 的 `/responses` 系列 724 次），尚未处理。
 
-- revision：候选构建完成后补上。
-- 部署：仅源码。
+- revision：`c5c4a1d4e`（未单独构建候选）。
+- 部署：未单独发布，并入 `0.2.11-geili.1`。
 
 ## 0.2.10-geili.2
 
