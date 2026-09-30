@@ -11,9 +11,9 @@
 - 补充 stream_timeout 与上游读错误的诊断日志：耗时、推理强度、是否已有客户端输出、upstream request id，便于从日志确认 Ultra/max 长思考与 180 秒超时的关系。
 - 正常成功的请求不受影响。
 
-- revision：待候选 CI 产出后补上。
-- 镜像 digest：待候选 CI 产出后补上。
-- 部署：仅源码（未上 Stage、未上生产）。
+- revision：`fea973e9b10e8355a42d3c87f9443da36f836b59`（候选 CI `36672546926` 构建成功，候选门禁全部 passed）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:b3f40b32c7d40544c00fe624de16c39cb3776991b45cbebe5fcbf990ebfeefd0`。
+- 部署：2026-09-30 已固定 Stage（health 200，版本 `0.2.10-geili.2`，生产三容器指纹未变）；未上生产。
 
 ## 0.2.10-geili.1
 
