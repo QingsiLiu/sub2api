@@ -4,6 +4,17 @@
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
 
+## 0.2.10-geili.2
+
+在`.1`基础上修正 Codex 官方客户端在流式中途失败时的报错，只影响失败路径；不改调度、计费与推理档位处理，无新增迁移。
+- 原生（OAuth/Codex）流式转发在 stream_timeout（流数据间隔超时）、上游读错误、单行超限时，此前只写一个裸 `error` 帧，Codex 不认，只会看到连接直接结束，报 "stream closed before response.completed"，既没有真实原因，也不会按可重试失败处理。现改为以 `response.failed` 终止（OAuth 账号沿用既有约定，只发 `response.failed`，不再发裸 `error` 帧），Codex 会显示真实原因并可重试。
+- 补充 stream_timeout 与上游读错误的诊断日志：耗时、推理强度、是否已有客户端输出、upstream request id，便于从日志确认 Ultra/max 长思考与 180 秒超时的关系。
+- 正常成功的请求不受影响。
+
+- revision：待候选 CI 产出后补上。
+- 镜像 digest：待候选 CI 产出后补上。
+- 部署：仅源码（未上 Stage、未上生产）。
+
 ## 0.2.10-geili.1
 
 同步上游 Wei-Shaw/sub2api `v0.2.10`（`e8cbebf37`，22 个提交），Geili 独立结算、多分组 Key、订阅、模型广场与 Excel Transport 插件还原挂钩保留不变，无新增迁移（仍 331 条）。用户可见变化：
