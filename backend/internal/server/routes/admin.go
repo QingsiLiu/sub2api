@@ -706,6 +706,10 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		subscriptions.POST("/:id/align-legacy", h.Admin.Subscription.AlignLegacy)
 		subscriptions.GET("/legacy-management", h.Admin.Subscription.LegacyRollout)
 		subscriptions.PUT("/legacy-management", h.Admin.Subscription.LegacyRollout)
+		// geili hook: administrator grants that stack with existing rights.
+		subscriptions.POST("/grant", h.Admin.Subscription.Grant)
+		subscriptions.GET("/:id/entitlements", h.Admin.Subscription.Entitlements)
+		subscriptions.POST("/:id/entitlements/:eid/terminate", h.Admin.Subscription.TerminateGrant)
 		subscriptions.POST("/:id/reset-quota", h.Admin.Subscription.ResetQuota)
 		subscriptions.POST("/:id/revoke", h.Admin.Subscription.Revoke)
 		subscriptions.POST("/:id/restore", h.Admin.Subscription.Restore)
