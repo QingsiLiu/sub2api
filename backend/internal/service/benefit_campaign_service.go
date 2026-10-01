@@ -457,6 +457,14 @@ func (s *BenefitCampaignService) Claim(ctx context.Context, userID int64, slug, 
 	if _, err = c.ExecContext(tc, `UPDATE user_subscriptions SET expires_at=GREATEST(expires_at,$2),status=CASE WHEN status='suspended' THEN status ELSE 'active' END,updated_at=NOW() WHERE id=$1`, subID, expiresAt); err != nil {
 		return nil, err
 	}
+	// geili hook: a compatibility contract must cover the new gift, otherwise
+	// quotes see it as expired and sell a V2 purchase that cannot be fulfilled.
+	if _, err = c.ExecContext(tc, `UPDATE subscription_contract_terms t SET expires_at=$2 FROM subscription_contracts sc WHERE sc.subscription_id=$1 AND sc.mode='legacy_daily' AND t.term_id=sc.term_id AND t.expires_at<$2`, subID, expiresAt); err != nil {
+		return nil, err
+	}
+	if _, err = c.ExecContext(tc, `UPDATE subscription_contracts SET expires_at=$2,revision=revision+1,updated_at=NOW() WHERE subscription_id=$1 AND mode='legacy_daily' AND expires_at<$2`, subID, expiresAt); err != nil {
+		return nil, err
+	}
 	if subStatus == "" {
 		subStatus = SubscriptionStatusActive
 	}
