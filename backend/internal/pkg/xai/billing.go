@@ -18,8 +18,9 @@ const (
 	// CLIClientVersion is the one place the pinned Grok CLI version lives. The
 	// repository and service layers build their own client identity from it, so
 	// one bump here covers OAuth traffic and billing probes together.
-	// Keep in sync with https://x.ai/cli/stable.
-	CLIClientVersion = "0.2.120"
+	// Keep in sync with https://x.ai/cli/stable. cli-chat-proxy answers 426 to
+	// anything older than its current minimum (1.0.13 as of 2026-10-01).
+	CLIClientVersion = "1.0.13"
 	// billingCLIUserAgent is the legacy pager/shell UA used by billing probes.
 	// Distinct from CLIUserAgent() in cli_identity.go (workspace-style UA).
 	billingCLIUserAgent = "grok-pager/" + CLIClientVersion + " grok-shell/" + CLIClientVersion + " (macos; aarch64)"
