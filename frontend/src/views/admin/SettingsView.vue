@@ -7356,6 +7356,147 @@
                 class="input font-mono text-sm"
               ></textarea>
             </div>
+
+            <div v-if="form.model_plaza_enabled" class="space-y-5 border-t border-gray-100 pt-5 dark:border-dark-700">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.modelPlaza.groupWhitelist') }}
+                </label>
+                <p class="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.modelPlaza.groupWhitelistHint') }}
+                </p>
+                <GroupSelector
+                  v-model="form.model_plaza_geili_config.group_whitelist"
+                  :groups="plazaGroupOptions"
+                />
+              </div>
+
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.modelPlaza.cnyGroups') }}
+                </label>
+                <p class="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.modelPlaza.cnyGroupsHint') }}
+                </p>
+                <GroupSelector
+                  v-model="form.model_plaza_geili_config.cny_group_ids"
+                  :groups="plazaGroupOptions"
+                />
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.modelPlaza.usdCnyRate') }}
+                  </label>
+                  <p class="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.modelPlaza.usdCnyRateHint') }}
+                  </p>
+                  <input
+                    v-model.number="form.model_plaza_geili_config.usd_cny_rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="input"
+                  />
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.modelPlaza.quotaUsdPerCny') }}
+                  </label>
+                  <p class="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.modelPlaza.quotaUsdPerCnyHint') }}
+                  </p>
+                  <input
+                    v-model.number="form.model_plaza_geili_config.quota_usd_per_cny"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.modelPlaza.officialOverrides') }}
+                </label>
+                <p class="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.modelPlaza.officialOverridesHint') }}
+                </p>
+                <div
+                  v-for="(row, index) in form.model_plaza_geili_config.official_overrides"
+                  :key="index"
+                  class="mb-3 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800 md:grid-cols-6"
+                  data-test="plaza-override-row"
+                >
+                  <input
+                    v-model="row.model"
+                    type="text"
+                    class="input col-span-2 font-mono text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideModel')"
+                  />
+                  <select v-model="row.currency" class="input text-sm">
+                    <option value="usd">USD</option>
+                    <option value="cny">CNY</option>
+                  </select>
+                  <input
+                    v-model="row.note"
+                    type="text"
+                    maxlength="40"
+                    class="input col-span-2 text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideNote')"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="removePlazaOfficialOverride(index)"
+                  >
+                    {{ t('common.delete') }}
+                  </button>
+                  <input
+                    v-model.number="row.input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    class="input text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideInput')"
+                  />
+                  <input
+                    v-model.number="row.output"
+                    type="number"
+                    min="0"
+                    step="any"
+                    class="input text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideOutput')"
+                  />
+                  <input
+                    v-model.number="row.cache_read"
+                    type="number"
+                    min="0"
+                    step="any"
+                    class="input text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideCacheRead')"
+                  />
+                  <input
+                    v-model.number="row.cache_write"
+                    type="number"
+                    min="0"
+                    step="any"
+                    class="input text-sm"
+                    :placeholder="t('admin.settings.features.modelPlaza.overrideCacheWrite')"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  data-test="plaza-override-add"
+                  @click="addPlazaOfficialOverride"
+                >
+                  {{ t('admin.settings.features.modelPlaza.addOverride') }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -9004,6 +9145,7 @@ import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vu
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
+import GroupSelector from "@/components/common/GroupSelector.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
@@ -10051,6 +10193,13 @@ const form = reactive<SettingsForm>({
   model_plaza_enabled: false,
   model_plaza_require_auth: false,
   model_plaza_description: '',
+  model_plaza_geili_config: {
+    group_whitelist: [],
+    cny_group_ids: [],
+    usd_cny_rate: 6.8,
+    quota_usd_per_cny: 1,
+    official_overrides: [],
+  },
   // Plugin management menu visibility; plugin runtime is unaffected.
   plugin_management_enabled: false,
   // Affiliate (邀请返利) feature switch
@@ -11213,9 +11362,54 @@ async function loadSettings() {
   }
 }
 
+const plazaGroupOptions = ref<AdminGroup[]>([]);
+
+function addPlazaOfficialOverride() {
+  form.model_plaza_geili_config.official_overrides.push({
+    model: "",
+    currency: "usd",
+    input: null,
+    output: null,
+    cache_read: null,
+    cache_write: null,
+    note: "",
+  });
+}
+
+function removePlazaOfficialOverride(index: number) {
+  form.model_plaza_geili_config.official_overrides.splice(index, 1);
+}
+
+// Number inputs yield "" when cleared; the API wants null (keep pulled value) or a number.
+function plazaPriceOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function buildModelPlazaGeiliPayload() {
+  const cfg = form.model_plaza_geili_config;
+  const rate = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+  return {
+    group_whitelist: [...cfg.group_whitelist],
+    cny_group_ids: [...cfg.cny_group_ids],
+    usd_cny_rate: rate(cfg.usd_cny_rate),
+    quota_usd_per_cny: rate(cfg.quota_usd_per_cny),
+    official_overrides: cfg.official_overrides.map((o) => ({
+      model: (o.model ?? "").trim(),
+      currency: o.currency,
+      input: plazaPriceOrNull(o.input),
+      output: plazaPriceOrNull(o.output),
+      cache_read: plazaPriceOrNull(o.cache_read),
+      cache_write: plazaPriceOrNull(o.cache_write),
+      note: (o.note ?? "").trim(),
+    })),
+  };
+}
+
 async function loadSubscriptionGroups() {
   try {
     const groups = await adminAPI.groups.getAll();
+    plazaGroupOptions.value = groups.filter((group) => group.status === "active");
     subscriptionGroups.value = groups.filter(
       (group) =>
         group.subscription_type === "subscription" && group.status === "active",
@@ -11806,6 +12000,7 @@ async function saveSettings() {
       model_plaza_enabled: form.model_plaza_enabled,
       model_plaza_require_auth: form.model_plaza_require_auth,
       model_plaza_description: form.model_plaza_description,
+      model_plaza_geili_config: buildModelPlazaGeiliPayload(),
       plugin_management_enabled: form.plugin_management_enabled,
       // Affiliate (邀请返利) feature switch
       affiliate_enabled: form.affiliate_enabled,

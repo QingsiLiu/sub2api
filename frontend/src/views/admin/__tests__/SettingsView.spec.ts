@@ -122,6 +122,7 @@ vi.mock("@/api", () => ({
 }));
 
 vi.mock("@/stores", () => ({
+  useAuthStore: () => ({ isSimpleMode: false }),
   useAppStore: () => ({
     showError,
     showSuccess,
@@ -829,6 +830,71 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ compact_home_enabled: true }),
     );
+  });
+
+  it("edits the model plaza whitelist, rates and official price overrides and saves them", async () => {
+    getGroups.mockResolvedValue([
+      { id: 4, name: "GPT", platform: "openai", status: "active", subscription_type: "standard", rate_multiplier: 0.15 },
+      { id: 86, name: "Kimi", platform: "anthropic", status: "active", subscription_type: "standard", rate_multiplier: 0.45 },
+    ]);
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      model_plaza_enabled: true,
+      model_plaza_geili_config: {
+        group_whitelist: [4],
+        cny_group_ids: [],
+        usd_cny_rate: 6.8,
+        quota_usd_per_cny: 1,
+        official_overrides: [],
+      },
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-test="plaza-override-row"]')).toHaveLength(0);
+    await wrapper.get('[data-test="plaza-override-add"]').trigger("click");
+    const row = wrapper.get('[data-test="plaza-override-row"]');
+    const inputs = row.findAll("input");
+    await inputs[0].setValue("  deepseek-v4 ");
+    await row.get("select").setValue("cny");
+    await inputs[1].setValue("高峰价");
+    await inputs[2].setValue("4");
+    await inputs[3].setValue("16");
+    // cache_read left blank, cache_write left blank
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model_plaza_geili_config: {
+          group_whitelist: [4],
+          cny_group_ids: [],
+          usd_cny_rate: 6.8,
+          quota_usd_per_cny: 1,
+          official_overrides: [
+            {
+              model: "deepseek-v4",
+              currency: "cny",
+              input: 4,
+              output: 16,
+              cache_read: null,
+              cache_write: null,
+              note: "高峰价",
+            },
+          ],
+        },
+      }),
+    );
+    wrapper.unmount();
+  });
+
+  it("hides the model plaza whitelist controls while the plaza is disabled", async () => {
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, model_plaza_enabled: false });
+    const wrapper = mountView();
+    await flushPromises();
+    expect(wrapper.find('[data-test="plaza-override-add"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it("renders panel rate limit card and saves settings", async () => {

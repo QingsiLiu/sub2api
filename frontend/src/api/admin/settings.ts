@@ -397,6 +397,28 @@ export function deriveWeChatConnectStoredMode(
 /**
  * System settings interface
  */
+/** Manual official reference price for one model (display only, per 1M tokens). */
+export interface ModelPlazaOfficialOverride {
+  model: string;
+  currency: "usd" | "cny";
+  input: number | null;
+  output: number | null;
+  cache_read: number | null;
+  cache_write: number | null;
+  note?: string;
+}
+
+/** Geili model-plaza additions; stored as one server-side JSON setting. */
+export interface ModelPlazaGeiliConfig {
+  /** Empty = the public plaza lists no group. */
+  group_whitelist: number[];
+  /** Groups priced natively in CNY. */
+  cny_group_ids: number[];
+  usd_cny_rate: number;
+  quota_usd_per_cny: number;
+  official_overrides: ModelPlazaOfficialOverride[];
+}
+
 export interface SystemSettings {
   // Registration settings
   registration_enabled: boolean;
@@ -743,6 +765,7 @@ export interface SystemSettings {
   model_plaza_enabled: boolean;
   model_plaza_require_auth: boolean;
   model_plaza_description: string;
+  model_plaza_geili_config: ModelPlazaGeiliConfig;
   plugin_management_enabled: boolean;
 
   // Affiliate (邀请返利) feature switch
@@ -1053,6 +1076,7 @@ export interface UpdateSettingsRequest {
   model_plaza_enabled?: boolean;
   model_plaza_require_auth?: boolean;
   model_plaza_description?: string;
+  model_plaza_geili_config?: ModelPlazaGeiliConfig;
   plugin_management_enabled?: boolean;
 
   // Affiliate (邀请返利) feature switch
