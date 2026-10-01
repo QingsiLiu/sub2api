@@ -69,6 +69,7 @@
                     <ul class="mt-2 space-y-2">
                       <li v-for="lot in subscription.entitlements" :key="lot.id" class="rounded border border-gray-200 p-2 dark:border-dark-600">
                         <p v-if="lot.source_type === 'campaign'" class="font-medium">{{ t('subscriptionRights.campaignGift') }} · {{ t('subscriptionRights.campaignPriority') }}</p>
+                        <p v-else-if="lot.source_type === 'admin_grant'" class="font-medium">{{ t('subscriptionRights.sourceAdminGrant') }}</p>
                         <p>#{{ lot.id }} · {{ t('subscriptionRights.status') }}: {{ t(`subscriptionRights.status_${lot.status === 'active' && Date.parse(lot.expires_at) <= Date.now() ? 'expired' : lot.status}`) }}</p>
                         <p>{{ t('subscriptionRights.created') }}: {{ formatDateTimeToMinute(lot.created_at) }}</p>
                         <p>{{ formatDateTimeToMinute(lot.starts_at) }} → {{ formatDateTimeToMinute(lot.expires_at) }}</p>

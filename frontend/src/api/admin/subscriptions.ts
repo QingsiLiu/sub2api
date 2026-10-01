@@ -10,7 +10,11 @@ import type {
   AssignSubscriptionRequest,
   BulkAssignSubscriptionRequest,
   ExtendSubscriptionRequest,
-  PaginatedResponse
+  PaginatedResponse,
+  AdminGrantRequest,
+  AdminGrantResult,
+  AdminGrantTermination,
+  AdminEntitlementView
 } from '@/types'
 
 export type SubscriptionBulkAction = 'extend' | 'reset_quota' | 'revoke' | 'restore'
@@ -229,7 +233,58 @@ export async function listByUser(
   return data
 }
 
+// geili: administrator grants that stack with a user's existing rights.
+
+/** Preview a grant; nothing is written. Pass the returned snapshot to applyGrant. */
+export async function previewGrant(request: AdminGrantRequest): Promise<AdminGrantResult> {
+  const { data } = await apiClient.post<AdminGrantResult>('/admin/subscriptions/grant', {
+    ...request,
+    apply: false
+  })
+  return data
+}
+
+/** Apply a reviewed grant. Retries must reuse the same idempotency key. */
+export async function applyGrant(
+  request: AdminGrantRequest & { expected_snapshot: string },
+  idempotencyKey: string
+): Promise<AdminGrantResult> {
+  const { data } = await apiClient.post<AdminGrantResult>(
+    '/admin/subscriptions/grant',
+    { ...request, apply: true },
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+  return data
+}
+
+/** End a live administrator grant now. */
+export async function terminateGrant(
+  subscriptionId: number,
+  entitlementId: number,
+  reason: string,
+  idempotencyKey: string
+): Promise<AdminGrantTermination> {
+  const { data } = await apiClient.post<AdminGrantTermination>(
+    `/admin/subscriptions/${subscriptionId}/entitlements/${entitlementId}/terminate`,
+    { reason },
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+  return data
+}
+
+/** Lots, projected daily limits and audited operations of one pool. */
+export async function getEntitlements(subscriptionId: number): Promise<AdminEntitlementView> {
+  const { data } = await apiClient.get<AdminEntitlementView>(
+    `/admin/subscriptions/${subscriptionId}/entitlements`
+  )
+  return data
+}
+
 export const subscriptionsAPI = {
+  previewGrant,
+  applyGrant,
+  terminateGrant,
+  getEntitlements,
   list,
   getById,
   getProgress,

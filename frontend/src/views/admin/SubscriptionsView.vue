@@ -160,6 +160,10 @@
               <Icon name="questionCircle" size="md" />
             </button>
             <RouterLink to="/admin/orders/plans" class="btn btn-secondary">{{ t('nav.paymentPlans') }}</RouterLink>
+            <!-- geili hook: admin entitlement grant -->
+            <button class="btn btn-secondary" data-test="open-admin-grant" @click="showGrantDialog = true">
+              {{ t('admin.subscriptions.grant.button') }}
+            </button>
             <button @click="showAssignModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
@@ -455,6 +459,14 @@
                 <Icon name="refresh" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.restore') }}</span>
               </button>
+              <!-- geili hook: entitlement detail -->
+              <button
+                @click="lotsSubscription = row"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/20 dark:hover:text-violet-400"
+              >
+                <Icon name="document" size="sm" />
+                <span class="text-xs">{{ t('admin.subscriptions.lots.button') }}</span>
+              </button>
             </div>
           </template>
 
@@ -489,6 +501,17 @@
       :subscriptions="bulkSubscriptions"
       @close="bulkAction = null"
       @completed="handleBulkCompleted"
+    />
+
+    <!-- geili hook: admin entitlement grant -->
+    <AdminGrantDialog v-if="showGrantDialog" :show="true" @close="showGrantDialog = false" @completed="loadSubscriptions()" />
+    <SubscriptionLotsDialog
+      v-if="lotsSubscription"
+      :show="true"
+      :subscription-id="lotsSubscription.id"
+      :email="lotsSubscription.user?.email"
+      @close="lotsSubscription = null"
+      @changed="loadSubscriptions()"
     />
 
     <!-- Assign Subscription Modal -->
@@ -839,6 +862,8 @@ import type { SimpleUser } from '@/api/admin/usage'
 import type { SubscriptionBulkAction, SubscriptionBulkActionResult, BulkAssignSubscriptionResult } from '@/api/admin/subscriptions'
 import { useTableSelection } from '@/composables/useTableSelection'
 import BulkSubscriptionActionDialog from '@/components/admin/subscription/BulkSubscriptionActionDialog.vue'
+import AdminGrantDialog from '@/components/admin/subscription/AdminGrantDialog.vue' // geili hook
+import SubscriptionLotsDialog from '@/components/admin/subscription/SubscriptionLotsDialog.vue' // geili hook
 import type { Column } from '@/components/common/types'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -1064,6 +1089,8 @@ const pagination = reactive({
 })
 
 const showAssignModal = ref(false)
+const showGrantDialog = ref(false) // geili hook
+const lotsSubscription = ref<UserSubscription | null>(null) // geili hook
 const showExtendModal = ref(false)
 const showRevokeDialog = ref(false)
 const showRestoreDialog = ref(false)

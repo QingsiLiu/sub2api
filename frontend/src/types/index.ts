@@ -2225,6 +2225,112 @@ export interface UserSubscription {
 	}>
 }
 
+// geili: administrator grants (POST /admin/subscriptions/grant).
+export interface SubscriptionLimitSegment {
+  starts_at: string
+  ends_at: string
+  /** null means unlimited. */
+  daily_limit_usd: number | null
+  lot_count: number
+}
+
+export interface AdminGrantRequest {
+  user_id: number
+  daily_limit_usd: number
+  days: number
+  reason: string
+  expected_snapshot?: string
+}
+
+export type AdminGrantWarning =
+  | 'self_service_paused'
+  | 'creates_pool'
+  | 'converts_from_v2'
+  | 'conversion_changes_quota'
+  | 'already_unlimited'
+  | 'user_not_active'
+
+export interface AdminGrantLot {
+  id: number
+  source_type: string
+  status: string
+  starts_at: string
+  expires_at: string
+  daily_limit_usd: number | null
+  plan_id?: number
+  new: boolean
+}
+
+export interface AdminGrantResult {
+  user_id: number
+  subscription_id: number
+  entitlement_id: number
+  created_pool: boolean
+  converts_from_v2: boolean
+  contract_mode: string
+  current_daily_limit_usd: number | null
+  after_daily_limit_usd: number | null
+  daily_usage_usd: number
+  daily_limit_usd: number
+  days: number
+  starts_at: string
+  expires_at: string
+  pool_expires_at: string
+  timeline: SubscriptionLimitSegment[]
+  lots: AdminGrantLot[]
+  warnings: string[]
+  snapshot: string
+  applied: boolean
+}
+
+export interface AdminGrantTermination {
+  subscription_id: number
+  entitlement_id: number
+  terminated_at: string
+  daily_limit_usd: number | null
+  pool_expires_at: string | null
+  applied: boolean
+}
+
+export interface AdminEntitlementLot {
+  id: number
+  source_type: string
+  source_reference?: string
+  plan_id?: number
+  source_order_id?: number
+  lot_index: number
+  purchase_mode: string
+  status: string
+  starts_at: string
+  expires_at: string
+  daily_limit_usd: number | null
+  daily_usage_usd: number
+  lifetime_usage_usd: number
+  created_at: string
+}
+
+export interface AdminEntitlementOperation {
+  id: number
+  entitlement_id: number
+  operation: string
+  source_type: string
+  source_reference: string
+  actor_id: number
+  actor_email?: string
+  reason?: string
+  created_at: string
+}
+
+export interface AdminEntitlementView {
+  subscription_id: number
+  user_id: number
+  contract: SubscriptionContract | null
+  summary: NonNullable<UserSubscription['quota_summary']>
+  timeline: SubscriptionLimitSegment[]
+  lots: AdminEntitlementLot[]
+  operations: AdminEntitlementOperation[]
+}
+
 export interface SubscriptionProgress {
   subscription_id: number
   daily: {
