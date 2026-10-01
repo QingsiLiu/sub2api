@@ -66,6 +66,9 @@
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
         :prices-include-rate="props.pricesIncludeRate"
+        :currency="group.currency"
+        :usd-cny-rate="props.display?.usd_cny_rate"
+        :quota-usd-per-cny="props.display?.quota_usd_per_cny"
       />
       <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
@@ -80,7 +83,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
-import type { ModelPlazaGroup } from '@/api/modelPlaza'
+import type { ModelPlazaDisplay, ModelPlazaGroup } from '@/api/modelPlaza'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBorderStrongClass } from '@/utils/platformColors'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
@@ -89,6 +92,7 @@ import { useAppStore } from '@/stores/app'
 const props = defineProps<{
   group: ModelPlazaGroup
   pricesIncludeRate?: boolean
+  display?: ModelPlazaDisplay
 }>()
 
 const { t } = useI18n()

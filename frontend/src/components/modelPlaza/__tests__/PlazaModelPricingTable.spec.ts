@@ -768,3 +768,75 @@ describe('prices include balance rate', () => {
     expect(rows[1].text()).toContain('0.1x')
   })
 })
+
+describe('currency and savings versus official', () => {
+  const display = { usdCnyRate: 6.8, quotaUsdPerCny: 1 }
+
+  it('shows a savings tag when paid is far below the CNY-converted official price', () => {
+    const model = tokenModel({
+      pricing: { ...tokenModel().pricing!, input_price: 0.6e-6, output_price: 3e-6 }
+    })
+    const wrapper = mount(PlazaModelPricingTable, {
+      props: { models: [model], rateMultiplier: 0.2, pricesIncludeRate: true, ...display }
+    })
+    expect(wrapper.text()).toContain('modelPlaza.table.savingVsOfficial')
+    expect(wrapper.text()).not.toContain('modelPlaza.table.higherThanOfficial')
+  })
+
+  it('flags paid prices above official as higher, not as savings', () => {
+    const model = tokenModel({
+      pricing: { ...tokenModel().pricing!, input_price: 9e-6, output_price: 9e-6 },
+      official_pricing: { ...tokenModel().official_pricing!, input_price: 1e-7, output_price: 1e-7 }
+    })
+    const wrapper = mount(PlazaModelPricingTable, {
+      props: { models: [model], rateMultiplier: 1, pricesIncludeRate: true, ...display }
+    })
+    expect(wrapper.text()).toContain('modelPlaza.table.higherThanOfficial')
+  })
+
+  it('omits the tag without exchange rates, and on period rows', () => {
+    const plain = mount(PlazaModelPricingTable, { props: { models: [tokenModel()], rateMultiplier: 1 } })
+    expect(plain.text()).not.toContain('modelPlaza.table.savingVsOfficial')
+    expect(plain.text()).not.toContain('modelPlaza.table.higherThanOfficial')
+
+    const timed = tokenModel({
+      pricing: { ...tokenModel().pricing!, output_price: 3e-6 },
+      time_pricing: { timezone: 'Asia/Shanghai', periods: [{ start_time: '00:00', end_time: '08:00', multiplier: 0.5 }] }
+    })
+    const wrapper = mount(PlazaModelPricingTable, {
+      props: { models: [timed], rateMultiplier: 0.2, pricesIncludeRate: true, ...display }
+    })
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows[0].text()).toContain('modelPlaza.table.savingVsOfficial')
+    expect(rows[1].text()).not.toContain('modelPlaza.table.savingVsOfficial')
+  })
+
+  it('renders CNY-native groups with ¥ and a CNY override note', () => {
+    const model = tokenModel({
+      pricing: { ...tokenModel().pricing!, input_price: 2e-6, output_price: 8e-6 },
+      official_pricing: {
+        input_price: 4e-6, output_price: 16e-6, cache_write_price: null, cache_read_price: null,
+        currency: 'cny', note: '高峰价'
+      }
+    })
+    const wrapper = mount(PlazaModelPricingTable, {
+      props: { models: [model], rateMultiplier: 1, pricesIncludeRate: true, currency: 'cny', ...display }
+    })
+    const text = wrapper.find('tbody').text()
+    expect(text).toContain('¥2.00')
+    expect(text).toContain('¥4.00')
+    expect(text).not.toContain('$')
+    expect(text).toContain('高峰价')
+    // CNY on both sides: (16 - 8) / 16 = 50% off
+    expect(text).toContain('modelPlaza.table.savingVsOfficial')
+  })
+
+  it('keeps USD official prices in $ inside a CNY group when no override exists', () => {
+    const wrapper = mount(PlazaModelPricingTable, {
+      props: { models: [tokenModel()], rateMultiplier: 1, currency: 'cny' }
+    })
+    const cells = wrapper.findAll('tbody tr')[0].findAll('td')
+    expect(cells[1].text()).toContain('¥')
+    expect(wrapper.find('tbody').text()).toContain('$3.00')
+  })
+})

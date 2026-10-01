@@ -10,7 +10,12 @@
  * Uses toPrecision(10) then strips trailing zeros to avoid IEEE 754 display noise.
  * `minFractionDigits` pads the result back up to a minimum number of decimals.
  */
-export function formatScaled(value: number | null, scale: number, minFractionDigits = 0): string {
+export function formatScaled(
+  value: number | null,
+  scale: number,
+  minFractionDigits = 0,
+  symbol = '$'
+): string {
   if (value == null) return '-'
   let s = (value * scale).toPrecision(10).replace(/\.?0+$/, '')
   if (minFractionDigits > 0 && !s.includes('e')) {
@@ -20,7 +25,36 @@ export function formatScaled(value: number | null, scale: number, minFractionDig
       s = (dot === -1 ? `${s}.` : s) + '0'.repeat(minFractionDigits - digits)
     }
   }
-  return `$${s}`
+  return `${symbol}${s}`
+}
+
+/** '¥' for CNY, '$' otherwise (including a missing currency). */
+export function currencySymbol(currency?: string | null): string {
+  return currency === 'cny' ? '¥' : '$'
+}
+
+export interface SavingsInput {
+  paid: number | null | undefined
+  paidCurrency?: string | null
+  official: number | null | undefined
+  officialCurrency?: string | null
+  usdCnyRate: number
+  quotaUsdPerCny: number
+}
+
+/**
+ * Savings of the paid price against the official reference, in percent.
+ * Both sides are converted to CNY first: USD official × usdCnyRate, USD-quota
+ * paid ÷ quotaUsdPerCny, CNY prices as-is. Positive = cheaper than official,
+ * negative = dearer. null when either side is missing or a rate is unusable.
+ */
+export function savingsPercent(i: SavingsInput): number | null {
+  const { paid, official } = i
+  if (paid == null || official == null || !(official > 0) || !(paid >= 0)) return null
+  if (!(i.usdCnyRate > 0) || !(i.quotaUsdPerCny > 0)) return null
+  const officialCny = i.officialCurrency === 'cny' ? official : official * i.usdCnyRate
+  const paidCny = i.paidCurrency === 'cny' ? paid : paid / i.quotaUsdPerCny
+  return ((officialCny - paidCny) / officialCny) * 100
 }
 
 import type { UserPricingInterval } from '@/api/channels'

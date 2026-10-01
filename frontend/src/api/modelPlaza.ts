@@ -7,6 +7,8 @@
 import { apiClient } from './client'
 import type { UserPricingInterval, UserSupportedModelPricing } from './channels'
 
+export type PlazaCurrency = 'usd' | 'cny'
+
 /** 官方参考价（USD per token，与计费目录同源；字段缺失 = 目录未覆盖）。 */
 export interface PlazaOfficialPricing {
   input_price: number | null
@@ -18,6 +20,10 @@ export interface PlazaOfficialPricing {
   cache_read_price: number | null
   /** 官方长上下文阶梯（多档模型才有），不受分组开关影响。 */
   intervals?: UserPricingInterval[]
+  /** 管理员以人民币录入的覆盖价为 'cny'；缺省为 USD。 */
+  currency?: PlazaCurrency
+  /** 管理员为覆盖价填写的短备注（如「高峰价」）。 */
+  note?: string
 }
 
 /**
@@ -79,7 +85,17 @@ export interface ModelPlazaGroup {
   video_rate_multiplier: number
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
+  /** 实付价展示币种；原生人民币计价分组为 'cny'。缺省按 USD。 */
+  currency?: PlazaCurrency
   models: PlazaModel[]
+}
+
+/** 前端折算「相比官方」所需的汇率口径。 */
+export interface ModelPlazaDisplay {
+  /** 1 USD 折合多少 CNY（仅用于把官方美元价折成人民币对比）。 */
+  usd_cny_rate: number
+  /** ¥1 充值得到多少 USD 额度。 */
+  quota_usd_per_cny: number
 }
 
 export interface ModelPlazaResponse {
@@ -87,6 +103,7 @@ export interface ModelPlazaResponse {
   description: string
   /** pricing values already include the effective balance multiplier. */
   prices_include_rate?: boolean
+  display?: ModelPlazaDisplay
   groups: ModelPlazaGroup[]
 }
 

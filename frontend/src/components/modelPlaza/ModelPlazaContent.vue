@@ -13,6 +13,15 @@
       v-html="descriptionHtml"
     ></div>
 
+    <!-- 额度与汇率口径(「相比官方」标签的折算依据) -->
+    <p
+      v-if="rulesNote"
+      class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dark-400"
+    >
+      <Icon name="infoCircle" size="xs" class="h-3.5 w-3.5" />
+      {{ rulesNote }}
+    </p>
+
     <!-- 未登录提示 -->
     <p
       v-if="!isAuthenticated"
@@ -55,6 +64,7 @@
           :key="g.id"
           :group="g"
           :prices-include-rate="props.response?.prices_include_rate === true"
+          :display="props.response?.display"
         />
       </div>
       <div
@@ -94,6 +104,12 @@ const selectedPlatform = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
 const selectedRate = ref<number | 'all'>('all')
 const searchQuery = ref('')
+
+const rulesNote = computed(() => {
+  const d = props.response?.display
+  if (!d || !(d.usd_cny_rate > 0) || !(d.quota_usd_per_cny > 0)) return ''
+  return t('modelPlaza.rulesNote', { quota: d.quota_usd_per_cny, rate: d.usd_cny_rate })
+})
 
 const searchActive = computed(() => searchQuery.value.trim() !== '')
 

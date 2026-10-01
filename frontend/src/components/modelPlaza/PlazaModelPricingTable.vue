@@ -24,7 +24,7 @@
           <th colspan="3" class="pz-bg pt-2 text-center">
             <div class="pz-title border-b pb-2 font-semibold">
               {{ t('modelPlaza.table.paidPrice') }}
-              <span class="pz-unit ml-1 normal-case font-normal">{{ t('modelPlaza.table.unitPerMillion') }}</span>
+              <span class="pz-unit ml-1 normal-case font-normal">{{ t('modelPlaza.table.unitPerMillion', { currency: paidSymbol }) }}</span>
             </div>
           </th>
           <th
@@ -33,7 +33,7 @@
           >
             <div class="border-b border-gray-200 pb-2 text-gray-400 dark:border-dark-600 dark:text-dark-500">
               {{ t('modelPlaza.table.officialPrice') }}
-              <span class="ml-1 normal-case font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.unitPerMillion') }}</span>
+              <span class="ml-1 normal-case font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.unitPerMillion', { currency: paidSymbol }) }}</span>
             </div>
           </th>
           <th
@@ -225,10 +225,16 @@
                 class="whitespace-nowrap leading-5"
               >
                 <span class="mr-1 font-sans text-gray-400 dark:text-dark-500" :title="t('modelPlaza.table.tierHint')">{{ tierLabel(iv) }}</span>
-                {{ official(iv.input_price) }}
+                {{ official(iv.input_price, m) }}
               </div>
             </template>
-            <template v-else>{{ official(m.official_pricing?.input_price) }}</template>
+            <template v-else>{{ official(m.official_pricing?.input_price, m) }}</template>
+            <div
+              v-if="!period && m.official_pricing?.note"
+              class="mt-0.5 font-sans text-[10px] leading-4 text-amber-600 dark:text-amber-400"
+            >
+              {{ m.official_pricing.note }}
+            </div>
           </td>
           <td class="px-3 py-2.5 align-middle font-mono text-xs text-gray-500 dark:text-dark-400">
             <template v-if="officialIntervals(m).length">
@@ -238,10 +244,10 @@
                 class="whitespace-nowrap leading-5"
                 :title="t('modelPlaza.table.tierHint')"
               >
-                {{ official(iv.output_price) }}
+                {{ official(iv.output_price, m) }}
               </div>
             </template>
-            <template v-else>{{ official(m.official_pricing?.output_price) }}</template>
+            <template v-else>{{ official(m.official_pricing?.output_price, m) }}</template>
           </td>
           <td class="px-3 py-2.5 align-middle">
             <template v-if="hasTierCachePricing(officialIntervals(m))">
@@ -253,13 +259,13 @@
               >
                 <template v-if="iv.cache_write_price != null || iv.cache_write_1h_price != null || iv.cache_read_price != null">
                   <span class="font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWriteShort') }}</span>
-                  {{ official(iv.cache_write_price) }}
+                  {{ official(iv.cache_write_price, m) }}
                   <template v-if="iv.cache_write_1h_price != null"
-                    ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(iv.cache_write_1h_price)
+                    ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(iv.cache_write_1h_price, m)
                     }}<span class="font-sans text-gray-400 dark:text-dark-500">)</span></template
                   >
                   <span class="ml-1 font-sans text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheReadShort') }}</span>
-                  {{ official(iv.cache_read_price) }}
+                  {{ official(iv.cache_read_price, m) }}
                 </template>
                 <span v-else class="text-gray-400 dark:text-dark-500">-</span>
               </div>
@@ -270,15 +276,15 @@
             >
               <div>
                 <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheWrite') }}</span>
-                {{ official(m.official_pricing.cache_write_price)
+                {{ official(m.official_pricing.cache_write_price, m)
                 }}<template v-if="m.official_pricing.cache_write_1h_price != null"
-                  ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(m.official_pricing.cache_write_1h_price)
+                  ><span class="font-sans text-gray-400 dark:text-dark-500"> (1h </span>{{ official(m.official_pricing.cache_write_1h_price, m)
                   }}<span class="font-sans text-gray-400 dark:text-dark-500">)</span></template
                 >
               </div>
               <div>
                 <span class="mr-1 font-sans font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.cacheRead') }}</span>
-                {{ official(m.official_pricing.cache_read_price) }}
+                {{ official(m.official_pricing.cache_read_price, m) }}
               </div>
             </div>
             <span v-else class="text-gray-400 dark:text-dark-500">-</span>
@@ -304,6 +310,19 @@
               <span class="font-bold text-primary-600 dark:text-primary-400">{{ effectiveRate }}x</span>
             </template>
             <span v-else class="font-bold text-gray-700 dark:text-gray-300">{{ effectiveRate }}x</span>
+            <div v-if="!period && savingOf(m)" class="mt-1">
+              <span
+                :class="[
+                  'inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 font-sans text-[10px] font-medium',
+                  savingOf(m)!.higher
+                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                ]"
+                :title="t('modelPlaza.table.savingHint')"
+              >
+                {{ t(savingOf(m)!.higher ? 'modelPlaza.table.higherThanOfficial' : 'modelPlaza.table.savingVsOfficial', { percent: savingOf(m)!.percent }) }}
+              </span>
+            </div>
           </td>
         </tr>
       </tbody>
@@ -314,7 +333,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
+import { currencySymbol, formatScaled, resolveIntervalPrices, savingsPercent } from '@/utils/pricing'
 import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
 import {
   BILLING_MODE_TOKEN,
@@ -359,6 +378,11 @@ const props = defineProps<{
   peakRateMultiplier?: number | null
   /** Backend may return prices with the effective balance multiplier applied. */
   pricesIncludeRate?: boolean
+  /** 实付价币种，'cny' = 原生人民币计价分组；缺省 USD。 */
+  currency?: string
+  /** 「相比官方」折算口径；缺省时不显示对比标签。 */
+  usdCnyRate?: number
+  quotaUsdPerCny?: number
 }>()
 
 const { t } = useI18n()
@@ -367,6 +391,8 @@ const { t } = useI18n()
 const accentStyle = computed(() => ({ '--plaza-accent': platformAccentColor(props.platform ?? '') }))
 
 const PER_MILLION = 1_000_000
+
+const paidSymbol = computed(() => currencySymbol(props.currency))
 
 /**
  * 展示顺序:
@@ -435,7 +461,7 @@ function periodRate(period: PlazaTimePricingPeriod): number {
 function paidPerMillion(value: number | null | undefined, period: PlazaTimePricingPeriod | null = null): string {
   if (value == null) return '-'
   const rate = priceRate.value * (period?.multiplier ?? 1)
-  return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS)
+  return formatScaled(value * rate, PER_MILLION, MIN_DECIMALS, paidSymbol.value)
 }
 
 /** 图片和视频分别使用对应的独立倍率开关。 */
@@ -461,13 +487,37 @@ function requestDisplayRate(m: PlazaModel): number {
 /** 非 token 单价乘该行生效倍率，不换算为每百万 token。 */
 function paidRequestPrice(m: PlazaModel, value: number | null | undefined): string {
   if (value == null) return '-'
-  return formatScaled(value * requestRate(m), 1, MIN_DECIMALS)
+  return formatScaled(value * requestRate(m), 1, MIN_DECIMALS, paidSymbol.value)
 }
 
-/** 官方参考价不乘倍率。 */
-function official(value: number | null | undefined): string {
+/** 官方参考价不乘倍率；币种随该模型的参考价（管理员可录入人民币价）。 */
+function official(value: number | null | undefined, m: PlazaModel): string {
   if (value == null) return '-'
-  return formatScaled(value, PER_MILLION, MIN_DECIMALS)
+  return formatScaled(value, PER_MILLION, MIN_DECIMALS, currencySymbol(m.official_pricing?.currency))
+}
+
+/**
+ * 相比官方的节省比例：仅 token 计费的标准行，优先比较输出价，缺失时用输入价；
+ * 汇率未下发（旧后端）或四舍五入后为 0 时不展示。
+ */
+function savingOf(m: PlazaModel): { percent: number; higher: boolean } | null {
+  if (billingMode(m) !== BILLING_MODE_TOKEN) return null
+  if (props.usdCnyRate == null || props.quotaUsdPerCny == null) return null
+  const useOutput = m.pricing?.output_price != null && m.official_pricing?.output_price != null
+  const paid = useOutput ? m.pricing?.output_price : m.pricing?.input_price
+  const official = useOutput ? m.official_pricing?.output_price : m.official_pricing?.input_price
+  const pct = savingsPercent({
+    paid: paid == null ? null : paid * priceRate.value,
+    paidCurrency: props.currency,
+    official,
+    officialCurrency: m.official_pricing?.currency,
+    usdCnyRate: props.usdCnyRate,
+    quotaUsdPerCny: props.quotaUsdPerCny
+  })
+  if (pct == null) return null
+  const rounded = Math.round(Math.abs(pct))
+  if (rounded === 0) return null
+  return { percent: rounded, higher: pct < 0 }
 }
 
 /** 非 token 计费的单位后缀:按图片 → “/ 张”,按次 → “/ 次”。 */
