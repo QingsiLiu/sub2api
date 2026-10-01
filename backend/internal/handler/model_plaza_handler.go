@@ -46,6 +46,10 @@ type modelPlazaOfficialPricing struct {
 	CacheReadPrice    *float64 `json:"cache_read_price"`
 	// Intervals 官方长上下文阶梯，仅多档模型给出。
 	Intervals []userPricingIntervalDTO `json:"intervals,omitempty"`
+	// Currency 仅管理员以人民币录入的覆盖价为 "cny"，其余省略（USD）。
+	Currency string `json:"currency,omitempty"`
+	// Note 管理员为覆盖价填写的短备注（如「高峰价」）。
+	Note string `json:"note,omitempty"`
 }
 
 // modelPlazaTimePricingPeriod 分时倍率时段（配置时区当天 [start, end)）。
@@ -97,14 +101,23 @@ type modelPlazaGroup struct {
 	VideoRateIndependent bool    `json:"video_rate_independent"`
 	VideoRateMultiplier  float64 `json:"video_rate_multiplier"`
 	// 分组是否启用长上下文阶梯计费；关闭时模型实付列只展示最低档/基础价。
-	LongContextPricingEnabled bool              `json:"long_context_pricing_enabled"`
-	Models                    []modelPlazaModel `json:"models"`
+	LongContextPricingEnabled bool `json:"long_context_pricing_enabled"`
+	// Currency 实付价展示币种："usd"（默认）或 "cny"（原生人民币计价分组）。
+	Currency string            `json:"currency"`
+	Models   []modelPlazaModel `json:"models"`
+}
+
+// modelPlazaDisplay 前端折算「相比官方」所需的汇率口径。
+type modelPlazaDisplay struct {
+	USDCNYRate     float64 `json:"usd_cny_rate"`
+	QuotaUSDPerCNY float64 `json:"quota_usd_per_cny"`
 }
 
 // modelPlazaResponse 广场页响应。
 type modelPlazaResponse struct {
 	Description       string            `json:"description"`
 	PricesIncludeRate bool              `json:"prices_include_rate"`
+	Display           modelPlazaDisplay `json:"display"`
 	Groups            []modelPlazaGroup `json:"groups"`
 }
 
@@ -195,7 +208,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		}
 	}
 
-	visible, err := h.plazaService.ListVisibleGroups(c.Request.Context(), allowedGroups, restrictPublicGroups)
+	visible, err := h.plazaService.ListVisibleGroupsWithConfig(c.Request.Context(), allowedGroups, restrictPublicGroups, &rt.Geili)
 	if err != nil {
 		response.InternalError(c, "Unable to load model plaza")
 		return
@@ -203,12 +216,18 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
-		out = append(out, toModelPlazaGroupDTO(&visible[i], userRates))
+		dto := toModelPlazaGroupDTO(&visible[i], userRates)
+		dto.Currency = rt.Geili.PlazaGroupCurrency(visible[i].ID)
+		out = append(out, dto)
 	}
 	response.Success(c, modelPlazaResponse{
 		Description:       rt.Description,
 		PricesIncludeRate: true,
-		Groups:            out,
+		Display: modelPlazaDisplay{
+			USDCNYRate:     rt.Geili.USDCNYRate,
+			QuotaUSDPerCNY: rt.Geili.QuotaUSDPerCNY,
+		},
+		Groups: out,
 	})
 }
 
@@ -286,6 +305,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		VideoRateIndependent:      g.VideoRateIndependent,
 		VideoRateMultiplier:       g.VideoRateMultiplier,
 		LongContextPricingEnabled: g.LongContextPricingEnabled,
+		Currency:                  service.ModelPlazaCurrencyUSD,
 		Models:                    models,
 	}
 	if rate, ok := userRates[g.ID]; ok {
@@ -322,6 +342,8 @@ func toModelPlazaOfficialPricing(p *service.PlazaOfficialPricing) *modelPlazaOff
 		CacheWrite1hPrice: p.CacheWrite1hPrice,
 		CacheReadPrice:    p.CacheReadPrice,
 		Intervals:         toUserPricingIntervals(p.Intervals),
+		Currency:          p.Currency,
+		Note:              p.Note,
 	}
 }
 

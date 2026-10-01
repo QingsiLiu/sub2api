@@ -16,6 +16,10 @@ type PlazaOfficialPricing struct {
 	CacheWritePrice   *float64 // 5m 缓存写入（= LiteLLM cache_creation）
 	CacheWrite1hPrice *float64 // 1h 缓存写入，仅计费会区分 5m/1h 时给出
 	CacheReadPrice    *float64
+	// Currency is "cny" only for admin overrides entered in CNY; empty means USD.
+	Currency string
+	// Note is the admin's short label for an override (for example a peak-hour hint).
+	Note string
 	// Intervals 官方长上下文阶梯（多档时给出），不受分组开关影响。
 	Intervals []PricingInterval
 }
@@ -121,22 +125,40 @@ func NewModelPlazaService(
 //
 // 可见性过滤（专属分组）不在此层做，由 handler 按登录态裁剪。
 func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error) {
-	return s.listGroups(ctx, nil)
+	return s.listGroups(ctx, nil, nil)
 }
 
 // ListVisibleGroups filters before any upstream discovery. A hidden group must
 // not be contacted or influence a visitor's public response.
 func (s *ModelPlazaService) ListVisibleGroups(ctx context.Context, allowed map[int64]struct{}, restrict bool) ([]PlazaGroup, error) {
+	return s.ListVisibleGroupsWithConfig(ctx, allowed, restrict, nil)
+}
+
+// ListVisibleGroupsWithConfig additionally applies the Geili plaza config:
+// groups outside the whitelist are dropped before any catalog discovery, and
+// manual official-price overrides are merged into the reference prices. A nil
+// config applies neither; the public handler always passes one (fail-closed).
+func (s *ModelPlazaService) ListVisibleGroupsWithConfig(ctx context.Context, allowed map[int64]struct{}, restrict bool, cfg *ModelPlazaGeiliConfig) ([]PlazaGroup, error) {
+	var whitelist map[int64]struct{}
+	if cfg != nil {
+		whitelist = cfg.whitelistSet()
+	}
 	return s.listGroups(ctx, func(g *Group) bool {
+		// geili hook: public group whitelist.
+		if cfg != nil {
+			if _, ok := whitelist[g.ID]; !ok {
+				return false
+			}
+		}
 		if g.IsExclusive || (restrict && allowed != nil) {
 			_, ok := allowed[g.ID]
 			return ok
 		}
 		return true
-	})
+	}, cfg)
 }
 
-func (s *ModelPlazaService) listGroups(ctx context.Context, visible func(*Group) bool) ([]PlazaGroup, error) {
+func (s *ModelPlazaService) listGroups(ctx context.Context, visible func(*Group) bool, cfg *ModelPlazaGeiliConfig) ([]PlazaGroup, error) {
 	channels, err := s.channelRepo.ListAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
@@ -279,6 +301,10 @@ func (s *ModelPlazaService) listGroups(ctx context.Context, visible func(*Group)
 	}
 
 	officialMemo := make(map[string]*PlazaOfficialPricing)
+	var officialOverrides map[string]ModelPlazaOfficialOverride
+	if cfg != nil {
+		officialOverrides = cfg.overrideIndex()
+	}
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
 		pg := byGroup[gid]
@@ -295,6 +321,10 @@ func (s *ModelPlazaService) listGroups(ctx context.Context, visible func(*Group)
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
 			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			// geili hook: admin official-price override (display only).
+			if o, ok := officialOverrides[strings.ToLower(pg.Models[j].Name)]; ok {
+				pg.Models[j].OfficialPricing = applyPlazaOfficialOverride(pg.Models[j].OfficialPricing, o)
+			}
 		}
 		out = append(out, *pg)
 	}

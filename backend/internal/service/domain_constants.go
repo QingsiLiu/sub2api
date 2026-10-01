@@ -562,6 +562,12 @@ const (
 	// the Model Plaza page (global pricing notes, exchange rate, promotions, ...).
 	SettingKeyModelPlazaDescription = "model_plaza_description"
 
+	// SettingKeyModelPlazaGeiliConfig stores the Geili plaza additions as JSON: the
+	// public group whitelist (empty = list nothing), CNY-native groups, comparison
+	// rates and manual official-price overrides. Server-side only; never exposed via
+	// public settings.
+	SettingKeyModelPlazaGeiliConfig = "model_plaza_geili_config"
+
 	// SettingKeyPluginManagementEnabled controls sidebar visibility only; it does
 	// not stop or otherwise change already loaded plugin runtimes.
 	SettingKeyPluginManagementEnabled = "plugin_management_enabled"

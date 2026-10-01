@@ -332,6 +332,8 @@ type SystemSettings struct {
 	ModelPlazaRequireAuth   bool   `json:"model_plaza_require_auth"`
 	ModelPlazaDescription   string `json:"model_plaza_description"`
 	PluginManagementEnabled bool   `json:"plugin_management_enabled"`
+	// ModelPlazaGeiliConfig is admin-only (group whitelist, CNY groups, rates, official overrides).
+	ModelPlazaGeiliConfig service.ModelPlazaGeiliConfig `json:"model_plaza_geili_config"`
 
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`

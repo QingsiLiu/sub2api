@@ -1010,6 +1010,13 @@ func TestAPIContracts(t *testing.T) {
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
+					"model_plaza_geili_config": {
+						"group_whitelist": [],
+						"cny_group_ids": [],
+						"usd_cny_rate": 6.8,
+						"quota_usd_per_cny": 1,
+						"official_overrides": []
+					},
 					"plugin_management_enabled": false,
 					"risk_control_enabled": false,
 					"cyber_policy_user_allowlist": "",
@@ -1331,6 +1338,13 @@ func TestAPIContracts(t *testing.T) {
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
+					"model_plaza_geili_config": {
+						"group_whitelist": [],
+						"cny_group_ids": [],
+						"usd_cny_rate": 6.8,
+						"quota_usd_per_cny": 1,
+						"official_overrides": []
+					},
 					"plugin_management_enabled": false,
 					"risk_control_enabled": false,
 					"cyber_policy_user_allowlist": "",

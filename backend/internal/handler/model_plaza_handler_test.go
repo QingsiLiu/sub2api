@@ -262,3 +262,37 @@ func TestFilterPlazaVisibleGroups_SubscribedExclusiveGroup(t *testing.T) {
 		require.Equal(t, int64(42), visible[0].ID)
 	}
 }
+
+func TestToModelPlazaGroupDTO_CurrencyAndOfficialOverrideFields(t *testing.T) {
+	g := service.PlazaGroup{
+		ID: 86, Name: "kimi", Platform: "anthropic", RateMultiplier: 1,
+		Models: []service.PlazaModel{{
+			Name: "deepseek-v4", Platform: "anthropic",
+			Pricing: &service.ChannelModelPricing{BillingMode: service.BillingModeToken, InputPrice: testPtr(4e-6)},
+			OfficialPricing: &service.PlazaOfficialPricing{
+				InputPrice: testPtr(4e-6), Currency: service.ModelPlazaCurrencyCNY, Note: "高峰价",
+			},
+		}},
+	}
+
+	dto := toModelPlazaGroupDTO(&g, nil)
+	require.Equal(t, service.ModelPlazaCurrencyUSD, dto.Currency, "mapper defaults to usd; handler sets the configured currency")
+
+	raw, err := json.Marshal(dto)
+	require.NoError(t, err)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.Contains(t, decoded, "currency")
+	official := decoded["models"].([]any)[0].(map[string]any)["official_pricing"].(map[string]any)
+	require.Equal(t, "cny", official["currency"])
+	require.Equal(t, "高峰价", official["note"])
+
+	// 官方价无币种/备注时不输出这两个键（USD 是默认值）。
+	g.Models[0].OfficialPricing = &service.PlazaOfficialPricing{InputPrice: testPtr(3e-6)}
+	raw, err = json.Marshal(toModelPlazaGroupDTO(&g, nil))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	official = decoded["models"].([]any)[0].(map[string]any)["official_pricing"].(map[string]any)
+	require.NotContains(t, official, "currency")
+	require.NotContains(t, official, "note")
+}

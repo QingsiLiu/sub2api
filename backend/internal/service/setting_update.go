@@ -452,6 +452,15 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyModelPlazaEnabled] = strconv.FormatBool(settings.ModelPlazaEnabled)
 	updates[SettingKeyModelPlazaRequireAuth] = strconv.FormatBool(settings.ModelPlazaRequireAuth)
 	updates[SettingKeyModelPlazaDescription] = settings.ModelPlazaDescription
+	plazaGeiliConfig, err := NormalizeModelPlazaGeiliConfig(settings.ModelPlazaGeiliConfig)
+	if err != nil {
+		return nil, err
+	}
+	plazaGeiliJSON, err := MarshalModelPlazaGeiliConfig(plazaGeiliConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshal model plaza geili config: %w", err)
+	}
+	updates[SettingKeyModelPlazaGeiliConfig] = plazaGeiliJSON
 	updates[SettingKeyPluginManagementEnabled] = strconv.FormatBool(settings.PluginManagementEnabled)
 
 	// Affiliate (邀请返利) feature switch

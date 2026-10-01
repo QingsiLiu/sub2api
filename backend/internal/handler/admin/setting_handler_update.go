@@ -354,6 +354,8 @@ type UpdateSettingsRequest struct {
 	ModelPlazaEnabled     *bool   `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth *bool   `json:"model_plaza_require_auth"`
 	ModelPlazaDescription *string `json:"model_plaza_description"`
+	// ModelPlazaGeiliConfig nil keeps the stored value (partial updates stay safe).
+	ModelPlazaGeiliConfig *service.ModelPlazaGeiliConfig `json:"model_plaza_geili_config"`
 
 	// Plugin management menu visibility switch; plugin runtime is unaffected.
 	PluginManagementEnabled *bool `json:"plugin_management_enabled"`
@@ -2013,6 +2015,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.ModelPlazaDescription
 		}(),
+		ModelPlazaGeiliConfig: func() service.ModelPlazaGeiliConfig {
+			if req.ModelPlazaGeiliConfig != nil {
+				return *req.ModelPlazaGeiliConfig
+			}
+			return previousSettings.ModelPlazaGeiliConfig
+		}(),
 		PluginManagementEnabled: func() bool {
 			if req.PluginManagementEnabled != nil {
 				return *req.PluginManagementEnabled
@@ -2454,6 +2462,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ModelPlazaEnabled:       updatedSettings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:   updatedSettings.ModelPlazaRequireAuth,
 		ModelPlazaDescription:   updatedSettings.ModelPlazaDescription,
+		ModelPlazaGeiliConfig:   updatedSettings.ModelPlazaGeiliConfig,
 		PluginManagementEnabled: updatedSettings.PluginManagementEnabled,
 
 		AffiliateEnabled: updatedSettings.AffiliateEnabled,
