@@ -7,9 +7,9 @@
 - API Key 在请求完成前被删除时，仍结算用户余额；仅跳过已不存在 Key 的额度与限速计数，避免余额和财务记录丢失。
 - 增加私密安全问题报告政策文档。
 
-- revision：待候选 CI 产出。
-- 镜像 digest：待候选 CI 产出。
-- 部署：仅源码合并，待 Stage 验收；未发布生产。
+- revision：`5db9692216f7e795fbd6a6da60c3a80e5fb99d64`（候选 CI `37057024053` 全部门禁通过；golangci-lint 为与 v0.2.12 基线一致的既有存量诊断）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:bf165fb5d507b65c443881865f4331f94887ad61d3b0aab854a664dc0a2c6b63`。
+- 部署：候选 CI 已通过，待 Stage 验收；未发布生产。
 
 ## 0.2.12-geili.1（未单独发布，随 0.2.13-geili.1 合并）
 
