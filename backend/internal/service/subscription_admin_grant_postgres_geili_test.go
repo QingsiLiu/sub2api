@@ -32,6 +32,12 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(regexp.MustCompile(`(?s)CREATE OR REPLACE FUNCTION geili_grant_unified_subscription\(\).*?EXECUTE FUNCTION geili_grant_unified_subscription\(\);`).FindString(string(raw)))
 	require.NoError(t, err)
+	// The trigger inserts into user_subscription_groups without created_at, which
+	// production survives because migration 234 declares DEFAULT NOW(). Ent's
+	// Schema.Create omits that DB default (it applies the value in Go), so the
+	// test schema must restore it before the trigger can run.
+	_, err = db.Exec(`ALTER TABLE user_subscription_groups ALTER COLUMN created_at SET DEFAULT NOW()`)
+	require.NoError(t, err)
 	unifiedGroup, err := c.Group.Create().SetName("全模型订阅").SetPlatform("composite").SetSubscriptionType("subscription").Save(ctx)
 	require.NoError(t, err)
 	unified := unifiedGroup.ID
@@ -59,6 +65,13 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 		_, e = campaigns.Claim(ctx, u.ID, ca.Slug, "claim-"+label, now.Add(-time.Hour))
 		require.NoError(t, e)
 		pool, e := c.UserSubscription.Query().Where(usersubscription.UserIDEQ(u.ID)).Only(ctx)
+		require.NoError(t, e)
+		// Claim ignores its claimAt argument and stamps the pool with the real
+		// clock, so backdate it explicitly to model a gift claimed an hour ago.
+		// The contract inherits this start, keeping it older than the gift's
+		// forced expiry below and so inside the retired-usage window.
+		startedAt := now.Add(-time.Hour)
+		_, e = db.Exec(`UPDATE user_subscriptions SET starts_at=$2 WHERE id=$1`, pool.ID, startedAt)
 		require.NoError(t, e)
 		gift, e := c.UserSubscriptionEntitlement.Query().Where(usersubscriptionentitlement.UserSubscriptionIDEQ(pool.ID)).Only(ctx)
 		require.NoError(t, e)
@@ -140,7 +153,8 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 		view, err = svc.AdminEntitlements(ctx, sid)
 		require.NoError(t, err)
 		require.Equal(t, 360.0, *view.Summary.DailyLimitUSD)
-		require.Equal(t, 360.0, *view.Summary.RemainingUSD)
+		require.Equal(t, 360.0, *view.Summary.RemainingUSD, "the gift's retired usage frees the grant")
+		require.Equal(t, 0.0, view.Summary.DailyUsageUSD)
 	})
 
 	t.Run("no-pool-creates-unified-pool", func(t *testing.T) {

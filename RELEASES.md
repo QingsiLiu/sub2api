@@ -12,7 +12,7 @@
 - 修复：领取赠礼进兼容池时同步延长兼容合同到期，避免报价误判合同过期、引导付款后履约失败转人工。
 - 并入`0.2.11-geili.2`（未单独发布）：公开模型广场改为原生页面，支持分组白名单（空即不展示）、人民币计价分组与「相比官方」折算、管理员手填官方参考价（仅展示，不影响计费）。
 - 并入 Grok CLI 客户端版本默认 1.0.13，修复 cli-chat-proxy 返回 426（生产此前已用环境变量覆盖止血）。
-- 验证：CI 单元、Postgres 集成（含 6 个发放场景）、前端全量通过；golangci-lint 仍是主干既有的 10 处 errcheck，未涉及本次文件。运维手册见 `.github/geili/admin-grant.md`。
+- 验证：主干 CI 的单元与集成、前端全量通过（`codex/admin-grant` 跑 `9d0ee63` 时 `golangci-lint` 失败，但那 10 处 errcheck 在 `geili/main` 上原本就有，涉及文件本次未改，与本版无关）。发放的 Postgres 集成测试带 `//go:build unit && integration`，只有候选工作流的 `-tags=unit,integration` 步骤会编译它，主干 CI 一直看不到；首次在候选工作流运行时连着暴露两个夹具缺陷（建表缺 `created_at` 库级默认值、赠礼池起点被真实时钟覆盖），已在 OVH 用 Docker 修复并跑通：AdminGrant 6/6、BenefitCampaign、CampaignPurchaseBoundaries、CampaignStack、LegacyManagement 全部通过。运维手册见 `.github/geili/admin-grant.md`。
 
 - revision：候选构建完成后补上。
 - 镜像 digest：候选构建完成后补上。
