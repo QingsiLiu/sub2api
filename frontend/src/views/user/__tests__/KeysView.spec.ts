@@ -240,6 +240,7 @@ const PaginationStub = {
   template: `
     <div>
       <button data-test="page-size-50" @click="$emit('update:pageSize', 50)">50</button>
+      <button data-test="page-2" @click="$emit('update:page', 2)">Page 2</button>
     </div>
   `,
 }
@@ -636,7 +637,11 @@ describe('user KeysView column settings', () => {
     expect(currentConcurrencyColumn?.sortable).toBe(true)
   })
 
-  it('keeps filters and selected page size when sorting by current concurrency', async () => {
+  it.each([
+    { key: 'current_concurrency', order: 'asc' },
+    { key: 'group', order: 'asc' },
+    { key: 'group', order: 'desc' },
+  ] as const)('keeps filters and resets pagination and selection when sorting $key $order', async ({ key, order }) => {
     getAvailableGroups.mockResolvedValue([{ id: 42, name: 'OpenAI' }])
     const wrapper = await mountView()
 
@@ -653,11 +658,19 @@ describe('user KeysView column settings', () => {
     await selects[1].vm.$emit('update:modelValue', 'active')
     await flushPromises()
 
+    await wrapper.get('[data-test="page-2"]').trigger('click')
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    expect(table.props('selectedKeys')).toEqual([1])
+    expect(visibleColumnMeta(wrapper).find((column) => column.key === key)?.sortable).toBe(true)
     listKeys.mockClear()
 
-    await wrapper.get('[data-test="sort-current-concurrency"]').trigger('click')
+    table.vm.$emit('sort', key, order)
     await flushPromises()
 
+    expect(table.props('selectedKeys')).toEqual([])
     expect(listKeys).toHaveBeenLastCalledWith(
       1,
       50,
@@ -665,8 +678,8 @@ describe('user KeysView column settings', () => {
         search: 'target',
         status: 'active',
         group_id: 42,
-        sort_by: 'current_concurrency',
-        sort_order: 'asc',
+        sort_by: key,
+        sort_order: order,
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
@@ -695,6 +708,11 @@ describe('user KeysView column settings', () => {
       expect(groupSelect(wrapper).props('options').map((g: {value:number}) => g.value)).toEqual([1, 2, 3])
       expect(wrapper.find('#key-subscription').exists()).toBe(false)
       expect(getAvailableGroups).toHaveBeenCalledWith('balance')
+    })
+    it('lists a TypeSafe group as an explicit balance target', async () => {
+      getAvailableGroups.mockResolvedValue([...availableGroups, { id: 4, name: 'Jev System One', platform: 'typesafe', usage_panel: undefined, rate_multiplier: 1, subscription_type: 'standard' }])
+      const wrapper = await openCreate()
+      expect(groupSelect(wrapper).props('options').map((g: { value: number }) => g.value)).toEqual([1, 2, 3, 4])
     })
     it('requires a selected group and submits explicit balance settlement', async () => {
       const wrapper = await openCreate()
@@ -791,4 +809,7 @@ describe('user KeysView column settings', () => {
       expect(groupSelect(wrapper).props('options')).toHaveLength(3)
     })
   })
+
+
+
 })

@@ -1,5 +1,19 @@
 # Geili 版本说明
 
+## 0.2.12-geili.1
+
+在 `0.2.11-geili.4` 基础上同步上游 `v0.2.12`，保留 Geili 独立结算、订阅 V2、复合 Key、多分组路由、模型广场和持久化用量结算。用户可见变化：
+- 新增 TypeSafe Jev System One 原生平台（`/v1/systemone`），支持账号、分组、Composite 路由、配额、计费、内容审核和提示词审计；TypeSafe-only 模型不进入普通 LLM 入口。
+- 充值页支持可配置的「满额赠金」或「满额折扣」阶梯、活动 Markdown 文案、促销价签和订单赠送金额展示；现有余额倍率与订阅 V2 计费继续生效。
+- 管理端账号支持优先级快捷调整，API Key 列表支持按分组名称排序。
+- Grok OAuth 身份升级并对齐官方 CLI `1.0.46`，修复旧版本 426。
+- 修复 Antigravity 错误体泄露、邮箱验证码并发猜测、重置密码 token 存储与单次消费、匿名订单查询枚举和自定义错误码提示。升级后此前签发但未使用的重置密码链接失效，需要重新申请。
+- 新增迁移 `241_add_payment_order_bonus_amount.sql` 和 `241_add_typesafe_platform.sql`；不修改既有迁移。
+
+- revision：待候选 CI 产出。
+- 镜像 digest：待候选 CI 产出。
+- 部署：仅源码合并，待 Stage 验收；未发布生产。
+
 每次改 `backend/cmd/server/VERSION` 并准备发布时，必须在本文件顶部追加一条。没有这条说明，不算完成发版。
 
 每条至少写：版本号、相对上一版的用户可见变化、revision、镜像 digest（候选构建完成后补上）、当前部署到哪（仅源码 / Stage / 生产）。不要把密钥、用户邮箱或生产数据写进来。
