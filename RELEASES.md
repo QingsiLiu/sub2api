@@ -14,7 +14,7 @@
 
 - revision：`dd1a83afd8c61f103a73430d89362a52874aa3ff`（候选 CI `36980138613` 全部门禁通过）。
 - 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:c2ca6cd3260781045ed3c49748f100437d64f8359600db5c320fab5325c9b4f7`。
-- 部署：2026-10-02 已固定 Stage（health 200，版本 `0.2.11-geili.4`，复合 Key 管理员替换验收通过，管理员发放权益验收通过）；生产待本次授权发布。
+- 部署：2026-10-02 已固定 Stage 并经用户授权发布生产；Stage/生产 health 200，版本 `0.2.11-geili.4`，复合 Key 管理员替换和管理员发放权益验收通过。生产应用切换约 10.96 秒，PostgreSQL/Redis 指纹未变，备份 `/root/backups/subscription-prod-image-bump-20261002T085119Z`。
 
 ## 0.2.11-geili.3
 
