@@ -258,7 +258,7 @@ func TestSubscriptionV2QuoteAndOrderFeeParityMatrix(t *testing.T) {
 				require.NoError(t, err)
 				_, paid, err := calculateCreateOrderPayAmountForOrderType(q.OrderAmount, fee, currency, "subscription", 7.14)
 				require.NoError(t, err)
-				o, err := s.createOrderInTx(context.Background(), req, &User{ID: u.ID, Email: u.Email}, p, &PaymentConfig{MaxPendingOrders: 10}, q.OrderAmount, q.OrderAmount, fee, paid, &payment.InstanceSelection{ProviderKey: "stripe", Config: map[string]string{"currency": currency}})
+				o, err := s.createOrderInTx(context.Background(), req, &User{ID: u.ID, Email: u.Email}, p, &PaymentConfig{MaxPendingOrders: 10}, q.OrderAmount, q.OrderAmount, fee, paid, 0, &payment.InstanceSelection{ProviderKey: "stripe", Config: map[string]string{"currency": currency}})
 				require.NoError(t, err)
 				snap, err := readSubscriptionV2Snapshot(o)
 				require.NoError(t, err)

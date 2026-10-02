@@ -55,7 +55,7 @@ func v2Create(t *testing.T, s *PaymentService, u *dbent.User, q *SubscriptionQuo
 	if err != nil {
 		return nil, err
 	}
-	return s.createOrderInTx(ctx, req, &User{ID: u.ID, Email: u.Email, Username: u.Username}, plan, &PaymentConfig{MaxPendingOrders: 10, OrderTimeoutMin: 15}, q.OrderAmount, q.OrderAmount, 0, q.OrderAmount, nil)
+	return s.createOrderInTx(ctx, req, &User{ID: u.ID, Email: u.Email, Username: u.Username}, plan, &PaymentConfig{MaxPendingOrders: 10, OrderTimeoutMin: 15}, q.OrderAmount, q.OrderAmount, 0, q.OrderAmount, 0, nil)
 }
 func v2Fulfill(t *testing.T, s *PaymentService, o *dbent.PaymentOrder) *geilisub.Contract {
 	t.Helper()
