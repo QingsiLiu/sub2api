@@ -96,6 +96,30 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 	return key, nil
 }
 
+// GetByIDForUpdate loads an active key while holding a row lock. Admin routing
+// edits use this inside a transaction so two panel replacements cannot apply
+// against the same stale group_ids snapshot.
+func (r *apiKeyRepository) GetByIDForUpdate(ctx context.Context, id int64) (*service.APIKey, error) {
+	client := clientFromContext(ctx, r.client)
+	m, err := client.APIKey.Query().
+		Where(apikey.IDEQ(id)).
+		ForUpdate().
+		WithUser().
+		WithGroup().
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		return nil, err
+	}
+	key := apiKeyEntityToService(m)
+	if err := r.hydrateCompositeGroups(ctx, []*service.APIKey{key}); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
 // GetKeyAndOwnerID 根据 API Key ID 获取其 key 与所有者（用户）ID。
 // 相比 GetByID，此方法性能更优，因为：
 //   - 使用 Select() 只查询必要字段，减少数据传输量

@@ -14,9 +14,12 @@ export interface UpdateApiKeyGroupResult {
 }
 
 /**
- * Update an API key's group binding
+ * Update an API key's group binding. For explicit composite keys, groupId
+ * replaces the candidates in that group's usage panel while preserving the
+ * other panels.
  * @param id - API Key ID
- * @param groupId - Group ID (0 to unbind, positive to bind, null/undefined to skip)
+ * @param groupId - Group ID (0 to unbind legacy single keys, positive to bind
+ * or replace a composite usage panel, null/undefined to skip)
  * @returns Updated API key with auto-grant info
  */
 export async function updateApiKeyGroup(id: number, groupId: number | null): Promise<UpdateApiKeyGroupResult> {

@@ -1403,6 +1403,17 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 		return nil, infraerrors.BadRequest("INVALID_GROUP_ID", "group_id must be non-negative")
 	}
 
+	// Explicit composite keys keep their group list in group_ids. The existing
+	// admin endpoint remains compatible with the single-group payload, but for a
+	// composite key group_id means "replace the selected usage panel" rather
+	// than "set api_keys.group_id".
+	if apiKey.UsesGroupListRouting() {
+		if *groupID == 0 {
+			return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "composite keys cannot be unbound; replace an existing usage panel instead")
+		}
+		return s.adminReplaceCompositeAPIKeyGroup(ctx, apiKey, *groupID)
+	}
+
 	result := &AdminUpdateAPIKeyGroupIDResult{}
 
 	if *groupID == 0 {
@@ -1489,6 +1500,127 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 	result.APIKey = apiKey
 	return result, nil
+}
+
+// adminReplaceCompositeAPIKeyGroup replaces every candidate in the selected
+// usage panel while preserving candidates from all other panels. It shares
+// the same target-group policy as the legacy admin single-group operation.
+func (s *adminServiceImpl) adminReplaceCompositeAPIKeyGroup(ctx context.Context, apiKey *APIKey, selectedID int64) (*AdminUpdateAPIKeyGroupIDResult, error) {
+	if apiKey == nil || !apiKey.UsesGroupListRouting() {
+		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "API key is not a composite key")
+	}
+
+	opCtx := ctx
+	var tx *dbent.Tx
+	if s.entClient != nil {
+		var txErr error
+		tx, txErr = s.entClient.Tx(ctx)
+		if txErr != nil {
+			return nil, fmt.Errorf("begin transaction: %w", txErr)
+		}
+		defer func() { _ = tx.Rollback() }()
+		opCtx = dbent.NewTxContext(ctx, tx)
+		if locker, ok := s.apiKeyRepo.(interface {
+			GetByIDForUpdate(context.Context, int64) (*APIKey, error)
+		}); ok {
+			locked, lockErr := locker.GetByIDForUpdate(opCtx, apiKey.ID)
+			if lockErr != nil {
+				return nil, lockErr
+			}
+			apiKey = locked
+			if !apiKey.UsesGroupListRouting() {
+				return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "API key is no longer a composite key")
+			}
+		}
+	}
+
+	selected, err := s.groupRepo.GetByID(opCtx, selectedID)
+	if err != nil {
+		return nil, err
+	}
+	if selected == nil || selected.Status != StatusActive {
+		return nil, infraerrors.BadRequest("GROUP_NOT_ACTIVE", "target group is not active")
+	}
+	if selected.Platform == PlatformComposite || !IsUsagePanel(selected.UsagePanel) {
+		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "target group must belong to a usage panel and cannot be composite")
+	}
+
+	// Keep the established admin binding policy: subscription groups require an
+	// active subscription, while standard exclusive groups are auto-granted.
+	if selected.IsSubscriptionType() {
+		if s.userSubRepo == nil {
+			return nil, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
+		}
+		if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(opCtx, apiKey.UserID, selectedID); err != nil {
+			if errors.Is(err, ErrSubscriptionNotFound) {
+				return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
+			}
+			return nil, err
+		}
+	}
+
+	groupByID := make(map[int64]*Group, len(apiKey.Groups)+1)
+	for _, group := range apiKey.Groups {
+		if group != nil {
+			groupByID[group.ID] = group
+		}
+	}
+	groupByID[selected.ID] = selected
+	currentPanelFound := false
+	for _, id := range apiKey.GroupIDs {
+		if group := groupByID[id]; group != nil && group.UsagePanel == selected.UsagePanel {
+			currentPanelFound = true
+			break
+		}
+	}
+	if !currentPanelFound {
+		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "target group must replace an existing usage panel")
+	}
+
+	groupIDs, err := replaceCompositeGroup(apiKey.GroupIDs, groupByID, selectedID)
+	if err != nil {
+		return nil, err
+	}
+	apiKey.GroupIDs = groupIDs
+	apiKey.GroupID = nil
+	apiKey.Group = nil
+	apiKey.Groups = orderedCompositeGroups(groupIDs, groupByID)
+
+	result := &AdminUpdateAPIKeyGroupIDResult{}
+
+	if selected.IsExclusive && !selected.IsSubscriptionType() {
+		if addErr := s.userRepo.AddGroupToAllowedGroups(opCtx, apiKey.UserID, selectedID); addErr != nil {
+			return nil, fmt.Errorf("add group to user allowed groups: %w", addErr)
+		}
+		result.AutoGrantedGroupAccess = true
+		result.GrantedGroupID = &selected.ID
+		result.GrantedGroupName = selected.Name
+	}
+
+	if err := s.apiKeyRepo.Update(opCtx, apiKey, APIKeyUpdateFields{GroupID: true, SettlementRouting: true}); err != nil {
+		return nil, fmt.Errorf("update api key: %w", err)
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
+	}
+
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+	}
+	result.APIKey = apiKey
+	return result, nil
+}
+
+func orderedCompositeGroups(ids []int64, groups map[int64]*Group) []*Group {
+	ordered := make([]*Group, 0, len(ids))
+	for _, id := range ids {
+		if group := groups[id]; group != nil {
+			ordered = append(ordered, group)
+		}
+	}
+	return ordered
 }
 
 // AdminResetAPIKeyRateLimitUsage resets all API key rate-limit usage windows.

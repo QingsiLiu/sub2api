@@ -25,7 +25,7 @@ const compositeKey = {
   group_id: null,
   routing_mode: 'composite',
   group_ids: [22, 11, 99],
-  groups: [{ id: 22, name: 'Second' }, { id: 11, name: 'First' }]
+  groups: [{ id: 22, name: 'Second', usage_panel: 'gpt' }, { id: 11, name: 'First', usage_panel: 'claude' }]
 }
 const user = (id: number) => ({ id, email: `user${id}@example.com`, username: `user${id}` }) as AdminUser
 const keys = (id: number, name: string) => ({ items: [{ id, name, key: 'sk-example-key-value-for-tests', status: 'active', created_at: '2026-09-20', group_id: null }] })
@@ -38,7 +38,7 @@ async function openModal(selectedUser = user(1)) {
         BaseDialog: { template: '<div><slot /></div>' },
         Teleport: true,
         GroupBadge: { props: ['name'], template: '<span>{{ name }}</span>' },
-        GroupOptionItem: true
+        GroupOptionItem: { props: ['name'], template: '<span>{{ name }}</span>' }
       }
     }
   })
@@ -61,23 +61,42 @@ describe('UserApiKeysModal', () => {
     mocks.list.mockResolvedValue({ items: [compositeKey] })
   })
 
-  it('shows ordered composite groups and a missing-group ID without a single-group editor', async () => {
+  it('shows composite groups by panel and exposes panel replacement controls', async () => {
     const wrapper = await openModal()
     const groups = wrapper.get('[data-testid="composite-key-groups"]')
     expect(groups.text()).toContain('keys.compositeKey')
     expect(groups.text().indexOf('Second')).toBeLessThan(groups.text().indexOf('First'))
     expect(groups.text()).toContain('#99')
     expect(wrapper.text()).not.toContain('admin.users.none')
-    expect(wrapper.findAll('button')).toHaveLength(0)
+    expect(wrapper.findAll('[data-group-selector-trigger]')).toHaveLength(2)
     expect(mocks.update).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
   it('uses the admin group catalog with older API responses', async () => {
     mocks.list.mockResolvedValue({ items: [{ ...compositeKey, groups: undefined }] })
-    mocks.groups.mockResolvedValue([{ id: 22, name: 'Second' }, { id: 11, name: 'First' }])
+    mocks.groups.mockResolvedValue([{ id: 22, name: 'Second', usage_panel: 'gpt' }, { id: 11, name: 'First', usage_panel: 'claude' }])
     const wrapper = await openModal()
     expect(wrapper.get('[data-testid="composite-key-groups"]').text()).toContain('Second')
+    wrapper.unmount()
+  })
+
+  it('filters composite replacement options to the selected usage panel and updates the key', async () => {
+    const replacement = { id: 23, name: 'Replacement', platform: 'openai', usage_panel: 'gpt', status: 'active' }
+    mocks.groups.mockResolvedValue([
+      { id: 22, name: 'Second', platform: 'openai', usage_panel: 'gpt', status: 'active' },
+      replacement,
+      { id: 11, name: 'First', platform: 'anthropic', usage_panel: 'claude', status: 'active' }
+    ])
+    mocks.update.mockResolvedValue({ api_key: { ...compositeKey, group_ids: [23, 11], groups: [replacement, { id: 11, name: 'First', usage_panel: 'claude' }] } })
+    const wrapper = await openModal()
+    await wrapper.get('[data-testid="composite-panel-gpt"] [data-group-selector-trigger]').trigger('click')
+    const options = wrapper.findAll('button').filter(button => button.text().includes('Replacement'))
+    expect(options).toHaveLength(1)
+    await options[0].trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenCalledWith(7, 23)
+    expect(wrapper.get('[data-testid="composite-key-groups"]').text()).toContain('Replacement')
     wrapper.unmount()
   })
 

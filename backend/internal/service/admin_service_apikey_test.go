@@ -220,6 +220,7 @@ func (s *apiKeyRepoStubForGroupUpdate) UpdateGroupIDByUserAndGroup(context.Conte
 // groupRepoStubForGroupUpdate implements GroupRepository for AdminUpdateAPIKeyGroupID tests.
 type groupRepoStubForGroupUpdate struct {
 	group          *Group
+	groups         map[int64]*Group
 	getErr         error
 	lastGetByIDArg int64
 }
@@ -229,7 +230,14 @@ func (s *groupRepoStubForGroupUpdate) GetByID(_ context.Context, id int64) (*Gro
 	if s.getErr != nil {
 		return nil, s.getErr
 	}
-	clone := *s.group
+	group := s.group
+	if s.groups != nil {
+		group = s.groups[id]
+	}
+	if group == nil {
+		return nil, ErrGroupNotFound
+	}
+	clone := *group
 	return &clone, nil
 }
 
@@ -354,6 +362,62 @@ func TestAdminService_AdminUpdateAPIKeyGroupID_BindActiveGroup(t *testing.T) {
 	// C1 fix: verify Group object is populated
 	require.NotNil(t, got.APIKey.Group)
 	require.Equal(t, "Pro", got.APIKey.Group.Name)
+}
+
+func TestAdminService_AdminUpdateAPIKeyGroupID_CompositeReplacesUsagePanel(t *testing.T) {
+	apiKey := &APIKey{
+		ID: 1, UserID: 42, Key: "sk-composite", BillingSource: BillingSourceBalance,
+		RoutingMode: KeyRoutingComposite, GroupIDs: []int64{11, 22, 33},
+		Groups: []*Group{
+			{ID: 11, Name: "GPT old", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive},
+			{ID: 22, Name: "Claude", Platform: PlatformAnthropic, UsagePanel: UsagePanelClaude, Status: StatusActive},
+			{ID: 33, Name: "National", Platform: PlatformDeepseek, UsagePanel: UsagePanelNational, Status: StatusActive},
+		},
+	}
+	repo := &apiKeyRepoStubForGroupUpdate{key: apiKey}
+	groupRepo := &groupRepoStubForGroupUpdate{groups: map[int64]*Group{
+		11: apiKey.Groups[0], 22: apiKey.Groups[1], 33: apiKey.Groups[2],
+		44: {ID: 44, Name: "GPT new", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive},
+	}}
+	cache := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{apiKeyRepo: repo, groupRepo: groupRepo, authCacheInvalidator: cache}
+
+	got, err := svc.AdminUpdateAPIKeyGroupID(context.Background(), 1, int64Ptr(44))
+	require.NoError(t, err)
+	require.Equal(t, []int64{44, 22, 33}, got.APIKey.GroupIDs)
+	require.Nil(t, got.APIKey.GroupID)
+	require.Equal(t, []int64{44, 22, 33}, repo.updated.GroupIDs)
+	require.Equal(t, []int64{44, 22, 33}, groupIDsFromGroups(got.APIKey.Groups))
+	require.Equal(t, []string{"sk-composite"}, cache.keys)
+}
+
+func TestAdminService_AdminUpdateAPIKeyGroupID_CompositeRejectsUnbindAndUnknownPanel(t *testing.T) {
+	apiKey := &APIKey{
+		ID: 1, UserID: 42, Key: "sk-composite", BillingSource: BillingSourceBalance,
+		RoutingMode: KeyRoutingComposite, GroupIDs: []int64{11},
+		Groups: []*Group{{ID: 11, Name: "GPT", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive}},
+	}
+	groupRepo := &groupRepoStubForGroupUpdate{groups: map[int64]*Group{
+		44: {ID: 44, Name: "Unassigned", Platform: PlatformOpenAI, UsagePanel: "", Status: StatusActive},
+	}}
+	repo := &apiKeyRepoStubForGroupUpdate{key: apiKey}
+	svc := &adminServiceImpl{apiKeyRepo: repo, groupRepo: groupRepo}
+
+	_, err := svc.AdminUpdateAPIKeyGroupID(context.Background(), 1, int64Ptr(0))
+	require.Equal(t, "KEY_ROUTING_INVALID", infraerrors.Reason(err))
+	_, err = svc.AdminUpdateAPIKeyGroupID(context.Background(), 1, int64Ptr(44))
+	require.Equal(t, "KEY_ROUTING_INVALID", infraerrors.Reason(err))
+	require.Nil(t, repo.updated)
+}
+
+func groupIDsFromGroups(groups []*Group) []int64 {
+	ids := make([]int64, 0, len(groups))
+	for _, group := range groups {
+		if group != nil {
+			ids = append(ids, group.ID)
+		}
+	}
+	return ids
 }
 
 func TestAdminService_AdminUpdateAPIKeyGroupID_SameGroup_Idempotent(t *testing.T) {

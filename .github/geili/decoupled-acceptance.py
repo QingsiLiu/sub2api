@@ -92,8 +92,8 @@ def serve():
 
 def bootstrap():
  token=admin();stamp=str(int(time.time()));groups={}
- for name,model,rate in [('gpt','gpt-4.1-mini',1.1),('pro','gpt-4.1-mini',1.3),('cn','neutral-custom-national',.8),('down','gpt-4.1-mini',4),('disabled','gpt-4.1-mini',1)]:
-  g=api('/admin/groups',{'name':'decoupled-'+name+'-'+stamp,'platform':'openai','rate_multiplier':.2,'subscription_rate_multiplier':rate,'subscription_enabled':name!='disabled','long_context_pricing_enabled':False,'model_pricing':[{'models':[model],'billing_mode':'token','input_price':.000001,'output_price':.000002}]},token)
+ for name,model,rate,panel in [('gpt','gpt-4.1-mini',1.1,'gpt'),('pro','gpt-4.1-mini',1.3,'gpt'),('cn','neutral-custom-national',.8,'national'),('down','gpt-4.1-mini',4,'gpt'),('disabled','gpt-4.1-mini',1,'gpt')]:
+  g=api('/admin/groups',{'name':'decoupled-'+name+'-'+stamp,'platform':'openai','usage_panel':panel,'rate_multiplier':.2,'subscription_rate_multiplier':rate,'subscription_enabled':name!='disabled','long_context_pricing_enabled':False,'model_pricing':[{'models':[model],'billing_mode':'token','input_price':.000001,'output_price':.000002}]},token)
   account=api('/admin/accounts',{'name':'decoupled-'+name+'-'+stamp,'platform':'openai','type':'apikey','credentials':{'api_key':'synthetic-test-key','base_url':f'http://127.0.0.1:{MOCK_PORT}/'+name,'model_mapping':{model:model}},'group_ids':[g['id']],'concurrency':5,'priority':1},token)
   groups[name]={'id':g['id'],'account_id':account['id'],'model':model,'rate':rate}
  plan=api('/admin/payment/plans',{'name':'Independent quota '+stamp,'description':'synthetic fixture','price':10,'daily_limit_usd':1,'weekly_limit_usd':5,'monthly_limit_usd':20,'validity_days':30,'validity_unit':'day','for_sale':True},token)
@@ -153,6 +153,8 @@ def verify_edges(s,check,call,snap):
   status,body=request(path,data,auth,method);check(name,400<=status<500,{'status':status,'error':body.get('message') if isinstance(body,dict) else str(body)[:100]})
  def new_key(data):return api('/keys',{'name':'boundary fixture',**data},ut)
  def mockcalls():return base.request('/__calls',base=f'http://127.0.0.1:{MOCK_PORT}')[1]
+ replacement=api('/admin/api-keys/'+str(multi['id']),{'group_id':groups['pro']['id']},token,'PUT')
+ check('admin composite panel replacement',replacement['api_key']['group_ids']==[groups['pro']['id'],groups['cn']['id']],replacement['api_key'])
  api('/keys/'+str(multi['id']),{'group_ids':[gid,groups['cn']['id']]},ut,'PUT')
  status,body=request('/v1/models',token=multi['key']);check('model union includes neutral national name',status==200 and {model,groups['cn']['model']}<={r['id'] for r in body['data']})
  status,body=request('/v1/models?client_version=1.0',token=multi['key']);check('Codex manifest shape',status==200 and 'models' in body)
