@@ -28,20 +28,6 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(string(raw))
 	require.NoError(t, err)
-	raw, err = migrations.FS.ReadFile("246_subscription_route_integrity.sql")
-	require.NoError(t, err)
-	_, err = db.Exec(regexp.MustCompile(`(?s)CREATE OR REPLACE FUNCTION geili_grant_unified_subscription\(\).*?EXECUTE FUNCTION geili_grant_unified_subscription\(\);`).FindString(string(raw)))
-	require.NoError(t, err)
-	// The trigger inserts into user_subscription_groups without created_at, which
-	// production survives because migration 234 declares DEFAULT NOW(). Ent's
-	// Schema.Create omits that DB default (it applies the value in Go), so the
-	// test schema must restore it before the trigger can run.
-	_, err = db.Exec(`ALTER TABLE user_subscription_groups ALTER COLUMN created_at SET DEFAULT NOW()`)
-	require.NoError(t, err)
-	unifiedGroup, err := c.Group.Create().SetName("全模型订阅").SetPlatform("composite").SetSubscriptionType("subscription").Save(ctx)
-	require.NoError(t, err)
-	unified := unifiedGroup.ID
-
 	pay, _, plans := v2PaymentFixtureWithClient(t, c)
 	svc := &SubscriptionService{entClient: c}
 	campaigns := NewBenefitCampaignService(c, nil)
@@ -157,7 +143,7 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 		require.Equal(t, 0.0, view.Summary.DailyUsageUSD)
 	})
 
-	t.Run("no-pool-creates-unified-pool", func(t *testing.T) {
+	t.Run("no-pool-creates-groupless-pool", func(t *testing.T) {
 		u := user("fresh")
 		preview, err := grant(u.ID, 360, 30, "", false, "")
 		require.NoError(t, err)
@@ -173,9 +159,10 @@ func TestSubscriptionV2PostgresAdminGrant(t *testing.T) {
 		require.Nil(t, pool.GroupID)
 		require.Nil(t, pool.PlanID)
 		require.Equal(t, &admin.ID, pool.AssignedBy)
-		var linked int64
-		require.NoError(t, db.QueryRow(`SELECT group_id FROM user_subscription_groups WHERE user_subscription_id=$1`, pool.ID).Scan(&linked))
-		require.Equal(t, unified, linked)
+		// Migration 248 dropped the unified-group trigger: new pools, like gift pools, carry no group link.
+		var linked int
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM user_subscription_groups WHERE user_subscription_id=$1`, pool.ID).Scan(&linked))
+		require.Zero(t, linked)
 		view, err := svc.AdminEntitlements(ctx, pool.ID)
 		require.NoError(t, err)
 		require.Equal(t, 360.0, *view.Summary.DailyLimitUSD)
