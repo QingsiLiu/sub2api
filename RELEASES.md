@@ -14,9 +14,9 @@
 - 并入 Grok CLI 客户端版本默认 1.0.13，修复 cli-chat-proxy 返回 426（生产此前已用环境变量覆盖止血）。
 - 验证：主干 CI 的单元与集成、前端全量通过（`codex/admin-grant` 跑 `9d0ee63` 时 `golangci-lint` 失败，但那 10 处 errcheck 在 `geili/main` 上原本就有，涉及文件本次未改，与本版无关）。发放的 Postgres 集成测试带 `//go:build unit && integration`，只有候选工作流的 `-tags=unit,integration` 步骤会编译它，主干 CI 一直看不到；首次在候选工作流运行时连着暴露两个夹具缺陷（建表缺 `created_at` 库级默认值、赠礼池起点被真实时钟覆盖），已在 OVH 用 Docker 修复并跑通：AdminGrant 6/6、BenefitCampaign、CampaignPurchaseBoundaries、CampaignStack、LegacyManagement 全部通过。运维手册见 `.github/geili/admin-grant.md`。
 
-- revision：候选构建完成后补上。
-- 镜像 digest：候选构建完成后补上。
-- 部署：仅源码。
+- revision：`c36ff62f39b6b8792b7bfaebdbb6f4cb6daf94dd`（首个候选 `9d0ee63` 在候选工作流第 7 步失败，未产出镜像；修复夹具后重推得到本候选，候选 CI 全部步骤成功）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:8616b00c17b80888f9de0db23985a873e137af577d02040ac78970d1f5425ec3`。
+- 部署：2026-10-02 已固定 Stage（health 200，版本 `0.2.11-geili.3`，生产三容器指纹未变），发放权益 Stage 验收 54 项全过；尚未上生产。
 
 ## 0.2.11-geili.1
 
