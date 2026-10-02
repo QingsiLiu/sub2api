@@ -185,7 +185,7 @@ type CreateGroupRequest struct {
 	SubscriptionEnabled        bool                          `json:"subscription_enabled"`
 	Name                       string                        `json:"name" binding:"required"`
 	Description                string                        `json:"description"`
-	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
+	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go typesafe composite"`
 	UsagePanel                 string                        `json:"usage_panel"`
 	RateMultiplier             float64                       `json:"rate_multiplier"`
 	SubscriptionRateMultiplier *float64                      `json:"subscription_rate_multiplier"`
@@ -263,7 +263,7 @@ type UpdateGroupRequest struct {
 	SubscriptionEnabled        *bool                          `json:"subscription_enabled"`
 	Name                       string                         `json:"name"`
 	Description                *string                        `json:"description"`
-	Platform                   string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
+	Platform                   string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go typesafe composite"`
 	UsagePanel                 *string                        `json:"usage_panel"`
 	RateMultiplier             *float64                       `json:"rate_multiplier"`
 	SubscriptionRateMultiplier *float64                       `json:"subscription_rate_multiplier"`
@@ -340,7 +340,7 @@ type UpdateGroupRequest struct {
 type CompositeRouteRequest struct {
 	PublicModel    string `json:"public_model" binding:"required"`
 	MatchType      string `json:"match_type" binding:"omitempty,oneof=exact prefix"`
-	TargetPlatform string `json:"target_platform" binding:"required,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go"`
+	TargetPlatform string `json:"target_platform" binding:"required,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go typesafe"`
 	TargetGroupID  *int64 `json:"target_group_id"`
 	ProfileKey     string `json:"profile_key"`
 	UpstreamModel  string `json:"upstream_model"`
