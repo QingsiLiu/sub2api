@@ -637,6 +637,7 @@ export default {
       changeGroup: 'Change',
       compositeUnassigned: 'Groups without a recognized panel',
       compositeNoAvailableGroups: 'No active groups are available for this panel',
+      selectedGroups: 'selected',
       noUsersYet: 'No users yet',
       createFirstUser: 'Create your first user to get started.',
       userCreated: 'User created successfully',

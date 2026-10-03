@@ -77,12 +77,29 @@ func (s *APIKeyService) canBindExplicitGroup(ctx context.Context, user *User, gr
 // group and keeps the other panels untouched. A single-group edit on a composite
 // key means "use this group for this panel", not "discard the rest of the key".
 func replaceCompositeGroup(existing []int64, groups map[int64]*Group, selectedID int64) ([]int64, error) {
-	selected := groups[selectedID]
+	return replaceCompositeGroups(existing, groups, []int64{selectedID})
+}
+
+// replaceCompositeGroups replaces every candidate on the selected usage panel
+// with the supplied ordered candidates, preserving all other panels.
+func replaceCompositeGroups(existing []int64, groups map[int64]*Group, selectedIDs []int64) ([]int64, error) {
+	if len(selectedIDs) == 0 {
+		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "at least one group is required for a composite usage panel")
+	}
+	selected := groups[selectedIDs[0]]
 	if selected == nil || !IsUsagePanel(selected.UsagePanel) {
 		return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "composite keys can only replace a group that belongs to a usage panel")
 	}
-	replaced := []int64{selectedID}
-	seen := map[int64]bool{selectedID: true}
+	replaced := make([]int64, 0, len(existing)+len(selectedIDs))
+	seen := make(map[int64]bool, len(existing)+len(selectedIDs))
+	for _, id := range selectedIDs {
+		group := groups[id]
+		if id <= 0 || group == nil || group.UsagePanel != selected.UsagePanel || seen[id] {
+			return nil, infraerrors.BadRequest("KEY_ROUTING_INVALID", "all replacement groups must belong to the same usage panel")
+		}
+		seen[id] = true
+		replaced = append(replaced, id)
+	}
 	for _, id := range existing {
 		if id <= 0 || seen[id] {
 			continue

@@ -615,6 +615,7 @@ export default {
       changeGroup: '更换',
       compositeUnassigned: '未识别板块分组',
       compositeNoAvailableGroups: '该板块暂无可用分组',
+      selectedGroups: '个已选',
       noUsersYet: '暂无用户',
       createFirstUser: '创建您的第一个用户以开始使用系统',
       userCreated: '用户创建成功',

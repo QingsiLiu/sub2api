@@ -391,6 +391,32 @@ func TestAdminService_AdminUpdateAPIKeyGroupID_CompositeReplacesUsagePanel(t *te
 	require.Equal(t, []string{"sk-composite"}, cache.keys)
 }
 
+func TestAdminService_AdminUpdateAPIKeyGroupIDs_CompositeKeepsMultipleSamePanelCandidates(t *testing.T) {
+	apiKey := &APIKey{
+		ID: 1, UserID: 42, Key: "sk-composite", BillingSource: BillingSourceBalance,
+		RoutingMode: KeyRoutingComposite, GroupIDs: []int64{11, 22, 33},
+		Groups: []*Group{
+			{ID: 11, Name: "GPT old", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive},
+			{ID: 22, Name: "Claude", Platform: PlatformAnthropic, UsagePanel: UsagePanelClaude, Status: StatusActive},
+			{ID: 33, Name: "National", Platform: PlatformDeepseek, UsagePanel: UsagePanelNational, Status: StatusActive},
+		},
+	}
+	repo := &apiKeyRepoStubForGroupUpdate{key: apiKey}
+	groupRepo := &groupRepoStubForGroupUpdate{groups: map[int64]*Group{
+		11: apiKey.Groups[0], 22: apiKey.Groups[1], 33: apiKey.Groups[2],
+		44: {ID: 44, Name: "GPT new 1", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive},
+		45: {ID: 45, Name: "GPT new 2", Platform: PlatformOpenAI, UsagePanel: UsagePanelGPT, Status: StatusActive},
+	}}
+	cache := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{apiKeyRepo: repo, groupRepo: groupRepo, authCacheInvalidator: cache}
+
+	got, err := svc.AdminUpdateAPIKeyGroupIDs(context.Background(), 1, []int64{44, 45})
+	require.NoError(t, err)
+	require.Equal(t, []int64{44, 45, 22, 33}, got.APIKey.GroupIDs)
+	require.Equal(t, []int64{44, 45, 22, 33}, repo.updated.GroupIDs)
+	require.Equal(t, []string{"sk-composite"}, cache.keys)
+}
+
 func TestAdminService_AdminUpdateAPIKeyGroupID_CompositeRejectsUnbindAndUnknownPanel(t *testing.T) {
 	apiKey := &APIKey{
 		ID: 1, UserID: 42, Key: "sk-composite", BillingSource: BillingSourceBalance,

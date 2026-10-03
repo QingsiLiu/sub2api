@@ -93,6 +93,19 @@ func TestAdminAPIKeyHandler_UpdateGroup_BindGroup(t *testing.T) {
 	require.Equal(t, int64(2), *data.APIKey.GroupID)
 }
 
+func TestAdminAPIKeyHandler_UpdateGroup_CompositeGroupIDs(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+	body := `{"group_ids":[22,44]}`
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/api-keys/10", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"group_ids":[22,44]`)
+}
+
 func TestAdminAPIKeyHandler_UpdateGroup_Unbind(t *testing.T) {
 	svc := newStubAdminService()
 	gid := int64(2)

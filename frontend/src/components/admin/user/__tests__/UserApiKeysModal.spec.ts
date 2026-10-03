@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import UserApiKeysModal from '../UserApiKeysModal.vue'
 import type { AdminUser } from '@/types'
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), groups: vi.fn(), update: vi.fn() }))
+const mocks = vi.hoisted(() => ({ list: vi.fn(), groups: vi.fn(), update: vi.fn(), updateMany: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: {
   users: { getUserApiKeys: mocks.list },
   groups: { getAll: mocks.groups },
-  apiKeys: { updateApiKeyGroup: mocks.update }
+  apiKeys: { updateApiKeyGroup: mocks.update, updateApiKeyGroups: mocks.updateMany }
 } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: vi.fn(), showError: vi.fn() }) }))
 vi.mock('vue-i18n', async (importOriginal) => {
@@ -59,6 +59,7 @@ describe('UserApiKeysModal', () => {
     vi.clearAllMocks()
     mocks.groups.mockResolvedValue([])
     mocks.list.mockResolvedValue({ items: [compositeKey] })
+    mocks.updateMany.mockResolvedValue({ api_key: compositeKey })
   })
 
   it('shows composite groups by panel and exposes panel replacement controls', async () => {
@@ -88,15 +89,36 @@ describe('UserApiKeysModal', () => {
       replacement,
       { id: 11, name: 'First', platform: 'anthropic', usage_panel: 'claude', status: 'active' }
     ])
-    mocks.update.mockResolvedValue({ api_key: { ...compositeKey, group_ids: [23, 11], groups: [replacement, { id: 11, name: 'First', usage_panel: 'claude' }] } })
+    mocks.updateMany.mockResolvedValue({ api_key: { ...compositeKey, group_ids: [23, 11], groups: [replacement, { id: 11, name: 'First', usage_panel: 'claude' }] } })
     const wrapper = await openModal()
     await wrapper.get('[data-testid="composite-panel-gpt"] [data-group-selector-trigger]').trigger('click')
     const options = wrapper.findAll('button').filter(button => button.text().includes('Replacement'))
     expect(options).toHaveLength(1)
     await options[0].trigger('click')
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="save-composite-groups"]').trigger('click')
     await flushPromises()
-    expect(mocks.update).toHaveBeenCalledWith(7, 23)
+    expect(mocks.updateMany).toHaveBeenCalledWith(7, [22, 23])
     expect(wrapper.get('[data-testid="composite-key-groups"]').text()).toContain('Replacement')
+    wrapper.unmount()
+  })
+
+  it('submits multiple groups selected within one usage panel in one request', async () => {
+    const second = { id: 24, name: 'GPT second', platform: 'openai', usage_panel: 'gpt', status: 'active' }
+    mocks.groups.mockResolvedValue([
+      { id: 22, name: 'Second', platform: 'openai', usage_panel: 'gpt', status: 'active' },
+      second,
+      { id: 11, name: 'First', platform: 'anthropic', usage_panel: 'claude', status: 'active' },
+    ])
+    mocks.updateMany.mockResolvedValue({ api_key: { ...compositeKey, group_ids: [22, 24, 11], groups: [{ id: 22, name: 'Second', usage_panel: 'gpt' }, second, { id: 11, name: 'First', usage_panel: 'claude' }] } })
+    const wrapper = await openModal()
+    await wrapper.get('[data-testid="composite-panel-gpt"] [data-group-selector-trigger]').trigger('click')
+    const options = wrapper.findAll('button').filter(button => button.text().includes('GPT second'))
+    expect(options).toHaveLength(1)
+    await options[0].trigger('click')
+    await wrapper.get('[data-testid="save-composite-groups"]').trigger('click')
+    await flushPromises()
+    expect(mocks.updateMany).toHaveBeenCalledWith(7, [22, 24])
     wrapper.unmount()
   })
 

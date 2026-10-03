@@ -113,7 +113,7 @@
         <button
           v-for="group in selectableGroups"
           :key="group.id"
-          @click="changeGroup(selectedKeyForGroup!, group.id)"
+          @click="selectedKeyForGroup?.routing_mode === 'composite' ? toggleCompositeGroup(group.id) : changeGroup(selectedKeyForGroup!, group.id)"
           :class="[
             'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
             isSelectedGroup(group.id) ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-gray-100 dark:hover:bg-dark-700'
@@ -132,6 +132,18 @@
             :selected="isSelectedGroup(group.id)"
           />
         </button>
+        <div v-if="selectedKeyForGroup?.routing_mode === 'composite'" class="flex items-center justify-between border-t border-gray-200 px-2 pt-2 dark:border-dark-600">
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ pendingCompositeGroupIDs.length }} {{ t('admin.users.selectedGroups') }}</span>
+          <button
+            type="button"
+            data-testid="save-composite-groups"
+            class="btn btn-primary px-3 py-1.5 text-xs"
+            :disabled="pendingCompositeGroupIDs.length === 0 || updatingKeyIds.has(selectedKeyForGroup.id)"
+            @click="saveCompositeGroups"
+          >
+            {{ t('common.save') }}
+          </button>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -170,6 +182,7 @@ const dropdownPosition = ref<{ top: number; left: number } | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
+const pendingCompositeGroupIDs = ref<number[]>([])
 
 const selectedKeyForGroup = computed(() => {
   if (groupSelectorKeyId.value === null) return null
@@ -219,7 +232,7 @@ const selectableGroups = computed<AdminGroup[]>(() => {
 const isSelectedGroup = (groupID: number): boolean => {
   const key = selectedKeyForGroup.value
   if (!key) return false
-  if (key.routing_mode === 'composite') return (key.group_ids || []).includes(groupID)
+  if (key.routing_mode === 'composite') return pendingCompositeGroupIDs.value.includes(groupID)
   return key.group_id === groupID
 }
 
@@ -279,12 +292,16 @@ const openGroupSelector = (key: ApiKey, panel: CompositePanel | null, event?: Mo
   }
   groupSelectorKeyId.value = key.id
   groupSelectorPanel.value = panel
+  pendingCompositeGroupIDs.value = panel
+    ? (key.group_ids || []).filter((id) => groupCatalogForKey(key).find((group) => group.id === id)?.usage_panel === panel)
+    : []
 }
 
 const closeGroupSelector = () => {
   groupSelectorKeyId.value = null
   groupSelectorPanel.value = null
   dropdownPosition.value = null
+  pendingCompositeGroupIDs.value = []
 }
 
 const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
@@ -305,6 +322,30 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
     } else {
       appStore.showSuccess(t('admin.users.groupChangedSuccess'))
     }
+  } catch (error: any) {
+    appStore.showError(error?.message || t('admin.users.groupChangeFailed'))
+  } finally {
+    updatingKeyIds.value.delete(key.id)
+  }
+}
+
+const toggleCompositeGroup = (groupID: number) => {
+  pendingCompositeGroupIDs.value = pendingCompositeGroupIDs.value.includes(groupID)
+    ? pendingCompositeGroupIDs.value.filter((id) => id !== groupID)
+    : [...pendingCompositeGroupIDs.value, groupID]
+}
+
+const saveCompositeGroups = async () => {
+  const key = selectedKeyForGroup.value
+  if (!key || key.routing_mode !== 'composite' || pendingCompositeGroupIDs.value.length === 0) return
+  const groupIDs = [...pendingCompositeGroupIDs.value]
+  closeGroupSelector()
+  updatingKeyIds.value.add(key.id)
+  try {
+    const result = await adminAPI.apiKeys.updateApiKeyGroups(key.id, groupIDs)
+    const idx = apiKeys.value.findIndex((item) => item.id === key.id)
+    if (idx !== -1) apiKeys.value[idx] = result.api_key
+    appStore.showSuccess(t('admin.users.groupChangedSuccess'))
   } catch (error: any) {
     appStore.showError(error?.message || t('admin.users.groupChangeFailed'))
   } finally {
