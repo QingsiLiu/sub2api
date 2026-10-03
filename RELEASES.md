@@ -8,9 +8,9 @@
 - 后端校验所有新分组属于同一板块，并继续执行 active、订阅资格、专属分组授权和认证缓存刷新规则。
 - 单分组 Key 的管理行为保持不变。
 
-- revision：待候选 CI 产出。
-- 镜像 digest：待候选 CI 产出。
-- 部署：仅源码候选，待 Stage 详细验收；未发布生产。
+- revision：`2cf22091ea9fa9b6e556f2870a79fdbf3a18a7c5`（候选 CI `37097479735`；前端、Go default/unit/integration、订阅与 race 门禁通过）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:6b5866341f793f04359421b01f9ecbc911d51a3a5d82752f7804a1d73f1af69f`。
+- 部署：2026-10-03 已固定 Stage 并完成复合 Key 多选 23 项、既有复合 Key 36 项和已支付订单回放验收；随后经用户授权以同一 digest 发布生产。生产 health 200，应用切换约 10.959 秒，PostgreSQL/Redis 指纹未变，备份 `/root/backups/subscription-prod-image-bump-20261003T053037Z`。
 
 ## 0.2.13-geili.1
 
