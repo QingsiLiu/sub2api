@@ -9,7 +9,7 @@
 
 - revision：`5db9692216f7e795fbd6a6da60c3a80e5fb99d64`（候选 CI `37057024053` 全部门禁通过；golangci-lint 为与 v0.2.12 基线一致的既有存量诊断）。
 - 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:bf165fb5d507b65c443881865f4331f94887ad61d3b0aab854a664dc0a2c6b63`。
-- 部署：候选 CI 已通过，待 Stage 验收；未发布生产。
+- 部署：2026-10-03 已固定 Stage 并完成 244 项 Subscription V2、36 项 Composite Key、37 项计费可靠性和实付/文本/图片验收；随后经用户授权以同一 digest 发布生产。生产 health 200，应用切换约 11.378 秒，PostgreSQL/Redis 指纹未变；图片上游尺寸 1254×1254 为已记录限制，视频因 Stage 无匹配账号未调用。
 
 ## 0.2.12-geili.1（未单独发布，随 0.2.13-geili.1 合并）
 
