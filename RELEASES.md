@@ -1,5 +1,18 @@
 # Geili 版本说明
 
+## 0.2.13-geili.3
+
+在 `0.2.13-geili.2` 基础上把 Cloudflare 边缘保活从 `/v1/messages` 扩面到 Responses 与 Chat Completions。用户可见变化：
+- 经 Cloudflare 进入的 `/v1/responses`、`/backend-api/codex/responses` 与 `/v1/chat/completions`，在上游迟迟不响应时不再被边缘在约 125 秒掐断。此前这些端点的保活起于「上游响应头已到达」之后，选账号、上游 429 挂起、重试与换号这段静默无人负责，正是 Codex 用户看到 524 与 `stream idle for 3m` 的窗口。
+- 静默帧按入站协议选择：Anthropic 仍发 `event: ping`；OpenAI 系发 SSE 注释行 `: keepalive`，官方 SDK 与 eventsource 都在解析层丢弃，不会进入事件流。
+- 流内错误帧按协议渲染：Responses 走 `response.failed` 终止事件（Codex 只认 completed/failed/incomplete/cancelled，通用 error 帧会被判为 `stream closed before response.completed`）；Chat Completions 走 `event: error` + `{"error":{...}}`；Anthropic 行为不变。
+- 补挂此前缺失边缘保活的 `/backend-api/codex` 与根路径别名路由组。
+- 心跳字节不计入 failover 的「已写出字节则禁止换号」判定；不设总时限、不改重试与换号策略。
+
+- revision：待候选 CI 产出。
+- 镜像 digest：待候选 CI 产出。
+- 部署：待 Stage 验收。
+
 ## 0.2.13-geili.2
 
 在 `0.2.13-geili.1` 基础上修复管理端复合 API Key 的分组编辑。用户可见变化：
