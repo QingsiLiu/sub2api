@@ -315,10 +315,18 @@ func TestEdgeKeepaliveCandidate(t *testing.T) {
 		{"direct connection", newReq(http.MethodPost, "/v1/messages", nil), false},
 		{"blank ray", newReq(http.MethodPost, "/v1/messages", map[string]string{"Cf-Ray": " "}), false},
 		{"count_tokens", newReq(http.MethodPost, "/v1/messages/count_tokens", cf), false},
-		{"responses", newReq(http.MethodPost, "/v1/responses", cf), false},
-		{"chat completions", newReq(http.MethodPost, "/v1/chat/completions", cf), false},
+		{"responses", newReq(http.MethodPost, "/v1/responses", cf), true},
+		{"responses trailing slash", newReq(http.MethodPost, "/v1/responses/", cf), true},
+		{"responses compact", newReq(http.MethodPost, "/v1/responses/compact", cf), true},
+		{"codex responses", newReq(http.MethodPost, "/backend-api/codex/responses", cf), true},
+		{"bare responses", newReq(http.MethodPost, "/responses", cf), true},
+		{"chat completions", newReq(http.MethodPost, "/v1/chat/completions", cf), true},
+		{"bare chat completions", newReq(http.MethodPost, "/chat/completions", cf), true},
+		{"responses without cf", newReq(http.MethodPost, "/v1/responses", nil), false},
 		{"GET", newReq(http.MethodGet, "/v1/messages", cf), false},
+		{"GET responses", newReq(http.MethodGet, "/v1/responses", cf), false},
 		{"websocket upgrade", newReq(http.MethodPost, "/v1/messages", map[string]string{"Cf-Ray": "x", "Upgrade": "websocket"}), false},
+		{"websocket upgrade responses", newReq(http.MethodPost, "/v1/responses", map[string]string{"Cf-Ray": "x", "Upgrade": "websocket"}), false},
 		{"nil", nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -496,17 +504,29 @@ func TestEdgeKeepalive_HandlerThatWritesNothingStillGetsItsHeaders(t *testing.T)
 // 与生产中间件顺序一致：ops 采集器在外，保活写入器在内。心跳和错误帧都要经过采集器。
 func opsKeepaliveRouter(t *testing.T, handler gin.HandlerFunc) *gin.Engine {
 	t.Helper()
+	return opsKeepaliveRouterOn(t, "/v1/messages", handler)
+}
+
+// opsKeepaliveRouterOn 与 opsKeepaliveRouter 相同，但可指定端点路径，
+// 用于覆盖 /responses、/chat/completions 等扩面后的路径。
+func opsKeepaliveRouterOn(t *testing.T, path string, handler gin.HandlerFunc) *gin.Engine {
+	t.Helper()
 	setupOpsErrorLogTestQueue(t, 4)
 	gin.SetMode(gin.TestMode)
 	ops := service.NewOpsService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(OpsErrorLoggerMiddleware(ops))
-	router.POST("/v1/messages", NewEdgeSSEKeepalive(keepaliveCfg(1), testFirstBeat), handler)
+	router.POST(path, NewEdgeSSEKeepalive(keepaliveCfg(1), testFirstBeat), handler)
 	return router
 }
 
 func serveWithCfRay(router *gin.Engine) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	return servePathWithCfRay(router, "/v1/messages")
+}
+
+// servePathWithCfRay 按指定路径发一次带 Cf-Ray 的 POST。
+func servePathWithCfRay(router *gin.Engine, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Cf-Ray", "a431221ddf69ce83-SIN")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -565,4 +585,195 @@ func TestEdgeKeepalive_FastFailureKeepsHTTPStatusAndOpsRow(t *testing.T) {
 	require.Equal(t, int64(1), OpsErrorLogQueueLength())
 	job := <-opsErrorLogQueue
 	require.Equal(t, http.StatusBadGateway, job.entry.StatusCode)
+}
+
+// ── 2026-10-05 扩面：/responses 与 /chat/completions 的静默帧 ──────────────────
+
+// newProtocolKeepaliveHarness 与 newKeepaliveHarness 相同，但显式指定入站协议，
+// 用来区分「未设协议（零值，按 Anthropic）」与真正的 OpenAI 路径。
+func newProtocolKeepaliveHarness(t *testing.T, protocol edgeKeepaliveProtocol) (*edgeKeepaliveWriter, *syncRecorder) {
+	t.Helper()
+	w, rec, _ := newKeepaliveHarness(t)
+	w.protocol = protocol
+	return w, rec
+}
+
+func commentCount(body string) int { return strings.Count(body, ": keepalive") }
+
+// Responses 路径必须发 SSE 注释行，绝不能发 Anthropic 的 event: ping ——
+// Codex 等严格 SDK 会把未知事件当异常。
+func TestEdgeKeepalive_ResponsesUsesCommentFrameNotAnthropicPing(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIResponses)
+	w.arm()
+
+	require.Eventually(t, func() bool { return commentCount(rec.body()) >= 3 }, 2*time.Second, 5*time.Millisecond)
+
+	require.Zero(t, pingCount(rec.body()), "Responses 路径不得发 Anthropic ping 帧")
+	require.Equal(t, http.StatusOK, rec.code())
+	require.Equal(t, "text/event-stream", rec.headerGet("Content-Type"))
+	require.Equal(t, "no", rec.headerGet("X-Accel-Buffering"))
+
+	// 对请求侧依然透明：failover 的「已写出字节则禁止换号」判定不受影响。
+	require.Equal(t, -1, w.Size())
+	require.False(t, w.Written())
+}
+
+func TestEdgeKeepalive_ChatCompletionsUsesCommentFrame(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIChat)
+	w.arm()
+
+	require.Eventually(t, func() bool { return commentCount(rec.body()) >= 2 }, 2*time.Second, 5*time.Millisecond)
+
+	require.Zero(t, pingCount(rec.body()))
+	require.Equal(t, http.StatusOK, rec.code())
+	require.Equal(t, -1, w.Size())
+}
+
+// 心跳已把 200 固化之后，Responses 的错误必须改写为 response.failed 终止事件：
+// Codex CLI 只认 completed/failed/incomplete/cancelled 集合，通用 error 帧会让它
+// 报 "stream closed before response.completed"。
+func TestEdgeKeepalive_ResponsesErrorBecomesResponseFailedFrame(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIResponses)
+	w.arm()
+	require.Eventually(t, func() bool { return commentCount(rec.body()) >= 1 }, 2*time.Second, 5*time.Millisecond)
+
+	body := `{"type":"error","error":{"type":"rate_limit_error","code":"gateway_queue_full","message":"Too many pending requests, please retry later"}}`
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	n, err := w.Write([]byte(body))
+	require.NoError(t, err)
+	require.Equal(t, len(body), n, "对请求线程假装写入了完整错误体")
+
+	out := rec.body()
+	require.Equal(t, http.StatusOK, rec.code(), "线上状态码已固化为 200")
+	require.Contains(t, out, "event: response.failed", "必须是 Responses 协议的终止事件")
+	require.NotContains(t, out, "event: error", "通用 error 帧不被 Codex 认作终止事件")
+	require.NotContains(t, out, "\n"+body+"\n", "不得出现夹在 SSE 里的裸 JSON")
+
+	// 严格 SDK 把 created_at / sequence_number 当必填字段，缺失会反序列化失败。
+	require.Contains(t, out, `"sequence_number":0`)
+	require.Contains(t, out, `"created_at":`)
+	require.Contains(t, out, `"status":"failed"`)
+	require.Contains(t, out, `"message":"Too many pending requests, please retry later"`)
+	require.Contains(t, out, `"code":"gateway_queue_full"`)
+}
+
+func TestEdgeKeepalive_ChatCompletionsErrorBecomesErrorFrame(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIChat)
+	w.arm()
+	require.Eventually(t, func() bool { return commentCount(rec.body()) >= 1 }, 2*time.Second, 5*time.Millisecond)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, err := w.Write([]byte(`{"error":{"type":"rate_limit_error","message":"Upstream rate limit exceeded, please retry later"}}`))
+	require.NoError(t, err)
+
+	out := rec.body()
+	require.Equal(t, http.StatusOK, rec.code())
+	require.Contains(t, out, "event: error")
+	require.Contains(t, out, `"type":"rate_limit_error"`)
+	require.Contains(t, out, `"message":"Upstream rate limit exceeded, please retry later"`)
+	require.NotContains(t, out, "response.failed", "Chat Completions 不用 Responses 的终止事件")
+}
+
+// finish 路径（handler 只设状态码、没有写体）同样要按协议补终止帧，否则客户端静默断流。
+func TestEdgeKeepalive_ResponsesFinishTerminatesBodylessError(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIResponses)
+	w.arm()
+	require.Eventually(t, func() bool { return commentCount(rec.body()) >= 1 }, 2*time.Second, 5*time.Millisecond)
+	w.WriteHeader(http.StatusServiceUnavailable)
+
+	w.finish()
+
+	require.Contains(t, rec.body(), "event: response.failed")
+	require.Contains(t, rec.body(), "Service Unavailable")
+}
+
+// 心跳提交前的快速失败仍走原 HTTP 状态码，不因扩面而改变。
+func TestEdgeKeepalive_ResponsesFastFailureKeepsHTTPStatus(t *testing.T) {
+	w, rec := newProtocolKeepaliveHarness(t, edgeProtocolOpenAIResponses)
+	w.arm()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadGateway)
+	_, err := w.Write([]byte(`{"error":{"type":"upstream_error","message":"x"}}`))
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusBadGateway, rec.code())
+	require.Equal(t, "application/json", rec.headerGet("Content-Type"))
+	require.Zero(t, commentCount(rec.body()))
+}
+
+// EdgeSSEKeepaliveCommitted 是写回方判断「还能不能用 HTTP 状态码表达错误」的依据。
+func TestEdgeSSEKeepaliveCommitted_ReflectsHeartbeatCommit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{}
+	cfg.Gateway.StreamKeepaliveInterval = 1
+
+	t.Run("no writer installed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		require.False(t, EdgeSSEKeepaliveCommitted(c))
+	})
+
+	t.Run("nil context", func(t *testing.T) {
+		require.False(t, EdgeSSEKeepaliveCommitted(nil))
+	})
+
+	t.Run("before first beat", func(t *testing.T) {
+		engine := gin.New()
+		engine.POST("/v1/responses", NewEdgeSSEKeepalive(cfg, testFirstBeat), func(c *gin.Context) {
+			require.False(t, EdgeSSEKeepaliveCommitted(c), "首拍之前响应头尚未提交")
+		})
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		req.Header.Set("Cf-Ray", "a431221ddf69ce83-SIN")
+		engine.ServeHTTP(httptest.NewRecorder(), req)
+	})
+
+	t.Run("after first beat", func(t *testing.T) {
+		engine := gin.New()
+		engine.POST("/v1/responses", NewEdgeSSEKeepalive(cfg, 1*time.Millisecond), func(c *gin.Context) {
+			ArmEdgeSSEKeepalive(c, true)
+			require.Eventually(t, func() bool { return EdgeSSEKeepaliveCommitted(c) }, 2*time.Second, 5*time.Millisecond)
+		})
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		req.Header.Set("Cf-Ray", "a431221ddf69ce83-SIN")
+		engine.ServeHTTP(httptest.NewRecorder(), req)
+	})
+}
+
+// 端到端：/responses 经 CF 进来、上游迟迟不答时，客户端看到的是注释行而不是裸沉默。
+func TestEdgeKeepalive_ResponsesEndToEndKeepsStreamAlive(t *testing.T) {
+	router := opsKeepaliveRouterOn(t, "/v1/responses", func(c *gin.Context) {
+		setOpsRequestContext(c, "gpt-6.1-sol", true)
+		ArmEdgeSSEKeepalive(c, true)
+		time.Sleep(4 * testFirstBeat)
+		c.Header("Content-Type", "text/event-stream")
+		_, _ = c.Writer.WriteString("event: response.completed\ndata: {\"type\":\"response.completed\"}\n\n")
+		c.Writer.Flush()
+	})
+
+	rec := servePathWithCfRay(router, "/v1/responses")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), ": keepalive")
+	require.Contains(t, rec.Body.String(), "event: response.completed")
+	require.Zero(t, OpsErrorLogQueueLength(), "心跳不得被误判为失败")
+}
+
+// 非流式请求不装心跳：否则一次性 JSON 响应会被提交成 text/event-stream。
+func TestEdgeKeepalive_ResponsesNonStreamNeverBeats(t *testing.T) {
+	router := opsKeepaliveRouterOn(t, "/v1/responses", func(c *gin.Context) {
+		setOpsRequestContext(c, "gpt-6.1-sol", false)
+		ArmEdgeSSEKeepalive(c, false)
+		time.Sleep(4 * testFirstBeat)
+		c.JSON(http.StatusOK, gin.H{"id": "resp_1", "status": "completed"})
+	})
+
+	rec := servePathWithCfRay(router, "/v1/responses")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotContains(t, rec.Body.String(), ": keepalive")
+	require.NotContains(t, rec.Body.String(), "event: ping")
+	require.Contains(t, rec.Body.String(), `"status":"completed"`)
 }

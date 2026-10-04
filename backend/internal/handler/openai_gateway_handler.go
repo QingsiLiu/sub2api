@@ -501,6 +501,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
+	// geili hook: 边界保活。装在中间件层、早于选账号，覆盖「上游响应头尚未到达」这段
+	// 静默（选账号、429 挂起、重试、换号），即用户看到 524 的窗口。
+	ArmEdgeSSEKeepalive(c, reqStream)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
 	if previousResponseID != "" {
@@ -1227,6 +1230,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(c, apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
+	// geili hook: /v1/messages 也可能由 OpenAI 平台分组承接，保活同样要早于选账号。
+	ArmEdgeSSEKeepalive(c, reqStream)
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
