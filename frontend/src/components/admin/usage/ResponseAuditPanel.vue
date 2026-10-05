@@ -4,7 +4,7 @@
     <form class="flex flex-wrap items-end gap-3" @submit.prevent="refresh">
       <label class="text-xs">{{ t('responseAudit.range') }}<select v-model="hours" class="input mt-1"><option :value="24">24h</option><option :value="72">72h</option><option :value="168">7d</option></select></label>
       <label class="text-xs">{{ t('responseAudit.result') }}<select v-model="status" class="input mt-1"><option value="">{{ t('common.all') }}</option><option v-for="s in statuses" :key="s" :value="s">{{ t(`responseAudit.status.${s}`) }}</option></select></label>
-      <label v-for="field in fields" :key="field" class="text-xs">{{ t(`responseAudit.fields.${field}`) }}<input v-model="filters[field]" class="input mt-1 w-36" :maxlength="field === 'model' ? 100 : 64" /></label>
+      <label v-for="field in fields" :key="field" class="text-xs">{{ t(`responseAudit.fields.${field}`) }}<input v-model="filters[field]" class="input mt-1 w-36" :maxlength="field === 'endpoint' ? 128 : field === 'model' ? 100 : 64" /></label>
       <button type="submit" class="btn btn-primary" :disabled="loading">{{ t('common.refresh') }}</button>
     </form>
     <p v-if="error" role="alert" class="text-sm text-rose-600">{{ error }}</p>
@@ -57,12 +57,12 @@ import { listSystemLogs, listRequestErrors, type OpsSystemLog, type OpsErrorLog 
 defineEmits<{ openError: [id: number] }>()
 const { t } = useI18n()
 const statuses: ResponseAuditStatus[] = ['success', 'partial_failure', 'empty', 'failed', 'unknown']
-const fields = ['user_id', 'api_key_id', 'account_id', 'model', 'request_id'] as const
-const filters = ref<Record<typeof fields[number], string>>({ user_id: '', api_key_id: '', account_id: '', model: '', request_id: '' })
+const fields = ['user_id', 'api_key_id', 'account_id', 'model', 'endpoint', 'request_id'] as const
+const filters = ref<Record<typeof fields[number], string>>({ user_id: '', api_key_id: '', account_id: '', model: '', endpoint: '', request_id: '' })
 const hours = ref(24), status = ref<ResponseAuditStatus | ''>(''), page = ref(1), total = ref(0), loading = ref(false), error = ref('')
 const rows = ref<ResponseAudit[]>([]), stats = ref<ResponseAuditStats | null>(null), detail = ref<ResponseAudit | null>(null)
 const logs = ref<OpsSystemLog[]>([]), errors = ref<OpsErrorLog[]>([]), logsLoading = ref(false), logsLoaded = ref(false), logsError = ref('')
-const detailFields = ['request_id', 'client_request_id', 'usage_request_id', 'upstream_request_id', 'started_at', 'finished_at', 'http_status', 'upstream_content_seen', 'text_written', 'reasoning_written', 'complete_tool_written', 'upstream_terminal', 'terminal', 'terminal_written', 'write_failed', 'client_disconnected', 'usage_present', 'first_output_ms'] as const
+const detailFields = ['audit_request_id', 'request_id', 'client_request_id', 'usage_request_id', 'upstream_request_id', 'started_at', 'finished_at', 'http_status', 'upstream_content_seen', 'text_written', 'reasoning_written', 'complete_tool_written', 'upstream_terminal', 'terminal', 'terminal_written', 'write_failed', 'client_disconnected', 'usage_present', 'first_output_ms'] as const
 const columns = computed(() => [
   { key: 'finished_at', label: t('responseAudit.fields.finished_at') },
   { key: 'status', label: t('responseAudit.result') },
@@ -84,7 +84,7 @@ async function load() {
     for (const field of fields) {
       const value = filters.value[field].trim()
       if (!value) continue
-      if (field === 'model' || field === 'request_id') query[field] = value
+      if (field === 'model' || field === 'endpoint' || field === 'request_id') query[field] = value
       else { if (!/^\d+$/.test(value) || Number(value) <= 0 || !Number.isSafeInteger(Number(value))) throw new Error(t('responseAudit.invalidId')); query[field] = Number(value) }
     }
     const [list, counts] = await Promise.all([responseAuditAPI.list(query), responseAuditAPI.stats(query)])

@@ -30,6 +30,8 @@ export default {
       "api_key_id": "Key ID",
       "account_id": "账号 ID",
       "model": "模型",
+      "endpoint": "端点",
+      "audit_request_id": "审计请求 ID",
       "request_id": "网关请求 ID",
       "client_request_id": "客户端请求 ID",
       "usage_request_id": "结算关联 ID",

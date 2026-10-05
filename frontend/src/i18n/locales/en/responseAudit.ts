@@ -30,6 +30,8 @@ export default {
       "api_key_id": "Api key id",
       "account_id": "Account id",
       "model": "Model",
+      "endpoint": "Endpoint",
+      "audit_request_id": "Audit request ID",
       "request_id": "Request id",
       "client_request_id": "Client request id",
       "usage_request_id": "Usage request id",
