@@ -26,6 +26,7 @@ const (
 // separate from the final outbound request tier until usage recording resolves
 // the billable tier for the selected credential protocol.
 type upstreamResponseModelObserver struct {
+	audit    *ResponseAuditSession // geili hook: upstream evidence separate from client writes.
 	first    string
 	terminal string
 	conflict bool
@@ -69,6 +70,9 @@ func normalizeObservedUpstreamResponseModel(model string) string {
 }
 
 func (o *upstreamResponseModelObserver) ObserveOpenAI(payload []byte, eventType string) {
+	if o != nil {
+		o.audit.Upstream(payload, eventType)
+	}
 	model := firstValidTrimmedGJSONString(payload, "response.model", "model")
 	terminal := isUpstreamResponseModelTerminalEvent(eventType)
 	o.Observe(model, terminal)
@@ -88,6 +92,9 @@ func (o *upstreamResponseModelObserver) ObserveOpenAI(payload []byte, eventType 
 }
 
 func (o *upstreamResponseModelObserver) ObserveAnthropic(payload []byte) {
+	if o != nil {
+		o.audit.Upstream(payload, "")
+	}
 	model := firstValidTrimmedGJSONString(payload, "message.model", "model")
 	o.Observe(model, false)
 	// usage.speed travels with the message object (message_start in streams,
@@ -188,6 +195,9 @@ func (o *upstreamResponseModelObserver) Conflict() bool {
 func beginUpstreamResponseModelObservation(c *gin.Context) *upstreamResponseModelObserver {
 	observer := &upstreamResponseModelObserver{}
 	if c != nil {
+		if c.Request != nil {
+			observer.audit = ResponseAuditFromContext(c.Request.Context())
+		}
 		c.Set(upstreamResponseModelObserverContextKey, observer)
 	}
 	return observer

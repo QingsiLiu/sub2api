@@ -206,8 +206,12 @@ func ProvideHandlers(
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
+	responseAudit *service.ResponseAuditService,
 ) *Handlers {
+	// geili hook: admin-only response audit, independent of settlement.
+	adminHandlers.Usage.SetResponseAuditService(responseAudit)
 	return &Handlers{
+		ResponseAudit:    responseAudit,
 		Auth:             authHandler,
 		User:             userHandler,
 		APIKey:           apiKeyHandler,

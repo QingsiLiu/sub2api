@@ -2892,6 +2892,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
+				// geili hook: accepted WS turns are observed independently.
+				auditModel := originalModel
+				if auditModel == "" {
+					auditModel = reqModel
+				}
+				service.ResponseAuditFromContext(ctx).BeginTurn(turn, auditModel)
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
 				setCyberTurnBody(turn, payload)
@@ -3070,6 +3076,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				if result == nil {
 					return
+				}
+				// geili hook: link the existing per-turn identity without changing billing.
+				if audit := service.ResponseAuditFromContext(ctx); audit != nil {
+					audit.Attribute(account.ID, 0, turnRequestedModel)
+					audit.LinkUsage(apiKey.ID, result.RequestID, result.RequestID)
 				}
 				result.BillingModel = openAIWSTurnBillingModel(result, turnMapping, turnRequestedModel, turnUpstreamModel)
 				reqLog.Debug("openai.websocket_turn_billing",

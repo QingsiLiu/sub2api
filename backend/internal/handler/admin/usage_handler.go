@@ -21,6 +21,7 @@ import (
 
 // UsageHandler handles admin usage-related requests
 type UsageHandler struct {
+	responseAudit  *service.ResponseAuditService // geili hook
 	usageService   *service.UsageService
 	apiKeyService  *service.APIKeyService
 	adminService   service.AdminService
@@ -235,6 +236,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 	for i := range records {
 		out = append(out, *dto.UsageLogFromServiceAdmin(&records[i]))
 	}
+	h.attachResponseAudits(c, out) // geili hook: admin-only, no financial writes.
 	response.Paginated(c, out, result.Total, page, pageSize)
 }
 

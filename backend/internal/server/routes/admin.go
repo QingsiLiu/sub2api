@@ -728,6 +728,10 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		usage.GET("", h.Admin.Usage.List)
 		usage.GET("/stats", h.Admin.Usage.Stats)
+		// geili hook: read-only administrator response observations.
+		usage.GET("/response-audits", h.Admin.Usage.ListResponseAudits)
+		usage.GET("/response-audits/stats", h.Admin.Usage.ResponseAuditStats)
+		usage.GET("/response-audits/:id", h.Admin.Usage.GetResponseAudit)
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)
 		usage.GET("/cleanup-tasks", h.Admin.Usage.ListCleanupTasks)

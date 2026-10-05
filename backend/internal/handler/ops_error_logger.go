@@ -469,6 +469,10 @@ func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) 
 		return
 	}
 	service.ClearOpsUpstreamModel(c)
+	// geili hook: per-attempt attribution, no scheduler state changes.
+	if c.Request != nil {
+		service.ResponseAuditFromContext(c.Request.Context()).Attribute(accountID, 0, "")
+	}
 	c.Set(opsAccountIDKey, accountID)
 	if c.Request != nil {
 		ctx := context.WithValue(c.Request.Context(), ctxkey.AccountID, accountID)

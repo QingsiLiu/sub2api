@@ -685,6 +685,7 @@ type UsageLog struct {
 
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
+	ResponseAudit        *service.ResponseAudit        `json:"response_audit,omitempty"` // geili hook: admin-only
 	RouteBillingSnapshot *service.RouteBillingSnapshot `json:"route_billing_snapshot,omitempty"`
 	UsageLog
 

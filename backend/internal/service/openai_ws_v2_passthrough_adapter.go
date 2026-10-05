@@ -653,7 +653,12 @@ func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderw
 			payload = c.restoreToolNames(payload)
 		}
 	}
-	return c.conn.Write(ctx, msgType, payload)
+	// geili hook: controlCtx retains request audit; writeCtx is detached.
+	err := c.conn.Write(ctx, msgType, payload)
+	if msgType == coderws.MessageText || msgType == coderws.MessageBinary {
+		ObserveResponseAuditWSWrite(c.controlCtx, payload, err)
+	}
+	return err
 }
 
 func (c *openAIWSClientFrameConn) Close() error {
@@ -787,7 +792,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		eventBytes := buildOpenAIFastPolicyBlockedWSEvent(blocked)
 		if eventBytes != nil {
 			writeCtx, cancelWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
-			_ = clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
+			writeErr := clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
+			ObserveResponseAuditWSWrite(ctx, eventBytes, writeErr)
 			cancelWrite()
 		}
 		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, blocked.Message, blocked)
@@ -1132,7 +1138,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				return
 			}
 			writeCtx, cancel := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
-			_ = clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
+			writeErr := clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
+			ObserveResponseAuditWSWrite(ctx, eventBytes, writeErr)
 			cancel()
 		},
 	}
