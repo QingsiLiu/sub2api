@@ -25,7 +25,7 @@ OpenAI WebSocket 按物理连接 UUID + 轮次记录。沿用现有 BeforeReques
 
 ## 隔离与存储
 
-新增迁移 275 只创建 gateway_response_audits 和索引；旧迁移不变。每个物理 HTTP 请求生成内部 UUID，客户端重复 request ID 不会覆盖审计。Save 以 UUID+turn 幂等，重试至多 3 次。单独有界任务池，溢出直接丢弃并计数，不进入原用量池、不同步降级、不修改结算命令、指纹或凭证。
+新增迁移 275 只创建 gateway_response_audits 和索引；旧迁移不变。每个物理 HTTP 请求生成内部 UUID，客户端重复 request ID 不会覆盖审计。Save 以 UUID+turn 幂等，重试至多 3 次。单独有界任务池，最多 2 个 worker、2048 个排队任务、任务 2 秒（若既有配置更小则取较小值）；关停最多给审计 2 秒排空，随后取消数据库等待并丢弃排队审计。溢出直接丢弃并计数，不进入原用量池、不同步降级、不修改结算命令、指纹或凭证。
 
 请求路径暂存 SSE/JSON 与工具片段用于判定，每种证据累计工具参数最多 1 MiB、64 个未完成工具；单个事件/非流式正文最多 1 MiB。持久化仅保存布尔证据、结果枚举、时序和标识，不保存提示词、输出正文、思考正文、工具参数、鉴权头或供应商密钥。新工具类型或超限应显示 unknown。进程崩溃可能丢失排队记录，不能把缺失记录判断为成功。
 
@@ -43,7 +43,8 @@ AdminUsageLog 可附加可空 response_audit，用户 DTO 与用户使用记录�
 
 本机已验证：
 - 前端全量 362 文件、2974 项测试通过；TypeScript、构建与 .github/geili/verify.sh 通过。
-- Go default/unit 全量回归及服务/处理器审计 race；PostgreSQL 审计集成 race，实际余额、Key 用量、上游成本、财务凭证写入前后不变。重复关联、无记录、保留期与幂等验证。
+- Go default 全量回归、服务/处理器审计 race、PostgreSQL 审计集成 race 通过。实际余额、Key 用量、上游成本、财务凭证写入前后不变；重复关联、无记录、保留期与幂等验证通过。
+- 本机 Go unit 全量的旧 TestInflightEstimate_AccountMappingNoDBAndBoundedMemory 在两次运行中全局 HeapAlloc 增量超过 8 MiB，单独复测通过；该测试与计费估算代码本次未修改。候选 CI 的全量 unit 门禁仍必须实际通过，不豁免或放宽阈值。
 - 模拟协议覆盖文本、仅思考、完整/不完整工具、零输出 token、空结果、HTTP 200 流内失败、缺少终止、短写/写失败、逐字节 UTF-8、未知类型、超限、WS 多轮。
 - 独立审计池满载/已停止不阻塞；数据库瞬时错误限次重试，持续错误计数。
 

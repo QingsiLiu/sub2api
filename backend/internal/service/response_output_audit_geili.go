@@ -89,13 +89,15 @@ type ResponseAuditRepository interface {
 }
 
 type ResponseAuditService struct {
-	repo     ResponseAuditRepository
-	pool     *UsageRecordWorkerPool
-	started  time.Time
-	failures atomic.Uint64
-	dropped  atomic.Uint64
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	repo       ResponseAuditRepository
+	pool       *UsageRecordWorkerPool
+	started    time.Time
+	failures   atomic.Uint64
+	dropped    atomic.Uint64
+	cancel     context.CancelFunc
+	workCtx    context.Context
+	workCancel context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 func NewResponseAuditService(repo ResponseAuditRepository, cfg *config.Config) *ResponseAuditService {
@@ -104,9 +106,14 @@ func NewResponseAuditService(repo ResponseAuditRepository, cfg *config.Config) *
 	opts := usageRecordPoolOptionsFromConfig(cfg)
 	opts.OverflowPolicy = config.UsageRecordOverflowPolicyDrop
 	opts.AutoScaleEnabled = false
+	// Leave database capacity for settlement; observation is a small bounded consumer.
+	opts.WorkerCount = min(opts.WorkerCount, 2)
+	opts.QueueSize = min(opts.QueueSize, 2048)
+	opts.TaskTimeout = min(opts.TaskTimeout, 2*time.Second)
 	s := &ResponseAuditService{repo: repo, pool: NewUsageRecordWorkerPoolWithOptions(opts), started: time.Now().UTC()}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	s.workCtx, s.workCancel = context.WithCancel(context.Background())
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -132,7 +139,12 @@ func (s *ResponseAuditService) Stop() {
 	if s != nil {
 		s.cancel()
 		s.wg.Wait()
+		// Briefly drain healthy observation; cancel SQL and skip queued work if
+		// storage is unavailable. Optional audit must not delay process shutdown.
+		timer := time.AfterFunc(2*time.Second, s.workCancel)
 		s.pool.Stop()
+		timer.Stop()
+		s.workCancel()
 	}
 }
 func (s *ResponseAuditService) Submit(a ResponseAudit) {
@@ -145,6 +157,13 @@ func (s *ResponseAuditService) Submit(a ResponseAudit) {
 		a.FirstOutputMs = &v
 	}
 	mode := s.pool.Submit(func(ctx context.Context) {
+		if s.workCtx.Err() != nil {
+			s.dropped.Add(1)
+			return
+		}
+		ctx, cancel := context.WithCancel(ctx)
+		stop := context.AfterFunc(s.workCtx, cancel)
+		defer func() { stop(); cancel() }()
 		var err error
 		for i := 0; i < 3; i++ {
 			err = s.repo.Save(ctx, &a)

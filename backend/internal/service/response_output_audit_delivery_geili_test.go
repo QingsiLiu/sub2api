@@ -102,3 +102,21 @@ func TestResponseAuditTerminalAndUnknownEvidence(t *testing.T) {
 	s.Finish(101, true)
 	require.Empty(t, s.current.UpstreamRequestID, "local gateway id must not masquerade as upstream id")
 }
+
+func TestResponseAuditShutdownCancelsStorageWait(t *testing.T) {
+	started := make(chan struct{})
+	var once sync.Once
+	r := &auditDeliveryRepo{save: func(ctx context.Context, _ *ResponseAudit) error {
+		once.Do(func() { close(started) })
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	s := auditDeliveryService(r)
+	s.Submit(ResponseAudit{})
+	<-started
+	s.Submit(ResponseAudit{})
+	now := time.Now()
+	s.Stop()
+	require.Less(t, time.Since(now), 3*time.Second)
+	require.GreaterOrEqual(t, s.failures.Load()+s.dropped.Load(), uint64(1))
+}

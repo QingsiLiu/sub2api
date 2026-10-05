@@ -55,6 +55,9 @@ func TestResponseAuditPersistenceBillingIsolationAndCorrelation(t *testing.T) {
 	links, err := repo.Lookup(ctx, []service.ResponseAuditUsageKey{key})
 	require.NoError(t, err)
 	require.NotNil(t, links[key])
+	require.Equal(t, "settled", links[key].SettlementState)
+	require.Equal(t, rows[0].ChargedAmount, links[key].ChargedAmount)
+	require.Equal(t, rows[0].ReceiptID, links[key].ReceiptID)
 	// Same financial identity can be reused by a second physical HTTP request.
 	// It must never overwrite the first observation or label the bill unambiguously.
 	a.AuditRequestID = uuid.NewString()

@@ -140,7 +140,7 @@ func (r *responseAuditRepository) Lookup(ctx context.Context, keys []service.Res
  SELECT k.key_id,k.request_id,a.id FROM keys k JOIN usage_settlement_receipts r ON r.api_key_id=k.key_id AND r.usage_request_id=k.request_id
  JOIN gateway_response_audits a ON a.api_key_id=r.api_key_id AND a.usage_request_id=r.request_id
  ), unique_matches AS (SELECT key_id,request_id,MIN(id) AS id FROM matches GROUP BY key_id,request_id HAVING COUNT(*)=1)
- SELECT m.key_id,m.request_id,a.evidence||jsonb_build_object('id',a.id) FROM unique_matches m JOIN gateway_response_audits a ON a.id=m.id`
+ SELECT m.key_id,m.request_id,` + responseAuditSelect + ` FROM unique_matches m JOIN gateway_response_audits a ON a.id=m.id` + responseAuditReceiptJoin
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
