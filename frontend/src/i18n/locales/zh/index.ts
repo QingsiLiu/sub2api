@@ -8,7 +8,10 @@ import misc from './misc'
 
 import subscriptionRights from './subscriptionRights'
 
+import responseAudit from './responseAudit'
+
 export default {
+  ...responseAudit,
   ...subscriptionRights,
   ...landing,
   ...common,

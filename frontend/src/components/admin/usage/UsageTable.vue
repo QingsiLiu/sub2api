@@ -52,6 +52,7 @@
           <span class="text-sm text-gray-900 dark:text-white">{{ row.account?.name || '-' }}</span>
         </template>
 
+        <template #cell-response_audit="{ row }"><ResponseAuditBadge :audit="row.response_audit" /></template>
         <template #cell-model="{ row }">
           <div class="space-y-0.5 text-xs">
             <div v-if="row.model_mapping_chain && row.model_mapping_chain.includes('→')" class="space-y-0.5">
@@ -607,6 +608,7 @@ import IpGeoCell from '@/components/common/IpGeoCell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { fetchBatch, getEntry } from '@/utils/ipGeoLookup'
 import type { AdminUsageLog } from '@/types'
+import ResponseAuditBadge from './ResponseAuditBadge.vue'
 import type { Column } from '@/components/common/types'
 
 interface Props {

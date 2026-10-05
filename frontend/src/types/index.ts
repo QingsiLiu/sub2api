@@ -1851,6 +1851,7 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
+  response_audit?: import('@/api/admin/responseAudit').ResponseAudit | null
   route_billing_snapshot?: {
     routing_source?: string
     subscription_id?: number | null
