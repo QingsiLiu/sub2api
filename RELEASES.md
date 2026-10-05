@@ -9,9 +9,9 @@
 - 补挂此前缺失边缘保活的 `/backend-api/codex` 与根路径别名路由组。
 - 心跳字节不计入 failover 的「已写出字节则禁止换号」判定；不设总时限、不改重试与换号策略。
 
-- revision：待候选 CI 产出。
-- 镜像 digest：待候选 CI 产出。
-- 部署：待 Stage 验收。
+- revision：`044993caa58940990df72ae3df5c579391e607cc`（候选 CI `37226941619`；前端、Go default/unit/integration、订阅与 race 门禁通过）。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:f7d96184244726fd24f22563f769c25601ea5ee2e4510aa73a703dc12da9d41c`。
+- 部署：2026-10-05 已固定 Stage 并完成综合 244 项、权益 52 项、跨场景 26 项、视觉 46 项、双实例 9 项，以及 owner 实付 ¥1 与真实文本验收；图片输出尺寸、Stage 视频路由与后台订单币种沿用 owner 授权的三项例外。2026-10-06 经用户授权以同一 digest 发布生产：health 200，应用切换约 11.238 秒，PostgreSQL/Redis 指纹未变，备份 `/root/backups/subscription-prod-image-bump-20261005T180833Z`；发布后 6 分钟内 OpenAI 入口心跳 41 次、流内错误帧 0 次。
 
 ## 0.2.13-geili.2
 
