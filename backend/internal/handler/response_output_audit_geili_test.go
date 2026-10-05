@@ -71,3 +71,62 @@ func TestResponseAuditMiddlewarePreservesWireAndRecordsHTTP200Failure(t *testing
 	})
 	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/images/generations", nil))
 }
+
+func TestResponseAuditRecordsKeepaliveWireStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		heartbeat bool
+		bodyless  bool
+		status    int
+	}{
+		{"fast failure", false, false, http.StatusBadGateway},
+		{"failure after heartbeat", true, false, http.StatusOK},
+		{"bodyless failure after heartbeat", true, true, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &auditCaptureRepo{records: make(chan service.ResponseAudit, 1)}
+			cfg := &config.Config{}
+			cfg.Gateway.StreamKeepaliveInterval = 1
+			cfg.Gateway.UsageRecord.WorkerCount = 1
+			svc := service.NewResponseAuditService(repo, cfg)
+			defer svc.Stop()
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{ID: 7, UserID: 3})
+				c.Next()
+			}, ResponseOutputAudit(svc), NewEdgeSSEKeepalive(cfg, time.Millisecond))
+			r.POST("/v1/responses", func(c *gin.Context) {
+				ArmEdgeSSEKeepalive(c, tc.heartbeat)
+				if tc.heartbeat {
+					require.Eventually(t, func() bool { return EdgeSSEKeepaliveCommitted(c) }, time.Second, time.Millisecond)
+				}
+				if tc.bodyless {
+					c.Status(http.StatusBadGateway)
+				} else {
+					c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"type": "upstream_error", "message": "synthetic failure"}})
+				}
+			})
+			req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			req.Header.Set("Cf-Ray", "synthetic-audit-SIN")
+			w := newSyncRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.code())
+			if tc.heartbeat {
+				require.Contains(t, w.body(), ": keepalive")
+				require.Contains(t, w.body(), "event: response.failed")
+			}
+			select {
+			case a := <-repo.records:
+				require.Equal(t, tc.status, a.HTTPStatus)
+				require.Equal(t, "failed", a.Status)
+				require.False(t, a.TextWritten)
+				require.False(t, a.ToolWritten)
+				if tc.heartbeat {
+					require.True(t, a.TerminalWritten)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("audit not persisted")
+			}
+		})
+	}
+}

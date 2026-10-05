@@ -56,6 +56,9 @@ func ResponseOutputAudit(svc *service.ResponseAuditService) gin.HandlerFunc {
 		}
 		ctx, audit := service.WithResponseAudit(c.Request.Context(), svc, base, ws)
 		c.Request = c.Request.WithContext(ctx)
+		// Keepalive exposes the handler's requested status for retry decisions.
+		// Capture the underlying writer to record the actual status on the wire.
+		wireWriter := c.Writer
 		if !ws {
 			c.Writer = &responseAuditWriter{ResponseWriter: c.Writer, audit: audit}
 		}
@@ -68,7 +71,7 @@ func ResponseOutputAudit(svc *service.ResponseAuditService) gin.HandlerFunc {
 				audit.UpstreamRequestID(id)
 			}
 			audit.Attribute(account, 0, modelName)
-			audit.Finish(c.Writer.Status(), c.Request.Context().Err() != nil)
+			audit.Finish(wireWriter.Status(), c.Request.Context().Err() != nil)
 		}()
 		c.Next()
 	}
