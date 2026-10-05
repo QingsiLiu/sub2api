@@ -9,9 +9,9 @@
 - 本版只标记、观察与统计；包括确认空输出在内的全部扣费、额度、指纹、凭证和调度规则保持现状。不退历史费用，不把 `output_tokens=0` 当作免费条件。写出成功不等于客户端应用收到。
 - 新增独立迁移 `275_gateway_response_audits_geili.sql`；旧迁移不变，不保存提示词、输出文本、思考正文或工具参数。
 
-- revision：待候选 CI 产出。
-- 镜像 digest：待候选 CI 产出。
-- 部署：仅源码，待 Stage 验收；未发布生产。
+- revision：`ae51c485a34f6656a011c773a5796ecbc44c8392`（最终候选 CI `37364064985` 排队；2026-10-06 GitHub 官方确认 Actions runner 分配延迟，尚未实际完成 CI 门禁）。
+- 镜像 digest：未产出，等待上述候选 CI；不使用旧 revision 的镜像代替。
+- 部署：已提交、推送源码；Stage 尚未部署本版，生产与 Stage 继续运行 `0.2.13-geili.3`。CI/Stage 未完成不视为发布完成。
 - 设计与验收记录：`.github/geili/response-output-audit.md`。
 
 ## 0.2.13-geili.3

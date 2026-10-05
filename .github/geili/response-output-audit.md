@@ -50,4 +50,10 @@ AdminUsageLog 可附加可空 response_audit，用户 DTO 与用户使用记录�
 
 HTTP 实测入口：先 go build -o bin/acceptance-server ./cmd/server，再在两个终端运行 .github/geili/response-output-audit-acceptance.py serve 与 verify。该脚本复用独立本机 PostgreSQL/Redis，以 synthetic-test-key 连本机 Mock，创建独立测试用户/分组/Key，不调用真实付费供应商。私密状态与原始报告仅存 deploy/.secrets/acceptance/，公开记录只保留脱敏汇总。
 
-候选 CI 新增审计 race 门禁。候选 digest、Stage 实测与最终报告待验证后补记。本次没有生产发布授权，不运行 prod 入口。
+最终源码 `ae51c485a34f6656a011c773a5796ecbc44c8392` 的本机 HTTP 25 场景已通过：成功 15、空结果 6、部分输出后失败 1、输出前失败 2、结果未知 1。真实等待 50 秒的模拟上游场景证明：45 秒保活后 HTTP 200 仍可携带客户端可解析的 response.failed；审计记录实际 HTTP 200 / failed，而非内部拟返回的 502。覆盖带正文和仅设错误状态两种处理器回归；不声称网关写入成功证明用户应用收到，也不声称全部 SDK 版本已验证。
+
+候选 CI 新增审计 race 门禁。最终候选 [37364064985](https://github.com/QingsiLiu/sub2api/actions/runs/37364064985) 当前排队；2026-10-06 03:45 左右（Asia/Shanghai）[GitHub 官方故障记录](https://www.githubstatus.com/incidents/3q1yb5m7ltvb) 明确托管 runner 分配延迟，尚无最终镜像 digest。候选 CI 全量 unit 等门禁、Stage 25 场景与后台页面验收仍待完成；不将它们标成 passed。本次没有生产发布授权，不运行 prod 入口，生产/Stage 均继续 `.3`。
+
+本机脱敏报告和后续 Stage 记录位于运维仓 `docs/reports/response-output-audit-20261006/`。Stage 夹具执行入口为运维仓 `bin/accept-response-output-audit-stage.py`，绑定最终 revision/digest、Stage 容器网络空间和数据库；验证全量迁移校验和、备份 Stage 库并比较生产容器指纹。验收成功会停用仅本次模拟用户、Key、分组、账号，保留财务/审计行。
+
+恢复后的执行顺序：候选 CI 实际通过并下载 geili-candidate 制品；记录 digest；从运维仓 canonical 入口固定 Stage；在 Stage 应用网络空间运行候选绑定的 25 场景脚本；用 Stage 后台核对结果、只读金额和日志关联，保存桌面与手机视图证据；回收 candidate.json、报告、RELEASES/OPERATIONS/PROGRESS 并推送。生产仍需当次用户授权。
