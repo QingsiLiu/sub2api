@@ -2,6 +2,14 @@
 /docs-local/
 .codex
 
+# 本地设计、对话预览、验收输出和探测备份不进入源码仓
+/.stitch/
+/.codex-visualizations/
+/outputs/
+/backend/outputs/
+/frontend/outputs/
+/probe*.bundle
+
 # ===================
 # Go 后端
 # ===================

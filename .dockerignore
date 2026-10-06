@@ -88,3 +88,10 @@ CLAUDE.md
 deploy/.secrets/
 .stitch/
 backend/bin/
+
+# Local conversation previews, acceptance output and probe backups
+.codex-visualizations/
+outputs/
+**/outputs/
+output/
+/probe*.bundle
