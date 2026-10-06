@@ -52,8 +52,10 @@ HTTP 实测入口：先 go build -o bin/acceptance-server ./cmd/server，再在�
 
 最终源码 `ae51c485a34f6656a011c773a5796ecbc44c8392` 的本机 HTTP 25 场景已通过：成功 15、空结果 6、部分输出后失败 1、输出前失败 2、结果未知 1。真实等待 50 秒的模拟上游场景证明：45 秒保活后 HTTP 200 仍可携带客户端可解析的 response.failed；审计记录实际 HTTP 200 / failed，而非内部拟返回的 502。覆盖带正文和仅设错误状态两种处理器回归；不声称网关写入成功证明用户应用收到，也不声称全部 SDK 版本已验证。
 
-候选 CI 新增审计 race 门禁。最终候选 [37364064985](https://github.com/QingsiLiu/sub2api/actions/runs/37364064985) 当前排队；2026-10-06 03:45 左右（Asia/Shanghai）[GitHub 官方故障记录](https://www.githubstatus.com/incidents/3q1yb5m7ltvb) 明确托管 runner 分配延迟，尚无最终镜像 digest。候选 CI 全量 unit 等门禁、Stage 25 场景与后台页面验收仍待完成；不将它们标成 passed。本次没有生产发布授权，不运行 prod 入口，生产/Stage 均继续 `.3`。
+候选 CI 新增审计 race 门禁。最终候选 [37364064985](https://github.com/QingsiLiu/sub2api/actions/runs/37364064985) 已 completed / success，全量 unit 等门禁实际通过，无豁免。此前 GitHub runner 分配故障作为历史证据保留。镜像 `ghcr.io/qingsiliu/sub2api@sha256:601733f3bd1b2d9b8f72c9537eb09e51a4ad527fa43bd224313b2b37c30e7bc1` 已通过运维仓 canonical 入口固定 Stage `0.2.13-geili.4`，部署备份 `/opt/sub2api-subscription-lab/backups/20261006T015156Z-candidate`。
 
-本机脱敏报告和后续 Stage 记录位于运维仓 `docs/reports/response-output-audit-20261006/`。Stage 夹具执行入口为运维仓 `bin/accept-response-output-audit-stage.py`，绑定最终 revision/digest、Stage 容器网络空间和数据库；验证全量迁移校验和、备份 Stage 库并比较生产容器指纹。验收成功会停用仅本次模拟用户、Key、分组、账号，保留财务/审计行。
+Stage 25 场景已通过，分类和本机一致；50 秒静默模拟实际 45 秒保活后解析 response.failed、HTTP 200 / failed。管理员后台核对五类结果、历史未审计、只读金额、筛选、详情、上游 502/换号关联；1280px 桌面、390px 手机审计视觉 18 项通过，390px/320px 订单布局 10 项通过。订单通用金额美元符号仍是既有未修复项，不称为币种修复通过。SDK 全覆盖与真实外部供应商长流没有伪称通过；WebSocket 多轮等由当前源码 CI/race 覆盖，本轮 Stage 25 场景为 HTTP。
 
-恢复后的执行顺序：候选 CI 实际通过并下载 geili-candidate 制品；记录 digest；从运维仓 canonical 入口固定 Stage；在 Stage 应用网络空间运行候选绑定的 25 场景脚本；用 Stage 后台核对结果、只读金额和日志关联，保存桌面与手机视图证据；回收 candidate.json、报告、RELEASES/OPERATIONS/PROGRESS 并推送。生产仍需当次用户授权。
+另有 Stage 综合 284、赠礼 52、跨场景 26、计费可靠性 31、Composite Key 36 项通过（加审计共 454 项）；当前源码独立双实例 6 项通过。334 个迁移与 Stage 校验一致，原迁移未改。全部合成夹具停用、配置恢复、正式活动仍 draft、未冻结/无人领取；生产三容器指纹不变、health 200。本机专用数据库/Redis已停，数据保留。
+
+公开报告和截图在运维仓 `docs/reports/response-output-audit-20261006/`，原始配置快照及凭据留于私密目录。生产证明草案已绑定 revision/digest、迁移与报告 SHA256，保持 production_ready=false。本版后端已变，不能套用 `.3` 实付/外联证据或旧例外授权；本候选真实支付/首次购买精度、限额文本/媒体与现存问题的范围确认、当次生产授权仍待完成。不执行历史退款，不停生产账号调度，不将 output_tokens=0 当作免费条件。
