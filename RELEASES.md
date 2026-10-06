@@ -11,7 +11,7 @@
 
 - revision：`ae51c485a34f6656a011c773a5796ecbc44c8392`（最终候选 CI `37364064985` 全部门禁通过，含前端全量、Go default/unit/integration 与审计/订阅/结算 race）。
 - 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:601733f3bd1b2d9b8f72c9537eb09e51a4ad527fa43bd224313b2b37c30e7bc1`。
-- 部署：2026-10-06 已用同一 digest 固定 Stage；响应审计 25、综合 284、赠礼 52、跨场景 26、计费 31、复合 Key 36 项全部通过，审计视觉 18、手机订单视觉 10、候选源码双实例 6 项通过，334 个迁移校验一致。Stage/生产 health 200，生产三容器指纹未变；备份 `/opt/sub2api-subscription-lab/backups/20261006T015156Z-candidate`。生产仍 `0.2.13-geili.3`，本候选真实付费外联及当次生产授权未完成，不标 production_ready。
+- 部署：2026-10-06 已用同一 digest 固定 Stage；响应审计 25、综合 284、赠礼 52、跨场景 26、计费 31、复合 Key 36 项全部通过，审计视觉 18、手机订单视觉 10、候选源码双实例 6 项通过，334 个迁移校验一致。Stage/生产 health 200，生产三容器指纹未变；备份 `/opt/sub2api-subscription-lab/backups/20261006T015156Z-candidate`。生产仍 `0.2.13-geili.3`，用户已授权本候选 ¥1 实付、文本≤$0.05、图片≤$0.30和三项既有问题暂缓；专用订单1197待本人付款（12:47过期、套餐已下架、无Key/上游调用）。真实回调/精度/模型证据及实际生产切换授权未完成，不标 production_ready。
 - 设计与验收记录：`.github/geili/response-output-audit.md`。
 
 ## 0.2.13-geili.3
