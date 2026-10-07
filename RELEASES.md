@@ -10,8 +10,11 @@
 
 - revision：`7187d0912ded884b4ef6b52b8224f82af07cf785`（候选 CI `37564864841` 全部门禁通过）。
 - 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:ebc09e916b0cf9cbdd0d8d2be5074872126112af8d9bb2600b5571d49b3b4bef`。
-- 部署：已合并并推送 `geili/main`；未部署 Stage 或生产。
+- 部署：2026-10-07 Stage 已固定上述 digest，非支付后端 167 项（计费/生命周期 51、复合 Key 36、Astra 工具协议 55、响应审计 25）、桌面/手机明暗主题浏览器回归 176 项、本机双实例 6 项与结算故障恢复 9 项通过。128 并发、131 条明细金额一致且无重复扣费；334 个 Stage/生产迁移校验一致、无新增迁移。支付验收与真实图片/视频生成未执行。生产待同 digest 发布。
 - 验证：本地 Go 编译、默认标签全量、支付/安装回归、订阅与退款 PostgreSQL 回归、响应审计 PostgreSQL 回归，以及前端 362 文件 / 2974 用例、生产构建和 ESLint 通过。Go unit 全量仅既有 `TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 全局堆阈值失败，单跑通过；对应测试与实现未变。Geili 专用 CI 与安全扫描通过；常规 CI 的 lint 仍有既有诊断（涉及的 27 个文件本次均未修改），候选 CI 的 Go default/unit/integration、订阅/结算/审计 race 和前端全量门禁全部通过。当前用户要求详细非支付验收后发布，Stage/生产结果将据实补充。
+
+- 既有界面观察：手机后台用户/订阅页在长合成邮箱下横向溢出；使用当前生产前端资源加载同一 Stage 数据，新旧均为 524px / 390px，未发现新增回归。首次公网 TLS 连接失败后独立复查 health 200，版本正确。
+- 生产准备：配置、完整结构及订阅/支付元数据备份 `/root/backups/upstream-v0214-preflight-20261007T034659Z`；两份 dump 目录解析通过，非历史用量整库备份。
 
 ## 0.2.13-geili.4
 
