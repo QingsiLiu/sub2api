@@ -8,9 +8,10 @@
 - 使用远程 Codex 模型目录时，生成的客户端配置包含 `api_key_model_discovery`，保留 Geili 默认模型与复合 Key 配置行为。
 - 同步上游 Vue / source-map-js 依赖安全更新与部署示例的初始管理员配置调整。
 
-- revision：待本版提交及候选 CI 确认。
+- revision：`7187d0912ded884b4ef6b52b8224f82af07cf785`（候选 CI `37564864841` 正在执行，尚未取得镜像）。
 - 镜像 digest：待候选 CI 产出。
-- 部署：仅源码合并；未部署 Stage 或生产。
+- 部署：已合并并推送 `geili/main`；未部署 Stage 或生产。
+- 验证：本地 Go 编译、默认标签全量、支付/安装回归、订阅与退款 PostgreSQL 回归、响应审计 PostgreSQL 回归，以及前端 362 文件 / 2974 用例、生产构建和 ESLint 通过。Go unit 全量仅既有 `TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 全局堆阈值失败，单跑通过；对应测试与实现未变。Geili 专用 CI 与安全扫描通过；常规 CI 的 lint 仍有既有诊断（涉及的 27 个文件本次均未修改），候选全量门禁结果待 CI 完成。
 
 ## 0.2.13-geili.4
 
