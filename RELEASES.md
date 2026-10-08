@@ -9,10 +9,10 @@
 - Claude 5.5 / GPT-6 Astra 使用独立的 600 秒上游读空闲预算；普通流仍为 180 秒，禁用及自定义设置可保留。上游读取计时与下游心跳分开，并缩短检查步长，避免一个空闲预算延后成两个预算。
 - 提供运维入口缓冲修复候选补丁及本机 Nginx 对照实验；本镜像不自动应用 Nginx 配置。图片单请求 50 张与 CLI 输出 128000 token 硬限制保持其原始错误含义。
 
-- revision：候选提交后记录。
-- 镜像 digest：候选 CI 构建中，未指定生产镜像。
-- 部署：尚未部署 Stage 或生产；本次未获生产授权。
-- 验证：定向 Go default/unit 回归通过；本机 Nginx 配置语法与 4 入口慢上传前后对照通过，全量与 race 门禁继续验证。
+- revision：`dd2b6703f8ecfdab008bfd578764bf53a8c4feb9`（修复主提交 `24f3a62947bba1c81e387b7cce67d424e2d3e03f`；候选 CI `37809163875` 全部门禁通过）。二者程序、前端及迁移文件完全相同，中间仅增加返点文档和公式脚本。
+- 镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:726ea751895ad52093d2399a66fb87ca0c852f927f00054ce988b855ca6c66c0`。
+- 部署：仅生成候选镜像，尚未部署 Stage 或生产；Nginx 补丁未应用，本次未获生产授权。候选验收记录仍为 `production_ready=false`，Stage 业务与真实限额上游验收尚未执行。
+- 验证：候选 CI 的前端全量、Go default/unit/integration、订阅和计费 race 门禁通过；334 个迁移文件 SHA256 与候选制品一致，无迁移变更。本机 Go default/unit/integration 全量、受影响流式/签名路径 race、本机 Nginx 配置语法与 4 入口慢上传前后对照通过。常规 CI 的测试/前端/Shell/发布辅助检查和 Geili CI/安全扫描通过；常规 lint 的本次 Pipe 清理告警已修正并经同版本 v2.13.2 差异检查为 0 issues，剩余 49 条诊断涉及 26 个本次未改文件。后续收尾仅修改测试清理与文档，候选程序和前端未变。
 - 排查及入口补丁：[CLI 可靠性排查](.github/geili/cli-reliability-20261008.md)。无新增迁移，不修改客户提示词、余额或历史扣费记录。
 
 ## 0.2.14-geili.1

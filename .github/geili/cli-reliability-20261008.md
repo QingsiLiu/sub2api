@@ -20,6 +20,10 @@
 | 2 条超过 50 张图 | 精确找到两条该客户请求的上游 HTTP 400，见下节。属于单请求输入限制；52 个日志标记不能证明 52 张不同图片。 | 当前 invalid_request 错误不应触发配额冷却或无意义重试。GUI 客户端需按图片块计数、压缩旧截图历史；网关不静默删除用户有效图片，无法从本仓修改客户运行器。 |
 | 1 条 128000 输出上限 | CLI 自己报告 OutputTokenExceededError；请求 max_tokens 与 CLI 限制一致，代表一轮生成触及输出预算。 | 保留 max_tokens/真实 stop reason，不能加账户余额或盲目重放解决。客户端应分轮完成任务、续写或减少单轮输出；单纯提高请求参数不保证上游允许。 |
 
+## 实际请求线路
+
+只读核对客户所用线路：Anthropic 账号 6314 / 6315 / 5899 / 5900 将 `claude-opus-5-5` 映射到同名上游模型；OpenAI 账号 6025 / 6316 / 6227 将 `gpt-6-astra` 映射到同名模型。没有发现这些请求被映射成旧模型。上述 OpenAI 账号的 Responses WebSocket V2 与 pool-mode 标志均未设置，反馈实例对应 HTTP 线路；本次 WS / 池模式测试属于共用错误分类的补充覆盖，不能冒充该客户走过 WS 的证据。
+
 ## 可复核的生产实例（均为北京时间）
 
 ### 签名实例
@@ -69,6 +73,12 @@ cd ..
 python3 .github/geili/check-cli-stream-nginx.py --ops-config /Users/tedliu/code/geili/subscription-lab-ops/deploy/ovh/sub.geiliapi.com.conf
 ```
 
+本机 `go test ./...`、`go test -tags=unit ./...`、`CI=true go test -tags=integration ./...` 全量通过；受影响流式与签名路径的 race 回归通过，Nginx 语法及四入口前后对照通过。候选 CI 与不可变制品结果另见版本说明，未执行真实供应商付费请求。
+
+常规 CI 的后端测试、前端、Shell 和发布辅助检查通过；lint 日志报告 6 条本次新增的 Pipe 清理返回值告警，已连同同类清理点修正并通过相关 race 回归。用 CI 同版本 golangci-lint `v2.13.2` 对生产 revision `7187d091…` 的全部本次差异检查，结果 `0 issues`。CI 其余 49 条诊断涉及 26 个本次未修改的文件，未把常规 lint 整体失败写成通过。
+
 入口补丁：[cli-reliability-nginx.patch](cli-reliability-nginx.patch)。它对运维仓 `deploy/ovh/sub.geiliapi.com.conf` 扩展既有无缓冲流式 location，未应用到服务器；静态页面、图片路由及 WebSocket 头保留。应用发布仍走候选 CI → 固定 digest 的 Stage → 用户当次授权的生产。Nginx 修改另需运维仓回收、`nginx -t` 和 reload 授权。
+
+候选 CI [37809163875](https://github.com/QingsiLiu/sub2api/actions/runs/37809163875) 全部门禁通过，revision `dd2b6703f8ecfdab008bfd578764bf53a8c4feb9`，digest `sha256:726ea751895ad52093d2399a66fb87ca0c852f927f00054ce988b855ca6c66c0`。该提交与修复主提交 `24f3a6294` 的程序/前端/迁移完全相同；之后的测试清理与文档收尾不改变镜像程序。仍未部署 Stage 或生产，未执行真实付费上游验收；CI 制品保留 `production_ready=false`。
 
 验证状态与候选制品记录在根目录 [RELEASES.md](../../RELEASES.md)。供应商全部线路同时不可用、长上传超过边缘窗口、输入/输出硬限制仍可能导致真实失败；本次改动改善恢复和错误语义，不能承诺消灭所有 91 条错误。

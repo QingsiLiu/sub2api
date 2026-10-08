@@ -136,8 +136,8 @@ func TestLongThinkingGeiliBudgetAndCompletion(t *testing.T) {
 	svc.cfg.Gateway.LongThinkingStreamDataIntervalTimeout = 3
 	c, rec := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
+	defer func() { require.NoError(t, pr.Close()) }()
+	defer func() { require.NoError(t, pw.Close()) }()
 	go func() {
 		time.Sleep(1200 * time.Millisecond)
 		_, _ = io.WriteString(pw, "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_ok\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}]}}\n\n")
@@ -189,8 +189,8 @@ func TestAPIKeyResponsesGeiliBareErrorGraceIgnoresKeepalives(t *testing.T) {
 	svc := newOpenAIStreamFailedTestService(600)
 	c, rec := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
+	defer func() { require.NoError(t, pr.Close()) }()
+	defer func() { require.NoError(t, pw.Close()) }()
 	go func() {
 		_, _ = io.WriteString(pw, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Invalid input\"}}\n\n")
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -213,8 +213,8 @@ func TestLongThinkingGeiliConvertedAnthropicStream(t *testing.T) {
 	svc.cfg.Gateway.LongThinkingStreamDataIntervalTimeout = 3
 	c, rec := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
+	defer func() { require.NoError(t, pr.Close()) }()
+	defer func() { require.NoError(t, pw.Close()) }()
 	go func() {
 		time.Sleep(1200 * time.Millisecond)
 		_, _ = io.WriteString(pw, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_test\",\"model\":\"claude-opus-5-5\",\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":2}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
@@ -267,8 +267,8 @@ func TestLongThinkingGeiliIdleBoundStartsAtLastRead(t *testing.T) {
 	svc.cfg.Gateway.LongThinkingStreamDataIntervalTimeout = 3
 	c, _ := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
+	defer func() { require.NoError(t, pr.Close()) }()
+	defer func() { require.NoError(t, pw.Close()) }()
 	go func() {
 		time.Sleep(800 * time.Millisecond)
 		_, _ = io.WriteString(pw, "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_wait\"}}\n\n")
