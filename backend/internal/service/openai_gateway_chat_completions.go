@@ -550,7 +550,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 
-	finalResponse, usage, acc, err := s.readOpenAICompatBufferedTerminal(resp, c, "openai chat_completions buffered", requestID)
+	finalResponse, usage, acc, err := s.readOpenAICompatBufferedTerminal(resp, c, "openai chat_completions buffered", requestID, upstreamModel)
 	if err != nil {
 		return nil, s.newOpenAICompatBufferedReadFailoverError(c, account, resp, requestID, err)
 	}
@@ -741,9 +741,11 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
 		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 	}
+	// geili hook: use the upstream model's bounded long-thinking idle budget.
+	streamInterval = longThinkingStreamInterval(s.cfg, upstreamModel, streamInterval)
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time

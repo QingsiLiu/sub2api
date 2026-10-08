@@ -869,7 +869,7 @@ func (s *SettingService) GetRectifierSettings(ctx context.Context) (*RectifierSe
 		return DefaultRectifierSettings(), nil
 	}
 
-	var settings RectifierSettings
+	settings := RectifierSettings{APIKeySignatureEnabled: true} // geili hook: absent legacy field uses default; explicit false survives.
 	if err := json.Unmarshal([]byte(value), &settings); err != nil {
 		return DefaultRectifierSettings(), nil
 	}

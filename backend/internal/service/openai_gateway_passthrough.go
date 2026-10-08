@@ -770,6 +770,10 @@ func stripOpenAILegacyResponsesBeta(headers http.Header) {
 }
 
 func shouldFailoverOpenAIPassthroughResponse(account *Account, statusCode int, responseBody []byte) bool {
+	// geili hook: providers wrap instant quota failures in 400, 502 or HTTP 200 SSE.
+	if isOpenAIInstantInferenceQuotaError("", responseBody) {
+		return true
+	}
 	if hit, _, _ := detectOpenAICyberPolicy(responseBody); hit {
 		return false
 	}
@@ -1388,6 +1392,10 @@ var openAIStreamErrorStatusPaths = []string{
 }
 
 func openAIStreamFailedEventSemanticStatus(payload []byte, message string) int {
+	// geili hook: preserve quota semantics across provider wrappers.
+	if isOpenAIInstantInferenceQuotaError(message, payload) {
+		return http.StatusTooManyRequests
+	}
 	if isOpenAIContextWindowError(message, payload) {
 		return http.StatusBadRequest
 	}
@@ -1660,6 +1668,10 @@ func (s *OpenAIGatewayService) handleOpenAIStreamTerminalAccountSideEffects(
 }
 
 func openAIStreamFailedEventRetryableOnSameAccount(account *Account, payload []byte, message string) bool {
+	// geili hook: an exhausted provider quota needs another account, not pool retries.
+	if isOpenAIInstantInferenceQuotaError(message, payload) {
+		return false
+	}
 	if account == nil {
 		return false
 	}

@@ -170,7 +170,8 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 
 	// 检测signature相关的错误（更宽松的匹配）
 	// 例如: "Invalid `signature` in `thinking` block", "***.signature" 等
-	if strings.Contains(msg, "signature") {
+	// geili hook: signing/authentication failures are not thinking-history errors.
+	if strings.Contains(msg, "signature") && (strings.Contains(msg, "thinking") || strings.Contains(msg, ".content.")) {
 		return true
 	}
 
@@ -776,10 +777,12 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
 		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 	}
+	// geili hook: use the upstream model's bounded long-thinking idle budget.
+	streamInterval = longThinkingStreamInterval(s.cfg, mappedModel, streamInterval)
 	// 仅监控上游数据间隔超时，避免下游写入阻塞导致误判
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time

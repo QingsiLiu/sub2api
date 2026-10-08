@@ -602,7 +602,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 
-	finalResponse, usage, acc, err := s.readOpenAICompatBufferedTerminal(resp, c, "openai messages buffered", requestID)
+	finalResponse, usage, acc, err := s.readOpenAICompatBufferedTerminal(resp, c, "openai messages buffered", requestID, upstreamModel)
 	if err != nil {
 		var readErr *openAICompatBufferedReadError
 		if errors.As(err, &readErr) && readErr != nil {
@@ -774,6 +774,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 	c *gin.Context,
 	logPrefix string,
 	requestID string,
+	model ...string,
 ) (*apicompat.ResponsesResponse, OpenAIUsage, *apicompat.BufferedResponseAccumulator, error) {
 	acc := apicompat.NewBufferedResponseAccumulator()
 	var usage OpenAIUsage
@@ -787,6 +788,8 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
 		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 	}
+	// geili hook: upstream SSE thinking budget also applies to buffered conversions.
+	streamInterval = longThinkingStreamInterval(s.cfg, firstNonEmpty(model...), streamInterval)
 	var timeoutCh <-chan time.Time
 	var timeoutTimer *time.Timer
 	resetTimeout := func() {
@@ -967,9 +970,11 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
 		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 	}
+	// geili hook: conversion preserves the long-thinking budget.
+	streamInterval = longThinkingStreamInterval(s.cfg, upstreamModel, streamInterval)
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time

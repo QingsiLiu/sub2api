@@ -537,6 +537,7 @@ func DefaultRectifierSettings() *RectifierSettings {
 		Enabled:                  true,
 		ThinkingSignatureEnabled: true,
 		ThinkingBudgetEnabled:    true,
+		APIKeySignatureEnabled:   true, // geili hook: missing settings must also recover API Key thinking history.
 	}
 }
 

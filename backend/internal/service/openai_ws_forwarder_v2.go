@@ -722,11 +722,20 @@ readLoop:
 			if !wroteDownstream && canFallback {
 				return nil, wrapOpenAIWSFallback(fallbackReason, errors.New(errMsg))
 			}
-			statusCode := openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw)
+			// geili hook: HTTP -> WS quota failure has the same pre-output switch contract.
+			if !wroteDownstream && isOpenAIInstantInferenceQuotaError(errMsgRaw, message) {
+				return nil, s.newOpenAIWSRateLimitFailoverError(account, lease.HandshakeHeaders(), message, errMsgRaw)
+			}
+			statusCode := openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
 			setOpsUpstreamError(c, statusCode, errMsg, "")
 			if reqStream && !clientDisconnected {
 				flushBufferedStreamEvents("error_event")
-				emitStreamMessage(message, true)
+				// geili hook: native Responses clients require a failed terminal after partial output.
+				if isOpenAIInstantInferenceQuotaError(errMsgRaw, message) {
+					emitStreamMessage([]byte(strings.TrimSpace(strings.TrimPrefix(buildOpenAIResponseFailedSSE(responseID, originalModel, message, errMsg), "event: response.failed\ndata: "))), true)
+				} else {
+					emitStreamMessage(message, true)
+				}
 			}
 			if !reqStream {
 				c.JSON(statusCode, gin.H{

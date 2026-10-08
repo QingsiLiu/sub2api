@@ -1,0 +1,10 @@
+--- a/deploy/ovh/sub.geiliapi.com.conf
++++ b/deploy/ovh/sub.geiliapi.com.conf
+@@ -239,4 +239,6 @@
+-    location ~ ^/(v1/)?responses$ {
++    # Stream APIs must reach the application without body/response buffering.
++    # Cover Claude, Chat Completions and Codex aliases as well as Responses.
++    location ~ ^/((v1/)?(responses|messages|chat/completions)|backend-api/codex/responses)$ {
+         client_max_body_size 100m;
+         proxy_http_version 1.1;
+         proxy_set_header Host $host;

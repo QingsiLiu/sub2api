@@ -80,11 +80,9 @@ func TestOpenAIStreamingTimeoutEndsWithResponseFailedForAPIKeyAccount(t *testing
 	require.ErrorContains(t, err, "stream data interval timeout")
 
 	frames := parseSSETestFrames(t, rec.Body.String())
-	require.Len(t, frames, 2)
-	require.Equal(t, "error", frames[0].event)
-	require.Equal(t, "stream_timeout", gjson.Get(frames[0].data, "code").String())
-	requireResponsesFailedFrame(t, frames[1], "stream_timeout")
-	require.Equal(t, "gpt-6-astra", gjson.Get(frames[1].data, "response.model").String())
+	require.Len(t, frames, 1, "Responses clients must not receive a bare error frame")
+	requireResponsesFailedFrame(t, frames[0], "stream_timeout")
+	require.Equal(t, "gpt-6-astra", gjson.Get(frames[0].data, "response.model").String())
 	require.True(t, IsResponseCommitted(c))
 }
 

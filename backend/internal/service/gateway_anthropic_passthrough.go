@@ -458,9 +458,11 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 	if s.cfg != nil && s.cfg.Gateway.StreamDataIntervalTimeout > 0 {
 		streamInterval = time.Duration(s.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 	}
+	// geili hook: use the upstream model's bounded long-thinking idle budget.
+	streamInterval = longThinkingStreamInterval(s.cfg, model, streamInterval)
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time

@@ -251,7 +251,7 @@ func markOpenAIWSClientVisibleFailure(c *gin.Context, eventType string, payload 
 		status = int(gjson.GetBytes(payload, "status").Int())
 	}
 	if status == 0 {
-		status = openAIWSErrorHTTPStatusFromRaw(code, errType)
+		status = openAIWSErrorHTTPStatusFromRaw(code, errType, message)
 	}
 	if errType == "" {
 		errType = "upstream_error"
@@ -668,6 +668,10 @@ func classifyOpenAIWSAcquireError(err error) string {
 }
 
 func isOpenAIWSRateLimitError(codeRaw, errTypeRaw, msgRaw string) bool {
+	// geili hook: share HTTP/SSE/WS quota classification.
+	if isOpenAIInstantInferenceQuotaError(msgRaw, nil) {
+		return true
+	}
 	code := strings.ToLower(strings.TrimSpace(codeRaw))
 	errType := strings.ToLower(strings.TrimSpace(errTypeRaw))
 	msg := strings.ToLower(strings.TrimSpace(msgRaw))
@@ -779,7 +783,11 @@ func classifyOpenAIWSErrorEvent(message []byte) (string, bool) {
 	return classifyOpenAIWSErrorEventFromRaw(parseOpenAIWSErrorEventFields(message))
 }
 
-func openAIWSErrorHTTPStatusFromRaw(codeRaw, errTypeRaw string) int {
+func openAIWSErrorHTTPStatusFromRaw(codeRaw, errTypeRaw string, message ...string) int {
+	// geili hook: an upstream_error with no rate-limit code can still carry exact quota.
+	if isOpenAIInstantInferenceQuotaError(firstNonEmpty(message...), nil) {
+		return http.StatusTooManyRequests
+	}
 	code := strings.ToLower(strings.TrimSpace(codeRaw))
 	errType := strings.ToLower(strings.TrimSpace(errTypeRaw))
 	switch {
@@ -807,8 +815,8 @@ func openAIWSErrorHTTPStatus(message []byte) int {
 	if len(message) == 0 {
 		return http.StatusBadGateway
 	}
-	codeRaw, errTypeRaw, _ := parseOpenAIWSErrorEventFields(message)
-	return openAIWSErrorHTTPStatusFromRaw(codeRaw, errTypeRaw)
+	codeRaw, errTypeRaw, msg := parseOpenAIWSErrorEventFields(message)
+	return openAIWSErrorHTTPStatusFromRaw(codeRaw, errTypeRaw, msg)
 }
 
 func (s *OpenAIGatewayService) openAIWSFallbackCooldown() time.Duration {

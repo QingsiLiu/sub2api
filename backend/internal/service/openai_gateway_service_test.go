@@ -1607,14 +1607,9 @@ func TestOpenAIStreamingTimeout(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "stream data interval timeout") {
 		t.Fatalf("expected stream timeout error, got %v", err)
 	}
-	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "stream_timeout") {
-		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
-	}
-	errorFrame := strings.SplitN(rec.Body.String(), "\n\n", 2)[0]
-	payload := strings.TrimSpace(strings.TrimPrefix(errorFrame, "event: error\ndata: "))
-	require.Equal(t, "stream_timeout", gjson.Get(payload, "code").String())
-	require.False(t, gjson.Get(payload, "error").Exists())
-	require.Contains(t, rec.Body.String(), "event: response.failed\n", "the stream must end with a Responses terminal event")
+	frames := parseSSETestFrames(t, rec.Body.String())
+	require.Len(t, frames, 1)
+	requireResponsesFailedFrame(t, frames[0], "stream_timeout")
 	require.True(t, IsResponseCommitted(c))
 }
 
@@ -1707,22 +1702,12 @@ func TestOpenAIStreamingReadErrorAfterOutputUsesResponsesErrorSchema(t *testing.
 			require.NotContains(t, body, "stream ID")
 			require.NotContains(t, body, "response.completed")
 			require.NotContains(t, body, "[DONE]")
-			require.Equal(t, 1, strings.Count(body, "event: error\n"))
+			require.NotContains(t, body, "event: error\n")
 			require.True(t, IsResponseCommitted(c), "the handler must not append another failure")
-			var events []gjson.Result
-			for _, line := range strings.Split(body, "\n") {
-				if strings.HasPrefix(line, "data: ") {
-					event := gjson.Parse(strings.TrimPrefix(line, "data: "))
-					if event.Get("type").String() == "error" {
-						events = append(events, event)
-					}
-				}
-			}
-			require.Len(t, events, 1)
-			require.Equal(t, tc.code, events[0].Get("code").String())
-			require.NotEmpty(t, events[0].Get("message").String())
-			require.False(t, events[0].Get("error").Exists(), "Responses errors have top-level fields")
-			require.True(t, events[0].Get("param").Exists())
+			frames := parseSSETestFrames(t, body)
+			require.Len(t, frames, 2)
+			requireResponsesFailedFrame(t, frames[1], tc.code)
+
 		})
 	}
 }
@@ -2841,12 +2826,9 @@ func TestOpenAIStreamingTooLong(t *testing.T) {
 	if !errors.Is(err, bufio.ErrTooLong) {
 		t.Fatalf("expected ErrTooLong, got %v", err)
 	}
-	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "response_too_large") {
-		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
-	}
-	payload := strings.TrimSpace(strings.TrimPrefix(rec.Body.String(), "event: error\ndata: "))
-	require.Equal(t, "response_too_large", gjson.Get(payload, "code").String())
-	require.False(t, gjson.Get(payload, "error").Exists())
+	frames := parseSSETestFrames(t, rec.Body.String())
+	require.Len(t, frames, 1)
+	requireResponsesFailedFrame(t, frames[0], "response_too_large")
 	require.True(t, IsResponseCommitted(c))
 }
 

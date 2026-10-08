@@ -666,6 +666,10 @@ func FilterThinkingBlocks(body []byte, mappedModel string) []byte {
 // 因为这类上游的契约就是「thinking block 原样回传」（或我们不了解），
 // retry 任何变形都不会修好 400，反而破坏契约。详见 thinking_protocol.go。
 func FilterThinkingBlocksForRetry(body []byte, mappedModel string) []byte {
+	// geili hook: 5.5 requires adaptive thinking; repair signed history without exposing it as text.
+	if isClaude55SignedThinkingModel(mappedModel) {
+		return stripClaude55ThinkingHistoryForRetry(body)
+	}
 	// 仅 anthropic-strict 走整流；passback-required 与 unknown 都返回原 body。
 	if !ShouldApplyRetryFilters(mappedModel) {
 		return body

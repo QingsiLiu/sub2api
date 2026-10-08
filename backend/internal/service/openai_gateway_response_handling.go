@@ -184,10 +184,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		}
 		streamInterval = resolveGrokStreamIdleTimeout(cfgSec)
 	}
+	// geili hook: use the upstream model's bounded long-thinking idle budget.
+	streamInterval = longThinkingStreamInterval(s.cfg, mappedModel, streamInterval)
 	// 仅监控上游数据间隔超时，不被下游写入阻塞影响
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time
@@ -253,7 +255,25 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	capacityFailoverSuppressedLogged := false
 	failedMessage := ""
 	clientOutputStarted := false
-	codexFailureTerminal := account != nil && account.IsOpenAIOAuthLike()
+	// geili hook: Responses termination is a protocol contract for API Key accounts too.
+	codexFailureTerminal := true
+	// geili hook: a bare error gets a short grace for an authoritative terminal;
+	// provider keepalives cannot extend it to the long-thinking idle budget.
+	var bareErrorGraceTimer *time.Timer
+	var bareErrorGraceCh <-chan time.Time
+	stopBareErrorGrace := func() {
+		if bareErrorGraceTimer != nil {
+			bareErrorGraceTimer.Stop()
+		}
+		bareErrorGraceCh = nil
+	}
+	defer stopBareErrorGrace()
+	armBareErrorGrace := func() {
+		if bareErrorGraceTimer == nil {
+			bareErrorGraceTimer = time.NewTimer(openAIResponsesBareErrorGrace)
+			bareErrorGraceCh = bareErrorGraceTimer.C
+		}
+	}
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
 	var streamEarlyErr error
 	terminalFailurePending := false
@@ -521,6 +541,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				(eventType == "response.completed" || eventType == "response.done") {
 				// A later successful terminal is authoritative over a pending bare
 				// error. Keep its usage and terminal visible to the client.
+				stopBareErrorGrace()
 				sawBareError = false
 				sawFailedEvent = false
 				terminalFailurePending = false
@@ -555,10 +576,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			cyberHit := false
 			if eventType == "response.failed" || eventType == "error" {
 				if codexFailureTerminal && eventType == "error" {
+					armBareErrorGrace()
 					sawBareError = true
 					bareErrorPayload = append(bareErrorPayload[:0], dataBytes...)
 					suppressCurrentEvent = true
 				} else if codexFailureTerminal && eventType == "response.failed" {
+					stopBareErrorGrace()
 					sawResponseFailed = true
 				}
 				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
@@ -618,7 +641,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 						streamEarlyErr = s.newOpenAIStreamFailoverErrorWithModel(c, account, false, upstreamRequestID, dataBytes, failedMessage, mappedModel, resp.Header)
 						return
 					}
-					if !cyberHit && !sawBareError {
+					// geili hook: API Key custom error rules still apply before output.
+					if !cyberHit && (!sawBareError || (account != nil && account.Type == AccountTypeAPIKey)) {
 						if status, errType, errMsg, matched := applyOpenAIStreamFailedErrorPassthroughRule(c, account.Platform, dataBytes, failedMessage); matched {
 							sawFailedEvent = true
 							// 命中透传规则也要记录 ops 上游错误事件（对齐 CC/Messages 与
@@ -846,7 +870,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	}
 
 	// 无超时/无 keepalive 的常见路径走同步扫描，减少 goroutine 与 channel 开销。
-	if streamInterval <= 0 && keepaliveInterval <= 0 && firstOutputTimeout <= 0 {
+	// geili hook: Responses must also enforce the bare-error grace with watchdog disabled.
+	if streamInterval <= 0 && keepaliveInterval <= 0 && firstOutputTimeout <= 0 && !codexFailureTerminal {
 		defer putSSEScannerBuf64K(scanBuf)
 		for documentScanner.Scan() {
 			processSSELine(documentScanner.Text(), true)
@@ -856,7 +881,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			// Terminal 事件完整写出后直接结束，不等上游 EOF（见下方异步循环同款说明）。
 			// Codex bare error 序列（error 后可能跟 response.failed 或翻盘的 completed）
 			// 必须继续读取，不适用提前结束。
-			if sawTerminalEvent && !eventInProgress && (!codexFailureTerminal || !sawBareError) {
+			if sawTerminalEvent && !eventInProgress && (!codexFailureTerminal || !sawBareError || sawResponseFailed) {
 				return finalizeStream()
 			}
 		}
@@ -878,7 +903,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	events := make(chan scanEvent, openAIFirstOutputEventQueueSize(guardFirstOutput))
 	done := make(chan struct{})
 	sendEvent := func(ev scanEvent) bool {
-		if firstOutputScanGuard.Load() {
+		if firstOutputScanGuard.Load() || (streamInterval <= 0 && keepaliveInterval <= 0 && firstOutputTimeout <= 0) {
 			ev.processed = make(chan struct{})
 		}
 		select {
@@ -943,10 +968,14 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			// 靠 keepalive 维持，白白拉长尾延迟。usage 已在 terminal 事件中解析。
 			// Codex bare error 序列（error 后可能跟 response.failed 或翻盘的 completed）
 			// 必须继续读取，不适用提前结束。
-			if sawTerminalEvent && !eventInProgress && (!codexFailureTerminal || !sawBareError) {
+			if sawTerminalEvent && !eventInProgress && (!codexFailureTerminal || !sawBareError || sawResponseFailed) {
 				_ = resp.Body.Close()
 				return finalizeStream()
 			}
+
+		case <-bareErrorGraceCh:
+			_ = resp.Body.Close()
+			return finalizeStream()
 
 		case <-intervalCh:
 			if failureDelivered {

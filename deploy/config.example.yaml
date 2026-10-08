@@ -488,6 +488,9 @@ gateway:
   # Stream data interval timeout (seconds), 0=disable
   # 流数据间隔超时（秒），0=禁用
   stream_data_interval_timeout: 180
+  # Claude 5.5 / GPT-6 Astra silent thinking idle budget (seconds), 0=use ordinary budget.
+  # 长思考模型独立空闲预算；普通 watchdog 设为 0 时仍禁用，心跳不刷新上游读计时。
+  long_thinking_stream_data_interval_timeout: 600
   # Stream keepalive interval (seconds), 0=disable
   # 流式 keepalive 间隔（秒），0=禁用
   stream_keepalive_interval: 10
