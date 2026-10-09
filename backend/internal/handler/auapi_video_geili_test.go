@@ -77,3 +77,12 @@ func TestAUAPIVideoFallbackPreservesOriginalBody(t *testing.T) {
 	router.ServeHTTP(w, httptest.NewRequest("POST", "/v1/videos", strings.NewReader(body)))
 	require.Equal(t, 204, w.Code)
 }
+
+func TestAUAPIVideoPromptAuditAcceptsVideoEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/videos/generations", strings.NewReader(`{"model":"MiniMax-H3","prompt":"boat"}`))
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 1})
+	h := NewAsyncImageHandlerWithAUAPI(nil, &OpenAIGatewayHandler{gatewayService: &service.OpenAIGatewayService{}}, nil)
+	require.True(t, h.checkAUAPIVideoPrompt(c, &service.APIKey{ID: 2, UserID: 1}, "MiniMax-H3", []byte(`{"model":"MiniMax-H3","prompt":"boat"}`)))
+}

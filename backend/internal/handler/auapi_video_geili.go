@@ -78,7 +78,7 @@ func (h *AsyncImageHandler) TryAUAPIVideo(c *gin.Context, operation string) bool
 	// Use the same prompt moderation path as existing Grok video generation;
 	// only model/prompt enter that path, not provider-specific video parameters.
 	moderation, _ := json.Marshal(map[string]string{"model": request.Model, "prompt": request.Prompt})
-	if !h.checkSecurityAuditBeforeSubmit(c, key, service.PlatformOpenAI, moderation) {
+	if !h.checkAUAPIVideoPrompt(c, key, request.Model, moderation) {
 		return true
 	}
 	sub, _ := middleware2.GetSubscriptionFromContext(c)
@@ -101,5 +101,25 @@ func (h *AsyncImageHandler) TryAUAPIVideo(c *gin.Context, operation string) bool
 	c.Header("Location", prefix+"/videos/"+task.ID)
 	c.Header("Retry-After", "3")
 	c.JSON(http.StatusAccepted, task)
+	return true
+}
+
+// Video moderation must not run the Images endpoint parser: that parser rejects
+// /videos before auditing the prompt. The audit service and protocol are shared
+// with existing media generation, with the real account/key context preserved.
+func (h *AsyncImageHandler) checkAUAPIVideoPrompt(c *gin.Context, key *service.APIKey, model string, body []byte) bool {
+	if h.openAI == nil {
+		return true
+	}
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		imageTaskJSONError(c, http.StatusInternalServerError, "api_error", "User context not found")
+		return false
+	}
+	decision := h.openAI.checkSecurityAudit(c, requestLogger(c, "handler.auapi_video.security_audit"), key, subject, service.ContentModerationProtocolOpenAIImages, model, body)
+	if decision != nil && !decision.AllowNextStage {
+		h.openAI.openAISecurityAuditError(c, decision)
+		return false
+	}
 	return true
 }
