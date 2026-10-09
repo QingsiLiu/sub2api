@@ -1,6 +1,9 @@
 --- a/deploy/ovh/sub.geiliapi.com.conf
 +++ b/deploy/ovh/sub.geiliapi.com.conf
-@@ -239,4 +239,6 @@
+@@ -236,7 +236,9 @@
+         proxy_pass https://status.openai.com/api/v2/summary.json;
+     }
+
 -    location ~ ^/(v1/)?responses$ {
 +    # Stream APIs must reach the application without body/response buffering.
 +    # Cover Claude, Chat Completions and Codex aliases as well as Responses.
@@ -8,3 +11,14 @@
          client_max_body_size 100m;
          proxy_http_version 1.1;
          proxy_set_header Host $host;
+@@ -246,8 +248,8 @@
+         proxy_set_header X-Forwarded-Host $host;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection $connection_upgrade;
+-        proxy_read_timeout 600s;
+-        proxy_send_timeout 600s;
++        proxy_read_timeout 1800s;
++        proxy_send_timeout 1800s;
+         proxy_connect_timeout 60s;
+         proxy_request_buffering off;
+         proxy_buffering off;

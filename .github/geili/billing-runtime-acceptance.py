@@ -178,7 +178,7 @@ def main():
                                    (redis, 'redis:8.4-alpine', ['-p', f'127.0.0.1:{redis_port}:6379'])]:
             run(['docker', 'run', '-d', '--name', cname, '--label', 'geili.acceptance=local', '--label', 'geili.runtime_fault='+stamp] + extra + [image])
             created.append(cname)
-        wait_for('own PostgreSQL ready', lambda: subprocess.run(['docker', 'exec', pg, 'pg_isready', '-U', 'acceptance'], capture_output=True).returncode == 0, 40)
+        wait_for('own PostgreSQL ready', lambda: subprocess.run(['docker', 'exec', pg, 'pg_isready', '-h', '127.0.0.1', '-U', 'acceptance'], capture_output=True).returncode == 0, 40)
         start_app(0)
         sql("INSERT INTO settings(key,value) SELECT 'admin_compliance_acknowledgement:'||id,'{\"version\":\"v2026.06.10\",\"user_agent\":\"isolated fault acceptance\"}' FROM users WHERE email='admin@subscription-lab.invalid' ON CONFLICT DO NOTHING;")
         fixture = v2.Fixture(argparse.Namespace(base=f'http://127.0.0.1:{app_ports[0]}', database=db, project=name, mock_port=mock_port))
@@ -239,7 +239,7 @@ def main():
         files=list((volumes[0]/'data'/'usage-settlement-ingress').glob('*.json'))
         check('final observed usage survives unavailable SQL in fsynced WAL', len(files)==1, {'http_status':reply['status'],'wal_files':len(files)})
         kill_app(0);kill_app(1)
-        run(['docker','start',pg]);wait_for('own PostgreSQL restart',lambda:subprocess.run(['docker','exec',pg,'pg_isready','-U','acceptance'],capture_output=True).returncode==0,40)
+        run(['docker','start',pg]);wait_for('own PostgreSQL restart',lambda:subprocess.run(['docker','exec',pg,'pg_isready','-h','127.0.0.1','-U','acceptance'],capture_output=True).returncode==0,40)
         recovered_start=time.monotonic();start_app(0);start_app(1)
         wait_for('WAL replay becomes one billed delivered record',lambda:counts()['settled']==3 and counts()['delivered']==3,max(1,120-(time.monotonic()-recovered_start)))
         check('SQL outage plus SIGKILL replay preserves full metadata and one charge',counts()['amount']==.0036 and not list((volumes[0]/'data'/'usage-settlement-ingress').glob('*.json')),{'recovery_seconds':time.monotonic()-recovered_start,**counts()})

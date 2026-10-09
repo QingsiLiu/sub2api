@@ -1,0 +1,6 @@
+requests==2.34.2
+httpx==0.28.1
+openai==3.26.1
+anthropic==1.12.1
+# The pinned SDKs use httpx2; the standalone httpx client is tested separately.
+httpx2==2.13.1
