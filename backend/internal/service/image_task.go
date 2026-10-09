@@ -52,6 +52,7 @@ type ImageTask struct {
 	Status      string          `json:"status"`
 	HTTPStatus  int             `json:"http_status,omitempty"`
 	ImageURL    string          `json:"image_url,omitempty"`
+	VideoURL    string          `json:"video_url,omitempty"`
 	Result      json.RawMessage `json:"result,omitempty"`
 	Error       json.RawMessage `json:"error,omitempty"`
 	CreatedAt   int64           `json:"created_at"`
