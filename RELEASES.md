@@ -11,10 +11,10 @@
 - 保留单次准入与结算合同：恢复成功和部分输出失败都按实际账号/分组及真实已观察用量结算一次，取消不增加新尝试。图片限制按实际图片块，重复图不去重、不静默删图；输出上限不自动续写。
 - 新增可复跑 Python → Nginx → 完整网关 → A/B 模拟供应商 → 独立 PostgreSQL/Redis 验收，SDK 客户端重试为零，检查内容、终态、真实秒数等待、账号归属与精确结算。提供候选绑定的 Stage 模拟验收入口。
 
-- revision：本轮实施提交，推送后绑定新候选（待 CI 产出后回填）。上一枚 `dd2b6703…` / `726ea751…` 是此前修复候选，不能作为本轮证据。
-- 镜像 digest：待新候选 CI 产出。
-- 部署：准备新候选及 Stage 验收，未部署生产。生产仍为 `7187d091…` / `ebc09e91…`；本次无生产授权。
-- 验证：最终结果将由候选 CI 与本轮完整 Python/Stage 报告回填。无新增迁移、前端代码不变，不调用付费供应商、支付或媒体生成。
+- revision：`d5aa99ddcb9bf376589ebc2746fe6279de9a2519`，已推送 `geili/main`；后续文档提交不改变本轮程序和验收脚本。上一枚 `dd2b6703…` / `726ea751…` 不能作为本轮证据。
+- 镜像 digest：尚未产出。GitHub Actions dispatch 四次返回 HTTP 422 `Actions has been disabled for this repository`，虽权限接口为 enabled、workflow active；新候选 CI 和 Stage 发布因此阻塞，不能视为发版完成。
+- 部署：没有部署新候选到 Stage 或生产，两者仍为 `.1` / `7187d091…` / `ebc09e91…`；本次无生产授权。只读核验六个核心容器 healthy/restart0、Stage health 200，334 个当前源码迁移在两环境校验一致；Stage 另有一条既有历史迁移记录，共 335 行，未改写。
+- 验证：本机 Python → Nginx → 完整网关 → 模拟供应商 → 独立 PG/Redis 224/224 通过（快测 187、真实等待 7、Nginx 原/候选配置各 15）；客户端重试为零、真实终态/usage/单次结算准确。180/600 秒静默后仍在一次请求中恢复；125 秒同步代理限制如实失败，不称解决全部 524。两实例计费 9、缓存 15 项通过，128 并发、131 凭证/明细金额一致。Go default/unit/integration 全量、受影响 race、内嵌网关别名、lint 增量 0、前端 362 文件/2974 用例及构建/lint通过；Stage/HTTP2 脚本离线防护 55 项通过。真实 TLS HTTP/2 故障 18 项及传输能力 12 项断言通过，Astra Messages 原始 RST 恢复与空凭证缺口已修复；内置工具启动（含待闭合帧）禁止重放。新候选 Stage 业务、完整 Python OAuth/WS/CLI、真实 Cloudflare 等仍未执行，详见报告。无新增迁移、前端产品代码不变，没有实付、真实供应商或媒体生成。
 - 详细原因、配置兼容与已知限制：[Python 单次调用可靠性报告](.github/geili/python-single-call-reliability-20261009.md)。同步 JSON 的 Cloudflare 长等待边界仍存在，心跳和延长网关预算不等于解决全部 524；Nginx 候选补丁不自动应用到生产。
 
 ## 0.2.14-geili.1

@@ -21,7 +21,7 @@
 
 接口、鉴权与同步/流式方式保持现有合同。新增逻辑收拢在 `*_geili.go` 和必要小挂钩，不新增迁移。
 
-- 有效交付包括文字、thinking、工具参数/调用与已经观察到的内置工具执行。心跳、响应头、`message_start`、`response.created`、空 reasoning item 不算答案。失败尝试的 ID 和响应头不会泄漏；心跳可以保活，但不会阻止安全恢复。
+- 有效交付包括文字、thinking、工具参数/调用。已经观察到的内置工具执行单独禁止重放，即使转换后没有客户端输出。心跳、响应头、`message_start`、`response.created`、空 reasoning item 不算答案。失败尝试的 ID 和响应头不会泄漏；心跳可以保活，但不会阻止安全恢复。
 - 连接错误、空流、异常 EOF、缺终态、静默超时、暂不可用、明确的容量/并发错误在未交付内容时可恢复。HTTP 200 里的 JSON/SSE 错误同样识别。明确管理员透传及本地错误合同优先，不凭一个错误名称猜来源。
 - 已交付有效内容后禁止换路，输出协议对应的失败事件。同步 Responses 的真实 failed 状态保留；Responses completed/incomplete、Chat finish_reason、Messages stop_reason 不伪造。`[DONE]`、usage 和 EOF 单独不构成完成；明确终态的空答案即使缺 usage 仍合法。
 - Anthropic 兼容 EOF 只有在 message_start、停止原因、全部块闭合、工具 JSON 完整且无错误时才允许完成。真实终态及时返回，避免供应商继续保持连接造成多等一次空闲预算。
@@ -43,13 +43,41 @@
 
 `.github/geili/python-reliability-acceptance.py` 创建独立、有所有权标签的 Nginx / PostgreSQL / Redis，启动完整 Go 应用，生成隔离用户、分组、Key 和 A/B 模拟供应商；清理不碰其他环境。运维 `bin/accept-python-reliability-stage.py` 则绑定候选 revision/digest，默认只读，执行前验证 Stage、生产指纹及结构，使用 Stage 应用网络命名空间的 loopback 模拟上游和私有 Nginx，记录并恢复自建夹具。
 
-固定依赖：requests 2.34.2、httpx 0.28.1、openai 3.26.1、anthropic 1.12.1；这两版 SDK 的底层依赖 httpx2 固定 2.13.1。所有推理客户端重试为零，分别测试同步、异步、原始客户端、普通 SDK 迭代和最终响应获取。管理端夹具限额等待不计为推理重试，账号创建探测与推理请求分别记录。
+固定依赖：requests 2.34.2、httpx 0.28.1、openai 3.26.1、anthropic 1.12.1；这两版 SDK 的底层依赖 httpx2 固定 2.13.1。所有推理客户端重试为零，推理等待显式设为 900 秒以覆盖真实长等待；不声称客户自行设置的更短 timeout 会被服务器延长。分别测试同步、异步、原始客户端、普通 SDK 迭代和最终响应获取。管理端夹具限额等待不计为推理重试，账号创建探测与推理请求分别记录。
 
 每个案例记录客户端入口请求数、推理上游尝试数/账号、终态、用量、耗时和结算。成功恢复要求客户端只有一次入口请求、结果完整、失败尝试未混入、凭证/用量日志各一条、账单金额/余额/Key 用量及实际账号/分组正确。部分输出和取消已有用量时也必须有准确的单笔结算，不允许以零凭证掩盖漏结算。
 
 ## 验收结果
 
-实施和验收进行中。此行将在最终新候选及 Stage 证据完成后替换，早期调试报告、旧 binary 和上一枚候选不算本次通过证据。
+源码实现已提交并推送 `geili/main`，验收 revision 为 `d5aa99ddcb9bf376589ebc2746fe6279de9a2519`，版本 `0.2.14-geili.2`。本机嵌入版本和 commit 的完整程序 SHA256 为 `aea09b8d3a2d1ebafe2121d4826fe93404674c629c4e4cf080441f67d3551345`；所有完整链路报告退出时确认源码、二进制和 runner 均未改变，独立资源已停止。
+
+| 验收 | 结果 | 证明范围 |
+| --- | --- | --- |
+| Python 故障快测 | 187/187 通过 | 12 个基础组合、转换/直转/别名、同步/异步 SDK、普通事件迭代和 final 获取；可恢复故障一次入口调用完成，有输出后准确失败；HTTP 200 错误、图片、输出上限、签名、取消、真实 usage 和精确单次结算。 |
+| 真实秒数等待、边缘模拟和上传 | 7/7 通过 | 普通模型 180.080 秒、Astra 600.194 秒静默后换 B 成功，各 2 次上游尝试、1 次结算；181 秒长思考/SSE 保活、125 秒同步代理限制、120 秒完整慢上传、30 秒上传中断。 |
+| 生产 Nginx 原配置 → 完整网关 | 15/15 预期断言通过 | 原 API/fallback 配置的心跳、同步 JSON、别名与慢上传；Messages/Chat 同步约 300 秒代理超时如实记失败，未把该 HTTP 504 算成生成成功。 |
+| Nginx 候选补丁 → 完整网关 | 15/15 通过 | 三入口同步在 305 秒得到完整结果，流式约 5 秒收到真实网关心跳；模拟供应商提前不发送数据。补丁延长 API read/send 到 1800 秒并禁用缓冲，留出恢复时间。 |
+| 真实 TLS HTTP/2 RST 补测 | 18/18 故障 + 12/12 能力断言通过 | Astra 三入口 sync/SSE 及 Opus 的 OpenAI-compatible Responses/Chat 在输出前 RST 后换 B；8 个已输出后 RST 不重放。真实 TLS1.3/ALPN=h2、读写 RST_STREAM 帧各一次；Opus 原生六条为 HTTP/1.1，OpenAI 分组 Messages 两条为受控 404，不冒充 H2 成功。 |
+| 两实例计费故障恢复 | 9/9 通过 | 真正锁表、两进程 SIGKILL、SQL 中断/WAL 补写；128 并发 HTTP 调用，最终 131 笔凭证/明细各一次，金额之和均 0.1572。SIGKILL 明细恢复时间见最终凭证摘要，未宣称立即恢复。 |
+| 两实例缓存与订阅回归 | 15/15 通过 | 独立 PG/Redis、Redis 中断及空缓存恢复、撤销/恢复/重置跨实例生效，无丢失或重复扣费。既有本机 runner 含隔离数据库中的合成签名回调夹具，没有实付。 |
+| Go 默认 / unit / integration 全量及受影响 race | 通过 | 原生/转换、其他模型、Key/OAuth/池模式/WS、错误规则、模型映射与工具回归；另有真实 TLS HTTP/2 RST 的完整 Python 链路补测；本轮 Messages 公共入口新增 31 个边界子场景，错误读取在真实上游 body 边界分类，取消和过长行仍不可重试。 |
+| 内嵌前端完整测试 / 网关别名 / lint 增量 | 通过 | `/chat/completions` 不再被 SPA 吞掉；完整静态资源测试更新到现存 logo.svg、原断言保留；lint 新增问题 0，既有全量 lint 诊断仍保留。 |
+| 前端全量测试、构建、lint | 通过 | 362 个测试文件、2974 个用例；前端产品代码未改。 |
+| Stage / HTTP2 执行脚本离线防护 | 55/55 通过 | 隔离数据库/Redis/网络、候选与生产身份、资源所有权和恢复状态；拒绝用 HTTP 200 错误对象或供应商 403 假装成功/本地拒绝，也拒绝无界冷却。离线 guard 不等同 Stage 业务验收。 |
+| 新候选 CI / 不可变镜像 | 阻塞 | GitHub dispatch 返回 HTTP 422 `Actions has been disabled for this repository`；权限接口仍 `enabled=true`、workflow `active`，没有本 revision 的 run/check 或新 digest。 |
+| 新候选 Stage 生命周期、复合 Key、审计、双实例、真实等待 | 未执行 | 必须先获得新候选 CI 制品并经 canonical Stage 部署；没有使用旧候选代替。 |
+
+这 224 项 Python/代理案例全部只发一次推理入口请求，按各场景验证成功、准确失败或真实代理限制，结算 oracle 均通过。30 秒上传案例客户端实际 HTTP 状态为空、传输 EOF，唯一关联 Nginx 日志为 408/30.032 秒，上游尝试和凭证均为零；不能称客户端收到了 HTTP 408。原配置代理超时后是否计费取决于实际观察到的 usage：Messages 无用量则无凭证，Chat 的有界 drain 观察到真实用量则按原合同单笔结算。
+
+追加真实 HTTP/2 后，旧 `cbc567ca6` 候选的 Astra Messages 同步/流式两条路径确实失败：收到原始 RST 后只调用 A，直接 502；流式还生成了一条零用量凭证。修复了转换代码漏用 typed body-read 分类，并观察被转换器吞掉的内置工具执行与未闭合 SSE 帧，防止重复执行。无输出、无用量的失败读取不制造空凭证，真实已观察用量保留；输出前弃用尝试仍不结算。本轮新 revision 完整重跑，旧 CBC 通过报告不能代替新增缺口的验收。
+
+验收发现并修复了内嵌前端吞掉已注册 `/chat/completions` 根别名的问题，Python 此前会得到空 HTTP200、上游尝试为零；现已验证真实内嵌中间件下未鉴权401、鉴权后正确转发。既有内存测试的全局堆统计受同包后台工作影响，本轮让原测试在独立子进程执行，仍保留原20,000次工作量、8MiB阈值和全部断言，没有调高阈值。全量集成测试曾因并行运行多个全量命令争用 entc 临时目录失败，最终依照 CI 顺序独立重跑通过；调试失败报告没有删除或混作最终通过。
+
+逐案例公开 JSON、原报告校验和、Go/前端日志校验和及计费摘要见运维仓 [本轮完整证据](https://github.com/QingsiLiu/geili-sub2api/tree/main/docs/reports/python-single-call-20261009)。四份原始 Python 报告 SHA256 分别为 `a5d8e7290899563f8a732fd65cc68efef9356d9e33ef9f23e04404dc334d08d3`、`1faa77bd2afb48f5dcb6e5062c684591d3da2f14fb2fa6cbeb2410f792481596`、`507d04e72fcd437f4f7a58165c7d3f8b51a1de1e48273dcee193a82888930d4b`、`0550d47fceb7daf396f8fc365b8b116b1c76181910f6ae32823e010f9c5db553`。真实 HTTP2 原报告 SHA256 为 `2ca39810318beddf10dd9b92229e7e94eb82e667f168d10d752dbd3f7f106d96`，Linux arm64 binary 为 `b8cfc510d058b16c9ce58dc1f64413128e4679a3ab05bdce6c2e8de594687b33`；同运行代码、不同平台构建，均不是候选镜像。早期调试报告、旧 binary 和上一枚候选均不是本次通过证据。
+
+2026-10-09 的服务器只读核验：Stage/生产仍为 `.1` / `7187d091…` / `ebc09e91…`，六个核心容器 healthy、restart 0，Stage health 200，Stage PG/Redis/网络隔离 guard 通过。334 个当前源码迁移在 Stage 和生产逐项校验相同；Stage 实际还有一条历史 `275_account_group_scheduling_geili.sql` 记录（共 335 行），生产为 334 行。本轮无迁移变更，未删除或改写历史记录。这只是旧运行版本的基线检查，不是新候选 Stage 验收。
+
+GitHub 官方说明，此类平台控制的停用可能独立于仓库启用设置，需要支持团队审核恢复；API 没有提供本仓停用的具体原因。本轮未改 Actions 权限、绕过候选 CI 或在服务器编译。[GitHub 官方说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)
 
 ## 未执行与已知限制
 
@@ -57,3 +85,16 @@
 - 同步 JSON 经代理长等待仍可能超时，不能向 JSON 插入 SSE 心跳。Cloudflare 官方当前默认读超时为 125 秒、写超时为 30 秒；客户错误包装写 120 秒属于该条正文，不可推导全站统一值。本轮独立记录 125 秒同步失败、SSE 保活与慢上传边界，不将 Nginx 模拟冒充真实 Cloudflare 验收。[Cloudflare 官方 524 说明](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-524/)
 - 已产生部分输出的断流必须由客户收到准确失败，无法安全地在原流拼接另一条生成。输入硬限制也无法靠服务端重试消除。
 - Stage 程序更新不会自动修改生产 Nginx。本轮对生产原配置和候选无缓冲配置做隔离对照，不执行生产入口配置变更。
+- 完整 Python OAuth/WS/CLI 链路、Stage 冷却到期等待尚未执行；对应已有 Go 回归不能替代这些场景的端到端证据。所有 Stage 新候选门禁仍待执行，`production_ready=false`。
+
+## 本机复跑入口
+
+先对选定 revision 建立 clean 检出，构建包含真实版本/commit 的内嵌前端程序；准备独立 Python venv 并安装 `.github/geili/python-reliability-requirements.txt`，Docker 必须是本机 Unix socket。所有报告和数据库凭据写入被忽略的 `deploy/.secrets/`。
+
+- 主矩阵：`python .github/geili/python-reliability-acceptance.py --binary <Darwin-program> --idle`，包含 185 基础/故障及 2 个实际 30 秒静默场景，共 187。省略 `--idle` 只有 185，不能报成 187。
+- 真实时间：单独使用同一入口的 `--slow-only`（不带 `--idle`），单独运行 7 个 180/600 秒、边缘模拟和上传场景。
+- Nginx 对照：`python .github/geili/python-nginx-full-gateway-acceptance.py --binary <Darwin-program> --profile original --original-config <OPS>/deploy/ovh/sub.geiliapi.com.conf`；再用 `--profile candidate`。每个 profile 15 项，真实 305 秒供应商等待与 35 秒完整上传，不用假上游提前 ping。
+- 真实 HTTP2：运维 `bin/accept-python-http2-local.py` 提供 `--source-root`、`--binary <Linux-arm64-program>`、`--expected-revision`、`--expected-runtime-sha`、`--main-binary-sha`；参数必须来自本轮精确源码和两平台构建。只有私有容器通过 `SSL_CERT_FILE` 信任夹具 CA，不修改系统 Keychain。
+- 计费/缓存复跑及最终源码/二进制冻结校验结果见运维公开摘要；其底层已有 `.github/geili/billing-runtime-acceptance.py` 和 `.github/geili/acceptance.py` 本机入口，纯隔离模拟。
+
+最后检查每例入口次数、完整终态、usage/归属/金额以及所有 `*_unchanged` 和资源回收字段；保留原报告及 SHA256。CI/Stage 使用新镜像与新 revision 时重新执行，不能给本机旧报告换标签。
