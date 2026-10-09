@@ -35,6 +35,43 @@ func TestInstantQuotaGeiliWrappedHTTPHasRecoverableCooldown(t *testing.T) {
 	}
 }
 
+type instantQuotaRuleRepoGeili struct {
+	oauth429RateLimitRepo
+	modelCalls int
+	model      string
+	until      time.Time
+}
+
+func (r *instantQuotaRuleRepoGeili) SetModelRateLimit(_ context.Context, _ int64, model string, until time.Time, _ ...string) error {
+	r.modelCalls++
+	r.model, r.until = model, until
+	return nil
+}
+
+func TestInstantQuotaGeiliOriginalHTTPRulePrecedesFallback(t *testing.T) {
+	for _, status := range []int{400, 502} {
+		for _, typ := range []string{AccountTypeAPIKey, AccountTypeOAuth} {
+			for _, pool := range []bool{false, true} {
+				repo := &instantQuotaRuleRepoGeili{}
+				svc := &OpenAIGatewayService{rateLimitService: NewRateLimitService(repo, nil, &config.Config{}, nil, nil)}
+				svc.rateLimitService.runtimeBlocker = svc
+				account := &Account{ID: 1, Platform: PlatformOpenAI, Type: typ,
+					Extra: map[string]any{"pool_mode": pool}, Credentials: map[string]any{
+						"temp_unschedulable_enabled": true,
+						"temp_unschedulable_rules": []any{map[string]any{"error_code": status,
+							"keywords": []any{"Insufficient quota available for instant inference."}, "duration_minutes": 1}}}}
+				start := time.Now()
+				require.True(t, svc.handleOpenAIAccountUpstreamError(context.Background(), account, status, nil, []byte(instantQuotaFixtureGeili), "gpt-6-astra"))
+				require.Equal(t, 1, repo.modelCalls, "the explicit original-status rule must match")
+				require.Equal(t, "gpt-6-astra", repo.model)
+				require.InDelta(t, time.Minute.Seconds(), repo.until.Sub(start).Seconds(), 2)
+				require.Zero(t, repo.setRateLimitedCalls, "fallback must not override the explicit rule")
+				require.False(t, svc.isOpenAIAccountRuntimeBlocked(account), "the explicit known-model rule stays model scoped")
+			}
+		}
+	}
+}
+
 func TestAPIKeyResponsesGeiliBareErrorKeepsPassthroughRules(t *testing.T) {
 	for _, suffix := range []string{"", "event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Invalid input\"}}}\n\n"} {
 		c, rec := newOpenAIStreamFailedTestContext()

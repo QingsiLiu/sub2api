@@ -106,10 +106,8 @@ func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Cont
 	if account != nil && account.Platform == PlatformOpenAI && isOpenAIRequestScopedCapacityShed("", responseBody) {
 		return false
 	}
-	// geili hook: use the existing bounded 429 cooldown even when HTTP was 400/502.
-	if isOpenAIInstantInferenceQuotaError("", responseBody) {
-		statusCode = http.StatusTooManyRequests
-	}
+	// geili hook: preserve the original HTTP code for administrator rules below;
+	// instant-quota classification and its 429 fallback happen after those rules.
 	stateCtx, cancel := openAIAccountStateContext(ctx)
 	defer cancel()
 	if account != nil && account.Platform == PlatformOpenAI && isOpenAIHTTPUpstreamAccessStateError(statusCode, "", responseBody) {
