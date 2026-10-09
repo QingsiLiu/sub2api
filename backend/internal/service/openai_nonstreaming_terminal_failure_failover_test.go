@@ -105,7 +105,7 @@ func TestNonStreamingSSEToJSON_UnclassifiedFailedEventFailsOver(t *testing.T) {
 	require.Empty(t, rec.Body.String())
 }
 
-// 「response.failed 必须回写协议错误」这一契约没有丢：明确不可重试的错误仍写 502。
+// 明确输入错误保留 400，其他既有协议错误保留 502；都不允许换号。
 func TestNonStreamingSSEToJSON_NonRetryableFailedEventStillWritesProtocolError(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -133,15 +133,22 @@ func TestNonStreamingSSEToJSON_NonRetryableFailedEventStillWritesProtocolError(t
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newNonStreamingFailoverContext(t)
 			svc := newNonStreamingFailoverService()
+			finish := BeginTextForwardGuard(c, false)
 
 			result, err := svc.handleSSEToJSON(newNonStreamingSSEResponse(), c,
 				newNonStreamingFailoverAccount(), sseTerminalBody("response.failed", tc.data), "model", "model")
+			err = finish(err)
 
 			require.Nil(t, result)
 			require.Error(t, err)
 			var failoverErr *UpstreamFailoverError
 			require.False(t, errors.As(err, &failoverErr), "不可重试的上游错误不得换号")
-			require.Equal(t, http.StatusBadGateway, rec.Code)
+			wantStatus := http.StatusBadGateway
+			if tc.name == "invalid_request" {
+				wantStatus = http.StatusBadRequest
+				require.Contains(t, rec.Body.String(), `"code":"invalid_request"`)
+			}
+			require.Equal(t, wantStatus, rec.Code)
 			require.Contains(t, rec.Body.String(), tc.wantMsg)
 			require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 		})
@@ -235,16 +242,19 @@ func TestNonStreamingSSEToJSON_CommittedResponseKeepsProtocolError(t *testing.T)
 	c, rec := newNonStreamingFailoverContext(t)
 	svc := newNonStreamingFailoverService()
 	MarkResponseCommitted(c)
+	finish := BeginTextForwardGuard(c, false)
 	body := sseTerminalBody("response.failed",
 		`{"type":"response.failed","error":{"message":"Selected model is at capacity. Please try a different model.","type":"invalid_request_error"}}`)
 
 	result, err := svc.handleSSEToJSON(newNonStreamingSSEResponse(), c, newNonStreamingFailoverAccount(), body, "model", "model")
+	err = finish(err)
 
 	require.Nil(t, result)
 	require.Error(t, err)
 	var failoverErr *UpstreamFailoverError
 	require.False(t, errors.As(err, &failoverErr))
-	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), `"type":"invalid_request_error"`)
 }
 
 func TestNonStreamingTerminalFailureFailover_NilAccountProposesNothing(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -95,6 +96,79 @@ func TestSameAccountRetryAllowedHonorsErrorMaxBeforeDeadline(t *testing.T) {
 	require.True(t, sameAccountRetryAllowed(err, 0, maxSameAccountRetries))
 	require.False(t, sameAccountRetryAllowed(err, 1, maxSameAccountRetries))
 	require.False(t, sameAccountRetryAllowed(err, 0, 0), "an explicit zero retry budget remains disabled")
+}
+
+// A supplier's retry deadline cannot silently override the administrator's
+// configured same-account attempt budget.
+func TestSameAccountRetryAllowedDeadlineHonorsConfiguredPoolCount(t *testing.T) {
+	err := &service.UpstreamFailoverError{
+		RetryableOnSameAccount:   true,
+		SameAccountRetryDeadline: time.Now().Add(time.Minute),
+	}
+	for _, tc := range []struct {
+		name       string
+		configured any
+		count      int
+		want       bool
+	}{
+		{name: "zero disables", configured: float64(0), count: 0, want: false},
+		{name: "below explicit two", configured: float64(2), count: 1, want: true},
+		{name: "explicit two exhausted", configured: float64(2), count: 2, want: false},
+		{name: "string configuration", configured: " 2 ", count: 2, want: false},
+		{name: "negative clamps to zero", configured: -1, count: 0, want: false},
+		{name: "large configuration clamps", configured: 100, count: 10, want: false},
+		{name: "invalid value keeps getter fallback", configured: "invalid", count: 3, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := &service.Account{Type: service.AccountTypeAPIKey, Credentials: map[string]any{
+				"pool_mode": true, "pool_mode_retry_count": tc.configured,
+			}}
+			require.Equal(t, tc.want, sameAccountRetryAllowed(err, tc.count, effectiveSameAccountRetryLimit(err, account), account))
+		})
+	}
+	for _, account := range []*service.Account{
+		{Type: service.AccountTypeOAuth},
+		{Type: service.AccountTypeAPIKey, Credentials: map[string]any{"pool_mode": true}},
+		{Type: service.AccountTypeAPIKey, Credentials: map[string]any{"pool_mode": true, "pool_mode_retry_count": nil}},
+	} {
+		require.True(t, sameAccountRetryAllowed(err, 100, effectiveSameAccountRetryLimit(err, account), account), "an unconfigured deadline retains its existing retry window")
+	}
+}
+
+func TestHandleFailoverErrorDeadlineHonorsConfiguredPoolCount(t *testing.T) {
+	for _, retryLimit := range []int{0, 2} {
+		t.Run(strconv.Itoa(retryLimit), func(t *testing.T) {
+			account := &service.Account{ID: 100, Type: service.AccountTypeAPIKey, Credentials: map[string]any{
+				"pool_mode": true, "pool_mode_retry_count": float64(retryLimit),
+			}}
+			fs := NewFailoverState(3, false)
+			mock := &mockTempUnscheduler{}
+			err := newTestFailoverErr(http.StatusTooManyRequests, true, false)
+			err.SameAccountRetryDeadline = time.Now().Add(time.Minute)
+			err.SameAccountRetryDelay = time.Millisecond
+			for attempt := 0; attempt <= retryLimit; attempt++ {
+				require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, account.ID, service.PlatformOpenAI, account.GetPoolModeRetryCount(), err, account))
+			}
+			require.Equal(t, retryLimit, fs.SameAccountRetryCount[account.ID])
+			require.Equal(t, 1, fs.SwitchCount)
+			require.Contains(t, fs.FailedAccountIDs, account.ID)
+			require.Len(t, mock.calls, 1)
+		})
+	}
+	t.Run("unconfigured oauth keeps deadline window", func(t *testing.T) {
+		account := &service.Account{ID: 100, Type: service.AccountTypeOAuth}
+		fs := NewFailoverState(3, false)
+		mock := &mockTempUnscheduler{}
+		err := newTestFailoverErr(http.StatusTooManyRequests, true, false)
+		err.SameAccountRetryDeadline = time.Now().Add(time.Minute)
+		err.SameAccountRetryDelay = time.Millisecond
+		for attempt := 0; attempt < maxSameAccountRetries+1; attempt++ {
+			require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, account.ID, service.PlatformOpenAI, account.GetPoolModeRetryCount(), err, account))
+		}
+		require.Equal(t, maxSameAccountRetries+1, fs.SameAccountRetryCount[account.ID])
+		require.Zero(t, fs.SwitchCount)
+		require.Empty(t, mock.calls)
+	})
 }
 
 func TestSameAccountRetryDeadlineAllows(t *testing.T) {
@@ -920,9 +994,10 @@ func TestHandleSelectionExhausted(t *testing.T) {
 		require.Equal(t, FailoverExhausted, action)
 	})
 
-	t.Run("503且未耗尽_等待后返回Continue并清除失败列表", func(t *testing.T) {
+	t.Run("503且冷却已知_等待后返回Continue并清除失败列表", func(t *testing.T) {
 		fs := NewFailoverState(3, false)
 		fs.LastFailoverErr = newTestFailoverErr(503, false, false)
+		fs.LastFailoverErr.SelectionRetryAfter = time.Now().Add(50 * time.Millisecond)
 		fs.FailedAccountIDs[100] = struct{}{}
 		fs.SwitchCount = 1
 
@@ -932,7 +1007,7 @@ func TestHandleSelectionExhausted(t *testing.T) {
 
 		require.Equal(t, FailoverContinue, action)
 		require.Empty(t, fs.FailedAccountIDs, "应清除失败账号列表")
-		require.GreaterOrEqual(t, elapsed, 1500*time.Millisecond, "应等待约 2s")
+		require.GreaterOrEqual(t, elapsed, 40*time.Millisecond, "必须等到已知冷却结束")
 		require.Less(t, elapsed, 5*time.Second)
 	})
 
@@ -987,9 +1062,10 @@ func TestHandleSelectionExhausted(t *testing.T) {
 		require.Equal(t, FailoverCanceled, action)
 	})
 
-	t.Run("503且SwitchCount等于MaxSwitches_仍可重试", func(t *testing.T) {
+	t.Run("503且SwitchCount等于MaxSwitches_已知冷却仍可重试", func(t *testing.T) {
 		fs := NewFailoverState(2, false)
 		fs.LastFailoverErr = newTestFailoverErr(503, false, false)
+		fs.LastFailoverErr.SelectionRetryAfter = time.Now().Add(10 * time.Millisecond)
 		fs.SwitchCount = 2 // == MaxSwitches，条件是 <=，仍可重试
 
 		action := fs.HandleSelectionExhausted(context.Background())

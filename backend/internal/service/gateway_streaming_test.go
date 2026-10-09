@@ -150,7 +150,7 @@ func TestHandleStreamingResponse_CacheTokens(t *testing.T) {
 	go func() {
 		defer func() { _ = pw.Close() }()
 		_, _ = pw.Write([]byte("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":20,\"cache_read_input_tokens\":30}}}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":15}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":15}}\n\n"))
 		_, _ = pw.Write([]byte("data: [DONE]\n\n"))
 	}()
 
@@ -184,7 +184,8 @@ func TestHandleStreamingResponse_EmptyStream(t *testing.T) {
 	result, err := svc.handleStreamingResponse(context.Background(), resp, c, &Account{ID: 1}, time.Now(), "model", "model", false)
 	_ = pr.Close()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "missing terminal event")
+	var failover *UpstreamFailoverError
+	require.ErrorAs(t, err, &failover)
 	require.NotNil(t, result)
 }
 
@@ -202,9 +203,11 @@ func TestHandleStreamingResponse_SpecialCharactersInJSON(t *testing.T) {
 	go func() {
 		defer func() { _ = pw.Close() }()
 		// 包含特殊字符的 content_block_delta（引号、换行、Unicode）
-		_, _ = pw.Write([]byte("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello \\\"world\\\"\\n你好\"}}\n\n"))
 		_, _ = pw.Write([]byte("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":5}}}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":3}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello \\\"world\\\"\\n你好\"}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"content_block_stop\",\"index\":0}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\n"))
 		_, _ = pw.Write([]byte("data: [DONE]\n\n"))
 	}()
 
@@ -223,6 +226,7 @@ func TestHandleStreamingResponse_SpecialCharactersInJSON(t *testing.T) {
 
 // 上游中途读错误（如 HTTP/2 GOAWAY 触发的 unexpected EOF）发生在向客户端写入任何字节前：
 // 网关应返回 *UpstreamFailoverError 触发账号 failover/重试，而不是把错误事件直接发给客户端。
+
 func TestHandleStreamingResponse_StreamReadErrorBeforeOutput_TriggersFailover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := newMinimalGatewayService()
@@ -393,9 +397,7 @@ func TestHandleStreamingResponse_FailoverBodyDoesNotLeakAddresses(t *testing.T) 
 	require.Contains(t, body, "upstream stream disconnected")
 }
 
-// 上游 HTTP 200 + SSE 流体内 event:error 帧应被识别为 *sseStreamErrorEventError，
-// 且 RawData 等于上游 data: 行的原始 JSON。这是 Forward 主流程后续把 dataLine
-// 透传到 UpstreamFailoverError.ResponseBody 与 ops_error_logs 的前提。
+// HTTP 200 流内错误在有效内容输出前应可恢复，并保留上游错误正文用于诊断。
 func TestHandleStreamingResponse_SSEErrorEvent_ReturnsTypedErrorWithRawData(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := newMinimalGatewayService()
@@ -418,22 +420,22 @@ func TestHandleStreamingResponse_SSEErrorEvent_ReturnsTypedErrorWithRawData(t *t
 	_ = pr.Close()
 
 	require.Error(t, err)
-	require.Nil(t, result)
+	require.NotNil(t, result)
 
-	// typed error 必须可被 errors.As 匹配，RawData 必须保留上游 dataLine 原文
-	var sseErr *sseStreamErrorEventError
-	require.True(t, errors.As(err, &sseErr), "SSE event:error 必须包成 *sseStreamErrorEventError，期望: %v", err)
-	require.Equal(t, errorJSON, sseErr.RawData)
+	// 可恢复错误必须保留上游 dataLine 原文。
+	var sseErr *UpstreamFailoverError
+	require.True(t, errors.As(err, &sseErr), "SSE event:error 必须保留原始正文并产生可恢复的上游错误，期望: %v", err)
+	require.Equal(t, errorJSON, string(sseErr.ResponseBody))
 
-	// 字符串兼容：保留与旧实现一致的 "have error in stream"，避免破坏依赖该字符串的日志检索
-	require.Equal(t, "have error in stream", err.Error())
+	// HTTP 200 内的 overload 仍按供应商过载处理。
+	require.Equal(t, 529, sseErr.StatusCode)
 
-	// 在 Forward 主流程中调用方依赖 ExtractUpstreamErrorMessage 从 RawData 解析出 message
-	extracted := ExtractUpstreamErrorMessage([]byte(sseErr.RawData))
+	// Forward 主流程的诊断仍可从原始正文解析 message。
+	extracted := ExtractUpstreamErrorMessage([]byte(string(sseErr.ResponseBody)))
 	require.Equal(t, "Anthropic upstream is overloaded", extracted)
 }
 
-// 边界用例：上游只发了 event: error 而没有 data 行。RawData 为空，
+// 边界用例：上游只发了 event: error 而没有 data 行。错误正文为空，
 // 调用方不得 panic，UpstreamFailoverError.ResponseBody 应回退为空切片。
 func TestHandleStreamingResponse_SSEErrorEvent_EmptyDataLine(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -455,15 +457,12 @@ func TestHandleStreamingResponse_SSEErrorEvent_EmptyDataLine(t *testing.T) {
 	_ = pr.Close()
 
 	require.Error(t, err)
-	var sseErr *sseStreamErrorEventError
-	require.True(t, errors.As(err, &sseErr), "即使 data 行为空，也必须返回 typed error 让上层走 stream_error 分支")
-	require.Equal(t, "", sseErr.RawData)
+	var sseErr *UpstreamFailoverError
+	require.True(t, errors.As(err, &sseErr), "空错误帧必须作为上游异常恢复")
+	require.Equal(t, "", string(sseErr.ResponseBody))
 }
 
-// 对抗用例：上游先发 message_start 再发 event:error，模拟"流已开始写客户端"+SSE error 帧。
-// 这是 ping 放大场景的服务侧近似（c.Writer 已被写后才出现 error）。
-// 必须仍然返回 *sseStreamErrorEventError 且 RawData 包含真实错误体，
-// 让 Forward 调用方能正确补全 ResponseBody 与 ops 事件。
+// 有效文字输出后出现流内错误时保留原始正文，但不能换路拼接另一条答案。
 func TestHandleStreamingResponse_SSEErrorEvent_AfterPartialStreamOutput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := newMinimalGatewayService()
@@ -479,8 +478,9 @@ func TestHandleStreamingResponse_SSEErrorEvent_AfterPartialStreamOutput(t *testi
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		// 先发 message_start，让 handleStreamingResponse 把它转发到客户端 → c.Writer 已被写
+		// 开场事件之后交付有效文字，再注入错误。
 		_, _ = pw.Write([]byte(`data: {"type":"message_start","message":{"usage":{"input_tokens":5}}}` + "\n\n"))
+		_, _ = pw.Write([]byte(`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":"partial"}}` + "\n\n"))
 		// 紧接着发 event:error
 		_, _ = pw.Write([]byte("event: error\ndata: " + errorJSON + "\n\n"))
 	}()
@@ -489,14 +489,14 @@ func TestHandleStreamingResponse_SSEErrorEvent_AfterPartialStreamOutput(t *testi
 	_ = pr.Close()
 
 	require.Error(t, err)
-	var sseErr *sseStreamErrorEventError
-	require.True(t, errors.As(err, &sseErr), "已发数据后再来的 SSE event:error 必须仍包成 typed error，期望: %v", err)
-	require.Equal(t, errorJSON, sseErr.RawData)
+	var sseErr *geiliUpstreamPayloadFailure
+	require.True(t, errors.As(err, &sseErr), "有效内容输出后的错误必须保留供应商正文，期望: %v", err)
+	require.Equal(t, errorJSON, string(sseErr.payload))
 
-	// c.Writer 必定已被写过（message_start 已转发）— 这是 handler 838 行 streamStarted 守卫触发的条件，
-	// 修复前/后均会让 handler 直接走 handleFailoverExhausted 而非切账号；不变。
-	require.Greater(t, rec.Body.Len(), 0, "message_start 应被转发到客户端")
+	// 已交付的开场事件和文字仍留在客户端，不把该尝试隐藏为未输出。
+	require.Greater(t, rec.Body.Len(), 0, "已交付的内容应保留在客户端")
 	require.Contains(t, rec.Body.String(), "message_start")
+	require.Contains(t, rec.Body.String(), "partial")
 }
 
 // 对抗用例：上游发 event:error 但 data 行不是合法 JSON。
@@ -522,13 +522,13 @@ func TestHandleStreamingResponse_SSEErrorEvent_NonJSONDataLine(t *testing.T) {
 	_ = pr.Close()
 
 	require.Error(t, err)
-	var sseErr *sseStreamErrorEventError
+	var sseErr *UpstreamFailoverError
 	require.True(t, errors.As(err, &sseErr))
-	require.Equal(t, "not-a-json-payload", sseErr.RawData)
+	require.Equal(t, "not-a-json-payload", string(sseErr.ResponseBody))
 
 	// gjson 对非 JSON 输入返回空字符串，不 panic — Forward 主流程靠这个 invariant 安全地走下去
 	require.NotPanics(t, func() {
-		_ = ExtractUpstreamErrorMessage([]byte(sseErr.RawData))
+		_ = ExtractUpstreamErrorMessage([]byte(string(sseErr.ResponseBody)))
 	})
-	require.Equal(t, "", ExtractUpstreamErrorMessage([]byte(sseErr.RawData)))
+	require.Equal(t, "", ExtractUpstreamErrorMessage([]byte(string(sseErr.ResponseBody))))
 }

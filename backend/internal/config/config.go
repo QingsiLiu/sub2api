@@ -994,6 +994,10 @@ const (
 type GatewayConfig struct {
 	// Shared wall-clock budget across all selected-group attempts, including streams.
 	KeyGroupRequestTimeoutSeconds int `mapstructure:"key_group_request_timeout_seconds"`
+	// geili: explicit ordinary total budgets remain hard limits for all models.
+	KeyGroupRequestTimeoutExplicit            bool `mapstructure:"-"`
+	KeyGroupLongThinkingRequestTimeoutSeconds int  `mapstructure:"key_group_long_thinking_request_timeout_seconds"`
+	RequestRecoveryTimeoutSeconds             int  `mapstructure:"request_recovery_timeout_seconds"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
@@ -1884,6 +1888,8 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		cfg.Security.ForwardedClientIPHeaders = normalizeStringSlice(strings.Split(forwardedClientIPHeadersEnv, ","))
 	}
 	cfg.Server.TrustedProxiesConfigured = trustedProxiesConfigured
+	// geili hook: distinguish an operator's total limit from the ordinary default.
+	cfg.Gateway.KeyGroupRequestTimeoutExplicit = hasExplicitConfigOrEnv("gateway.key_group_request_timeout_seconds", "GATEWAY_KEY_GROUP_REQUEST_TIMEOUT_SECONDS")
 	if cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs == 0 {
 		cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
 	}
@@ -2442,6 +2448,8 @@ func setDefaults() {
 
 	// Gateway
 	viper.SetDefault("gateway.key_group_request_timeout_seconds", 600)
+	viper.SetDefault("gateway.key_group_long_thinking_request_timeout_seconds", 1800)
+	viper.SetDefault("gateway.request_recovery_timeout_seconds", 600)
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.openai_response_header_timeout", 0)
 	viper.SetDefault("gateway.grok_response_header_timeout", 120)
@@ -3448,6 +3456,10 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.StreamDataIntervalTimeout < 0 {
 		return fmt.Errorf("gateway.stream_data_interval_timeout must be non-negative")
+	}
+	// geili hook: request recovery is independently bounded across route attempts.
+	if err := validateRequestRecoveryConfig(c.Gateway); err != nil {
+		return err
 	}
 	if c.Gateway.StreamDataIntervalTimeout != 0 &&
 		(c.Gateway.StreamDataIntervalTimeout < 30 || c.Gateway.StreamDataIntervalTimeout > 300) {

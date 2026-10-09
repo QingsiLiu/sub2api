@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -32,7 +31,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	account *Account,
 	body []byte,
 	parsed *ParsedRequest,
-) (*ForwardResult, error) {
+) (out *ForwardResult, err error) {
 	startTime := time.Now()
 
 	// 1. Parse Chat Completions request
@@ -42,6 +41,20 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 	originalModel := ccReq.Model
 	clientStream := ccReq.Stream
+	// geili hook: keep each failed attempt's prelude and headers private.
+	recoveryModel := originalModel
+	finish := BeginTextForwardGuard(c, clientStream)
+	defer func() {
+		if out != nil && out.ClientDisconnect {
+			GeiliMarkTextClientDisconnect(c)
+		}
+		err = finish(err)
+		s.recordTextSupplierFailureGeili(ctx, c, account, recoveryModel, err)
+		var failover *UpstreamFailoverError
+		if errors.As(err, &failover) && failover.SafeToFailoverAfterWrite {
+			out = nil
+		}
+	}()
 
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
 	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
@@ -65,6 +78,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 			mappedModel = normalized
 		}
 	}
+	recoveryModel = mappedModel
 	if err := validateClaude55Request(body, mappedModel); err != nil {
 		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return nil, err
@@ -125,7 +139,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
-	releaseUpstreamCtx()
+	defer releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -229,85 +243,14 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
+	// geili hook: validate completion before constructing a successful JSON body.
+	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, mappedModel, false, nil)
+	if err != nil {
+		return nil, err
 	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+	finalResp := tracker.response
+	usage := tracker.usage
 
-	var finalResp *apicompat.AnthropicResponse
-	var usage ClaudeUsage
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		// SSE 规范允许 `event:xxx`（冒号后无空格）：Kimi 等 Anthropic 兼容上游
-		// 返回紧凑格式，严格匹配 "event: " 会丢弃全部事件（#4653 同根因）。
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
-			continue
-		}
-
-		if !scanner.Scan() {
-			break
-		}
-		payload, ok := extractOpenAISSEDataLine(scanner.Text())
-		if !ok {
-			continue
-		}
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-
-		// message_start carries the initial response structure and cache usage
-		if event.Type == "message_start" && event.Message != nil {
-			finalResp = event.Message
-			mergeAnthropicUsage(&usage, event.Message.Usage)
-		}
-
-		// message_delta carries final usage and stop_reason
-		if event.Type == "message_delta" {
-			if event.Usage != nil {
-				mergeAnthropicUsage(&usage, *event.Usage)
-			}
-			if event.Delta != nil && event.Delta.StopReason != "" && finalResp != nil {
-				finalResp.StopReason = apicompat.AnthropicStopReasonPtr(event.Delta.StopReason)
-			}
-		}
-		if event.Type == "content_block_start" && event.ContentBlock != nil && finalResp != nil {
-			finalResp.Content = append(finalResp.Content, *event.ContentBlock)
-		}
-		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
-			idx := *event.Index
-			if idx < len(finalResp.Content) {
-				switch event.Delta.Type {
-				case "text_delta":
-					finalResp.Content[idx].Text += event.Delta.Text
-				case "thinking_delta":
-					finalResp.Content[idx].Thinking += event.Delta.Thinking
-				case "input_json_delta":
-					finalResp.Content[idx].Input = appendRawJSON(finalResp.Content[idx].Input, event.Delta.PartialJSON)
-				}
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("forward_as_cc buffered: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
-		}
-	}
-
-	if finalResp == nil {
-		writeGatewayCCError(c, http.StatusBadGateway, "server_error", "Upstream stream ended without a response")
-		return nil, fmt.Errorf("upstream stream ended without response")
-	}
-
-	// Update usage from accumulated delta
 	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
 		finalResp.Usage = apicompat.AnthropicUsage{
 			InputTokens:              usage.InputTokens,
@@ -381,29 +324,29 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	var usage ClaudeUsage
 	var firstTokenMs *int
 	firstChunk := true
-
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
-	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+	clientDisconnected := false
 
 	resultWithUsage := func() *ForwardResult {
 		return &ForwardResult{
-			RequestID:       requestID,
-			UpstreamHeaders: resp.Header,
-			Usage:           usage,
-			Model:           originalModel,
-			UpstreamModel:   mappedModel,
-			ReasoningEffort: reasoningEffort,
-			Stream:          true,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    firstTokenMs,
+			RequestID:        requestID,
+			UpstreamHeaders:  resp.Header,
+			Usage:            usage,
+			Model:            originalModel,
+			UpstreamModel:    mappedModel,
+			ReasoningEffort:  reasoningEffort,
+			Stream:           true,
+			Duration:         time.Since(startTime),
+			FirstTokenMs:     firstTokenMs,
+			ClientDisconnect: clientDisconnected,
 		}
 	}
 
 	writeChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
+		if clientDisconnected || (c.Request != nil && errors.Is(c.Request.Context().Err(), context.Canceled)) {
+			clientDisconnected = true
+			GeiliMarkTextClientDisconnect(c)
+			return true
+		}
 		sse, err := apicompat.ChatChunkToSSE(chunk)
 		if err != nil {
 			return false
@@ -412,6 +355,8 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		// c 可能持有请求侧注入的 ToolNameRewrite；无则仅做静态前缀还原。
 		out := string(reverseToolNamesIfPresent(c, []byte(sse)))
 		if _, err := fmt.Fprint(c.Writer, out); err != nil {
+			clientDisconnected = true
+			GeiliMarkTextClientDisconnect(c)
 			return true // client disconnected
 		}
 		return false
@@ -427,7 +372,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		if event.Type == "ping" {
 			return false
 		}
-		if firstChunk {
+		if firstChunk && anthropicEventHasSemanticOutputGeili(event) {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
@@ -461,42 +406,15 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		return false
 	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		// 与缓冲路径一致：接受 SSE 紧凑格式（冒号后无空格，#4653 同根因）。
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
-			continue
-		}
+	// geili hook: transport errors and truncated streams must not be finalized.
+	_, readErr := readAnthropicCompletionGeili(c, resp, s.cfg, mappedModel, true, func(event *apicompat.AnthropicStreamEvent, raw string) error {
+		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(event, raw)
 
-		if !scanner.Scan() {
-			break
-		}
-		payload, ok := extractOpenAISSEDataLine(scanner.Text())
-		if !ok {
-			continue
-		}
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-
-		// Forward received usage regardless of the client stream_options.
-		// The intermediate Responses converter synthesizes usage even when absent.
-		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
-
-		if processAnthropicEvent(&event) {
-			return resultWithUsage(), nil
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("forward_as_cc stream: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
-		}
+		processAnthropicEvent(event)
+		return nil
+	})
+	if readErr != nil {
+		return resultWithUsage(), readErr
 	}
 
 	// Finalize both state machines
@@ -513,8 +431,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	}
 
 	// Write [DONE] marker
-	fmt.Fprint(c.Writer, "data: [DONE]\n\n") //nolint:errcheck
-	c.Writer.Flush()
+	if !clientDisconnected {
+		if _, err := fmt.Fprint(c.Writer, "data: [DONE]\n\n"); err != nil {
+			clientDisconnected = true
+			GeiliMarkTextClientDisconnect(c)
+		} else {
+			c.Writer.Flush()
+		}
+	}
 
 	return resultWithUsage(), nil
 }

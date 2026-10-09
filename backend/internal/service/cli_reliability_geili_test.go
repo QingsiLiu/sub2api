@@ -275,7 +275,10 @@ func TestLongThinkingGeiliIdleBoundStartsAtLastRead(t *testing.T) {
 	}()
 	started := time.Now()
 	_, err := svc.handleStreamingResponse(c.Request.Context(), &http.Response{StatusCode: 200, Header: http.Header{}, Body: pr}, c, &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}, started, "gpt-6-astra", "gpt-6-astra")
-	require.ErrorContains(t, err, "stream data interval timeout")
+	var failover *UpstreamFailoverError
+	require.ErrorAs(t, err, &failover)
+	require.True(t, failover.SafeToFailoverAfterWrite)
+	require.Contains(t, string(failover.ResponseBody), "data interval timeout")
 	require.Greater(t, time.Since(started), 3*time.Second)
 	require.Less(t, time.Since(started), 5*time.Second, "watchdog must not wait a second full thinking interval")
 }

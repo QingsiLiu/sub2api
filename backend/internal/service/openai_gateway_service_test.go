@@ -1600,17 +1600,23 @@ func TestOpenAIStreamingTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
+	finish := BeginTextForwardGuard(c, true)
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, start, "model", "model")
+	err = finish(err)
 	_ = pw.Close()
 	_ = pr.Close()
 
-	if err == nil || !strings.Contains(err.Error(), "stream data interval timeout") {
-		t.Fatalf("expected stream timeout error, got %v", err)
-	}
-	frames := parseSSETestFrames(t, rec.Body.String())
-	require.Len(t, frames, 1)
-	requireResponsesFailedFrame(t, frames[0], "stream_timeout")
-	require.True(t, IsResponseCommitted(c))
+	// A silent initial attempt may recover inside the same client request.
+	// Preserve the watchdog boundary while withholding an attempt's failure event.
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.True(t, failoverErr.SafeToFailoverAfterWrite)
+	require.Contains(t, strings.ToLower(string(failoverErr.ResponseBody)), "stream data interval timeout")
+	require.GreaterOrEqual(t, time.Since(start), time.Second)
+	require.Less(t, time.Since(start), 3*time.Second)
+	require.Empty(t, rec.Body.String())
+	require.False(t, c.Writer.Written())
+	require.False(t, IsResponseCommitted(c))
 }
 
 func TestOpenAIStreamingContextCanceledReturnsIncompleteErrorWithoutInjectingErrorEvent(t *testing.T) {
@@ -3921,7 +3927,7 @@ func TestHandleSSEToJSON_ReconstructsImageGenerationOutputItemDone(t *testing.T)
 	require.Equal(t, "draw a cat", gjson.Get(rec.Body.String(), "output.0.revised_prompt").String())
 }
 
-func TestHandleSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
+func TestHandleSSEToJSON_NoFinalResponseCanRecoverWithoutLeakingSSE(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -3938,11 +3944,11 @@ func TestHandleSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 	}, "\n"))
 
 	usage, err := svc.handleSSEToJSON(resp, c, nil, body, "gpt-4o", "gpt-4o")
-	require.NoError(t, err)
-	require.NotNil(t, usage)
-	require.Equal(t, 0, usage.InputTokens)
-	require.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
-	require.Contains(t, rec.Body.String(), `data: {"type":"response.in_progress"`)
+	var failover *UpstreamFailoverError
+	require.ErrorAs(t, err, &failover)
+	require.True(t, failover.SafeToFailoverAfterWrite)
+	require.Nil(t, usage)
+	require.Empty(t, rec.Body.String(), "sync caller must not receive unfinished SSE as JSON success")
 }
 
 // 无账号时没有可换的对象：newOpenAIStreamFailoverError 要拿 account 记录 ops 归属与

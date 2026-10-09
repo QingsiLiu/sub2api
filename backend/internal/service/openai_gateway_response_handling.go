@@ -27,6 +27,8 @@ import (
 
 // openaiStreamingResult streaming response result
 type openaiStreamingResult struct {
+	clientDisconnect bool
+	terminalEvent    string
 	usage            *OpenAIUsage
 	firstTokenMs     *int
 	responseID       string
@@ -246,6 +248,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	// 否则下游 SDK（例如 OpenCode）会因为类型校验失败而报错。
 	errorEventSent := false
 	clientDisconnected := false // 客户端断开后继续 drain 上游以收集 usage
+	markClientDisconnected := func() {
+		clientDisconnected = true
+		GeiliMarkTextClientDisconnect(c)
+	}
 	sawTerminalEvent := false
 	sawFailedEvent := false
 	sawBareError := false
@@ -299,7 +305,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			_ = resp.Body.Close()
 			return
 		}
-		clientDisconnected = true
+		markClientDisconnected()
 		logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 	}
 	completeGuardedEvent := func(queueDrained bool) {
@@ -313,7 +319,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			}
 			if shouldFlush {
 				if err := flushBuffered(); err != nil {
-					clientDisconnected = true
+					markClientDisconnected()
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 				} else {
 					clientOutputStarted = true
@@ -343,7 +349,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		// Chat Completions error envelope loses the classification in strict clients.
 		payload := `{"type":"error","sequence_number":0,"code":` + strconv.Quote(code) + `,"message":` + strconv.Quote(message) + `,"param":null}`
 		if err := flushBuffered(); err != nil {
-			clientDisconnected = true
+			markClientDisconnected()
 			return
 		}
 		// geili hook: a bare `error` frame is not a Responses terminal event. Codex
@@ -353,16 +359,16 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		// bare error frame to Codex.
 		if !codexFailureTerminal {
 			if _, err := writePendingString("event: error\ndata: " + payload + "\n\n"); err != nil {
-				clientDisconnected = true
+				markClientDisconnected()
 				return
 			}
 		}
 		if _, err := writePendingString(buildOpenAIGatewayStreamFailedSSE(responseID, originalModel, code, message)); err != nil {
-			clientDisconnected = true
+			markClientDisconnected()
 			return
 		}
 		if err := flushBuffered(); err != nil {
-			clientDisconnected = true
+			markClientDisconnected()
 			return
 		}
 		clientOutputStarted = true
@@ -382,6 +388,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	streamSearchSeen := make(map[string]struct{})
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{
+			clientDisconnect: clientDisconnected || errors.Is(c.Request.Context().Err(), context.Canceled),
+			terminalEvent:    terminalEventType,
 			usage:            usage,
 			firstTokenMs:     firstTokenMs,
 			responseID:       responseID,
@@ -395,7 +403,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			return
 		}
 		if err := flushBuffered(); err != nil {
-			clientDisconnected = true
+			markClientDisconnected()
 			logger.LegacyPrintf("service.openai_gateway", "%s", disconnectMessage)
 			return
 		}
@@ -525,6 +533,9 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		return resultWithUsage(), fmt.Errorf("stream read error: %w", scanErr), true
 	}
 	processSSELine := func(line string, queueDrained bool) {
+		if errors.Is(c.Request.Context().Err(), context.Canceled) {
+			markClientDisconnected()
+		}
 		if streamEarlyErr != nil {
 			return
 		}
@@ -537,6 +548,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		if data, ok := extractOpenAISSEDataLine(line); ok {
 			dataBytes := []byte(data)
 			eventType := effectiveOpenAISSEEventType(dataBytes, pendingSSEEventType)
+			// geili hook: execution progress may be named only by the SSE header.
+			geiliObserveUpstreamOperation(c, dataBytes, eventType)
 			if codexFailureTerminal && sawBareError && !sawResponseFailed &&
 				(eventType == "response.completed" || eventType == "response.done") {
 				// A later successful terminal is authoritative over a pending bare
@@ -854,7 +867,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				eventInProgress = line != ""
 				if shouldFlush {
 					if err := flushBuffered(); err != nil {
-						clientDisconnected = true
+						markClientDisconnected()
 						logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 					} else {
 						clientOutputStarted = true
@@ -1007,6 +1020,11 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 					return resultWithUsage(), grokStreamIdleFailoverError(account, streamInterval)
 				}
 			}
+			// geili hook: all native Responses accounts may recover before content.
+			if !openAIStreamClientOutputStarted(c, clientOutputStarted) && !eventShouldFlush {
+				_ = resp.Body.Close()
+				return resultWithUsage(), GeiliUpstreamReadFailure(c, fmt.Errorf("stream data interval timeout"))
+			}
 			sendErrorEvent("stream_timeout", "Upstream response stream timed out")
 			return resultWithUsage(), fmt.Errorf("stream data interval timeout")
 
@@ -1045,7 +1063,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				n, err := w.Write([]byte(":\n\n"))
 				recordOpenAIStreamKeepaliveBytes(c, n)
 				if err != nil {
-					clientDisconnected = true
+					markClientDisconnected()
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 					continue
 				}
@@ -1054,12 +1072,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				continue
 			}
 			if _, err := writePendingString(":\n\n"); err != nil {
-				clientDisconnected = true
+				markClientDisconnected()
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 				continue
 			}
 			if err := flushBuffered(); err != nil {
-				clientDisconnected = true
+				markClientDisconnected()
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during keepalive flush, continuing to drain upstream for billing")
 			} else {
 				lastDownstreamWriteAt = time.Now()
@@ -1457,6 +1475,14 @@ func openAIResponsesCompletedEventIsEmpty(data []byte, usage *OpenAIUsage) bool 
 	if gjson.GetBytes(data, "error").Exists() || gjson.GetBytes(data, "response.error").Exists() {
 		return false
 	}
+	// geili hook: a real completed response may legally contain an explicit
+	// empty output array without usage. Retain refusal detection only for an
+	// incomplete compatibility envelope, not a canonical empty answer.
+	if output := gjson.GetBytes(data, "response.output"); output.IsArray() &&
+		gjson.GetBytes(data, "response.id").String() != "" &&
+		gjson.GetBytes(data, "response.status").String() == "completed" {
+		return false
+	}
 	if output := gjson.GetBytes(data, "response.output"); output.Exists() && output.IsArray() && len(output.Array()) > 0 {
 		return false
 	}
@@ -1667,7 +1693,7 @@ func openAICacheCreationTokensFromUsage(value gjson.Result) int {
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*openaiNonStreamingResult, error) {
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+	body, err := s.readTextBufferedBodyGeili(ctx, resp, c, mappedModel)
 	if err != nil {
 		return nil, err
 	}
@@ -1710,12 +1736,20 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		}
 	}
 
+	if err := geiliSyncJSONFailure(c, resp, body); err != nil {
+		return nil, err
+	}
 	usageValue, usageOK := extractOpenAIUsageFromJSONBytes(body)
-	if !usageOK {
+	responseStatus := gjson.GetBytes(body, "status").String()
+	canonicalTerminalJSON := gjson.GetBytes(body, "id").String() != "" &&
+		gjson.GetBytes(body, "object").String() == "response" &&
+		(responseStatus == "completed" || responseStatus == "incomplete") &&
+		gjson.GetBytes(body, "output").IsArray()
+	if !usageOK && !canonicalTerminalJSON {
 		if bodyLooksLikeSSE {
 			return s.handleSSEToJSON(resp, c, account, body, originalModel, mappedModel)
 		}
-		return nil, fmt.Errorf("parse response: invalid json response")
+		return nil, GeiliUpstreamReadFailure(c, fmt.Errorf("invalid upstream JSON response"))
 	}
 	usage := &usageValue
 	logOpenAISuccessMissingUsage(ctx, c, account, resp, usage, "json", false)
@@ -1798,9 +1832,17 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 		if failoverErr := s.nonStreamingTerminalFailureFailover(c, resp, account, false, terminalType, terminalPayload, msg, mappedModel); failoverErr != nil {
 			return nil, failoverErr
 		}
+		// geili hook: HTTP 200 is only the stream transport status; retain
+		// supplier input errors and their code/param in synchronous JSON.
+		if kind := geiliPayloadErrorField(terminalPayload, "type"); kind == "invalid_request_error" || kind == "validation_error" {
+			return nil, GeiliUpstreamErrorFailure(c, terminalPayload, http.StatusBadRequest, resp.Header)
+		}
 		return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
 	}
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
+	if !terminalOK || !ok {
+		return nil, GeiliUpstreamReadFailure(c, errors.New("upstream stream ended without terminal event"))
+	}
 
 	usage := s.parseSSEUsageFromBody(bodyText)
 	if ok {
@@ -2041,7 +2083,9 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 		if normalized, changed := normalizeCompletedImageGenerationStatus(data); changed {
 			data = normalized
 		}
-		if eventType == "response.done" || eventType == "response.completed" {
+		// geili hook: incomplete/cancelled are genuine terminal responses too;
+		// preserve their status rather than replaying output-limit responses.
+		if eventType == "response.done" || eventType == "response.completed" || eventType == "response.incomplete" || eventType == "response.cancelled" || eventType == "response.canceled" {
 			if response := gjson.GetBytes(data, "response"); response.Exists() && response.Type == gjson.JSON && response.Raw != "" {
 				finalResponse = []byte(response.Raw)
 			}

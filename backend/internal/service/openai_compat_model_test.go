@@ -2083,9 +2083,7 @@ func TestForwardAsAnthropic_MissingTerminalBeforeOutputReturnsFailoverAndOps(t *
 	require.True(t, errors.As(err, &failoverErr), "missing terminal before output must use failover path")
 	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "OpenAI messages stream ended before a terminal event")
-	require.NotNil(t, result)
-	require.Zero(t, result.Usage.InputTokens)
-	require.Zero(t, result.Usage.OutputTokens)
+	require.Nil(t, result, "safe pre-output recovery must not submit a second usage settlement")
 	require.False(t, c.Writer.Written(), "no client body/header should be committed before safe failover")
 	require.Empty(t, rec.Body.String())
 
@@ -2164,6 +2162,10 @@ func TestForwardAsAnthropic_MissingTerminalAfterClientDisconnectSkipsOpsAndFailo
 
 	upstreamBody := strings.Join([]string{
 		`data: {"type":"response.created","response":{"id":"resp_1","model":"gpt-5.4","status":"in_progress","output":[]}}`,
+		"",
+		// A private response.created prelude does not reach the failing writer.
+		// Deliver real text to exercise Write-detected disconnect before EOF.
+		`data: {"type":"response.output_text.delta","delta":"partial"}`,
 		"",
 	}, "\n")
 	upstream := &httpUpstreamRecorder{resp: &http.Response{

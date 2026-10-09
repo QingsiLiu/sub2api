@@ -7,6 +7,7 @@ package service
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -144,8 +145,9 @@ func TestCCStreamingFromNativeAnthropic_HangTimesOut(t *testing.T) {
 	_ = pw.Close()
 	_ = pr.Close()
 
-	if err == nil || !strings.Contains(err.Error(), "stream data interval timeout") {
-		t.Fatalf("expected stream timeout error, got %v", err)
+	var failover *UpstreamFailoverError
+	if !errors.As(err, &failover) {
+		t.Fatalf("expected pre-output recovery error, got %v", err)
 	}
 	if res == nil {
 		t.Fatalf("expected result carrying accumulated usage")
@@ -169,14 +171,15 @@ func TestCCBufferedFromNativeAnthropic_HangTimesOut(t *testing.T) {
 	_ = pw.Close()
 	_ = pr.Close()
 
-	if err == nil || !strings.Contains(err.Error(), "stream data interval timeout") {
-		t.Fatalf("expected stream timeout error, got %v", err)
+	var failover *UpstreamFailoverError
+	if !errors.As(err, &failover) {
+		t.Fatalf("expected pre-output recovery error, got %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("handler did not respect interval bound: %v", elapsed)
 	}
-	if !strings.Contains(rec.Body.String(), "Upstream stream data interval timeout") {
-		t.Fatalf("expected 502 error body, got %q", rec.Body.String())
+	if rec.Body.Len() != 0 {
+		t.Fatalf("failed attempt must not commit a 502 before another route, got %q", rec.Body.String())
 	}
 }
 
@@ -194,8 +197,9 @@ func TestResponsesStreamingFromNativeAnthropic_HangTimesOut(t *testing.T) {
 	_ = pw.Close()
 	_ = pr.Close()
 
-	if err == nil || !strings.Contains(err.Error(), "stream data interval timeout") {
-		t.Fatalf("expected stream timeout error, got %v", err)
+	var failover *UpstreamFailoverError
+	if !errors.As(err, &failover) {
+		t.Fatalf("expected pre-output recovery error, got %v", err)
 	}
 	if res == nil {
 		t.Fatalf("expected result carrying accumulated usage")

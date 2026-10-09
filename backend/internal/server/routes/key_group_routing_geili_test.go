@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -58,6 +60,181 @@ func TestKeyRouteWriterRetriesOnlyUncommittedUpstreamFailures(t *testing.T) {
 			require.Equal(t, tc.status, recorder.Code)
 		})
 	}
+}
+
+func TestKeyRouteWriterDistinguishesUpstreamConcurrencyFromLocal(t *testing.T) {
+	for _, upstream := range []bool{false, true} {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		writer := newKeyRouteWriter(c.Writer)
+		writer.upstreamFailure = upstream
+		writer.WriteHeader(http.StatusTooManyRequests)
+		_, err := writer.WriteString(`{"error":{"type":"rate_limit_error","code":"gateway_concurrency_limit","message":"concurrency limit exceeded"}}`)
+		require.NoError(t, err)
+		require.Equal(t, upstream, writer.canRetry())
+	}
+}
+
+func TestKeyRouteWriterSupplierHeartbeatAllowsNextGroupWithoutHeaderLeak(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	first := newKeyRouteWriter(c.Writer)
+	first.Header().Set("Content-Type", "text/event-stream")
+	first.Header().Set("X-Upstream-Request-ID", "failed-attempt")
+	_, err := first.WriteString(": keepalive\n\n")
+	require.NoError(t, err)
+	first.Flush()
+	require.False(t, first.Written())
+	require.Equal(t, -1, first.Size())
+	require.Empty(t, recorder.Header().Get("X-Upstream-Request-ID"))
+	first.WriteHeader(http.StatusBadGateway)
+	_, err = first.WriteString(`{"error":{"type":"upstream_error","message":"temporarily unavailable"}}`)
+	require.NoError(t, err)
+	require.True(t, first.canRetry())
+
+	second := newKeyRouteWriter(c.Writer)
+	second.Header().Set("Content-Type", "text/event-stream")
+	second.Header().Set("X-Upstream-Request-ID", "successful-attempt")
+	_, err = second.WriteString("data: {\"choices\":[{\"delta\":{\"content\":\"complete answer\"}}]}\n\n")
+	require.NoError(t, err)
+	second.commit()
+	require.True(t, second.Written())
+	require.False(t, second.canRetry())
+	require.Contains(t, recorder.Body.String(), "complete answer")
+	require.NotContains(t, recorder.Body.String(), "temporarily unavailable")
+}
+
+func TestKeyRouteWriterFinalFailureAfterPreviousGroupHeartbeatIsProtocolError(t *testing.T) {
+	for _, path := range []string{"/v1/messages", "/v1/responses", "/v1/chat/completions"} {
+		t.Run(path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, path, nil)
+			first := newKeyRouteWriter(c.Writer)
+			first.Header().Set("Content-Type", "text/event-stream")
+			_, err := first.WriteString(": keepalive\n\n")
+			require.NoError(t, err)
+			first.Flush()
+			// The next group emits its final rejection with no heartbeat of its own.
+			last := newKeyRouteWriter(c.Writer)
+			last.ctx = c
+			last.Header().Set("Content-Type", "application/json")
+			last.WriteHeader(http.StatusTooManyRequests)
+			_, err = last.WriteString(`{"error":{"type":"rate_limit_error","code":"upstream_rate_limited","message":"All suppliers are rate limited"}}`)
+			require.NoError(t, err)
+			service.MarkResponseCommitted(c) // JSON is buffered, not on the wire.
+			last.commit()
+			require.Equal(t, http.StatusOK, recorder.Code)
+			require.Contains(t, recorder.Header().Get("Content-Type"), "text/event-stream")
+			require.Contains(t, recorder.Body.String(), "All suppliers are rate limited")
+			require.Contains(t, recorder.Body.String(), "upstream_rate_limited")
+			if path == "/v1/responses" {
+				require.Equal(t, 1, strings.Count(recorder.Body.String(), "event: response.failed"))
+			} else {
+				require.Equal(t, 1, strings.Count(recorder.Body.String(), "event: error"))
+			}
+		})
+	}
+}
+
+func TestExplicitKeyRoutingInitializesRecoveryForLegacyTextOnly(t *testing.T) {
+	for _, tc := range []struct {
+		path   string
+		budget time.Duration
+	}{
+		{"/v1/messages", 7 * time.Second},
+		{"/v1/responses", 7 * time.Second},
+		{"/backend-api/codex/responses", 7 * time.Second},
+		{"/v1/chat/completions", 7 * time.Second},
+		{"/v1/images/generations", 600 * time.Second},
+		{"/v1/videos", 600 * time.Second},
+		{"/v1/messages/count_tokens", 600 * time.Second},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			router := gin.New()
+			cfg := &config.Config{Gateway: config.GatewayConfig{RequestRecoveryTimeoutSeconds: 7}}
+			router.Use(explicitKeyRouting(nil, nil, nil, cfg))
+			router.POST(tc.path, func(c *gin.Context) {
+				require.Equal(t, tc.budget, service.RequestRecoveryRemaining(c.Request.Context()))
+				c.Status(200)
+			})
+			router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{}`)))
+		})
+	}
+	request := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	request.Header.Set("Upgrade", "websocket")
+	require.False(t, isRecoveryTextRequest(request))
+}
+
+func TestExplicitKeyRoutingLongThinkingDefaultAndExplicitRootBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		model        string
+		gateway      config.GatewayConfig
+		parentBudget time.Duration
+		want         time.Duration
+	}{
+		{name: "ordinary-default", model: "gpt-6-sol", want: 600 * time.Second},
+		{name: "astra-default", model: "gpt-6-astra", want: 1800 * time.Second},
+		{name: "opus-default", model: "claude-opus-5-5", want: 1800 * time.Second},
+		{name: "explicit600", model: "gpt-6-astra", gateway: config.GatewayConfig{KeyGroupRequestTimeoutSeconds: 600, KeyGroupRequestTimeoutExplicit: true}, want: 600 * time.Second},
+		{name: "explicit90", model: "gpt-6-astra", gateway: config.GatewayConfig{KeyGroupRequestTimeoutSeconds: 90}, want: 90 * time.Second},
+		{name: "parent-shorter", model: "gpt-6-astra", parentBudget: 20 * time.Second, want: 20 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := gin.New()
+			var observed time.Duration
+			router.Use(func(c *gin.Context) {
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{BillingSource: "balance", RoutingMode: "composite", GroupIDs: []int64{22, 11}})
+				c.Next()
+				deadline, ok := c.Request.Context().Deadline()
+				require.True(t, ok)
+				observed = time.Until(deadline)
+			})
+			router.Use(explicitKeyRouting(service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, nil), nil, &handler.Handlers{}, &config.Config{Gateway: tc.gateway}))
+			router.POST("/v1/responses", func(c *gin.Context) { t.Fatal("must reject fixture before dispatch") })
+			request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"`+tc.model+`"}`))
+			if tc.parentBudget > 0 {
+				ctx, cancel := context.WithTimeout(request.Context(), tc.parentBudget)
+				defer cancel()
+				request = request.WithContext(ctx)
+			}
+			router.ServeHTTP(httptest.NewRecorder(), request)
+			require.InDelta(t, tc.want.Seconds(), observed.Seconds(), 1)
+		})
+	}
+}
+
+func TestLongThinkingKeyRouteAliasBudgetUsesOriginalIngressAndExplicitLimit(t *testing.T) {
+	started := time.Now().Add(-100 * time.Second)
+	for _, tc := range []struct {
+		name    string
+		gateway config.GatewayConfig
+		want    time.Duration
+	}{
+		{name: "long alias", want: 1700 * time.Second},
+		{name: "explicit600", gateway: config.GatewayConfig{KeyGroupRequestTimeoutSeconds: 600, KeyGroupRequestTimeoutExplicit: true}, want: 500 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := longThinkingKeyRouteContext(context.Background(), started, &config.Config{Gateway: tc.gateway})
+			defer cancel()
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.InDelta(t, tc.want.Seconds(), time.Until(deadline).Seconds(), 1)
+			// The first failure must freeze recovery against the enlarged root,
+			// not the obsolete ordinary600 default.
+			ctx = service.WithRequestRecovery(ctx, 600*time.Second)
+			require.True(t, service.BeginRequestRecovery(ctx))
+			if !tc.gateway.KeyGroupRequestTimeoutExplicit {
+				require.InDelta(t, 600, service.RequestRecoveryRemaining(ctx).Seconds(), 1)
+			}
+		})
+	}
+	parent, cancelParent := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelParent()
+	ctx, cancel := longThinkingKeyRouteContext(parent, started, nil)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	require.InDelta(t, 15, time.Until(deadline).Seconds(), 1)
 }
 
 func TestExplicitKeyRoutingRejectsMissingOrConflictingModelsBeforeScheduling(t *testing.T) {

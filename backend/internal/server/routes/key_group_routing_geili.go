@@ -3,6 +3,7 @@ package routes
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"net/http"
 	"strings"
@@ -23,19 +24,31 @@ import (
 // immutable across attempts; each attempt receives its own group/key/context.
 func explicitKeyRouting(keys *service.APIKeyService, resolver *service.CompositeRouteResolver, h *handler.Handlers, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// geili: one recovery state survives account and selected-group attempts,
+		// including legacy keys. Media/task endpoints keep their replay contract.
+		requestStarted := time.Now()
+		recoveryTextRequest := isRecoveryTextRequest(c.Request)
+		if recoveryTextRequest {
+			budget := 600 * time.Second
+			if cfg != nil {
+				budget = cfg.Gateway.RequestRecoveryBudget()
+			}
+			c.Request = c.Request.WithContext(service.WithRequestRecovery(c.Request.Context(), budget))
+		}
 		key, ok := middleware.GetAPIKeyFromContext(c)
 		if !ok || key == nil || key.BillingSource == "" {
 			c.Next()
 			return
 		}
 		ctx := service.WithKeyRequestRPM(c.Request.Context())
+		rootContext := ctx
 		if key.UsesGroupListRouting() {
 			budget := 600 * time.Second
-			if cfg != nil && cfg.Gateway.KeyGroupRequestTimeoutSeconds > 0 {
-				budget = time.Duration(cfg.Gateway.KeyGroupRequestTimeoutSeconds) * time.Second
+			if cfg != nil {
+				budget = cfg.Gateway.KeyGroupRequestBudget(false)
 			}
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, budget)
+			ctx, cancel = context.WithDeadline(ctx, requestStarted.Add(budget))
 			defer cancel()
 		}
 		c.Request = c.Request.WithContext(ctx)
@@ -148,6 +161,20 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		if strings.Contains(path, "/v1beta/models/") {
 			model = compositeGeminiModelFromParams(c)
 		}
+		if key.UsesGroupListRouting() && recoveryTextRequest && service.IsLongThinkingRequestModel(model) {
+			gatewayConfig := config.GatewayConfig{}
+			if cfg != nil {
+				gatewayConfig = cfg.Gateway
+			}
+			// Base the larger default on ingress time, so body parsing does not
+			// replenish the total budget. Parent/client deadlines remain shorter.
+			if extended := gatewayConfig.KeyGroupRequestBudget(true); extended != gatewayConfig.KeyGroupRequestBudget(false) {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithDeadline(rootContext, requestStarted.Add(extended))
+				defer cancel()
+				c.Request = c.Request.WithContext(ctx)
+			}
+		}
 		if model == "" {
 			if explicitGatewayHandler(h, path) != nil {
 				writeCompositeRouteError(c, infraerrors.BadRequest("MODEL_REQUIRED", "model is required"))
@@ -179,6 +206,19 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 				return
 			}
 		}
+		if key.UsesGroupListRouting() && recoveryTextRequest {
+			for _, decision := range candidates {
+				if resolver.LongThinkingRoute(c.Request.Context(), decision) {
+					// A public alias may hide Opus/Astra. Classify only its frozen,
+					// filtered routes before recovery freezes the root deadline.
+					var cancel context.CancelFunc
+					ctx, cancel = longThinkingKeyRouteContext(rootContext, requestStarted, cfg)
+					defer cancel()
+					c.Request = c.Request.WithContext(ctx)
+					break
+				}
+			}
+		}
 		next := explicitGatewayHandler(h, path)
 		if next == nil {
 			// Async/task/other specialized handlers keep their existing transaction and
@@ -191,18 +231,26 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		attempts := []service.KeyRouteAttempt{}
 		for index, decision := range candidates {
 			if err := c.Request.Context().Err(); err != nil {
-				c.JSON(http.StatusGatewayTimeout, gin.H{"error": gin.H{"code": "REQUEST_TIMEOUT", "message": "request timeout budget exhausted"}})
+				writeKeyRouteTimeout(c, "REQUEST_TIMEOUT", "request timeout budget exhausted")
+				return
+			}
+			if !service.RequestRecoveryAllowed(c.Request.Context()) {
+				writeKeyRouteTimeout(c, "UPSTREAM_RECOVERY_EXHAUSTED", "upstream recovery timeout budget exhausted")
 				return
 			}
 			attempt := handler.CopyContextForAttempt(c) // geili hook: 与 Cloudflare 保活心跳互斥
-			attempt.Request = c.Request.Clone(c.Request.Context())
+			attemptContext, cancelAttempt := service.RequestRecoveryContext(c.Request.Context())
+			defer cancelAttempt()
+			attempt.Request = c.Request.Clone(attemptContext)
 			requestmodel.ResetRequestBody(attempt.Request, body)
 			writer := newKeyRouteWriter(c.Writer)
+			writer.ctx = attempt
 			attempt.Writer = writer
 			history := append(append([]service.KeyRouteAttempt(nil), attempts...), service.KeyRouteAttempt{GroupID: *decision.TargetGroupID, Reason: "selected"})
 			bindExplicitAttempt(attempt, key, decision, history)
 			next(attempt)
-			retry := key.UsesGroupListRouting() && index+1 < len(candidates) && writer.canRetry()
+			writer.upstreamFailure = attempt.GetBool("geili_upstream_failure_final")
+			retry := key.UsesGroupListRouting() && index+1 < len(candidates) && writer.canRetry() && service.BeginRequestRecovery(c.Request.Context())
 			if retry {
 				attempts = append(attempts, service.KeyRouteAttempt{GroupID: *decision.TargetGroupID, Reason: http.StatusText(writer.Status())})
 				continue
@@ -214,6 +262,33 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 			return
 		}
 	}
+}
+
+func longThinkingKeyRouteContext(root context.Context, started time.Time, cfg *config.Config) (context.Context, context.CancelFunc) {
+	gatewayConfig := config.GatewayConfig{}
+	if cfg != nil {
+		gatewayConfig = cfg.Gateway
+	}
+	return context.WithDeadline(root, started.Add(gatewayConfig.KeyGroupRequestBudget(true)))
+}
+
+func writeKeyRouteTimeout(c *gin.Context, code, message string) {
+	body := gin.H{"error": gin.H{"type": "upstream_error", "code": code, "message": message}}
+	if c.Writer.Written() && strings.Contains(c.Writer.Header().Get("Content-Type"), "text/event-stream") {
+		encoded, _ := json.Marshal(body)
+		handler.WriteTextRecoveryFailure(c, http.StatusGatewayTimeout, encoded)
+		return
+	}
+	c.JSON(http.StatusGatewayTimeout, body)
+}
+
+func isRecoveryTextRequest(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodPost || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	path := strings.TrimRight(r.URL.Path, "/")
+	return strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/chat/completions") ||
+		strings.HasSuffix(path, "/responses") || strings.HasSuffix(path, "/responses/compact")
 }
 
 func bindExplicitAttempt(c *gin.Context, original *service.APIKey, decision service.CompositeRouteDecision, attempts []service.KeyRouteAttempt) {
@@ -299,16 +374,20 @@ func explicitGatewayHandler(h *handler.Handlers, path string) gin.HandlerFunc {
 // forwarded immediately; after a flush/write no cross-group replay is possible.
 type keyRouteWriter struct {
 	gin.ResponseWriter
-	headers   http.Header
-	status    int
-	size      int
-	written   bool
-	committed bool
-	rejected  bytes.Buffer
+	headers          http.Header
+	status           int
+	size             int
+	written          bool
+	committed        bool
+	upstreamFailure  bool // Set only by the final typed upstream failure, never inferred from its code.
+	heartbeatWritten bool
+	ctx              *gin.Context
+	rejected         bytes.Buffer
 }
 
 func newKeyRouteWriter(parent gin.ResponseWriter) *keyRouteWriter {
-	return &keyRouteWriter{ResponseWriter: parent, headers: parent.Header().Clone(), status: http.StatusOK, size: -1}
+	return &keyRouteWriter{ResponseWriter: parent, headers: parent.Header().Clone(), status: http.StatusOK, size: -1,
+		heartbeatWritten: parent.Written() && strings.Contains(parent.Header().Get("Content-Type"), "text/event-stream")}
 }
 func (w *keyRouteWriter) Header() http.Header {
 	if w.committed {
@@ -333,6 +412,17 @@ func (w *keyRouteWriter) Status() int   { return w.status }
 func (w *keyRouteWriter) Size() int     { return w.size }
 func (w *keyRouteWriter) Written() bool { return w.written || w.committed }
 func (w *keyRouteWriter) Write(data []byte) (int, error) {
+	// Transport heartbeats keep the Python connection alive without committing
+	// an account/group identity or preventing a later group from taking over.
+	if !w.committed && w.status < 400 && strings.Contains(w.headers.Get("Content-Type"), "text/event-stream") && keyRouteNeutralSSE(data) {
+		for _, name := range []string{"Content-Type", "Cache-Control", "X-Accel-Buffering"} {
+			if value := w.headers.Get(name); value != "" {
+				w.ResponseWriter.Header().Set(name, value)
+			}
+		}
+		w.heartbeatWritten = true
+		return w.ResponseWriter.Write(data)
+	}
 	w.WriteHeaderNow()
 	if w.status >= 400 && !w.committed {
 		// Error messages from the gateway are bounded; limit fallback buffering too.
@@ -356,6 +446,10 @@ func (w *keyRouteWriter) Flush() {
 	if w.status >= 400 && !w.committed {
 		return
 	}
+	if w.heartbeatWritten && !w.committed {
+		w.ResponseWriter.Flush()
+		return
+	}
 	w.commit()
 	w.ResponseWriter.Flush()
 }
@@ -364,6 +458,23 @@ func (w *keyRouteWriter) commit() {
 		return
 	}
 	w.committed = true
+	if w.heartbeatWritten && w.status >= 400 {
+		// HTTP 200 is already on the wire. Emit the final error using the
+		// requested streaming protocol, including on non-Cloudflare ingress.
+		if w.ctx != nil {
+			original := w.ctx.Writer
+			w.ctx.Writer = w.ResponseWriter
+			// Any committed marker refers to this still-buffered JSON rejection,
+			// not bytes delivered after the heartbeat. Convert it exactly once.
+			w.ctx.Set(service.ResponseCommittedKey, false)
+			handler.WriteTextRecoveryFailure(w.ctx, w.status, w.rejected.Bytes())
+			w.ctx.Writer = original
+		} else {
+			_, _ = w.ResponseWriter.WriteString("event: error\ndata: " + w.rejected.String() + "\n\n")
+			w.ResponseWriter.Flush()
+		}
+		return
+	}
 	headers := w.ResponseWriter.Header()
 	for k := range headers {
 		delete(headers, k)
@@ -376,9 +487,29 @@ func (w *keyRouteWriter) commit() {
 		_, _ = w.ResponseWriter.Write(w.rejected.Bytes())
 	}
 }
+
+func keyRouteNeutralSSE(data []byte) bool {
+	for _, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, ":") || line == "event: ping" || line == "event: keepalive" {
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			kind := gjson.Get(strings.TrimSpace(strings.TrimPrefix(line, "data:")), "type").String()
+			if kind == "ping" || kind == "keepalive" {
+				continue
+			}
+		}
+		return false
+	}
+	return true
+}
 func (w *keyRouteWriter) canRetry() bool {
 	if w.committed {
 		return false
+	}
+	if w.upstreamFailure && w.status == http.StatusTooManyRequests {
+		return true
 	}
 	body := w.rejected.Bytes()
 	code := strings.ToLower(gjson.GetBytes(body, "error.code").String())

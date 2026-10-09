@@ -191,9 +191,9 @@ func TestOpenAIResponsesCompletedEventIsEmpty(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "completed with empty output array",
+			name: "completed with explicit empty output array is a legal empty answer",
 			data: `{"type":"response.completed","response":{"id":"r1","status":"completed","output":[]}}`,
-			want: true,
+			want: false,
 		},
 		{
 			name: "completed with usage",

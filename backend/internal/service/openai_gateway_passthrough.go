@@ -368,7 +368,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		SetOpsUpstreamModel(c, actualModel)
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		upstreamReq, buildErr := s.buildUpstreamRequestOpenAIPassthrough(upstreamCtx, c, account, body, token)
-		releaseUpstreamCtx()
+		defer releaseUpstreamCtx()
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -1620,13 +1620,18 @@ func openAIStreamErrorEventShouldFailover(payload []byte, message string) bool {
 	case http.StatusUnauthorized, http.StatusTooManyRequests, 529:
 		return true
 	}
+	// The semantic classifier defaults unknown failures to 502. Only explicit
+	// supplier status/type evidence makes a bare error a recoverable server fault.
+	if geiliExplicitServerFailure(payload) {
+		return true
+	}
 	if isOpenAITransientProcessingError(http.StatusBadRequest, message, payload) {
 		return true
 	}
 	combined := strings.ToLower(strings.TrimSpace(message + " " +
 		gjson.GetBytes(payload, "error.message").String() + " " +
 		gjson.GetBytes(payload, "response.error.message").String()))
-	return strings.Contains(combined, "temporary") ||
+	return strings.Contains(combined, "temporary") || strings.Contains(combined, "temporarily") ||
 		strings.Contains(combined, "try again") ||
 		strings.Contains(combined, "please retry")
 }
@@ -1838,7 +1843,7 @@ func (s *OpenAIGatewayService) nonStreamingTerminalFailureFailover(
 	message string,
 	canonicalModel ...string,
 ) *UpstreamFailoverError {
-	if account == nil || IsResponseCommitted(c) {
+	if account == nil || IsResponseCommitted(c) || !geiliPreOutput(c) {
 		return nil
 	}
 	shouldFailover := openAIStreamFailedEventShouldFailover(payload, message)
@@ -2031,6 +2036,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
 			rawEventType := effectiveOpenAISSEEventType(dataBytes, pendingSSEEventType)
+			// geili hook: an observed built-in operation must never be replayed.
+			geiliObserveUpstreamOperation(c, dataBytes, rawEventType)
 			observer.ObserveOpenAI(dataBytes, rawEventType)
 			if needModelReplace {
 				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
@@ -2326,7 +2333,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	originalModel string,
 	mappedModel string,
 ) (*openaiNonStreamingResultPassthrough, error) {
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+	body, err := s.readTextBufferedBodyGeili(ctx, resp, c, mappedModel)
 	if err != nil {
 		return nil, err
 	}
@@ -2348,6 +2355,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		return s.handlePassthroughSSEToJSON(resp, c, account, body, originalModel, mappedModel)
 	}
 
+	if err := geiliSyncJSONFailure(c, resp, body); err != nil {
+		return nil, err
+	}
 	usage := &OpenAIUsage{}
 	usageParsed := false
 	if len(body) > 0 {
@@ -2410,9 +2420,16 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 		if failoverErr := s.nonStreamingTerminalFailureFailover(c, resp, account, true, terminalType, terminalPayload, msg, mappedModel); failoverErr != nil {
 			return nil, failoverErr
 		}
+		// geili hook: preserve hard input-error semantics inside HTTP 200 SSE.
+		if kind := geiliPayloadErrorField(terminalPayload, "type"); kind == "invalid_request_error" || kind == "validation_error" {
+			return nil, GeiliUpstreamErrorFailure(c, terminalPayload, http.StatusBadRequest, resp.Header)
+		}
 		return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
 	}
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
+	if !terminalOK || !ok {
+		return nil, GeiliUpstreamReadFailure(c, errors.New("upstream stream ended without terminal event"))
+	}
 
 	usage := s.parseSSEUsageFromBody(bodyText)
 	if ok {

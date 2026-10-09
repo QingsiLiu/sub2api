@@ -87,6 +87,7 @@ func TestProfitVetoAfter503DoesNotLivelock(t *testing.T) {
 func TestProfitVetoKeepsBackoffUsefulForHealthyAccount(t *testing.T) {
 	fs := NewFailoverState(10, false)
 	fs.LastFailoverErr = newTestFailoverErr(503, false, false)
+	fs.LastFailoverErr.SelectionRetryAfter = time.Now().Add(10 * time.Millisecond)
 	fs.SwitchCount = 1
 	// 账号 1 因真实 503 被排除；账号 2 会被利润门否决。
 	fs.FailedAccountIDs[1] = struct{}{}
@@ -131,6 +132,7 @@ func TestRecordProfitVetoExcludesAccount(t *testing.T) {
 func TestHandleSelectionExhaustedUnaffectedWithoutProfitVeto(t *testing.T) {
 	fs := NewFailoverState(3, false)
 	fs.LastFailoverErr = newTestFailoverErr(503, false, false)
+	fs.LastFailoverErr.SelectionRetryAfter = time.Now().Add(10 * time.Millisecond)
 	fs.SwitchCount = 1
 	fs.FailedAccountIDs[100] = struct{}{}
 

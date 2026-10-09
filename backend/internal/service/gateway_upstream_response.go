@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -740,6 +741,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	}
 	scanBuf := getSSEScannerBuf64K()
 	scanner.Buffer(scanBuf[:0], maxLineSize)
+	var preOutput atomic.Bool
+	preOutput.Store(true)
+	scanner.Split(openAIFirstOutputDynamicScanLines(&preOutput)) // geili hook: bound the private prelude before a newline arrives.
 
 	type scanEvent struct {
 		line string
@@ -849,11 +853,13 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	needModelReplace := originalModel != mappedModel
 	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
 	sawTerminalEvent := false
+	completion := &anthropicCompletionGeili{} // geili hook: do not accept truncated EOF or bare [DONE].
 	useNoopDeltaKeepalive := c != nil && c.Request != nil && shouldUseClaudeCodeNoopDeltaKeepalive(c.GetHeader("User-Agent"))
 	noopDeltaKeepaliveBlockIndex := -1
 	noopDeltaKeepaliveDeltaType := ""
 
 	pendingEventLines := make([]string, 0, 4)
+	pendingEventBytes := 0
 
 	processSSEEvent := func(lines []string) ([]string, string, *sseUsagePatch, error) {
 		if len(lines) == 0 {
@@ -862,19 +868,25 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 		eventName := ""
 		dataLine := ""
+		dataLines := make([]string, 0, 1)
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "event:") {
 				eventName = strings.TrimSpace(strings.TrimPrefix(trimmed, "event:"))
 				continue
 			}
-			if dataLine == "" && sseDataRe.MatchString(trimmed) {
-				dataLine = sseDataRe.ReplaceAllString(trimmed, "")
+			if sseDataRe.MatchString(trimmed) {
+				dataLines = append(dataLines, sseDataRe.ReplaceAllString(trimmed, ""))
 			}
 		}
+		dataLine = strings.Join(dataLines, "\n")
 
-		if eventName == "error" {
-			return nil, dataLine, nil, &sseStreamErrorEventError{RawData: dataLine}
+		if eventName == "error" || gjson.Get(dataLine, "type").String() == "error" || gjson.Get(dataLine, "error").Exists() {
+			status := resp.StatusCode
+			if !json.Valid([]byte(dataLine)) {
+				status = http.StatusBadGateway
+			}
+			return nil, dataLine, nil, GeiliUpstreamErrorFailure(c, []byte(dataLine), status, resp.Header)
 		}
 
 		if dataLine == "" {
@@ -882,24 +894,36 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		}
 
 		if dataLine == "[DONE]" {
+			if err := completion.complete(); err != nil {
+				return nil, dataLine, nil, GeiliUpstreamReadFailure(c, err)
+			}
 			sawTerminalEvent = true
+			completion.stopped = true
+			completion.syntheticStop = true
 			block := ""
 			if eventName != "" {
 				block = "event: " + eventName + "\n"
 			}
 			block += "data: " + dataLine + "\n\n"
+			block += "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
 			return []string{block}, dataLine, nil, nil
 		}
 
+		var typedEvent apicompat.AnthropicStreamEvent
+		if err := json.Unmarshal([]byte(dataLine), &typedEvent); err != nil {
+			return nil, dataLine, nil, GeiliUpstreamReadFailure(c, fmt.Errorf("upstream stream read error: invalid JSON event: %w", err))
+		}
+		if typedEvent.Type == "" {
+			typedEvent.Type = eventName
+		}
+		if err := completion.observe(&typedEvent); err != nil {
+			return nil, dataLine, nil, GeiliUpstreamReadFailure(c, err)
+		}
+		preOutput.Store(!completion.semantic)
+		sawTerminalEvent = completion.stopped
 		var event map[string]any
 		if err := json.Unmarshal([]byte(dataLine), &event); err != nil {
-			// JSON 解析失败，直接透传原始数据
-			block := ""
-			if eventName != "" {
-				block = "event: " + eventName + "\n"
-			}
-			block += "data: " + dataLine + "\n\n"
-			return []string{block}, dataLine, nil, nil
+			return nil, dataLine, nil, err
 		}
 
 		eventType, _ := event["type"].(string)
@@ -985,9 +1009,6 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		}
 
 		usagePatch := s.extractSSEUsagePatch(event)
-		if anthropicStreamEventIsTerminal(eventName, dataLine) {
-			sawTerminalEvent = true
-		}
 		if !eventChanged {
 			block := ""
 			if eventName != "" {
@@ -1016,13 +1037,63 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		return []string{block}, string(newData), usagePatch, nil
 	}
 
+	// geili hook: process the final unterminated SSE frame with the same rules.
+	relaySSEEvent := func(lines []string) error {
+		outputBlocks, data, usagePatch, err := processSSEEvent(lines)
+		if err != nil {
+			return err
+		}
+
+		for _, block := range outputBlocks {
+			if !clientDisconnected {
+				restored := reverseToolNamesIfPresent(c, []byte(block))
+				if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
+					clientDisconnected = true
+					logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
+					// 不 break：客户端断开后仍需继续合并本事件及后续事件的 usage，
+					// 否则会漏计当前事件携带的 usage 导致少计费。后续写入由
+					// clientDisconnected 守卫跳过。
+				} else {
+					flusher.Flush()
+					lastDataAt = time.Now()
+					resetKeepaliveTimer()
+				}
+			}
+			if data != "" {
+				if firstTokenMs == nil && completion.semantic && data != "[DONE]" {
+					ms := int(time.Since(startTime).Milliseconds())
+					firstTokenMs = &ms
+				}
+				if usagePatch != nil {
+					mergeSSEUsagePatch(usage, usagePatch)
+				}
+			}
+		}
+		return nil
+	}
+
 	for {
 		select {
 		case ev, ok := <-events:
 			if !ok {
-				// 上游完成，返回结果
+				if len(pendingEventLines) > 0 {
+					if err := relaySSEEvent(pendingEventLines); err != nil {
+						return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, err
+					}
+				}
+				if !sawTerminalEvent && completion.complete() == nil {
+					sawTerminalEvent = true
+					if !clientDisconnected {
+						_, _ = fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+						flusher.Flush()
+					}
+				}
 				if !sawTerminalEvent {
-					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, fmt.Errorf("stream usage incomplete: missing terminal event")
+					err := fmt.Errorf("stream usage incomplete: missing terminal event")
+					if !clientDisconnected {
+						err = GeiliUpstreamReadFailure(c, err)
+					}
+					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, err
 				}
 				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
@@ -1051,7 +1122,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				// 默认 *net.OpError 的 Error() 会泄露内部 IP/端口和上游地址。完整 ev.err
 				// 仅在下方 LegacyPrintf 内部日志中保留供运维诊断。
 				disconnectMsg := "upstream stream disconnected: " + sanitizeStreamError(ev.err)
-				if !c.Writer.Written() {
+				if geiliPreOutput(c) {
 					logger.LegacyPrintf("service.gateway", "Upstream stream read error before any client output (account=%d), failing over: %v", account.ID, ev.err)
 					body, _ := json.Marshal(map[string]any{
 						"type": "error",
@@ -1061,9 +1132,10 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 						},
 					})
 					return nil, &UpstreamFailoverError{
-						StatusCode:             http.StatusBadGateway,
-						ResponseBody:           body,
-						RetryableOnSameAccount: true,
+						StatusCode:               http.StatusBadGateway,
+						SafeToFailoverAfterWrite: true,
+						ResponseBody:             body,
+						RetryableOnSameAccount:   true,
 					}
 				}
 				sendErrorEvent("stream_read_error", disconnectMsg)
@@ -1077,43 +1149,26 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 					continue
 				}
 
-				outputBlocks, data, usagePatch, err := processSSEEvent(pendingEventLines)
+				err := relaySSEEvent(pendingEventLines)
 				pendingEventLines = pendingEventLines[:0]
+				pendingEventBytes = 0
 				if err != nil {
-					if clientDisconnected {
-						return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
-					}
-					return nil, err
+					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, err
 				}
-
-				for _, block := range outputBlocks {
-					if !clientDisconnected {
-						restored := reverseToolNamesIfPresent(c, []byte(block))
-						if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
-							clientDisconnected = true
-							logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
-							// 不 break：客户端断开后仍需继续合并本事件及后续事件的 usage，
-							// 否则会漏计当前事件携带的 usage 导致少计费。后续写入由
-							// clientDisconnected 守卫跳过。
-						} else {
-							flusher.Flush()
-							lastDataAt = time.Now()
-							resetKeepaliveTimer()
-						}
-					}
-					if data != "" {
-						if firstTokenMs == nil && data != "[DONE]" {
-							ms := int(time.Since(startTime).Milliseconds())
-							firstTokenMs = &ms
-						}
-						if usagePatch != nil {
-							mergeSSEUsagePatch(usage, usagePatch)
-						}
-					}
+				if completion.stopped {
+					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 				}
 				continue
 			}
 
+			maxFrameSize := openAIFirstOutputStageMaxBytes
+			if completion.semantic {
+				maxFrameSize = maxLineSize
+			}
+			pendingEventBytes += len(line) + 1
+			if pendingEventBytes > maxFrameSize {
+				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs}, GeiliUpstreamReadFailure(c, fmt.Errorf("upstream stream read error: SSE event exceeds staging limit"))
+			}
 			pendingEventLines = append(pendingEventLines, line)
 
 		case <-intervalCh:
@@ -1128,6 +1183,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			// 处理流超时，可能标记账户为临时不可调度或错误状态
 			if s.rateLimitService != nil {
 				s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)
+			}
+			if geiliPreOutput(c) {
+				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs}, GeiliUpstreamReadFailure(c, fmt.Errorf("stream data interval timeout"))
 			}
 			sendErrorEvent("stream_timeout", fmt.Sprintf("upstream stream idle for %s", streamInterval))
 			return &streamingResult{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream data interval timeout")
@@ -1414,6 +1472,11 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, mappedModel)
 		}
 		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	// geili hook: HTTP 200 JSON is not sufficient evidence of completion.
+	if err := validateAnthropicJSONGeili(c, resp, body); err != nil {
+		return nil, err
 	}
 
 	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细

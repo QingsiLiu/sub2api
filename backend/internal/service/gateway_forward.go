@@ -88,7 +88,7 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 }
 
 // Forward 转发请求到Claude API
-func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
+func (s *GatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
@@ -386,12 +386,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// 重试循环
 	var resp *http.Response
 	lastWireBody := body
-	retryStart := time.Now()
+	var retryStart time.Time
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 		upstreamReq, wireBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, body, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
-		releaseUpstreamCtx()
+		defer releaseUpstreamCtx()
 		if err != nil {
 			return nil, err
 		}
@@ -410,12 +410,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 优先检测thinking block签名错误（400）并重试一次
+		// geili hook: the initial generation may legitimately think for minutes;
+		// its wait must not consume a retry window that starts at the first fault.
+		if resp.StatusCode >= 400 && retryStart.IsZero() {
+			retryStart = time.Now()
+		}
 		if resp.StatusCode == 400 {
 			respBody, readErr := s.readUpstreamErrorBody(resp)
 			if readErr == nil {
 				_ = resp.Body.Close()
 
-				if s.shouldRectifySignatureError(ctx, account, respBody, reqModel) {
+				if s.shouldRectifySignatureError(ctx, account, respBody, reqModel) && (!isClaude55SignedThinkingModel(reqModel) || ClaimThinkingSignatureRecovery(ctx)) {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 						ProxyID:            opsUpstreamProxyID(account),
 						ProxyName:          opsUpstreamProxyName(account),
@@ -460,7 +465,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					filteredBody := FilterThinkingBlocksForRetry(body, reqModel)
 					retryCtx, releaseRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 					retryReq, retryWireBody, buildErr := s.buildUpstreamRequest(retryCtx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
-					releaseRetryCtx()
+					defer releaseRetryCtx()
 					if buildErr == nil {
 						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 						if retryErr == nil {
@@ -504,7 +509,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 									filteredBody2 := FilterSignatureSensitiveBlocksForRetry(body, reqModel)
 									retryCtx2, releaseRetryCtx2 := detachStreamUpstreamContext(ctx, reqStream)
 									retryReq2, retryWireBody2, buildErr2 := s.buildUpstreamRequest(retryCtx2, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
-									releaseRetryCtx2()
+									defer releaseRetryCtx2()
 									if buildErr2 == nil {
 										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, tlsProfile)
 										if retryErr2 == nil {
@@ -587,7 +592,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
 						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 						budgetRetryReq, budgetWireBody, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
-						releaseBudgetRetryCtx()
+						defer releaseBudgetRetryCtx()
 						if buildErr == nil {
 							budgetRetryResp, retryErr := s.httpUpstream.DoWithTLS(budgetRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 							if retryErr == nil {
@@ -618,6 +623,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 		// 检查是否需要通用重试（排除400，因为400已经在上面特殊处理过了）
 		if resp.StatusCode >= 400 && resp.StatusCode != 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {
+			if s.shouldFailoverUpstreamError(resp.StatusCode) && !BeginRequestRecovery(ctx) {
+				break
+			}
 			if attempt < maxRetryAttempts {
 				elapsed := time.Since(retryStart)
 				if elapsed >= maxRetryElapsed {
@@ -626,6 +634,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 				delay := retryBackoffDelay(attempt)
 				remaining := maxRetryElapsed - elapsed
+				if recoveryRemaining := RequestRecoveryRemaining(ctx); recoveryRemaining < remaining {
+					remaining = recoveryRemaining
+				}
 				if delay > remaining {
 					delay = remaining
 				}

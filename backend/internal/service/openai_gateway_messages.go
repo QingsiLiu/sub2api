@@ -25,7 +25,7 @@ import (
 // to OpenAI Responses API format, forwards to the OpenAI upstream, and converts
 // the response back to Anthropic Messages format. This enables Claude Code
 // clients to access OpenAI models through the standard /v1/messages endpoint.
-func (s *OpenAIGatewayService) ForwardAsAnthropic(
+func (s *OpenAIGatewayService) forwardAsAnthropicGeiliAttempt(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
@@ -365,7 +365,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	} else {
 		upstreamReq, err = s.buildUpstreamRequest(upstreamCtx, c, account, responsesBody, token, isStream, promptCacheKey, false)
 	}
-	releaseUpstreamCtx()
+	defer releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -414,7 +414,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			}
 			upstreamCtxRetry, releaseRetry := detachUpstreamContext(ctx)
 			upstreamReq, err = buildGrokResponsesRequest(upstreamCtxRetry, c, account, responsesBody, token, grokCacheIdentity, s.cfg, s.settingService)
-			releaseRetry()
+			defer releaseRetry()
 			if err != nil {
 				return nil, fmt.Errorf("build grok retry request: %w", err)
 			}
@@ -612,8 +612,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 	}
 
 	if finalResponse == nil {
-		writeAnthropicError(c, http.StatusBadGateway, "api_error", "Upstream stream ended without a terminal response event")
-		return nil, fmt.Errorf("upstream stream ended without terminal event")
+		return nil, GeiliUpstreamReadFailure(c, fmt.Errorf("upstream stream ended without terminal event"))
 	}
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
@@ -855,6 +854,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 				if frame, ok := parser.Finish(); ok {
 					payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
 					payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+					geiliObserveUpstreamOperation(c, []byte(payload))
 					var event apicompat.ResponsesStreamEvent
 					if err := json.Unmarshal([]byte(payload), &event); err == nil {
 						s.parseSSEUsageBytesWithType([]byte(payload), event.Type, &usage)
@@ -895,6 +895,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			}
 			payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
 			payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+			geiliObserveUpstreamOperation(c, []byte(payload))
 
 			var event apicompat.ResponsesStreamEvent
 			if err := json.Unmarshal([]byte(payload), &event); err != nil {

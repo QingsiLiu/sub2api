@@ -74,15 +74,18 @@ func TestOpenAIStreamingTimeoutEndsWithResponseFailedForAPIKeyAccount(t *testing
 	c, rec := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
 	defer func() { _ = pw.Close(); _ = pr.Close() }()
+	go func() {
+		_, _ = io.WriteString(pw, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"visible\"}\n\n")
+	}()
 	resp := &http.Response{StatusCode: http.StatusOK, Body: pr, Header: http.Header{}}
 
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "gpt-6-astra", "gpt-6-astra")
 	require.ErrorContains(t, err, "stream data interval timeout")
 
 	frames := parseSSETestFrames(t, rec.Body.String())
-	require.Len(t, frames, 1, "Responses clients must not receive a bare error frame")
-	requireResponsesFailedFrame(t, frames[0], "stream_timeout")
-	require.Equal(t, "gpt-6-astra", gjson.Get(frames[0].data, "response.model").String())
+	require.Len(t, frames, 2, "Responses clients must not receive a bare error frame")
+	requireResponsesFailedFrame(t, frames[1], "stream_timeout")
+	require.Equal(t, "gpt-6-astra", gjson.Get(frames[1].data, "response.model").String())
 	require.True(t, IsResponseCommitted(c))
 }
 
@@ -91,14 +94,17 @@ func TestOpenAIStreamingTimeoutOAuthAccountSendsOnlyResponseFailed(t *testing.T)
 	c, rec := newOpenAIStreamFailedTestContext()
 	pr, pw := io.Pipe()
 	defer func() { _ = pw.Close(); _ = pr.Close() }()
+	go func() {
+		_, _ = io.WriteString(pw, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"visible\"}\n\n")
+	}()
 	resp := &http.Response{StatusCode: http.StatusOK, Body: pr, Header: http.Header{}}
 
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, newOpenAIOAuthNamespaceTestAccount(), time.Now(), "gpt-6-astra", "gpt-6-astra")
 	require.ErrorContains(t, err, "stream data interval timeout")
 
 	frames := parseSSETestFrames(t, rec.Body.String())
-	require.Len(t, frames, 1, "Codex must not receive a bare error frame")
-	requireResponsesFailedFrame(t, frames[0], "stream_timeout")
+	require.Len(t, frames, 2, "Codex must not receive a bare error frame")
+	requireResponsesFailedFrame(t, frames[1], "stream_timeout")
 	require.True(t, IsResponseCommitted(c))
 }
 

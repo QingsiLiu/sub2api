@@ -59,7 +59,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
-	return s.forwardAsChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+	return s.forwardChatWithGeiliGuard(ctx, c, account, body, promptCacheKey, defaultMappedModel)
 }
 
 func (s *OpenAIGatewayService) forwardAsChatCompletions(
@@ -382,7 +382,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	}
 	defer cancelUpstream()
 	upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, responsesBody, token, true, promptCacheKey, false)
-	releaseUpstreamCtx()
+	defer releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -556,8 +556,8 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	}
 
 	if finalResponse == nil {
-		writeChatCompletionsError(c, http.StatusBadGateway, "api_error", "Upstream stream ended without a terminal response event")
-		return nil, fmt.Errorf("upstream stream ended without terminal event")
+		// geili hook: a clean EOF without a terminal is still a failed attempt.
+		return nil, GeiliUpstreamReadFailure(c, fmt.Errorf("upstream stream ended without terminal event"))
 	}
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
@@ -765,6 +765,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 			UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 			UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
 			Stream:                        true,
+			ClientDisconnect:              clientDisconnected,
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
 		}

@@ -151,8 +151,8 @@ func namespaceToolMapping() apicompat.ResponsesClientToolMapping {
 }
 
 func TestHandleResponsesBufferedStreamingResponse_RestoresNamespaceTool(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -168,8 +168,8 @@ func TestHandleResponsesBufferedStreamingResponse_RestoresNamespaceTool(t *testi
 }
 
 func TestHandleResponsesBufferedStreamingResponse_ToolArgumentsAreValidJSON(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -199,8 +199,8 @@ func TestAppendRawJSON_EmptyObjectPlaceholder(t *testing.T) {
 }
 
 func TestHandleResponsesStreamingResponse_RestoresNamespaceTool(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -242,8 +242,8 @@ func TestExtractResponsesReasoningEffortFromBody(t *testing.T) {
 }
 
 func TestHandleResponsesBufferedStreamingResponse_PreservesMessageStartCacheUsage(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -256,6 +256,9 @@ func TestHandleResponsesBufferedStreamingResponse_PreservesMessageStartCacheUsag
 			``,
 			`event: content_block_start`,
 			`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`,
+			``,
+			`event: content_block_stop`,
+			`data: {"type":"content_block_stop","index":0}`,
 			``,
 			`event: message_delta`,
 			`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}`,
@@ -275,8 +278,8 @@ func TestHandleResponsesBufferedStreamingResponse_PreservesMessageStartCacheUsag
 }
 
 func TestHandleResponsesStreamingResponse_PreservesMessageStartCacheUsage(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -289,6 +292,9 @@ func TestHandleResponsesStreamingResponse_PreservesMessageStartCacheUsage(t *tes
 			``,
 			`event: content_block_start`,
 			`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`,
+			``,
+			`event: content_block_stop`,
+			`data: {"type":"content_block_stop","index":0}`,
 			``,
 			`event: message_delta`,
 			`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":8}}`,
@@ -498,8 +504,8 @@ func TestParseAnthropicSSEField(t *testing.T) {
 }
 
 func TestHandleResponsesBufferedStreamingResponse_CompactSSEFormat(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -513,6 +519,9 @@ func TestHandleResponsesBufferedStreamingResponse_CompactSSEFormat(t *testing.T)
 			``,
 			`event:content_block_start`,
 			`data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"OK"}}`,
+			``,
+			`event: content_block_stop`,
+			`data: {"type":"content_block_stop","index":0}`,
 			``,
 			`event:message_delta`,
 			`data:{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`,
@@ -529,8 +538,8 @@ func TestHandleResponsesBufferedStreamingResponse_CompactSSEFormat(t *testing.T)
 }
 
 func TestHandleResponsesStreamingResponse_CompactSSEFormat(t *testing.T) {
-	t.Parallel()
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -544,6 +553,9 @@ func TestHandleResponsesStreamingResponse_CompactSSEFormat(t *testing.T) {
 			``,
 			`event:content_block_start`,
 			`data:{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"OK"}}`,
+			``,
+			`event: content_block_stop`,
+			`data: {"type":"content_block_stop","index":0}`,
 			``,
 			`event:message_delta`,
 			`data:{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":6}}`,

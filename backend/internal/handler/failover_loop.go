@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,10 +41,6 @@ const (
 	// maxRequestScopedRetryDelay 限制请求级瞬时错误的指数退避上限，避免高重试配置
 	// 将单次请求拖入分钟级等待。
 	maxRequestScopedRetryDelay = 8 * time.Second
-	// singleAccountBackoffDelay 单账号分组 503 退避重试固定延时。
-	// Service 层在 SingleAccountRetry 模式下已做充分原地重试（最多 3 次、总等待 30s），
-	// Handler 层只需短暂间隔后重新进入 Service 层即可。
-	singleAccountBackoffDelay = 2 * time.Second
 	// maxProfitVetoAttempts 单次请求内允许的分组利润门终检否决次数上限。
 	// 利润否决不产生上游请求，因此不会推进 SwitchCount；没有独立上限的话，
 	// 「选号 → 终检否决 → 重选」在候选池与账号快照短暂不一致时可以空转很久。
@@ -76,7 +74,7 @@ func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryC
 	return delay
 }
 
-func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCount, retryLimit int) bool {
+func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCount, retryLimit int, accounts ...*service.Account) bool {
 	if failoverErr == nil || !failoverErr.RetryableOnSameAccount {
 		return false
 	}
@@ -94,12 +92,22 @@ func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCo
 		}
 		return retryCount < retryLimit
 	}
-	// OAuth 429 explicitly opts into a deadline window. It is intentionally not
-	// bounded by the ordinary/default pool retry count.
-	if !failoverErr.SameAccountRetryDeadline.IsZero() {
+	// OAuth 429 may use its existing deadline window when no account retry
+	// count was configured. An administrator's explicit pool retry count still
+	// takes precedence, including zero; the account getter applies its usual
+	// parsing, fallback and clamping rules.
+	if !failoverErr.SameAccountRetryDeadline.IsZero() && !explicitSameAccountRetryCount(accounts) {
 		return true
 	}
 	return retryLimit > 0 && retryCount < retryLimit
+}
+
+func explicitSameAccountRetryCount(accounts []*service.Account) bool {
+	if len(accounts) == 0 || accounts[0] == nil || !accounts[0].IsPoolMode() {
+		return false
+	}
+	raw, configured := accounts[0].Credentials["pool_mode_retry_count"]
+	return configured && raw != nil
 }
 
 // sameAccountRetryDeadlineAllows prevents a retry from starting after the
@@ -139,6 +147,9 @@ type FailoverState struct {
 	profitVetoedAccountIDs map[int64]struct{}
 	// profitVetoCount 本次请求累计的利润否决次数，用于 maxProfitVetoAttempts 上限。
 	profitVetoCount int
+	// geili: direct handler callers also bound empty-selection waits; gateway
+	// requests additionally share this cap across selected-group attempts.
+	selectionWaitCount int
 }
 
 // NewFailoverState 创建 failover 状态
@@ -197,6 +208,7 @@ func (s *FailoverState) HandleFailoverError(
 	platform string,
 	retryLimit int,
 	failoverErr *service.UpstreamFailoverError,
+	accounts ...*service.Account,
 ) FailoverAction {
 	// 客户端已断开：failover 只会用已取消的 context 重新选号并必然失败，
 	// 不应再被当成账号耗尽处理（误报 502）。
@@ -207,10 +219,16 @@ func (s *FailoverState) HandleFailoverError(
 	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
 		return FailoverExhausted
 	}
+	// geili hook: never replenish recovery time by changing account or group.
+	if !service.BeginRequestRecovery(ctx) {
+		return FailoverExhausted
+	}
+	recoveryCtx, cancelRecovery := service.RequestRecoveryContext(ctx)
+	defer cancelRecovery()
 
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
 	retryCount := s.SameAccountRetryCount[accountID]
-	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
+	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit, accounts...)
 	if needForceCacheBilling(s.hasBoundSession, failoverErr, sameAccountRetry) {
 		s.ForceCacheBilling = true
 	}
@@ -227,8 +245,14 @@ func (s *FailoverState) HandleFailoverError(
 			zap.Int("same_account_retry_max", retryLimit),
 			zap.Duration("retry_delay", retryDelay),
 		)
-		if !sleepWithContext(ctx, retryDelay) {
-			return FailoverCanceled
+		if retryDelay >= service.RequestRecoveryRemaining(ctx) {
+			return FailoverExhausted
+		}
+		if !sleepWithContext(recoveryCtx, retryDelay) {
+			if ctx.Err() != nil {
+				return FailoverCanceled
+			}
+			return FailoverExhausted
 		}
 		return FailoverContinue
 	}
@@ -258,8 +282,11 @@ func (s *FailoverState) HandleFailoverError(
 	// Antigravity 平台换号线性递增延时
 	if platform == service.PlatformAntigravity {
 		delay := time.Duration(s.SwitchCount-1) * time.Second
-		if !sleepWithContext(ctx, delay) {
-			return FailoverCanceled
+		if !sleepWithContext(recoveryCtx, delay) {
+			if ctx.Err() != nil {
+				return FailoverCanceled
+			}
+			return FailoverExhausted
 		}
 	}
 
@@ -267,13 +294,16 @@ func (s *FailoverState) HandleFailoverError(
 }
 
 // HandleSelectionExhausted 处理选号失败（所有候选账号都在排除列表中）时的退避重试决策。
-// 针对 Antigravity 单账号分组的 503 (MODEL_CAPACITY_EXHAUSTED) 场景：
-// 清除排除列表、等待退避后重新选号。
+// 只有上游给出了明确冷却结束时间且仍在恢复预算内，才等待并重选；
+// 不再盲目清空排除列表造成无限空转。
 //
 // 返回 FailoverContinue 时，调用方应设置 SingleAccountRetry context 并 continue。
 // 返回 FailoverExhausted 时，调用方应返回错误响应。
 // 返回 FailoverCanceled 时，调用方应直接 return。
 func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAction {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// 客户端已断开时选号失败是 context canceled 的必然结果，
 	// 不代表账号耗尽，直接按取消终止。
 	if ctx.Err() != nil {
@@ -294,14 +324,33 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 			)
 			return FailoverExhausted
 		}
+		// geili: Retry-After is evidence of a known cooldown. A generic 503
+		// alone does not prove that unavailable accounts will become selectable.
+		waitUntil, known := selectionRetryAfter(s.LastFailoverErr, time.Now())
+		if !known || s.selectionWaitCount >= 3 || !service.BeginRequestRecovery(ctx) {
+			return FailoverExhausted
+		}
+		wait := time.Until(waitUntil)
+		if wait < 0 {
+			wait = 0
+		}
+		if wait >= service.RequestRecoveryRemaining(ctx) || !service.ClaimRequestRecoverySelectionWait(ctx) {
+			return FailoverExhausted
+		}
+		s.selectionWaitCount++
+		recoveryCtx, cancelRecovery := service.RequestRecoveryContext(ctx)
+		defer cancelRecovery()
 
 		logger.FromContext(ctx).Warn("gateway.failover_single_account_backoff",
-			zap.Duration("backoff_delay", singleAccountBackoffDelay),
+			zap.Duration("backoff_delay", wait),
 			zap.Int("switch_count", s.SwitchCount),
 			zap.Int("max_switches", s.MaxSwitches),
 		)
-		if !sleepWithContext(ctx, singleAccountBackoffDelay) {
-			return FailoverCanceled
+		if !sleepWithContext(recoveryCtx, wait) {
+			if ctx.Err() != nil {
+				return FailoverCanceled
+			}
+			return FailoverExhausted
 		}
 		logger.FromContext(ctx).Warn("gateway.failover_single_account_retry",
 			zap.Int("switch_count", s.SwitchCount),
@@ -318,6 +367,27 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 	return FailoverExhausted
 }
 
+func selectionRetryAfter(err *service.UpstreamFailoverError, now time.Time) (time.Time, bool) {
+	if err == nil {
+		return time.Time{}, false
+	}
+	if !err.SelectionRetryAfter.IsZero() {
+		return err.SelectionRetryAfter, true
+	}
+	raw := strings.TrimSpace(err.ResponseHeaders.Get("Retry-After"))
+	if raw == "" {
+		return time.Time{}, false
+	}
+	if seconds, parseErr := strconv.ParseInt(raw, 10, 32); parseErr == nil {
+		if seconds < 0 {
+			return time.Time{}, false
+		}
+		return now.Add(time.Duration(seconds) * time.Second), true
+	}
+	deadline, parseErr := http.ParseTime(raw)
+	return deadline, parseErr == nil
+}
+
 // needForceCacheBilling 判断 failover 时是否需要强制缓存计费。
 // 粘性会话实际切换账号、或上游明确标记时，将 input_tokens 转为 cache_read 计费。
 func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFailoverError, sameAccountRetry bool) bool {
@@ -330,6 +400,10 @@ func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFa
 // 照常完成计费，但不再为无人接收的响应启动新的上游尝试。
 // 响应尚未提交时把状态码标记为 499（client closed request），供访问日志归类。
 func failoverClientGone(c *gin.Context) bool {
+	// geili hook: server recovery/total deadlines produce a protocol failure.
+	if requestRecoveryStopped(c) {
+		return true
+	}
 	if c == nil || c.Request == nil || c.Request.Context().Err() == nil {
 		return false
 	}

@@ -674,6 +674,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	for {
+		defer armRequestRecoveryAttempt(c)()
 		// Streaming Forward intentionally detaches the upstream request so usage can
 		// be drained after a disconnect. Re-check the client context before every
 		// account attempt so a canceled request never starts a failover replay.
@@ -793,7 +794,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		forwardStart := time.Now()
 		// 用扣除非语义心跳字节的口径快照：心跳注释不构成语义响应，
 		// 不能因心跳字节变化而放弃 failover 换号（#3887）。
-		writerSizeBeforeForward := service.OpenAICompactKeepaliveAdjustedWrittenSize(c)
+		writerSizeBeforeForward := service.GeiliTextForwardWrittenSize(c)
 		// 跨 passthrough 边界的 failover：从 Kiro 等透传账号切到 Bedrock 等非透传账号前，
 		// 从不可变的 canonical forwardBody 派生本次尝试 body 并整块剔除上游私有的加密
 		// reasoning item（含耦合的 id/summary），避免非透传上游 400 拒绝 Kiro reasoning 形态。
@@ -868,6 +869,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			})
 		}
 		if err != nil {
+			if requestRecoveryStopped(c) {
+				submitResponsesUsage(result)
+				return
+			}
 			if result != nil && result.ClientDisconnect {
 				reqLog.Info("openai.client_disconnected",
 					zap.Int64("account_id", account.ID),
@@ -921,10 +926,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
+					if !service.BeginRequestRecovery(c.Request.Context()) {
+						writeRequestRecoveryTimeout(c)
+						return
+					}
 					// 池模式：同账号重试
 					if failoverErr.RetryableOnSameAccount {
 						retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
-						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
+						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit, account) {
 							sameAccountRetryCount[account.ID]++
 							retryDelay := sameAccountRetryDelayFor(failoverErr, sameAccountRetryCount[account.ID])
 							reqLog.Warn("openai.pool_mode_same_account_retry",
@@ -934,10 +943,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 								zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 								zap.Duration("retry_delay", retryDelay),
 							)
-							select {
-							case <-c.Request.Context().Done():
+							// geili hook: one recovery window also bounds same-account backoff.
+							if !waitForRequestRecovery(c, retryDelay) {
 								return
-							case <-time.After(retryDelay):
 							}
 							continue
 						}
@@ -1314,6 +1322,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	c.Request = c.Request.WithContext(msgPricingCtx)
 
 	for {
+		defer armRequestRecoveryAttempt(c)()
 		if failoverClientGone(c) {
 			return
 		}
@@ -1397,7 +1406,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
 		// 应用渠道模型映射到请求体
 		forwardBody := mappedBodyForMessages(channelMappingMsg.Mapped, channelMappingMsg.MappedModel)
-		writerSizeBeforeForward := c.Writer.Size()
+		writerSizeBeforeForward := service.GeiliTextForwardWrittenSize(c)
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer func() {
 				if accountReleaseFunc != nil {
@@ -1468,6 +1477,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			})
 		}
 		if err != nil {
+			if requestRecoveryStopped(c) {
+				submitMessagesUsage(result)
+				return
+			}
 			if result != nil && result.ImageCount > 0 {
 				reqLog.Warn("openai_messages.forward_partial_error_with_image_result",
 					zap.Int64("account_id", account.ID),
@@ -1484,7 +1497,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						)
 						return
 					}
-					if c.Writer.Size() != writerSizeBeforeForward {
+					if !openAIForwardMayFailover(c, writerSizeBeforeForward, failoverErr) {
 						h.gatewayService.ObserveOpenAIAccountHealthFailure(c.Request.Context(), account, err)
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
@@ -1496,10 +1509,14 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
+					if !service.BeginRequestRecovery(c.Request.Context()) {
+						writeRequestRecoveryTimeout(c)
+						return
+					}
 					// 池模式：同账号重试
 					if failoverErr.RetryableOnSameAccount {
 						retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
-						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
+						if sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit, account) {
 							sameAccountRetryCount[account.ID]++
 							retryDelay := sameAccountRetryDelayFor(failoverErr, sameAccountRetryCount[account.ID])
 							reqLog.Warn("openai_messages.pool_mode_same_account_retry",
@@ -1509,10 +1526,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 								zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 								zap.Duration("retry_delay", retryDelay),
 							)
-							select {
-							case <-c.Request.Context().Done():
+							// geili hook: one recovery window also bounds same-account backoff.
+							if !waitForRequestRecovery(c, retryDelay) {
 								return
-							case <-time.After(retryDelay):
 							}
 							continue
 						}
@@ -1630,6 +1646,16 @@ func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, stat
 
 // handleAnthropicFailoverExhausted maps upstream failover errors to Anthropic format.
 func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
+	if c != nil && service.IsResponseCommitted(c) {
+		return
+	}
+	if requestRecoveryStopped(c) {
+		return
+	}
+	if failoverErr != nil {
+		c.Set("geili_upstream_failure_final", true)
+		streamStarted = upstreamFailureStreamStarted(c, streamStarted)
+	}
 	if failoverErr != nil {
 		copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	}
@@ -2202,6 +2228,12 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 			h.handleStreamingAwareErrorWithCode(c, status, errType, code, message, *streamStarted, false)
 		}
 	}
+	protocolErrorWriter := writeError
+	writeError = func(status int, errType, code, message string) {
+		if !requestRecoveryStopped(c) {
+			protocolErrorWriter(status, errType, code, message)
+		}
+	}
 	if selection == nil || selection.Account == nil {
 		markOpsRoutingCapacityLimited(c)
 		writeError(http.StatusServiceUnavailable, "api_error", "", "No available accounts")
@@ -2640,7 +2672,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			return false
 		}
 		retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
-		if !sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit) {
+		if !sameAccountRetryAllowed(failoverErr, sameAccountRetryCount[account.ID], retryLimit, account) {
 			return false
 		}
 		sameAccountRetryCount[account.ID]++
@@ -3480,15 +3512,26 @@ func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, stream
 
 // handleConcurrencyError handles concurrency-related acquire errors.
 func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
+	if requestRecoveryStopped(c) {
+		return
+	}
 	status, errType, code, message := concurrencyErrorResponse(err, slotType)
 	h.handleStreamingAwareErrorWithCode(c, status, errType, code, message, streamStarted, false)
 }
 
 func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
+	if c != nil && service.IsResponseCommitted(c) {
+		return
+	}
+	if requestRecoveryStopped(c) {
+		return
+	}
 	if failoverErr == nil {
 		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, streamStarted)
 		return
 	}
+	c.Set("geili_upstream_failure_final", true)
+	streamStarted = upstreamFailureStreamStarted(c, streamStarted)
 	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	if failoverErr.IsOpenAIRequestBodyTooLarge() {
 		service.SetOpsUpstreamError(c, http.StatusRequestEntityTooLarge, service.OpenAIRequestBodyTooLargeClientMessage, "")
@@ -3751,7 +3794,7 @@ func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, stream
 		imageKeepalivePaddingOnly = adjustedSize < 0
 		imageKeepaliveResponseWritten = adjustedSize >= 0
 	}
-	compactKeepaliveHasMeaningfulOutput := compactKeepaliveCommitted && service.OpenAICompactKeepaliveAdjustedWrittenSize(c) > 0
+	compactKeepaliveHasMeaningfulOutput := compactKeepaliveCommitted && service.GeiliTextForwardWrittenSize(c) > 0
 	// Compact keepalive may have committed 200 headers without writing a
 	// semantic SSE event. In that case the Responses stream still needs its
 	// protocol-correct terminal response.failed event.
@@ -3792,7 +3835,7 @@ func openAIForwardErrorAlreadyCommunicated(c *gin.Context, writerSizeBeforeForwa
 	}
 	// 与快照同口径：排除 compact 心跳字节，避免"仅心跳写出"被误判为
 	// 响应已写出（#3887）。
-	if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) == writerSizeBeforeForward ||
+	if service.GeiliTextForwardWrittenSize(c) == writerSizeBeforeForward ||
 		service.OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c) == writerSizeBeforeForward {
 		return false
 	}
@@ -3821,7 +3864,12 @@ func openAIForwardMayFailover(c *gin.Context, writerSizeBeforeForward int, failo
 	if c == nil || c.Writer == nil {
 		return false
 	}
-	if service.OpenAICompactKeepaliveAdjustedWrittenSize(c) == writerSizeBeforeForward {
+	// The snapshot excludes known heartbeats. An answer delivered before this
+	// attempt still forbids replay when the failed attempt wrote nothing new.
+	if writerSizeBeforeForward > 0 {
+		return false
+	}
+	if service.GeiliTextForwardWrittenSize(c) == writerSizeBeforeForward {
 		return true
 	}
 	return failoverErr != nil && failoverErr.SafeToFailoverAfterWrite
@@ -3835,7 +3883,10 @@ func openAIRequestAllowsFailoverReplay(c *gin.Context) bool {
 }
 
 func openAIFirstOutputFailoverExhausted(failoverErr *service.UpstreamFailoverError, switchCount *int) bool {
-	if failoverErr == nil || !failoverErr.SafeToFailoverAfterWrite || switchCount == nil {
+	// geili: generic transport recovery also uses SafeToFailoverAfterWrite;
+	// only the dedicated first-output timer consumes this separate small cap.
+	if failoverErr == nil || !failoverErr.SafeToFailoverAfterWrite || switchCount == nil ||
+		gjson.GetBytes(failoverErr.ResponseBody, "error.type").String() != "first_output_timeout" {
 		return false
 	}
 	if *switchCount >= maxOpenAIFirstOutputTimeoutSwitches {

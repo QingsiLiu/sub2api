@@ -608,14 +608,18 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	if !stream {
 		return ctx, func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	// geili hook: detach caller cancellation for usage draining, retaining the
+	// immutable retry deadline on later attempts so a supplier cannot hang forever.
+	return detachRecoveryDeadlineGeili(ctx)
 }
 
 func detachUpstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	// geili hook: detach caller cancellation for usage draining, retaining the
+	// immutable retry deadline on later attempts so a supplier cannot hang forever.
+	return detachRecoveryDeadlineGeili(ctx)
 }
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
@@ -1313,4 +1317,19 @@ func optionalSubscriptionID(subscription *UserSubscription) *int64 {
 		return &subscription.ID
 	}
 	return nil
+}
+
+// Preserve explicit request limits for text calls while detaching client
+// cancellation to drain an already started generation for its final usage.
+func detachRecoveryDeadlineGeili(ctx context.Context) (context.Context, context.CancelFunc) {
+	base := context.WithoutCancel(ctx)
+	if requestRecoveryFromContext(ctx) == nil {
+		return base, func() {}
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		limited, cancel := context.WithDeadline(base, deadline)
+		recovered, recoveryCancel := RequestRecoveryContext(limited)
+		return recovered, func() { recoveryCancel(); cancel() }
+	}
+	return RequestRecoveryContext(base)
 }

@@ -9,12 +9,9 @@ package service
 // 状态机），仅上游发送/错误处理对齐 OpenAI 网关语义。
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -115,7 +112,7 @@ func (s *OpenAIGatewayService) forwardChatCompletionsViaNativeAnthropic(
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
 	upstreamReq, forwardedBody, err := s.buildNativeAnthropicUpstreamRequest(upstreamCtx, c, account, anthropicBody, apiKey, targetURL, body)
-	releaseUpstreamCtx()
+	defer releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -158,106 +155,13 @@ func (s *OpenAIGatewayService) handleCCBufferedFromNativeAnthropic(
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
+	// geili hook: validate completion before constructing a successful JSON body.
+	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, false, nil)
+	if err != nil {
+		return nil, err
 	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
-
-	var finalResp *apicompat.AnthropicResponse
-	var usage ClaudeUsage
-
-	// 读间隔上限：上游挂住 SSE 时中止组装（缓冲路径尚未提交响应头，可回 502）。
-	streamInterval := s.anthropicNativeStreamInterval(upstreamModel)
-	pump := newAnthropicNativeLinePump(scanner, streamInterval)
-	defer pump.stop()
-
-	logReadErr := func(err error) {
-		if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("openai cc via native anthropic buffered: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
-		}
-	}
-	onIdle := func() (*OpenAIForwardResult, error) {
-		_ = resp.Body.Close()
-		logger.L().Warn("openai cc via native anthropic buffered: data interval timeout",
-			zap.String("request_id", requestID),
-			zap.Duration("interval", streamInterval),
-		)
-		writeChatCompletionsError(c, http.StatusBadGateway, "server_error", "Upstream stream data interval timeout")
-		return nil, fmt.Errorf("stream data interval timeout")
-	}
-
-	for {
-		line, rerr := pump.next()
-		if rerr != nil {
-			if errors.Is(rerr, errAnthropicNativeStreamIdle) {
-				return onIdle()
-			}
-			logReadErr(rerr)
-			break
-		}
-		// SSE 规范允许 `event:xxx`（冒号后无空格）：Kimi 等 Anthropic 兼容上游
-		// 返回紧凑格式，严格匹配 "event: " 会丢弃全部事件（#4653 同根因）。
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
-			continue
-		}
-
-		dataLine, rerr := pump.next()
-		if rerr != nil {
-			if errors.Is(rerr, errAnthropicNativeStreamIdle) {
-				return onIdle()
-			}
-			logReadErr(rerr)
-			break
-		}
-		payload, ok := extractOpenAISSEDataLine(dataLine)
-		if !ok {
-			continue
-		}
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-
-		if event.Type == "message_start" && event.Message != nil {
-			finalResp = event.Message
-			mergeAnthropicUsage(&usage, event.Message.Usage)
-		}
-		if event.Type == "message_delta" {
-			if event.Usage != nil {
-				mergeAnthropicUsage(&usage, *event.Usage)
-			}
-			if event.Delta != nil && event.Delta.StopReason != "" && finalResp != nil {
-				finalResp.StopReason = apicompat.AnthropicStopReasonPtr(event.Delta.StopReason)
-			}
-		}
-		if event.Type == "content_block_start" && event.ContentBlock != nil && finalResp != nil {
-			finalResp.Content = append(finalResp.Content, *event.ContentBlock)
-		}
-		if event.Type == "content_block_delta" && event.Delta != nil && finalResp != nil && event.Index != nil {
-			idx := *event.Index
-			if idx < len(finalResp.Content) {
-				switch event.Delta.Type {
-				case "text_delta":
-					finalResp.Content[idx].Text += event.Delta.Text
-				case "thinking_delta":
-					finalResp.Content[idx].Thinking += event.Delta.Thinking
-				case "input_json_delta":
-					finalResp.Content[idx].Input = appendRawJSON(finalResp.Content[idx].Input, event.Delta.PartialJSON)
-				}
-			}
-		}
-	}
-
-	if finalResp == nil {
-		writeChatCompletionsError(c, http.StatusBadGateway, "server_error", "Upstream stream ended without a response")
-		return nil, fmt.Errorf("upstream stream ended without response")
-	}
+	finalResp := tracker.response
+	usage := tracker.usage
 
 	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
 		finalResp.Usage = apicompat.AnthropicUsage{
@@ -329,13 +233,6 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 	firstChunk := true
 	clientDisconnected := false
 
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
-	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
-
 	resultWithUsage := func() *OpenAIForwardResult {
 		return &OpenAIForwardResult{
 			RequestID:        requestID,
@@ -353,34 +250,6 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		}
 	}
 
-	// 读间隔上限：上游挂住 SSE（不发数据也不断连）时结束排水。上游 ctx 为
-	// WithoutCancel 且 http.Client 无整体 Timeout，无此界限则客户端断开后
-	// scanner.Scan() 永久阻塞（见 anthropic native pump 文件注释）。
-	streamInterval := s.anthropicNativeStreamInterval(upstreamModel)
-	pump := newAnthropicNativeLinePump(scanner, streamInterval)
-	defer pump.stop()
-
-	logReadErr := func(err error) {
-		if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("openai cc via native anthropic stream: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
-		}
-	}
-	// onIdle 关闭上游连接（解除阻塞的读、归还连接池位），并按已累计 usage
-	// 返回——与 messages 主路径 "stream usage incomplete after timeout" 同语义。
-	onIdle := func() (*OpenAIForwardResult, error) {
-		_ = resp.Body.Close()
-		if !clientDisconnected {
-			logger.L().Warn("openai cc via native anthropic stream: data interval timeout",
-				zap.String("request_id", requestID),
-				zap.Duration("interval", streamInterval),
-			)
-		}
-		return resultWithUsage(), fmt.Errorf("stream data interval timeout")
-	}
-
 	writeChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
 		if clientDisconnected {
 			return false // 已断开：不再写客户端，只排水上游累计 usage
@@ -392,13 +261,14 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		out := string(reverseToolNamesIfPresent(c, []byte(sse)))
 		if _, err := fmt.Fprint(c.Writer, out); err != nil {
 			clientDisconnected = true
+			GeiliMarkTextClientDisconnect(c)
 			return false
 		}
 		return false
 	}
 
 	processAnthropicEvent := func(event *apicompat.AnthropicStreamEvent) bool {
-		if firstChunk {
+		if firstChunk && anthropicEventHasSemanticOutputGeili(event) {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
@@ -436,45 +306,15 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		return false
 	}
 
-	for {
-		line, rerr := pump.next()
-		if rerr != nil {
-			if errors.Is(rerr, errAnthropicNativeStreamIdle) {
-				return onIdle()
-			}
-			logReadErr(rerr)
-			break
-		}
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
-			continue
-		}
+	// geili hook: transport errors and truncated streams must not be finalized.
+	_, readErr := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, true, func(event *apicompat.AnthropicStreamEvent, raw string) error {
+		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(event, raw)
 
-		dataLine, rerr := pump.next()
-		if rerr != nil {
-			if errors.Is(rerr, errAnthropicNativeStreamIdle) {
-				return onIdle()
-			}
-			// EOF / 读错误：事件行后流终止，进入 finalize。
-			logReadErr(rerr)
-			break
-		}
-		payload, ok := extractOpenAISSEDataLine(dataLine)
-		if !ok {
-			continue
-		}
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-
-		// Forward received usage regardless of the client stream_options.
-		// The intermediate Responses converter synthesizes usage even when absent.
-		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
-
-		if processAnthropicEvent(&event) {
-			return resultWithUsage(), nil
-		}
+		processAnthropicEvent(event)
+		return nil
+	})
+	if readErr != nil {
+		return resultWithUsage(), readErr
 	}
 
 	// Finalize both state machines（客户端已断开时仍执行，保证 usage 汇总完整）。
