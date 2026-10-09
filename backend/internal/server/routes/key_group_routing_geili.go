@@ -77,6 +77,12 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 			return true
 		}
 		path := strings.TrimRight(c.Request.URL.Path, "/")
+		// Native task handlers authorize the persisted user/key owner themselves.
+		// No model/account/group is reselected for an already accepted task.
+		if ownedAUAPIMediaLookup(c) {
+			c.Next()
+			return
+		}
 		if c.Request.Method == http.MethodGet && (strings.HasSuffix(path, "/models") || strings.Contains(path, "/models/")) {
 			models, err := keys.ExplicitKeyModels(c.Request.Context(), key, resolver, compositeRouteEndpointForPath(path), forcedPlatform)
 			if err != nil {
@@ -541,4 +547,33 @@ var upstreamSideRateLimitMessages = map[string]bool{
 
 func isUpstreamSideRateLimit(kind, code, message string) bool {
 	return kind == "rate_limit_error" && code == "" && upstreamSideRateLimitMessages[strings.TrimSpace(message)]
+}
+
+// Restrict model-free composite-key lookups to native task endpoints. Other
+// model-free requests retain ExplicitSingleGroup and cannot reach a global pool.
+func ownedAUAPIMediaLookup(c *gin.Context) bool {
+	if c.Request.Method != http.MethodGet {
+		return false
+	}
+	id, prefix := "", ""
+	switch c.FullPath() {
+	case "/v1/images/tasks/:task_id":
+		id, prefix = c.Param("task_id"), "auimgtask_"
+	case "/v1/videos/:request_id", "/v1/videos/:request_id/content",
+		"/v1/videos/generations/:request_id", "/v1/videos/generations/:request_id/content",
+		"/videos/:request_id", "/videos/:request_id/content",
+		"/videos/generations/:request_id", "/videos/generations/:request_id/content":
+		id, prefix = c.Param("request_id"), "auvidtask_"
+	default:
+		return false
+	}
+	if !strings.HasPrefix(id, prefix) || len(id) != len(prefix)+32 {
+		return false
+	}
+	for _, char := range id[len(prefix):] {
+		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
 }

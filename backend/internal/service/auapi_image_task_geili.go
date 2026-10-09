@@ -25,6 +25,8 @@ var (
 
 type AUAPIImageTaskRecord struct {
 	TaskID                                                                     string
+	Kind                                                                       string `json:"kind,omitempty"`
+	DurationSeconds                                                            int    `json:"duration_seconds,omitempty"`
 	UserID, APIKeyID, GroupID, AccountID                                       int64
 	Model, UpstreamModel                                                       string
 	Status, Phase                                                              string
@@ -101,6 +103,14 @@ func (s *AUAPIImageTaskService) Available(ctx context.Context, groupID int64, mo
 	return false, nil
 }
 func (s *AUAPIImageTaskService) Submit(ctx context.Context, key *APIKey, sub *UserSubscription, body []byte, idem string) (*ImageTask, bool, error) {
+	return s.submitMedia(ctx, key, sub, body, idem, "image")
+}
+
+func (s *AUAPIImageTaskService) SubmitVideo(ctx context.Context, key *APIKey, sub *UserSubscription, body []byte, idem string) (*ImageTask, bool, error) {
+	return s.submitMedia(ctx, key, sub, body, idem, "video")
+}
+
+func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, sub *UserSubscription, body []byte, idem, kind string) (*ImageTask, bool, error) {
 	if !s.Enabled() {
 		return nil, false, ErrImageTaskUnavailable
 	}
@@ -114,6 +124,9 @@ func (s *AUAPIImageTaskService) Submit(ctx context.Context, key *APIKey, sub *Us
 		return nil, false, ErrImageTaskUnavailable
 	}
 	request, tier, err := buildAUAPIImagePayload(body)
+	if kind == "video" {
+		request, tier, err = buildAUAPIVideoPayload(body)
+	}
 	if err != nil {
 		return nil, false, infraerrors.BadRequest("invalid_request_error", err.Error())
 	}
@@ -164,23 +177,41 @@ func (s *AUAPIImageTaskService) Submit(ctx context.Context, key *APIKey, sub *Us
 		return nil, false, infraerrors.ServiceUnavailable("NO_AUAPI_IMAGE_ACCOUNT", "No available AUAPI image account")
 	}
 	request.Model = account.GetMappedModel(routingModel)
-	// AUAPI's public GPT image contract currently exposes gpt-image-2.
-	if request.Model != "gpt-image-2" {
-		return nil, false, infraerrors.BadRequest("invalid_request_error", "AUAPI image account must map to gpt-image-2")
+	if request.Model == "gpt-image-2.5" && request.Parameters.Quality == "" {
+		request.Parameters.Quality = "low"
+	}
+	if !supportedAUAPIMediaModel(kind, request.Model) {
+		return nil, false, infraerrors.BadRequest("invalid_request_error", "Unsupported AUAPI media model mapping")
 	}
 	payload, _ := json.Marshal(request)
 	multiplier := s.gateway.ResolveUserGroupRateMultiplier(ctx, key.UserID, key.Group.ID, key.Group.BillingRateMultiplier(sub != nil))
-	multiplier = resolveImageRateMultiplier(key, multiplier)
-	resolved := s.gateway.resolveOpenAIChannelPricing(ctx, routingModel, key)
-	if !apiKeyHasConfiguredImagePrice(key, tier) && (resolved == nil || (resolved.Mode != BillingModeImage && resolved.Mode != BillingModePerRequest)) {
-		return nil, false, infraerrors.BadRequest("IMAGE_PRICE_REQUIRED", "Configure a per-image price for this model and size before enabling AUAPI")
+	multiplier = resolveAUAPIMediaRateMultiplier(kind, key, multiplier)
+	unitPrice := 0.0
+	if kind == "video" || request.Model != "gpt-image-2" {
+		unitPrice, err = auapiConfiguredMediaPrice(account, request, tier)
+		if err != nil {
+			return nil, false, infraerrors.BadRequest("MEDIA_PRICE_REQUIRED", err.Error())
+		}
+	} else {
+		resolved := s.gateway.resolveOpenAIChannelPricing(ctx, routingModel, key)
+		if !apiKeyHasConfiguredImagePrice(key, tier) && (resolved == nil || (resolved.Mode != BillingModeImage && resolved.Mode != BillingModePerRequest)) {
+			return nil, false, infraerrors.BadRequest("IMAGE_PRICE_REQUIRED", "Configure a per-image price for this model and size before enabling AUAPI")
+		}
+		cost := s.gateway.calculateOpenAIImageCost(ctx, routingModel, key, &OpenAIForwardResult{ImageCount: 1, ImageSize: tier}, multiplier)
+		if cost == nil {
+			return nil, false, ErrImageTaskUnavailable
+		}
+		unitPrice = cost.TotalCost
 	}
-	cost := s.gateway.calculateOpenAIImageCost(ctx, routingModel, key, &OpenAIForwardResult{ImageCount: 1, ImageSize: tier}, multiplier)
-	if cost == nil || cost.TotalCost < 0 || cost.ActualCost < 0 || math.IsNaN(cost.ActualCost) || math.IsInf(cost.ActualCost, 0) {
+	if unitPrice < 0 || multiplier < 0 || math.IsNaN(unitPrice) || math.IsInf(unitPrice, 0) || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
 		return nil, false, ErrImageTaskUnavailable
 	}
 	now := time.Now().UTC()
-	task := &AUAPIImageTaskRecord{TaskID: "auimgtask_" + strings.ReplaceAll(uuid.NewString(), "-", ""), UserID: key.UserID, APIKeyID: key.ID, GroupID: key.Group.ID, AccountID: account.ID, Model: routingModel, UpstreamModel: request.Model, Status: ImageTaskStatusProcessing, Phase: "estimate", RequestJSON: payload, IdempotencyKey: idem, RequestHash: hash, ImageSize: tier, Count: request.Parameters.N, UnitPrice: cost.TotalCost, RateMultiplier: multiplier, AccountRateMultiplier: account.BillingRateMultiplier(), HoldAmount: QuantizeUsageBillingAmount(cost.ActualCost * float64(request.Parameters.N)), CreatedAt: now, NextPollAt: now, ExpiresAt: now.Add(24 * time.Hour)}
+	prefix := "auimgtask_"
+	if kind == "video" {
+		prefix = "auvidtask_"
+	}
+	task := &AUAPIImageTaskRecord{TaskID: prefix + strings.ReplaceAll(uuid.NewString(), "-", ""), Kind: kind, DurationSeconds: request.Parameters.DurationSeconds, UserID: key.UserID, APIKeyID: key.ID, GroupID: key.Group.ID, AccountID: account.ID, Model: routingModel, UpstreamModel: request.Model, Status: ImageTaskStatusProcessing, Phase: "estimate", RequestJSON: payload, IdempotencyKey: idem, RequestHash: hash, ImageSize: tier, Count: request.Parameters.N, UnitPrice: unitPrice, RateMultiplier: multiplier, AccountRateMultiplier: account.BillingRateMultiplier(), HoldAmount: QuantizeUsageBillingAmount(unitPrice * multiplier * float64(request.Parameters.N)), CreatedAt: now, NextPollAt: now, ExpiresAt: now.Add(24 * time.Hour)}
 	task.UpstreamIdempotencyKey = "sub2api-" + task.TaskID
 	task.BaseURL = strings.TrimSpace(account.GetCredential("base_url"))
 	if task.BaseURL == "" {
@@ -217,7 +248,7 @@ func (s *AUAPIImageTaskService) Get(ctx context.Context, owner ImageTaskOwner, i
 	if err != nil {
 		return nil, err
 	}
-	if t.UserID != owner.UserID || t.APIKeyID != owner.APIKeyID || time.Now().After(t.ExpiresAt) {
+	if t.UserID != owner.UserID || t.APIKeyID != owner.APIKeyID || (t.Phase == "done" && time.Now().After(t.ExpiresAt)) {
 		return nil, ErrImageTaskNotFound
 	}
 	return auapiImageTaskPublic(t), nil
@@ -225,7 +256,7 @@ func (s *AUAPIImageTaskService) Get(ctx context.Context, owner ImageTaskOwner, i
 func auapiQueueID(id string) string { return "imgbatch_" + id }
 func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (BatchImageProcessResult, error) {
 	id := strings.TrimPrefix(queueID, "imgbatch_")
-	if !strings.HasPrefix(id, "auimgtask_") {
+	if !strings.HasPrefix(id, "auimgtask_") && !strings.HasPrefix(id, "auvidtask_") {
 		return BatchImageProcessResult{Terminal: true}, nil
 	}
 	// The lease must cover one bounded provider step and durable settlement;
@@ -262,7 +293,10 @@ func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (Ba
 			}
 		}
 		// Settlement and its usage record must never be discarded after a charge.
-		if task.Phase != "settle" && task.Phase != "fail" && (task.RetryCount >= 8 || (errors.As(err, &httpErr) && !httpErr.Retryable())) {
+		if task.Phase == "submit" && (!errors.As(err, &httpErr) || httpErr.Retryable()) {
+			task.Phase = "reconcile" // acceptance is unknown: retain the hold and never resubmit
+		}
+		if task.Phase != "settle" && task.Phase != "fail" && task.Phase != "poll" && task.Phase != "store" && task.Phase != "reconcile" && (task.RetryCount >= 8 || (errors.As(err, &httpErr) && !httpErr.Retryable())) {
 			task.Phase = "fail"
 			task.ErrorJSON = imageTaskErrorJSON("api_error", err.Error())
 			task.HTTPStatus = 502
@@ -271,7 +305,7 @@ func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (Ba
 		if saveErr := s.repo.Save(ctx, task); saveErr != nil {
 			return BatchImageProcessResult{}, saveErr
 		}
-		slog.Warn("auapi image task deferred", "task_id", task.TaskID, "phase", task.Phase, "retry", task.RetryCount)
+		slog.Warn("auapi media task deferred", "task_id", task.TaskID, "phase", task.Phase, "retry", task.RetryCount)
 	}
 	return BatchImageProcessResult{Terminal: task.Phase == "done", RequeueAfter: func() time.Duration {
 		d := time.Until(task.NextPollAt)
@@ -285,7 +319,11 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 	if t.Phase == "settle" || t.Phase == "fail" {
 		return s.finish(ctx, t)
 	}
-	if time.Since(t.CreatedAt) > time.Duration(s.cfg.AUAPIImage.MaxPollSeconds)*time.Second {
+	if t.Phase == "reconcile" {
+		t.NextPollAt = time.Now().Add(15 * time.Minute)
+		return s.repo.Save(ctx, t)
+	}
+	if t.Phase == "estimate" && time.Since(t.CreatedAt) > time.Duration(s.cfg.AUAPIImage.MaxPollSeconds)*time.Second {
 		t.Phase = "fail"
 		t.HTTPStatus = 504
 		t.ErrorJSON = imageTaskErrorJSON("timeout_error", "AUAPI task deadline exceeded; no replacement task was submitted")
@@ -308,7 +346,15 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 	client := &auapiImageClient{account: &copy, gateway: s.gateway}
 	switch t.Phase {
 	case "estimate":
-		if err = client.Estimate(ctx, t.RequestJSON, t.UpstreamIdempotencyKey); err != nil {
+		if t.Kind == "video" || t.UpstreamModel != "gpt-image-2" {
+			amount, e := client.EstimateRetail(ctx, t.RequestJSON, t.UpstreamIdempotencyKey)
+			if e != nil {
+				return e
+			}
+			if math.IsNaN(amount) || math.IsInf(amount, 0) || math.Abs(amount-t.UnitPrice*float64(t.Count)) > 0.000001 {
+				return &auapiHTTPError{Status: http.StatusConflict}
+			}
+		} else if err = client.Estimate(ctx, t.RequestJSON, t.UpstreamIdempotencyKey); err != nil {
 			return err
 		}
 		t.Phase = "submit"
@@ -364,12 +410,15 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 				return e
 			}
 			ct := detectedImageContentType(data)
-			if ct == "" {
-				return errors.New("AUAPI content is not an image")
+			if t.Kind == "video" {
+				ct = detectedAUAPIVideoContentType(data)
 			}
-			link, e := uploader.storage.Save(ctx, uploader.buildKey(t.TaskID, i, ct), ct, data)
+			if ct == "" {
+				return errors.New("AUAPI content does not match the requested media type")
+			}
+			link, e := uploader.storage.Save(ctx, auapiMediaStorageKey(uploader, t.TaskID, i, ct), ct, data)
 			if e != nil {
-				return errors.New("failed to store AUAPI image")
+				return errors.New("failed to store AUAPI media")
 			}
 			t.URLs = append(t.URLs, link)
 		}
@@ -418,8 +467,8 @@ func (s *AUAPIImageTaskService) finish(ctx context.Context, t *AUAPIImageTaskRec
 			SubscriptionAdmissionKey: t.AdmissionKey, RequestID: "auapi_image_settle:" + t.TaskID,
 			APIKeyID: t.APIKeyID, RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
 			UserID: t.UserID, AccountID: t.AccountID, SubscriptionID: t.SubscriptionID,
-			AccountType: AccountTypeAPIKey, Model: t.Model, ImageCount: t.SuccessCount,
-			MediaType: "image", SubscriptionCost: t.ActualAmount,
+			AccountType: AccountTypeAPIKey, Model: t.Model, ImageCount: auapiTaskImageCount(t),
+			MediaType: auapiTaskMediaKind(t), SubscriptionCost: t.ActualAmount,
 			UsageDetail: detail, CompletedAt: *t.CompletedAt, TerminalFailure: t.Phase == "fail",
 		})
 		if err != nil {
@@ -451,7 +500,7 @@ func (s *AUAPIImageTaskService) finish(ctx context.Context, t *AUAPIImageTaskRec
 			RequestID: "auapi_image_settle:" + t.TaskID, APIKeyID: t.APIKeyID,
 			RequestFingerprint: t.RequestHash, RequestPayloadHash: t.RequestHash,
 			UserID: t.UserID, AccountID: t.AccountID, AccountType: AccountTypeAPIKey,
-			Model: t.Model, ImageCount: t.SuccessCount, MediaType: "image",
+			Model: t.Model, ImageCount: auapiTaskImageCount(t), MediaType: auapiTaskMediaKind(t),
 			UsageDetail: detail, CompletedAt: *t.CompletedAt,
 		}); err != nil {
 			return err
@@ -484,7 +533,7 @@ func auapiImageUsageDetail(t *AUAPIImageTaskRecord) *UsageLog {
 	if t.SubscriptionID != nil {
 		typ = BillingTypeSubscription
 	}
-	return &UsageLog{
+	detail := &UsageLog{
 		UserID: t.UserID, APIKeyID: t.APIKeyID, AccountID: t.AccountID,
 		GroupID: &t.GroupID, SubscriptionID: t.SubscriptionID,
 		RequestID: "auapi_image:" + t.TaskID, Model: t.Model, RequestedModel: t.Model,
@@ -495,6 +544,13 @@ func auapiImageUsageDetail(t *AUAPIImageTaskRecord) *UsageLog {
 		BillingType: typ, RequestType: RequestTypeSync,
 		InboundEndpoint: &inbound, UpstreamEndpoint: &upstream, CreatedAt: t.CreatedAt,
 	}
+	if t.Kind == "video" {
+		mode, inbound, upstream = "video", "/v1/videos", "/v1/videos/tasks"
+		detail.ImageCount, detail.ImageOutputCost, detail.ImageSize = 0, 0, nil
+		detail.VideoCount, detail.VideoDurationSeconds, detail.VideoResolution = t.SuccessCount, &t.DurationSeconds, &t.ImageSize
+		detail.MediaType = &mode
+	}
+	return detail
 }
 
 func (s *AUAPIImageTaskService) invalidate(ctx context.Context, t *AUAPIImageTaskRecord) {
@@ -511,7 +567,15 @@ func auapiImageTaskPublic(t *AUAPIImageTaskRecord) *ImageTask {
 		v := t.CompletedAt.Unix()
 		completed = &v
 	}
-	return &ImageTask{ID: t.TaskID, TaskID: t.TaskID, Object: "image.generation.task", Status: t.Status, HTTPStatus: t.HTTPStatus, Result: t.ResultJSON, Error: t.ErrorJSON, CreatedAt: t.CreatedAt.Unix(), CompletedAt: completed, ExpiresAt: t.ExpiresAt.Unix(), ImageURL: firstImageTaskURL(t.ResultJSON)}
+	object := "image.generation.task"
+	if t.Kind == "video" {
+		object = "video.generation.task"
+	}
+	public := &ImageTask{ID: t.TaskID, TaskID: t.TaskID, Object: object, Status: t.Status, HTTPStatus: t.HTTPStatus, Result: t.ResultJSON, Error: t.ErrorJSON, CreatedAt: t.CreatedAt.Unix(), CompletedAt: completed, ExpiresAt: t.ExpiresAt.Unix(), ImageURL: firstImageTaskURL(t.ResultJSON)}
+	if t.Kind == "video" {
+		public.VideoURL, public.ImageURL = public.ImageURL, ""
+	}
+	return public
 }
 
 func (s *AUAPIImageTaskService) Start() {
@@ -564,4 +628,13 @@ func (s *AUAPIImageTaskService) Stop() {
 		cancel()
 	}
 	s.wg.Wait()
+}
+
+// Preserve the existing per-media override semantics. These replace the effective
+// group/user rate rather than multiplying a second discount into it.
+func resolveAUAPIMediaRateMultiplier(kind string, key *APIKey, effective float64) float64 {
+	if kind == "video" {
+		return resolveVideoRateMultiplier(key, effective)
+	}
+	return resolveImageRateMultiplier(key, effective)
 }

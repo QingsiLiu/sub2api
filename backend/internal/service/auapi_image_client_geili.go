@@ -29,16 +29,21 @@ func (a *Account) IsAUAPIImageAccount() bool {
 }
 
 type auapiImageRequest struct {
-	Model string `json:"model"`
-	Input struct {
+	Kind   string `json:"kind,omitempty"`
+	Action string `json:"action,omitempty"`
+	Model  string `json:"model"`
+	Input  struct {
 		Prompt string `json:"prompt"`
 	} `json:"input"`
 	Parameters struct {
-		N            int    `json:"n"`
-		Size         string `json:"size,omitempty"`
-		Resolution   string `json:"resolution,omitempty"`
-		Quality      string `json:"quality,omitempty"`
-		OutputFormat string `json:"output_format,omitempty"`
+		N               int    `json:"n"`
+		Size            string `json:"size,omitempty"`
+		Resolution      string `json:"resolution,omitempty"`
+		Quality         string `json:"quality,omitempty"`
+		OutputFormat    string `json:"output_format,omitempty"`
+		Ratio           string `json:"ratio,omitempty"`
+		DurationSeconds int    `json:"duration,omitempty"`
+		GenerateAudio   *bool  `json:"generate_audio,omitempty"`
 	} `json:"parameters"`
 }
 
@@ -50,7 +55,7 @@ func buildAUAPIImagePayload(body []byte) (auapiImageRequest, string, error) {
 	if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
 		return r, "", errors.New("invalid JSON image request")
 	}
-	allowed := map[string]bool{"model": true, "prompt": true, "n": true, "size": true, "resolution": true, "quality": true, "output_format": true, "stream": true, "response_format": true, "user": true}
+	allowed := map[string]bool{"model": true, "prompt": true, "n": true, "size": true, "resolution": true, "quality": true, "output_format": true, "stream": true, "response_format": true, "user": true, "aspect_ratio": true}
 	for key := range fields {
 		if !allowed[key] {
 			return r, "", fmt.Errorf("AUAPI text-to-image does not support parameter %s", key)
@@ -66,6 +71,7 @@ func buildAUAPIImagePayload(body []byte) (auapiImageRequest, string, error) {
 		Format         string `json:"output_format"`
 		Stream         bool   `json:"stream"`
 		ResponseFormat string `json:"response_format"`
+		AspectRatio    string `json:"aspect_ratio"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return r, "", errors.New("invalid image parameter type")
@@ -80,6 +86,14 @@ func buildAUAPIImagePayload(body []byte) (auapiImageRequest, string, error) {
 		return r, "", errors.New("invalid response_format")
 	}
 	r.Model = in.Model
+	if in.AspectRatio != "" {
+		switch in.AspectRatio {
+		case "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3":
+			r.Parameters.Ratio = in.AspectRatio
+		default:
+			return r, "", errors.New("unsupported aspect_ratio")
+		}
+	}
 	r.Input.Prompt = in.Prompt
 	r.Parameters.N = 1
 	if in.N != nil {
@@ -236,9 +250,31 @@ func (c *auapiImageClient) json(ctx context.Context, method, path string, body [
 func (c *auapiImageClient) Estimate(ctx context.Context, body []byte, idem string) error {
 	return c.json(ctx, "POST", "/v1/pricing/estimate", body, idem, nil)
 }
+
+func (c *auapiImageClient) EstimateRetail(ctx context.Context, body []byte, idem string) (float64, error) {
+	var out struct {
+		Amount string `json:"amount_usd"`
+	}
+	if err := c.json(ctx, "POST", "/v1/pricing/estimate", body, idem, &out); err != nil {
+		return 0, err
+	}
+	amount, err := strconv.ParseFloat(out.Amount, 64)
+	if err != nil || amount <= 0 {
+		return 0, errors.New("invalid AUAPI retail estimate")
+	}
+	return amount, nil
+}
 func (c *auapiImageClient) Submit(ctx context.Context, body []byte, idem string) (string, error) {
 	var out auapiTaskStatus
-	err := c.json(ctx, "POST", "/v1/images/tasks", body, idem, &out)
+	path := "/v1/images/tasks"
+	var request auapiImageRequest
+	if err := json.Unmarshal(body, &request); err != nil {
+		return "", errors.New("invalid AUAPI request")
+	}
+	if request.Kind == "video" {
+		path = "/v1/videos/tasks"
+	}
+	err := c.json(ctx, "POST", path, body, idem, &out)
 	if err != nil {
 		return "", err
 	}
