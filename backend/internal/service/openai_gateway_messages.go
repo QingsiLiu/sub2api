@@ -604,11 +604,8 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 
 	finalResponse, usage, acc, err := s.readOpenAICompatBufferedTerminal(resp, c, "openai messages buffered", requestID, upstreamModel)
 	if err != nil {
-		var readErr *openAICompatBufferedReadError
-		if errors.As(err, &readErr) && readErr != nil {
-			return nil, readErr.cause
-		}
-		return nil, err
+		// geili hook: Messages uses the same typed upstream-read recovery as Chat.
+		return nil, s.newOpenAICompatBufferedReadFailoverError(c, account, resp, requestID, err)
 	}
 
 	if finalResponse == nil {
@@ -851,7 +848,9 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 		select {
 		case ev, ok := <-events:
 			if !ok {
-				if frame, ok := parser.Finish(); ok {
+				frame, ok := parser.Finish()
+				geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
+				if ok {
 					payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
 					payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
 					geiliObserveUpstreamOperation(c, []byte(payload))
@@ -877,6 +876,8 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			}
 			resetTimeout()
 			if ev.err != nil {
+				// geili hook: a pending built-in operation also forbids replay.
+				s.observePendingCompatReadGeili(c, &parser, &usage)
 				if !errors.Is(ev.err, context.Canceled) && !errors.Is(ev.err, context.DeadlineExceeded) {
 					logger.L().Warn(logPrefix+": read error",
 						zap.Error(ev.err),
@@ -887,9 +888,11 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			}
 
 			if isOpenAICompatDoneSentinelLine(ev.line) {
+				s.observePendingCompatReadGeili(c, &parser, &usage)
 				return nil, usage, acc, nil
 			}
 			frame, ok := parser.AddLine(ev.line)
+			geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
 			if !ok {
 				continue
 			}
@@ -923,6 +926,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			}
 
 		case <-timeoutCh:
+			s.observePendingCompatReadGeili(c, &parser, &usage)
 			_ = resp.Body.Close()
 			logger.L().Warn(logPrefix+": data interval timeout",
 				zap.String("request_id", requestID),
@@ -1014,6 +1018,8 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	// processDataLine handles a single "data: ..." SSE line from upstream.
 	processDataLine := func(payload string) bool {
 		payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+		// geili hook: built-in progress may be swallowed by protocol conversion.
+		geiliObserveUpstreamOperation(c, []byte(payload))
 		if firstChunk {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
@@ -1216,9 +1222,11 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		for scanner.Scan() {
 			line := scanner.Text()
 			if isOpenAICompatDoneSentinelLine(line) {
+				s.observePendingCompatReadGeili(c, &parser, &usage)
 				return missingTerminalErr()
 			}
 			frame, ok := parser.AddLine(line)
+			geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
 			if !ok {
 				continue
 			}
@@ -1227,10 +1235,14 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			}
 		}
 		if err := scanner.Err(); err != nil {
+			// geili hook: classify known body-read errors before the public guard.
+			s.observePendingCompatReadGeili(c, &parser, &usage)
 			handleScanErr(err)
-			return resultWithUsage(), fmt.Errorf("stream usage incomplete: %w", err)
+			return geiliMessagesReadFailureResult(c, resultWithUsage()), geiliMessagesStreamReadError(c, err)
 		}
-		if frame, ok := parser.Finish(); ok {
+		frame, ok := parser.Finish()
+		geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
+		if ok {
 			if strings.TrimSpace(frame.Data) == "[DONE]" {
 				return missingTerminalErr()
 			}
@@ -1289,7 +1301,9 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		case ev, ok := <-events:
 			if !ok {
 				// Upstream closed
-				if frame, ok := parser.Finish(); ok {
+				frame, ok := parser.Finish()
+				geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
+				if ok {
 					if strings.TrimSpace(frame.Data) == "[DONE]" {
 						return missingTerminalErr()
 					}
@@ -1300,15 +1314,19 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 				return missingTerminalErr()
 			}
 			if ev.err != nil {
+				// geili hook: pending execution and cancellation constrain replay.
+				s.observePendingCompatReadGeili(c, &parser, &usage)
 				handleScanErr(ev.err)
-				return resultWithUsage(), fmt.Errorf("stream usage incomplete: %w", ev.err)
+				return geiliMessagesReadFailureResult(c, resultWithUsage()), geiliMessagesStreamReadError(c, ev.err)
 			}
 			lastDataAt = time.Now()
 			line := ev.line
 			if isOpenAICompatDoneSentinelLine(line) {
+				s.observePendingCompatReadGeili(c, &parser, &usage)
 				return missingTerminalErr()
 			}
 			frame, ok := parser.AddLine(line)
+			geiliObserveUpstreamOperation(c, []byte(frame.Data), frame.EventType)
 			if !ok {
 				continue
 			}
@@ -1321,6 +1339,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			if time.Since(lastRead) < streamInterval {
 				continue
 			}
+			s.observePendingCompatReadGeili(c, &parser, &usage)
 			if clientDisconnected {
 				return resultWithUsage(), fmt.Errorf("stream usage incomplete after timeout")
 			}

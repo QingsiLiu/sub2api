@@ -122,31 +122,47 @@ func TestChatCompletionsBufferedResponsesOversizedLineDoesNotFailover(t *testing
 	require.NotErrorAs(t, err, &failoverErr)
 }
 
-func TestAnthropicBufferedResponsesReadErrorKeepsExistingBehavior(t *testing.T) {
+func TestAnthropicBufferedResponsesReadErrorRecovery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-		Body:       &openAICompatBufferedReadErrorCloser{err: io.ErrUnexpectedEOF},
+	for _, tc := range []struct {
+		name     string
+		err      error
+		canceled bool
+		code     string
+	}{
+		{name: "unexpected_eof", err: io.ErrUnexpectedEOF, code: OpenAIUpstreamStreamReadErrorCode},
+		{name: "http2_reset", err: errors.New("stream error: stream ID 7; INTERNAL_ERROR; received from peer"), code: OpenAIUpstreamHTTP2StreamErrorCode},
+		{name: "canceled_request", err: io.ErrUnexpectedEOF, canceled: true},
+		{name: "oversized_line", err: bufio.ErrTooLong},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.canceled {
+				cancel()
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil).WithContext(ctx)
+			resp := &http.Response{StatusCode: http.StatusOK,
+				Header: http.Header{"Content-Type": []string{"text/event-stream"}, "X-Request-Id": []string{"upstream-rid"}},
+				Body:   &openAICompatBufferedReadErrorCloser{err: tc.err}}
+			result, err := (&OpenAIGatewayService{}).handleAnthropicBufferedStreamingResponse(resp, c,
+				&Account{ID: 40, Name: "openai-oauth", Platform: PlatformOpenAI},
+				"gpt-6-astra", "gpt-6-astra", "gpt-6-astra", time.Now())
+			require.Error(t, err)
+			require.Nil(t, result)
+			var failover *UpstreamFailoverError
+			if tc.code != "" {
+				require.ErrorAs(t, err, &failover)
+				require.Equal(t, tc.code, gjson.GetBytes(failover.ResponseBody, "error.code").String())
+				require.Equal(t, "upstream-rid", failover.ResponseHeaders.Get("x-request-id"))
+			} else {
+				require.NotErrorAs(t, err, &failover)
+				require.ErrorIs(t, err, tc.err)
+			}
+			require.Empty(t, rec.Body.String())
+			require.False(t, c.Writer.Written())
+		})
 	}
-
-	result, err := (&OpenAIGatewayService{}).handleAnthropicBufferedStreamingResponse(
-		resp,
-		c,
-		&Account{ID: 40, Name: "openai-oauth", Platform: PlatformOpenAI},
-		"gpt-5.6-sol",
-		"gpt-5.6-sol",
-		"gpt-5.6-sol",
-		time.Now(),
-	)
-
-	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
-	require.Equal(t, io.ErrUnexpectedEOF, err, "Messages 路径必须保持原始读取错误，不引入 Chat failover 包装")
-	require.Nil(t, result)
-	var failoverErr *UpstreamFailoverError
-	require.NotErrorAs(t, err, &failoverErr)
 }
