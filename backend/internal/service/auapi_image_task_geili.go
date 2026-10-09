@@ -185,9 +185,7 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	}
 	payload, _ := json.Marshal(request)
 	multiplier := s.gateway.ResolveUserGroupRateMultiplier(ctx, key.UserID, key.Group.ID, key.Group.BillingRateMultiplier(sub != nil))
-	if kind == "image" {
-		multiplier = resolveImageRateMultiplier(key, multiplier)
-	}
+	multiplier = resolveAUAPIMediaRateMultiplier(kind, key, multiplier)
 	unitPrice := 0.0
 	if kind == "video" || request.Model != "gpt-image-2" {
 		unitPrice, err = auapiConfiguredMediaPrice(account, request, tier)
@@ -630,4 +628,13 @@ func (s *AUAPIImageTaskService) Stop() {
 		cancel()
 	}
 	s.wg.Wait()
+}
+
+// Preserve the existing per-media override semantics. These replace the effective
+// group/user rate rather than multiplying a second discount into it.
+func resolveAUAPIMediaRateMultiplier(kind string, key *APIKey, effective float64) float64 {
+	if kind == "video" {
+		return resolveVideoRateMultiplier(key, effective)
+	}
+	return resolveImageRateMultiplier(key, effective)
 }
