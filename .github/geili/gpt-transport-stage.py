@@ -33,6 +33,7 @@ def fixture_type(cache, source):
             fixture = self
             self.transport_counts = {'oauth': 0, 'apikey': 0, 'http400': 0}
             self.gateway_transport_observations = {}
+            self.transport_requests = 0
             self.apikey_healthy = False
 
             class TransportMock(original):
@@ -105,6 +106,7 @@ def fixture_type(cache, source):
                 self.transport_cases.append({'kind': kind, 'group_id': group['id'], 'account': account, 'key': key})
 
         def call_transport(self, case, label, secondary=False):
+            self.transport_requests += 1
             seed = 'transport-' + self.suffix + '-' + case['kind'] + '-' + label
             payload = {'model': self.model, 'input': [{'role': 'user', 'content': seed}],
                        'prompt_cache_key': seed, 'stream': False}
@@ -234,6 +236,7 @@ def main():
             'checks': len(fixture.checks), 'restored': fixture.snapshot.get('restored', False),
             'replica_removed': fixture.snapshot.get('cache_replica', {}).get('removed', False),
             'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            'synthetic_requests': getattr(fixture, 'transport_requests', 0),
             'mock_connections_including_background_probes': getattr(fixture, 'transport_counts', {}),
             'gateway_transport_observations': getattr(fixture, 'gateway_transport_observations', {}), 'synthetic_only': True,
             'production_ready': False}
