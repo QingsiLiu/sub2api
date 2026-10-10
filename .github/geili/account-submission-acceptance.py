@@ -73,7 +73,7 @@ def verify(f):
             f.check(platform + ' expiry visible in history for ' + str(expected) + ' hours', listed['expires_at'] == invitation['invite']['expires_at'])
         for invalid in (0, -1, 721, 1.5, '72'):
             payload = {**config, 'expires_in_hours': invalid}
-            status, _ = f.request('/api/v1/admin/accounts/submission-invites', payload, f.admin)
+            status = f.request('/api/v1/admin/accounts/submission-invites', payload, f.admin)[0]
             f.check(platform + ' invalid expiry rejected: ' + str(invalid), status == 400)
 
     for platform in ('anthropic', 'openai'):
