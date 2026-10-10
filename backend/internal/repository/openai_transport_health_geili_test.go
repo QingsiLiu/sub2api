@@ -21,8 +21,10 @@ func TestOpenAITransportHealthGeiliRedisLifecycle(t *testing.T) {
 	server.SetTime(now)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	first := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
-	second := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
+	first, ok := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
+	require.True(t, ok)
+	second, ok := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
+	require.True(t, ok)
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
 		_, err := first.RecordOpenAITransportFailureGeili(ctx, 6300)
@@ -65,7 +67,8 @@ func TestOpenAITransportHealthGeiliRedisAtomicAndIndependent(t *testing.T) {
 	server := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	store := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
+	store, ok := NewTempUnschedCache(client).(service.OpenAITransportHealthCacheGeili)
+	require.True(t, ok)
 	var wg sync.WaitGroup
 	results := make(chan service.OpenAITransportHealthDecisionGeili, 30)
 	errors := make(chan error, 30)
@@ -91,7 +94,8 @@ func TestOpenAITransportHealthGeiliRedisAtomicAndIndependent(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, trips)
-	pool := NewTempUnschedCache(client).(service.OpenAIAPIKeyHealthCache)
+	pool, ok := NewTempUnschedCache(client).(service.OpenAIAPIKeyHealthCache)
+	require.True(t, ok)
 	count, tripped, err := pool.RecordOpenAIAPIKeyHealthFailure(context.Background(), 6300, 1, 3)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
@@ -105,8 +109,13 @@ func TestOpenAITransportHealthGeiliSlowEstablishedRedisIsBounded(t *testing.T) {
 	var hang atomic.Bool
 	var connections sync.Map
 	t.Cleanup(func() {
-		listener.Close()
-		connections.Range(func(key, value any) bool { key.(net.Conn).Close(); return true })
+		_ = listener.Close()
+		connections.Range(func(key, value any) bool {
+			if connection, ok := key.(net.Conn); ok {
+				_ = connection.Close()
+			}
+			return true
+		})
 	})
 	go func() {
 		for {
@@ -116,14 +125,14 @@ func TestOpenAITransportHealthGeiliSlowEstablishedRedisIsBounded(t *testing.T) {
 			}
 			connections.Store(down, true)
 			go func() {
-				defer down.Close()
+				defer func() { _ = down.Close() }()
 				up, err := net.Dial("tcp", server.Addr())
 				if err != nil {
 					return
 				}
 				connections.Store(up, true)
-				defer up.Close()
-				go io.Copy(up, down)
+				defer func() { _ = up.Close() }()
+				go func() { _, _ = io.Copy(up, down) }()
 				buffer := make([]byte, 4096)
 				for {
 					n, err := up.Read(buffer)
@@ -140,8 +149,9 @@ func TestOpenAITransportHealthGeiliSlowEstablishedRedisIsBounded(t *testing.T) {
 		}
 	}()
 	parent := redis.NewClient(&redis.Options{Addr: listener.Addr().String(), ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second})
-	t.Cleanup(func() { parent.Close() })
-	store := NewTempUnschedCache(parent).(service.OpenAITransportHealthCacheGeili)
+	t.Cleanup(func() { _ = parent.Close() })
+	store, ok := NewTempUnschedCache(parent).(service.OpenAITransportHealthCacheGeili)
+	require.True(t, ok)
 	require.NoError(t, parent.Ping(context.Background()).Err())
 	hang.Store(true)
 	began := time.Now()

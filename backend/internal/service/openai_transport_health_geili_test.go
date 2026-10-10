@@ -182,19 +182,20 @@ func TestOpenAITransportHealthGeiliExemptionsAndLongerCooldown(t *testing.T) {
 			svc := &OpenAIGatewayService{}
 			account := &Account{ID: 6300, Type: AccountTypeOAuth, Platform: PlatformOpenAI}
 			for i := 0; i < 3; i++ {
-				svc.handleOpenAIUpstreamTransportError(tt.ctx, transportHealthContextGeili(), account, tt.err, false)
+				_ = svc.handleOpenAIUpstreamTransportError(tt.ctx, transportHealthContextGeili(), account, tt.err, false)
 			}
 			require.True(t, svc.transportHealthStateGeili().blockedUntil(account.ID, time.Now()).IsZero())
 		})
 	}
-	svc := &OpenAIGatewayService{accountRepo: &transportHealthRepoGeili{}}
+	repo := &transportHealthRepoGeili{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
 	longer := time.Now().Add(20 * time.Minute)
 	account := &Account{ID: 6300, Type: AccountTypeAPIKey, Platform: PlatformOpenAI, TempUnschedulableUntil: &longer}
 	for i := 0; i < 3; i++ {
 		svc.observeOpenAITransportFailureGeili(context.Background(), account, "Bad Request")
 	}
 	require.Equal(t, longer, *account.TempUnschedulableUntil)
-	require.Equal(t, longer, svc.accountRepo.(*transportHealthRepoGeili).until)
+	require.Equal(t, longer, repo.until)
 	require.Equal(t, longer, svc.transportHealthStateGeili().blockedUntil(account.ID, time.Now().Add(61*time.Second)))
 }
 
@@ -310,7 +311,7 @@ func TestOpenAITransportHealthGeiliExpiredSharedBudgetAndHTTP400(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	account := &Account{ID: 6300, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
 	for i := 0; i < 3; i++ {
-		svc.handleOpenAIUpstreamTransportError(ctx, transportHealthContextGeili(), account, errors.New("connection refused"), false)
+		_ = svc.handleOpenAIUpstreamTransportError(ctx, transportHealthContextGeili(), account, errors.New("connection refused"), false)
 	}
 	require.Empty(t, svc.transportHealthStateGeili().entries)
 	for i := 0; i < 3; i++ {
