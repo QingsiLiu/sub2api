@@ -8,9 +8,11 @@ import (
 )
 
 type BackupHandler struct {
-	backupService *service.BackupService
-	userService   *service.UserService
-	imageStorage  *service.ImageStorageSettingService
+	// geili hook: raw database backups contain externally supplied credentials.
+	accountSubmission *service.AccountSubmissionService
+	backupService     *service.BackupService
+	userService       *service.UserService
+	imageStorage      *service.ImageStorageSettingService
 }
 
 func NewBackupHandler(backupService *service.BackupService, userService *service.UserService, imageStorage *service.ImageStorageSettingService) *BackupHandler {
@@ -154,6 +156,18 @@ func (h *BackupHandler) DeleteBackup(c *gin.Context) {
 }
 
 func (h *BackupHandler) GetDownloadURL(c *gin.Context) {
+	// geili hook: database backups remain available to server operators, never via the console.
+	if h.accountSubmission != nil {
+		protected, err := h.accountSubmission.HasProtectedAccounts(c.Request.Context())
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if protected {
+			response.ErrorFrom(c, service.ErrSubmissionBackupProtected)
+			return
+		}
+	}
 	backupID := c.Param("id")
 	if backupID == "" {
 		response.BadRequest(c, "backup ID is required")

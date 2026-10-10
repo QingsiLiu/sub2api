@@ -33,6 +33,8 @@ type DataPayload struct {
 	// SkippedShadows 记录导出时被排除的 spark 影子账号数量(见 ExportData)。仅作可见性提示,
 	// 导入侧忽略该字段;omitempty 保持向后兼容。
 	SkippedShadows int `json:"skipped_shadows,omitempty"`
+	// geili hook: externally supplied credentials never enter console exports.
+	SkippedExternal int `json:"skipped_external,omitempty"`
 }
 
 type DataProxy struct {
@@ -116,9 +118,24 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 	// 非空——若混入会产出无法还原的坏备份(导入即失败)。影子的独立调度配置(priority/并发/分组/
 	// status,管理员可单独调)随之不进备份,还原后需在重建的影子上重新调优;前端按 skipped_shadows
 	// 提示用户(外审第5轮发现、第6轮裁决:保持排除 + 警告,不做完整往返)。
+	// geili hook: fail closed if the durable provenance lookup fails.
+	ids := make([]int64, 0, len(accounts))
+	for _, account := range accounts {
+		ids = append(ids, account.ID)
+	}
+	protected, err := h.protectedSubmissionAccounts(c, ids)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	skippedExternal := 0
 	skippedShadows := 0
 	exportable := make([]service.Account, 0, len(accounts))
 	for i := range accounts {
+		if protected[accounts[i].ID] {
+			skippedExternal++
+			continue
+		}
 		if accounts[i].IsCredentialShadow() {
 			skippedShadows++
 			continue
@@ -216,10 +233,11 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 	}
 
 	payload := DataPayload{
-		ExportedAt:     time.Now().UTC().Format(time.RFC3339),
-		Proxies:        dataProxies,
-		Accounts:       dataAccounts,
-		SkippedShadows: skippedShadows,
+		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
+		Proxies:         dataProxies,
+		Accounts:        dataAccounts,
+		SkippedShadows:  skippedShadows,
+		SkippedExternal: skippedExternal,
 	}
 
 	response.Success(c, payload)
