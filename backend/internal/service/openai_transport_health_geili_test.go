@@ -114,6 +114,17 @@ func TestOpenAITransportHealthGeiliLegacyAndAdvancedAvoidFailedSticky(t *testing
 	}
 }
 
+func TestOpenAITransportHealthGeiliBatchedBlockSurvivesCacheOutage(t *testing.T) {
+	cache := &transportHealthCacheGeili{state: &openAITransportHealthStateGeili{entries: make(map[int64]openAITransportHealthEntryGeili)}}
+	until := time.Now().Add(time.Minute)
+	cache.state.record(6300, time.Now(), &OpenAITransportHealthDecisionGeili{Until: until})
+	svc := &OpenAIGatewayService{rateLimitService: &RateLimitService{tempUnschedCache: cache}}
+	stale := Account{ID: 6300, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+	svc.prefetchOpenAITransportHealthGeili(withOpenAITransportSelectionGeili(context.Background()), []Account{stale})
+	cache.err = errors.New("Redis unavailable after batch")
+	require.True(t, svc.openAITransportBlockedGeili(withOpenAITransportSelectionGeili(context.Background()), &stale, false))
+}
+
 func TestOpenAITransportHealthGeiliSuccessResetAndLocalOutage(t *testing.T) {
 	cache := &transportHealthCacheGeili{err: errors.New("redis unavailable")}
 	repo := &transportHealthRepoGeili{err: errors.New("database unavailable")}

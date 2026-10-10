@@ -272,6 +272,11 @@ func (s *OpenAIGatewayService) prefetchOpenAITransportHealthGeili(ctx context.Co
 	}
 	for _, id := range ids {
 		memo.until[id] = blocks[id]
+		if until := blocks[id]; time.Now().Before(until) {
+			// Retain blocks learned by filtering, even if no selected-account
+			// lookup occurs before the next Redis/database outage.
+			s.transportHealthStateGeili().record(id, time.Now(), &OpenAITransportHealthDecisionGeili{Until: until})
+		}
 	}
 }
 
