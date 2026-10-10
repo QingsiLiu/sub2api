@@ -200,7 +200,9 @@ func TestAUAPIMediaSeedAcceptanceKeepsExactVersionAndPayload(t *testing.T) {
 	require.Equal(t, seed, stored.UpstreamModel)
 	require.InDelta(t, 1.4732, stored.UnitPrice, 1e-9)
 	require.Empty(t, upstream.requests, "acceptance persists before asynchronous provider submission")
-	client := &auapiImageClient{account: &svc.accounts.(*auapiSeedAccountRepo).account, gateway: svc.gateway}
+	accounts, ok := svc.accounts.(*auapiSeedAccountRepo)
+	require.True(t, ok)
+	client := &auapiImageClient{account: &accounts.account, gateway: svc.gateway}
 	_, err = client.Submit(context.Background(), stored.RequestJSON, stored.UpstreamIdempotencyKey)
 	require.NoError(t, err)
 	var submitted auapiImageRequest
