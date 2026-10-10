@@ -192,8 +192,16 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	// passed back to the API"。在共用出站点补空格占位，真实明文不覆盖。
 	body = ensureDeepSeekChatReasoningPlaceholders(account, body)
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	// geili hook: this helper returns headers before callers read the body.
+	// Keep a recovery deadline alive until Body.Close; error paths still release
+	// immediately, and the existing once wrapper cancels before closing readers.
+	contextOwnedByBody := false
+	defer func() {
+		if !contextOwnedByBody {
+			releaseUpstreamCtx()
+		}
+	}()
 	upstreamReq, err := http.NewRequestWithContext(upstreamCtx, http.MethodPost, targetURL, bytes.NewReader(body))
-	defer releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -246,6 +254,8 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
+	resp.Body = &openAIRequestContextReadCloser{ReadCloser: resp.Body, cleanup: releaseUpstreamCtx}
+	contextOwnedByBody = true
 	return resp, nil
 }
 
