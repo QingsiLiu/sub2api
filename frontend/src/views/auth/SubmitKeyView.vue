@@ -32,6 +32,7 @@ import { inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, type
 
 const { t } = useI18n()
 let token = new URLSearchParams(window.location.hash.slice(1)).get('token') || ''
+let requestEpoch = 0
 const apiKey = ref('')
 const invite = ref<PublicSubmissionInvite | null>(null)
 const loading = ref(true)
@@ -62,14 +63,18 @@ function showError(cause: unknown) {
   }
 }
 async function inspect() {
+  const epoch = requestEpoch
+  const requestToken = token
   loading.value = true
   error.value = ''
   try {
-    if (!token) throw new SubmissionRequestError(400)
-    invite.value = await inspectSubmissionInvite(token)
+    if (!requestToken) throw new SubmissionRequestError(400)
+    const state = await inspectSubmissionInvite(requestToken)
+    if (epoch !== requestEpoch) return
+    invite.value = state
     if (invite.value.status === 'submitted') finish()
-  } catch (cause) { showError(cause) }
-  finally { loading.value = false }
+  } catch (cause) { if (epoch === requestEpoch) showError(cause) }
+  finally { if (epoch === requestEpoch) loading.value = false }
 }
 async function submit() {
   if (busy.value) return
@@ -79,23 +84,40 @@ async function submit() {
     return
   }
   busy.value = true
+  const epoch = requestEpoch
+  const requestToken = token
   error.value = ''
   try {
-    await submitAccountKey(token, key)
+    await submitAccountKey(requestToken, key)
+    if (epoch !== requestEpoch) return
     finish()
   } catch (cause) {
+    if (epoch !== requestEpoch) return
     // Confirm a committed submission when its response was lost. Never auto-resubmit the key.
     try {
-      const state = await inspectSubmissionInvite(token)
+      const state = await inspectSubmissionInvite(requestToken)
+      if (epoch !== requestEpoch) return
       if (state.status === 'submitted') { finish(); return }
       if (cause instanceof SubmissionRequestError && cause.status === 400) {
         error.value = t('admin.accounts.keyIntake.submitRejected')
         return
       }
-    } catch { /* Show only the original sanitized status. */ }
+    } catch { if (epoch !== requestEpoch) return /* Show only the original sanitized status. */ }
     showError(cause)
-  } finally { busy.value = false }
+  } finally { if (epoch === requestEpoch) busy.value = false }
 }
-onMounted(inspect)
-onBeforeUnmount(() => { apiKey.value = ''; token = '' })
+function switchInvitation() {
+  const next = new URLSearchParams(window.location.hash.slice(1)).get('token') || ''
+  if (next === token) return
+  requestEpoch++
+  token = next
+  apiKey.value = ''
+  invite.value = null
+  submitted.value = false
+  busy.value = false
+  retryable.value = false
+  void inspect()
+}
+onMounted(() => { window.addEventListener('hashchange', switchInvitation); void inspect() })
+onBeforeUnmount(() => { window.removeEventListener('hashchange', switchInvitation); requestEpoch++; apiKey.value = ''; token = '' })
 </script>

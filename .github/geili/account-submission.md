@@ -17,7 +17,7 @@
 
 ## 验证与发布
 
-2026-10-10 本机隔离 PostgreSQL/Redis + 内嵌网关 + 模拟上游已验证两平台录入、管理员启用、转发与单次结算。真实 PostgreSQL race 测试覆盖每平台 12 个并发提交、撤销竞争、过期/失效引用及永久来源；sqlmock 覆盖凭据写入失败和 outbox 失败整体回滚。公开路由测试覆盖共享限流、窗口恢复和 Redis 故障拒绝。前端 API/页面/弹窗测试、完整 Vitest（365 文件、2983 用例）、构建、Go default/unit、相关 race、增量 lint 和 `.github/geili/verify.sh` 通过。桌面 OpenAI、手机 Claude 实际浏览器提交成功；后台邀请生成、零倍率与状态刷新已检查。
+2026-10-10 本机隔离 PostgreSQL/Redis + 内嵌网关 + 模拟上游已验证两平台录入、管理员启用、转发与单次结算；同一程序的两个独立进程交错提交、全日志 Key/令牌检查共 43 项通过。真实 PostgreSQL race 测试覆盖每平台 12 个并发提交、撤销竞争、过期/失效引用及永久来源；sqlmock 覆盖凭据写入失败和 outbox 失败整体回滚。公开路由测试覆盖共享限流、窗口恢复和 Redis 故障拒绝。前端 API/页面/弹窗测试、完整 Vitest、构建、Go default/unit、相关 race、增量 lint 和 `.github/geili/verify.sh` 通过。桌面 OpenAI、手机 Claude 实际浏览器提交成功；后台邀请生成、零倍率与状态刷新已检查。页面也覆盖同标签页切换邀请：清空旧 Key/状态，并忽略旧邀请迟到的检查/提交结果，避免把成功归给新邀请。
 
 本机脚本 `.github/geili/account-submission-acceptance.py` 只允许带指定 label 的 `geili-key-intake-local` 独立测试库。候选 CI 额外执行新增 PostgreSQL/race 测试。Stage 使用 `.github/geili/account-submission-stage.py --ops-bin <运维仓/bin> …`，沿用正式运维身份/迁移/生产基线检查与排他租约，启动当前 digest 的第二实例，交错提交同一邀请；临时对象按快照里的精确 ID 恢复。同一镜像还需重做既有业务和双实例回归。
 
