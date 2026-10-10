@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -94,4 +95,26 @@ func TestAccountSubmissionInvalidKeysNeverConsumeInvite(t *testing.T) {
 	repo.invite.ExpiresAt = now.Add(-time.Hour)
 	require.ErrorIs(t, svc.Submit(context.Background(), token, "synthetic-provider-key"), ErrSubmissionInactive)
 	require.Equal(t, 1, repo.submits)
+}
+
+func TestAccountSubmissionCustomExpiry(t *testing.T) {
+	config := AccountSubmissionConfig{Name: "owner", Platform: PlatformAnthropic, Concurrency: 1}
+	require.Equal(t, 24, config.ExpiryHours())
+	require.NoError(t, ValidateAccountSubmissionConfig(&config))
+	for _, hours := range []int{1, 24, 72, 720, 0, -1, 721, 2147483647} {
+		t.Run(fmt.Sprintf("hours_%d", hours), func(t *testing.T) {
+			c := config
+			c.ExpiresInHours = &hours
+			repo := &submissionRepoStub{}
+			_, token, err := NewAccountSubmissionService(repo, submissionAdminStub{}).Create(context.Background(), 1, c)
+			if hours < 1 || hours > 720 {
+				require.ErrorIs(t, err, ErrSubmissionConfig)
+				require.Empty(t, token)
+				require.Empty(t, repo.hash)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, hours, repo.config.ExpiryHours())
+			}
+		})
+	}
 }

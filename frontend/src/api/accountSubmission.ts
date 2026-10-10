@@ -9,6 +9,7 @@ export interface SubmissionConfig {
   concurrency: number
   priority: number
   rate_multiplier: number
+  expires_in_hours?: number
 }
 export interface SubmissionInvite {
   id: number

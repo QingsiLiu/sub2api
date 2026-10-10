@@ -88,6 +88,32 @@ func TestAccountSubmissionPostgresConcurrentOneTimeAndProvenance(t *testing.T) {
 	}
 }
 
+func TestAccountSubmissionPostgresCustomExpiry(t *testing.T) {
+	ctx := context.Background()
+	repo := NewAccountSubmissionRepository(integrationDB)
+	for _, hours := range []int{24, 1, 72, 720} {
+		t.Run(fmt.Sprintf("hours_%d", hours), func(t *testing.T) {
+			config := service.AccountSubmissionConfig{Name: "expiry-fixture", Platform: service.PlatformOpenAI, Concurrency: 1}
+			if hours != 24 {
+				config.ExpiresInHours = &hours
+			}
+			hash := fmt.Sprintf("%064x", time.Now().UnixNano())
+			invite, err := repo.CreateInvite(ctx, hash, 1, config)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, _ = integrationDB.ExecContext(ctx, `DELETE FROM account_submission_invites_geili WHERE id=$1`, invite.ID)
+			})
+			var remaining float64
+			require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT extract(epoch FROM expires_at-clock_timestamp()) FROM account_submission_invites_geili WHERE id=$1`, invite.ID).Scan(&remaining))
+			require.InDelta(t, float64(hours*3600), remaining, 5)
+			reloaded, err := repo.InspectInvite(ctx, hash)
+			require.NoError(t, err)
+			require.True(t, invite.ExpiresAt.Equal(reloaded.ExpiresAt))
+			require.Equal(t, hours, reloaded.Config.ExpiryHours())
+		})
+	}
+}
+
 func TestAccountSubmissionPostgresInactiveAndReferenceChanges(t *testing.T) {
 	ctx := context.Background()
 	repo := NewAccountSubmissionRepository(integrationDB)

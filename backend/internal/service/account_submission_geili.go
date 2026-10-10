@@ -19,7 +19,7 @@ var (
 	ErrSubmissionInvalid         = infraerrors.BadRequest("SUBMISSION_INVALID", "Invalid invitation or API key")
 	ErrSubmissionUnavailable     = infraerrors.ServiceUnavailable("SUBMISSION_UNAVAILABLE", "Unable to process invitation; please try again")
 	ErrSubmissionInactive        = infraerrors.New(410, "SUBMISSION_INACTIVE", "Invitation has expired or been revoked")
-	ErrSubmissionConfig          = infraerrors.BadRequest("SUBMISSION_CONFIG_INVALID", "Check the invitation name, platform, groups and proxy")
+	ErrSubmissionConfig          = infraerrors.BadRequest("SUBMISSION_CONFIG_INVALID", "Check the invitation name, platform, groups, proxy and validity period")
 	ErrSubmissionProtected       = infraerrors.BadRequest("SUBMISSION_ACCOUNT_PROTECTED", "Externally submitted accounts cannot be duplicated")
 	ErrSubmissionBackupProtected = infraerrors.Forbidden("SUBMISSION_BACKUP_PROTECTED", "Database backups may contain externally submitted credentials; console downloads are disabled")
 )
@@ -33,6 +33,20 @@ type AccountSubmissionConfig struct {
 	Concurrency    int     `json:"concurrency"`
 	Priority       int     `json:"priority"`
 	RateMultiplier float64 `json:"rate_multiplier"`
+	ExpiresInHours *int    `json:"expires_in_hours,omitempty"`
+}
+
+const (
+	DefaultSubmissionExpiryHours = 24
+	MaxSubmissionExpiryHours     = 720
+)
+
+// Missing lifetime preserves the 24-hour default for older clients and invitations.
+func (c AccountSubmissionConfig) ExpiryHours() int {
+	if c.ExpiresInHours == nil {
+		return DefaultSubmissionExpiryHours
+	}
+	return *c.ExpiresInHours
 }
 
 type AccountSubmissionInvite struct {
@@ -93,7 +107,7 @@ func ValidateAccountSubmissionConfig(c *AccountSubmissionConfig) error {
 	if c.Name == "" || utf8.RuneCountInString(c.Name) > 100 || strings.ContainsAny(c.Name, "\r\n") ||
 		(c.Platform != PlatformAnthropic && c.Platform != PlatformOpenAI) || c.Concurrency < 1 || c.Concurrency > 1000 ||
 		c.Priority < 0 || c.Priority > 10000 || math.IsNaN(c.RateMultiplier) || math.IsInf(c.RateMultiplier, 0) || c.RateMultiplier < 0 || c.RateMultiplier > 999999 ||
-		(c.ProxyID != nil && *c.ProxyID <= 0) || len(c.GroupIDs) > 100 {
+		(c.ProxyID != nil && *c.ProxyID <= 0) || len(c.GroupIDs) > 100 || c.ExpiryHours() < 1 || c.ExpiryHours() > MaxSubmissionExpiryHours {
 		return ErrSubmissionConfig
 	}
 	seen := make(map[int64]bool, len(c.GroupIDs))

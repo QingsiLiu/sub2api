@@ -69,6 +69,9 @@ func validateSubmissionReferences(ctx context.Context, tx *sql.Tx, c service.Acc
 }
 
 func (r *accountSubmissionRepository) CreateInvite(ctx context.Context, hash string, actor int64, c service.AccountSubmissionConfig) (*service.AccountSubmissionInvite, error) {
+	if err := service.ValidateAccountSubmissionConfig(&c); err != nil {
+		return nil, err
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, service.ErrSubmissionUnavailable
@@ -81,7 +84,7 @@ func (r *accountSubmissionRepository) CreateInvite(ctx context.Context, hash str
 	if err != nil {
 		return nil, service.ErrSubmissionConfig
 	}
-	invite, err := scanSubmission(tx.QueryRowContext(ctx, `INSERT INTO account_submission_invites_geili (token_hash,created_by,config,expires_at) VALUES ($1,$2,$3,clock_timestamp()+interval '24 hours') RETURNING `+submissionColumns, hash, actor, string(config)))
+	invite, err := scanSubmission(tx.QueryRowContext(ctx, `INSERT INTO account_submission_invites_geili (token_hash,created_by,config,expires_at) VALUES ($1,$2,$3,clock_timestamp()+$4::integer*interval '1 hour') RETURNING `+submissionColumns, hash, actor, string(config), c.ExpiryHours()))
 	if err != nil {
 		return nil, err
 	}

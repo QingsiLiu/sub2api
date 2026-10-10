@@ -36,10 +36,12 @@ def verify(f):
         caller = f.replica_request if secondary else f.request
         return caller('/api/v1/account-submissions/' + action, body)
 
-    def make(platform, group=None, name='key'):
+    def make(platform, group=None, name='key', hours=None):
         config = {'name': 'Intake ' + name + ' ' + platform + ' ' + f.suffix,
                   'platform': platform, 'group_ids': [] if group is None else [group],
                   'proxy_id': None, 'concurrency': 2, 'priority': 50, 'rate_multiplier': 0}
+        if hours is not None:
+            config['expires_in_hours'] = hours
         result = f.api('/admin/accounts/submission-invites', config, f.admin)
         f.remember_invite(result['invite']['id'])
         f.intake_canaries.append(result['token'])
@@ -58,6 +60,21 @@ def verify(f):
     anonymous = f.request('/api/v1/admin/accounts/submission-invites')
     f.check('anonymous callers cannot create/list invitations', anonymous[0] == 401)
     f.check('public submission SPA loads without login', f.request('/submit-key')[0] == 200)
+
+    for platform in ('anthropic', 'openai'):
+        for hours in (None, 1, 72, 720):
+            invitation, config = make(platform, name='expiry', hours=hours)
+            ident = invitation['invite']['id']
+            duration = f.sql("SELECT json_build_object('hours',extract(epoch FROM expires_at-created_at)/3600) FROM account_submission_invites_geili WHERE id=" + str(ident) + ';')[0]['hours']
+            expected = 24 if hours is None else hours
+            f.check(platform + ' expiry persisted for ' + str(expected) + ' hours', abs(float(duration) - expected) < .01)
+            listing = f.api('/admin/accounts/submission-invites?page=1&page_size=100', token=f.admin)
+            listed = next(item for item in listing['items'] if item['id'] == ident)
+            f.check(platform + ' expiry visible in history for ' + str(expected) + ' hours', listed['expires_at'] == invitation['invite']['expires_at'])
+        for invalid in (0, -1, 721, 1.5, '72'):
+            payload = {**config, 'expires_in_hours': invalid}
+            status, _ = f.request('/api/v1/admin/accounts/submission-invites', payload, f.admin)
+            f.check(platform + ' invalid expiry rejected: ' + str(invalid), status == 400)
 
     for platform in ('anthropic', 'openai'):
         model = 'claude-sonnet-4-6' if platform == 'anthropic' else 'gpt-4.1-mini'

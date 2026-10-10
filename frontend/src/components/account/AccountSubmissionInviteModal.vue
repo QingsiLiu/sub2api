@@ -10,6 +10,7 @@
           <div><label for="invite-priority" class="input-label">{{ t('admin.accounts.keyIntake.priority') }}</label><input id="invite-priority" v-model.number="form.priority" type="number" min="0" max="10000" class="input w-full" required :disabled="busy" /></div>
           <div><label for="invite-rate" class="input-label">{{ t('admin.accounts.keyIntake.multiplier') }}</label><input id="invite-rate" v-model.number="form.rate_multiplier" type="number" min="0" max="999999" step="0.0001" class="input w-full" required :disabled="busy" /></div>
           <div><label for="invite-proxy" class="input-label">{{ t('admin.accounts.keyIntake.proxy') }}</label><select id="invite-proxy" v-model="form.proxy_id" class="input w-full" :disabled="busy"><option :value="null">{{ t('admin.accounts.keyIntake.direct') }}</option><option v-for="proxy in proxies" :key="proxy.id" :value="proxy.id">{{ proxy.name }}</option></select></div>
+          <div><label for="invite-expiry" class="input-label">{{ t('admin.accounts.keyIntake.expiryHours') }}</label><input id="invite-expiry" v-model.number="form.expires_in_hours" type="number" min="1" max="720" step="1" class="input w-full" required :disabled="busy || !!link" aria-describedby="invite-expiry-hint" /><p id="invite-expiry-hint" class="mt-1 text-xs text-gray-500">{{ t('admin.accounts.keyIntake.expiryHint') }}</p></div>
         </div>
         <fieldset :disabled="busy" class="space-y-2"><legend class="input-label">{{ t('admin.accounts.keyIntake.groups') }}</legend>
           <div class="flex max-h-40 flex-wrap gap-3 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-600">
@@ -51,7 +52,7 @@ const props = defineProps<{ show: boolean; groups: AdminGroup[]; proxies: Proxy[
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 const appStore = useAppStore()
-const form = reactive<SubmissionConfig>({ name: '', platform: 'anthropic', group_ids: [], proxy_id: null, concurrency: 1, priority: 50, rate_multiplier: 1 })
+const form = reactive<SubmissionConfig>({ name: '', platform: 'anthropic', group_ids: [], proxy_id: null, concurrency: 1, priority: 50, rate_multiplier: 1, expires_in_hours: 24 })
 const platformGroups = computed(() => props.groups.filter(group => group.platform === form.platform && group.status === 'active'))
 const items = ref<SubmissionInvite[]>([])
 const page = ref(1)
@@ -72,7 +73,12 @@ async function load() {
   finally { listLoading.value = false }
 }
 async function create() {
-  if (busy.value) return
+  if (busy.value || link.value) return
+  const hours = form.expires_in_hours
+  if (typeof hours !== 'number' || !Number.isInteger(hours) || hours < 1 || hours > 720) {
+    error.value = t('admin.accounts.keyIntake.expiryInvalid')
+    return
+  }
   busy.value = true
   error.value = ''
   try {
