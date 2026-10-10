@@ -58,6 +58,9 @@ def fixture_type(cache, source):
                     if self.path.startswith('/transport-http400/'):
                         with fixture.lock:
                             fixture.transport_counts['http400'] += 1
+                        # Drain the request before closing HTTP/1.0, otherwise
+                        # unread body bytes can turn a real 400 into a TCP reset.
+                        self.rfile.read(int(self.headers.get('Content-Length', '0')))
                         return self.reply({'error': {'type': 'invalid_request_error',
                                                    'message': 'Synthetic bad input'}}, 400)
                     return super().do_POST()
