@@ -59,10 +59,12 @@ var tempUnschedSetScript = redis.NewScript(`
 
 type tempUnschedCache struct {
 	rdb *redis.Client
+	// geili hook: a bounded client view shares the pool without changing other Redis callers.
+	transportRDBGeili *redis.Client
 }
 
 func NewTempUnschedCache(rdb *redis.Client) service.TempUnschedCache {
-	return &tempUnschedCache{rdb: rdb}
+	return &tempUnschedCache{rdb: rdb, transportRDBGeili: openAITransportRedisGeili(rdb)}
 }
 
 // SetTempUnsched 设置临时不可调度状态（只延长不缩短）

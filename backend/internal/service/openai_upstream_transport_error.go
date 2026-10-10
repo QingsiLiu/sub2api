@@ -150,8 +150,13 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 		return err
 	}
 
-	if classifyUpstreamTransportError(err).Persistent {
-		s.tempUnscheduleOpenAITransportError(ctx, account, safeErr)
+	// geili hook: exhausted request budgets say nothing about account health.
+	if RequestRecoveryAllowed(ctx) {
+		if classifyUpstreamTransportError(err).Persistent {
+			s.tempUnscheduleOpenAITransportError(ctx, account, safeErr)
+		} else {
+			s.observeOpenAITransportFailureGeili(ctx, account, safeErr)
+		}
 	}
 
 	return &UpstreamFailoverError{
@@ -176,6 +181,13 @@ func (s *OpenAIGatewayService) tempUnscheduleOpenAITransportError(ctx context.Co
 		return
 	}
 	until := time.Now().Add(openAITransportErrorTempUnschedDuration)
+	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(until) {
+		until = *account.TempUnschedulableUntil
+	}
+	// geili hook: preserve durable blocks when a database write or snapshot update fails.
+	if isOpenAITransportHealthAccountGeili(account) {
+		s.transportHealthStateGeili().record(account.ID, time.Now(), &OpenAITransportHealthDecisionGeili{Until: until})
+	}
 	reason := "upstream transport error (proxy/network): " + safeErr
 
 	// Immediate in-memory block so this process skips the account until the

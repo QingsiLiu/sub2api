@@ -471,9 +471,12 @@ type OpenAIGatewayService struct {
 	liveAttestation       liveattestation.Provider
 	liveAttestationCipher SecretEncryptor
 
-	openaiWSPoolOnce               sync.Once
-	openaiWSStateStoreOnce         sync.Once
-	openaiSchedulerOnce            sync.Once
+	openaiWSPoolOnce       sync.Once
+	openaiWSStateStoreOnce sync.Once
+	openaiSchedulerOnce    sync.Once
+	// geili hook: transport health also protects legacy scheduling.
+	openaiTransportHealthOnceGeili sync.Once
+	openaiTransportHealthGeili     *openAITransportHealthStateGeili
 	openaiProxyStreamCircuitOnce   sync.Once
 	openaiWSPassthroughDialerOnce  sync.Once
 	openaiModelTransientOnce       sync.Once
