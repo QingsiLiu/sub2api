@@ -1,4 +1,4 @@
-## 0.2.14-geili.8（Stage 已验收，待生产授权）
+## 0.2.14-geili.8（已发布生产，Stage 同镜像）
 
 在 `.7` 基础上，后台「邀请录入」增加自定义有效期：填写 1～720 的整数小时，默认 24 小时，可设置 72 小时（三天）等时长。邀请记录继续展示实际到期时间。
 
@@ -6,7 +6,7 @@
 - 无新增迁移，不包含工作区未提交的 GPT 加密路由工作。
 - revision：`a86c4778f063d2fa976c746731101a51f07b59a7`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:5d19236efa2e399652d47441fc49827bf49e1ead41c5dbce4b88187286d7e45f`。[候选 CI 38070711350](https://github.com/QingsiLiu/sub2api/actions/runs/38070711350)、Geili CI 与安全扫描通过。普通 CI 仍只有既有 lint 工具无法解析 Go1.27.2 export data v5；本机兼容 lint2.14 增量 0 issues。
 - 验证：相关 Go/unit、PostgreSQL 默认与自定义到期时间、前端 16 项相关测试与构建通过；当前镜像 Stage 录入及有效期69、非支付业务51、双实例缓存17、桌面/手机页面9、完整迁移6、生产保全6，共158项通过，夹具及副本全部恢复。无真实供应商或付费测试。
-- 部署：2026-10-11 经正式脚本部署 Stage，health200、版本`.8`；生产仍`.7`。独立 v10 校验已验证全部新候选证据，只有具体候选的生产授权待确认，`production_ready=false`。Stage 回退备份 `/opt/sub2api-subscription-lab/backups/20261010T174612Z-candidate`；旧邀请表及数据保留。
+- 部署：用户在本候选 Stage 158项验收通过后当次授权“发布生产”。2026-10-11 02:04左右（UTC 2026-10-10 18:04）经正式脚本发布生产，Stage/生产同为`0.2.14-geili.8` / `a86c4778f063d2fa976c746731101a51f07b59a7` / `sha256:5d19236efa2e399652d47441fc49827bf49e1ead41c5dbce4b88187286d7e45f`。支持1～720整数小时、默认24，72为三天；旧链接到期时间不变。应用健康恢复9.263秒；生产只读27项、公网及部署资源16项全部通过，六核心容器healthy/restart0。生产PG/Redis及Stage数据库指纹不变，335迁移校验及邀请表约束完整。Compose只替换应用镜像，env/config.yaml/Nginx与既有媒体标志保持，仓库使用原密钥占位符。未创建生产测试账号、未调用真实供应商。备份`/root/backups/subscription-prod-image-bump-20261010T180348Z`；回退上一枚`.7` / `sha256:80b57e2f145230c46a36ab70aad917b8de5dff5d278d33e987de60eb2bfc4e13`，保留邀请表及新增业务数据，不整库回灌。Stage 回退备份 `/opt/sub2api-subscription-lab/backups/20261010T174612Z-candidate`。
 
 ## 0.2.14-geili.7（已发布生产，Stage 同镜像）
 
