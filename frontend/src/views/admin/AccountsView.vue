@@ -17,6 +17,8 @@
             @create="showCreate = true"
           >
             <template #after>
+              <!-- geili hook: external upstream credentials. -->
+              <button class="btn btn-secondary" @click="showSubmissionInvite = true">{{ t('admin.accounts.keyIntake.invite') }}</button>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
                 <button
@@ -454,6 +456,7 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
+    <AccountSubmissionInviteModal :show="showSubmissionInvite" :groups="groups" :proxies="proxies" @close="showSubmissionInvite = false" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
@@ -513,6 +516,7 @@ import AccountTableFilters from '@/components/admin/account/AccountTableFilters.
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
 import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
+import AccountSubmissionInviteModal from '@/components/account/AccountSubmissionInviteModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
@@ -593,6 +597,7 @@ const selTypes = computed<AccountType[]>(() => {
   return [...types]
 })
 const showCreate = ref(false)
+const showSubmissionInvite = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
 const showImportData = ref(false)
@@ -1362,6 +1367,7 @@ watch(accounts, (rows) => {
 const isAnyModalOpen = computed(() => {
   return (
     showCreate.value ||
+    showSubmissionInvite.value ||
     showEdit.value ||
     showSync.value ||
     showImportData.value ||
@@ -2289,6 +2295,9 @@ const handleExportData = async () => {
     URL.revokeObjectURL(url)
     // spark 影子账号被后端排除出备份(其凭据透传母账号、调度配置不可经凭据型导入重建);
     // 跳过非零时明确提示用户,避免「下载成功但少了账号」的静默丢失。
+    if (dataPayload.skipped_external && dataPayload.skipped_external > 0) {
+      appStore.showWarning(t('admin.accounts.keyIntake.exportSkipped', { count: dataPayload.skipped_external }))
+    }
     if (dataPayload.skipped_shadows && dataPayload.skipped_shadows > 0) {
       appStore.showWarning(t('admin.accounts.dataExportedSkippedShadows', { count: dataPayload.skipped_shadows }))
     } else {

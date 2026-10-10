@@ -30,6 +30,13 @@ const routes: RouteRecordRaw[] = [
   },
 
   // ==================== Public Routes ====================
+  // geili hook: invitation-scoped upstream API key intake.
+  {
+    path: '/submit-key',
+    name: 'SubmitKey',
+    component: () => import('@/views/auth/SubmitKeyView.vue'),
+    meta: { requiresAuth: false, titleKey: 'admin.accounts.keyIntake.title' }
+  },
   {
     path: '/home',
     name: 'Home',
