@@ -128,3 +128,110 @@ func TestAUAPIPendingTaskRemainsOwnedAndQueryableAfterRetentionWindow(t *testing
 	_, err = s.Get(context.Background(), ImageTaskOwner{UserID: 1, APIKeyID: 2}, repo.record.TaskID)
 	require.ErrorIs(t, err, ErrImageTaskNotFound)
 }
+
+func TestAUAPIMediaIndependentSeedVersionAndKindIsolation(t *testing.T) {
+	const seed = "dreamina-seedance-2-5-260628"
+	require.True(t, supportedAUAPIMediaModel("video", seed))
+	for _, kind := range []string{"image", "audio", "text", ""} {
+		require.False(t, supportedAUAPIMediaModel(kind, seed), kind)
+	}
+	for _, model := range []string{"wan3.0-video", "seedance-2.5", "MiniMax-H3", "kling-3.0"} {
+		require.True(t, supportedAUAPIMediaModel("video", model), model)
+		require.False(t, supportedAUAPIMediaModel("image", model), model)
+	}
+	for _, model := range []string{"gpt-image-2", "gpt-image-2.5", "gemini-3-pro-image-preview"} {
+		require.True(t, supportedAUAPIMediaModel("image", model), model)
+		require.False(t, supportedAUAPIMediaModel("video", model), model)
+	}
+	for _, model := range []string{"dreamina-seedance-2-5-260627", "dreamina-seedance-2-5-260628-preview", "DREAMINA-SEEDANCE-2-5-260628", "kling-video-o1", "kling-3.0-turbo", "unknown-video"} {
+		require.False(t, supportedAUAPIMediaModel("video", model), model)
+	}
+}
+
+type auapiSeedAcceptanceRepo struct {
+	AUAPIImageTaskRepository
+	created []*AUAPIImageTaskRecord
+}
+
+func (r *auapiSeedAcceptanceRepo) GetByIdempotency(context.Context, int64, int64, string) (*AUAPIImageTaskRecord, error) {
+	return nil, ErrImageTaskNotFound
+}
+func (r *auapiSeedAcceptanceRepo) Create(_ context.Context, task *AUAPIImageTaskRecord) (*AUAPIImageTaskRecord, bool, error) {
+	r.created = append(r.created, task)
+	return task, true, nil
+}
+
+type auapiSeedAccountRepo struct {
+	AccountRepository
+	account Account
+}
+
+func (r *auapiSeedAccountRepo) ListByGroup(context.Context, int64) ([]Account, error) {
+	return []Account{r.account}, nil
+}
+
+func auapiSeedAcceptanceFixture(upstreamModel, prices string) (*AUAPIImageTaskService, *APIKey, *auapiSeedAcceptanceRepo, *httpUpstreamRecorder) {
+	const seed = "dreamina-seedance-2-5-260628"
+	repo := &auapiSeedAcceptanceRepo{}
+	accounts := &auapiSeedAccountRepo{account: Account{ID: 4, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Credentials: map[string]any{
+		"image_provider": "auapi", "api_key": "fixture-only", "base_url": "https://api.auapi.ai",
+		"model_mapping": map[string]any{seed: upstreamModel}, "auapi_media_prices": prices,
+	}}}
+	cfg := &config.Config{RunMode: config.RunModeSimple, AUAPIImage: config.AUAPIImageConfig{Enabled: true}}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"id":"seed_task","status":"queued"}`))}}
+	group := &Group{ID: 3, RateMultiplier: 1, AllowImageGeneration: true}
+	key := &APIKey{ID: 2, UserID: 1, User: &User{ID: 1}, GroupID: &group.ID, Group: group}
+	svc := &AUAPIImageTaskService{repo: repo, accounts: accounts, cfg: cfg, storage: func() (*ImageResultUploader, bool) { return nil, true },
+		gateway: &OpenAIGatewayService{cfg: cfg, httpUpstream: upstream}, billingCache: &BillingCacheService{cfg: cfg}}
+	return svc, key, repo, upstream
+}
+
+func TestAUAPIMediaSeedAcceptanceKeepsExactVersionAndPayload(t *testing.T) {
+	const seed = "dreamina-seedance-2-5-260628"
+	svc, key, repo, upstream := auapiSeedAcceptanceFixture(seed, `{"dreamina-seedance-2-5-260628":{"720p:no_video_input:audio_false":0.3683}}`)
+	body := []byte(`{"model":"dreamina-seedance-2-5-260628","prompt":"boat","resolution":"720p","duration":4,"generate_audio":false,"aspect_ratio":"16:9"}`)
+	task, replayed, err := svc.SubmitVideo(context.Background(), key, nil, body, "seed-exact")
+	require.NoError(t, err)
+	require.False(t, replayed)
+	require.True(t, strings.HasPrefix(task.ID, "auvidtask_"))
+	require.Len(t, repo.created, 1)
+	stored := repo.created[0]
+	require.Equal(t, seed, stored.Model)
+	require.Equal(t, seed, stored.UpstreamModel)
+	require.InDelta(t, 1.4732, stored.UnitPrice, 1e-9)
+	require.Empty(t, upstream.requests, "acceptance persists before asynchronous provider submission")
+	client := &auapiImageClient{account: &svc.accounts.(*auapiSeedAccountRepo).account, gateway: svc.gateway}
+	_, err = client.Submit(context.Background(), stored.RequestJSON, stored.UpstreamIdempotencyKey)
+	require.NoError(t, err)
+	var submitted auapiImageRequest
+	require.NoError(t, json.Unmarshal(upstream.lastBody, &submitted))
+	require.Equal(t, seed, submitted.Model)
+	require.Equal(t, "video", submitted.Kind)
+	require.Equal(t, "720p", submitted.Parameters.Resolution)
+	require.Equal(t, 4, submitted.Parameters.DurationSeconds)
+	require.Equal(t, "16:9", submitted.Parameters.Ratio)
+	require.NotNil(t, submitted.Parameters.GenerateAudio)
+	require.False(t, *submitted.Parameters.GenerateAudio)
+	require.Equal(t, "/v1/videos/tasks", upstream.lastReq.URL.Path)
+}
+
+func TestAUAPIMediaSeedRejectsUnsupportedMappingsOrUnpricedSpecsBeforeHold(t *testing.T) {
+	const seed = "dreamina-seedance-2-5-260628"
+	for _, tc := range []struct{ name, mapping, prices, resolution, audio string }{
+		{"different version", "dreamina-seedance-2-5-260627", `{}`, "720p", "false"},
+		{"unverified O1", "kling-video-o1", `{}`, "720p", "false"},
+		{"unverified Turbo", "kling-3.0-turbo", `{}`, "720p", "false"},
+		{"old version tariff", seed, `{"seedance-2.5":{"720p:no_video_input:audio_false":0.2842}}`, "720p", "false"},
+		{"unpriced audio", seed, `{"dreamina-seedance-2-5-260628":{"720p:no_video_input:audio_false":0.3683}}`, "720p", "true"},
+		{"unpriced resolution", seed, `{"dreamina-seedance-2-5-260628":{"720p:no_video_input:audio_false":0.3683}}`, "1080p", "false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, key, repo, upstream := auapiSeedAcceptanceFixture(tc.mapping, tc.prices)
+			body := []byte(`{"model":"` + seed + `","prompt":"boat","resolution":"` + tc.resolution + `","duration":4,"generate_audio":` + tc.audio + `,"aspect_ratio":"16:9"}`)
+			_, _, err := svc.SubmitVideo(context.Background(), key, nil, body, "seed-reject")
+			require.Error(t, err)
+			require.Empty(t, repo.created, "repository INSERT and its balance hold must not run")
+			require.Empty(t, upstream.requests, "rejected requests must never submit upstream")
+		})
+	}
+}

@@ -86,3 +86,50 @@ func TestAUAPIVideoPromptAuditAcceptsVideoEndpoint(t *testing.T) {
 	h := NewAsyncImageHandlerWithAUAPI(nil, &OpenAIGatewayHandler{gatewayService: &service.OpenAIGatewayService{}}, nil)
 	require.True(t, h.checkAUAPIVideoPrompt(c, &service.APIKey{ID: 2, UserID: 1}, "MiniMax-H3", []byte(`{"model":"MiniMax-H3","prompt":"boat"}`)))
 }
+
+type auapiSeedValidationRepo struct {
+	service.AUAPIImageTaskRepository
+	lookups, creates int
+}
+
+func (r *auapiSeedValidationRepo) GetByIdempotency(context.Context, int64, int64, string) (*service.AUAPIImageTaskRecord, error) {
+	r.lookups++
+	return nil, service.ErrImageTaskNotFound
+}
+func (r *auapiSeedValidationRepo) Create(context.Context, *service.AUAPIImageTaskRecord) (*service.AUAPIImageTaskRecord, bool, error) {
+	r.creates++
+	return nil, false, service.ErrImageTaskUnavailable
+}
+
+type auapiSeedValidationAccountRepo struct{ service.AccountRepository }
+
+func (auapiSeedValidationAccountRepo) ListByGroup(context.Context, int64) ([]service.Account, error) {
+	return []service.Account{{Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{
+		"image_provider": "auapi", "model_mapping": map[string]any{"dreamina-seedance-2-5-260628": "dreamina-seedance-2-5-260628"},
+	}}}, nil
+}
+
+func TestAUAPIVideoSeedInvalidCapabilitiesFailBeforeTaskOrHold(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, extra := range []string{`,"image_url":"https://fixture.invalid/reference.png"`, `,"generate_audio":null`} {
+		t.Run(extra, func(t *testing.T) {
+			repo := &auapiSeedValidationRepo{}
+			cfg := &config.Config{AUAPIImage: config.AUAPIImageConfig{Enabled: true}}
+			svc := service.NewAUAPIImageTaskService(repo, auapiSeedValidationAccountRepo{}, func() (*service.ImageResultUploader, bool) { return nil, true }, cfg)
+			h := NewAsyncImageHandlerWithAUAPI(nil, nil, svc)
+			group := &service.Group{ID: 1, AllowImageGeneration: true}
+			router := gin.New()
+			router.POST("/v1/videos/generations", func(c *gin.Context) {
+				c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{ID: 2, UserID: 1, GroupID: &group.ID, Group: group})
+				require.True(t, h.TryAUAPIVideo(c, "create"))
+			})
+			body := `{"model":"dreamina-seedance-2-5-260628","prompt":"boat","resolution":"720p","duration":4,"aspect_ratio":"16:9"` + extra + `}`
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("POST", "/v1/videos/generations", strings.NewReader(body)))
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			require.NotContains(t, w.Body.String(), "auvidtask_")
+			require.Zero(t, repo.lookups)
+			require.Zero(t, repo.creates, "no task INSERT or hold and no asynchronous upstream work")
+		})
+	}
+}

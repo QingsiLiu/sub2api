@@ -38,7 +38,7 @@ func auapiConfiguredMediaPrice(account *Account, request auapiImageRequest, tier
 
 func supportedAUAPIMediaModel(kind, model string) bool {
 	if kind == "video" {
-		return model == "wan3.0-video" || model == "seedance-2.5" || model == "MiniMax-H3" || model == "kling-3.0"
+		return model == "wan3.0-video" || model == "seedance-2.5" || model == "dreamina-seedance-2-5-260628" || model == "MiniMax-H3" || model == "kling-3.0"
 	}
 	return model == "gpt-image-2" || model == "gpt-image-2.5" || model == "gemini-3-pro-image-preview"
 }
