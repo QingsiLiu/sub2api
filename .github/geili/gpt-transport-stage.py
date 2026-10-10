@@ -32,6 +32,7 @@ def fixture_type(cache, source):
             original = self.server.RequestHandlerClass
             fixture = self
             self.transport_counts = {'oauth': 0, 'apikey': 0, 'http400': 0}
+            self.gateway_transport_observations = {}
             self.apikey_healthy = False
 
             class TransportMock(original):
@@ -101,7 +102,7 @@ def fixture_type(cache, source):
                                     'model_mapping': {self.model: self.model}}}, self.admin)
                 key = self.api('/keys', {'name': 'Transport ' + kind, 'billing_source': 'balance',
                                         'routing_mode': 'single', 'group_id': group['id']}, user['token'])
-                self.transport_cases.append({'kind': kind, 'account': account, 'key': key})
+                self.transport_cases.append({'kind': kind, 'group_id': group['id'], 'account': account, 'key': key})
 
         def call_transport(self, case, label, secondary=False):
             seed = 'transport-' + self.suffix + '-' + case['kind'] + '-' + label
@@ -109,6 +110,30 @@ def fixture_type(cache, source):
                        'prompt_cache_key': seed, 'stream': False}
             caller = self.replica_request if secondary else self.request
             return caller('/v1/responses', payload, case['key']['key'])
+
+        def transport_observations(self, case, expected=None):
+            # Account creation also launches capability/privacy probes. Only
+            # request-scoped Ops events measure gateway transport observations.
+            deadline = time.monotonic() + 5
+            while True:
+                count = self.sql("SELECT json_build_object('n',COUNT(*)) FROM ops_error_logs o "
+                    "CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(o.upstream_errors::jsonb)='array' "
+                    "THEN o.upstream_errors::jsonb ELSE '[]'::jsonb END) a "
+                    f"WHERE o.group_id={int(case['group_id'])} AND a->>'account_id'='{int(case['account']['id'])}' "
+                    "AND a->>'kind'='request_error';")[0]['n']
+                if expected is None or count >= expected or time.monotonic() >= deadline:
+                    self.gateway_transport_observations[case['kind']] = count
+                    return count
+                time.sleep(.1)
+
+        def completed_usage(self, case, expected):
+            deadline = time.monotonic() + 5
+            while True:
+                count = self.sql("SELECT json_build_object('n',COUNT(*)) FROM usage_logs "
+                    f"WHERE group_id={int(case['group_id'])} AND account_id={int(case['account']['id'])};")[0]['n']
+                if count >= expected or time.monotonic() >= deadline:
+                    return count
+                time.sleep(.1)
 
         def cooldown(self, account_id):
             return self.sql("SELECT json_build_object('active',COALESCE(temp_unschedulable_until>NOW(),false),"
@@ -135,14 +160,13 @@ def fixture_type(cache, source):
                     continue
                 for i in range(3):
                     self.check_response(kind + ' failure recovered ' + str(i), self.call_transport(case, str(i), i == 0))
-                self.check(kind + ' exactly three failed network attempts', self.transport_counts[kind] == 3,
-                           dict(self.transport_counts))
+                self.check(kind + ' exactly three gateway transport observations', self.transport_observations(case, 3) == 3)
                 state = self.cooldown(case['account']['id'])
                 self.check(kind + ' durable60s cooldown after third attempt', state['active']
                     and 45 <= state['remaining'] <= 65 and 'openai_transport_health' in state['reason'], state)
                 self.check_response(kind + ' secondary skips failed A', self.call_transport(case, 'blocked-secondary', True))
                 self.check_response(kind + ' primary skips failed A', self.call_transport(case, 'blocked-primary'))
-                self.check(kind + ' no additional failed attempts while cooled', self.transport_counts[kind] == 3)
+                self.check(kind + ' no additional gateway failures while cooled', self.transport_observations(case) == 3)
             self.apikey_healthy = True
             began = time.monotonic()
             while time.monotonic() - began < 70:
@@ -154,17 +178,22 @@ def fixture_type(cache, source):
             for case in self.transport_cases[:2]:
                 self.check_response(case['kind'] + ' fresh secondary can retry A after expiry',
                                     self.call_transport(case, 'after-expiry', True))
-                self.check(case['kind'] + ' A attempted again after expiry', self.transport_counts[case['kind']] == 4)
+                self.check(case['kind'] + ' A selected again after expiry',
+                    self.transport_observations(case, 4) == 4 if case['kind'] == 'oauth' else self.completed_usage(case, 1) == 1)
             apikey = self.transport_cases[1]
             for cycle in range(2):
                 self.apikey_healthy = False
                 for i in range(2):
                     self.check_response('apikey two failures recover ' + str(cycle) + '/' + str(i),
                                         self.call_transport(apikey, f'cycle-{cycle}-{i}'))
-                self.check('two failures do not cool ' + str(cycle), not self.cooldown(apikey['account']['id'])['active'])
+                self.check('two gateway failures do not cool ' + str(cycle),
+                    self.transport_observations(apikey, 5 + cycle * 2) == 5 + cycle * 2
+                    and not self.cooldown(apikey['account']['id'])['active'])
                 self.apikey_healthy = True
                 self.check_response('completed success resets streak ' + str(cycle),
                                     self.call_transport(apikey, 'success-' + str(cycle)))
+                self.check('success belongs to A ' + str(cycle), self.completed_usage(apikey, cycle + 2) == cycle + 2)
+            self.gateway_transport_observations = {c['kind']: self.transport_observations(c) for c in self.transport_cases}
             self.check('protected settings and production fingerprints unchanged', self.protected_state_unchanged())
 
         def restore(self):
@@ -205,7 +234,8 @@ def main():
             'checks': len(fixture.checks), 'restored': fixture.snapshot.get('restored', False),
             'replica_removed': fixture.snapshot.get('cache_replica', {}).get('removed', False),
             'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            'attempts': getattr(fixture, 'transport_counts', {}), 'synthetic_only': True,
+            'mock_connections_including_background_probes': getattr(fixture, 'transport_counts', {}),
+            'gateway_transport_observations': getattr(fixture, 'gateway_transport_observations', {}), 'synthetic_only': True,
             'production_ready': False}
         cache.b.stage.private_json(fixture.private / 'transport-result.json', result)
         print('RESULT ' + str(fixture.private / 'transport-result.json'), flush=True)
