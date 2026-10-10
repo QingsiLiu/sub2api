@@ -242,6 +242,18 @@ func cloneAccountValuePointer[T any](value *T) *T {
 // account cannot mutate the in-memory source. Linked credential shadows are excluded because they
 // intentionally do not own credentials and must be created through CreateShadow.
 func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actorScope, operationKey string) (*Account, error) {
+	// geili hook: durable external provenance cannot be removed by editing account Extra.
+	if protection, ok := s.accountRepo.(interface {
+		ProtectedAccountIDs(context.Context, []int64) (map[int64]bool, error)
+	}); ok {
+		protected, err := protection.ProtectedAccountIDs(ctx, []int64{id})
+		if err != nil {
+			return nil, err
+		}
+		if protected[id] {
+			return nil, ErrSubmissionProtected
+		}
+	}
 	operationID := duplicateAccountOperationID(id, actorScope, operationKey)
 	existing, err := s.RecoverDuplicateAccount(ctx, id, actorScope, operationKey)
 	if err != nil {

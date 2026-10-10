@@ -49,6 +49,8 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
+	// geili hook: one-time external upstream credential intake.
+	accountSubmission       *service.AccountSubmissionService
 	claudeResetCredits      claudeResetReader
 	adminService            service.AdminService
 	oauthService            *service.OAuthService
@@ -1105,6 +1107,16 @@ func (h *AccountHandler) Duplicate(c *gin.Context) {
 	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	// geili hook: provenance is stored outside editable account metadata.
+	protected, protectErr := h.protectedSubmissionAccounts(c, []int64{accountID})
+	if protectErr != nil {
+		response.ErrorFrom(c, protectErr)
+		return
+	}
+	if protected[accountID] {
+		response.ErrorFrom(c, service.ErrSubmissionProtected)
 		return
 	}
 	actorScope := adminActorScope(c)

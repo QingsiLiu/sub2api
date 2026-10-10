@@ -124,6 +124,8 @@ func registerRoutes(
 	panelRateLimiter := middleware2.NewPanelRateLimiter(redisClient, settingService)
 
 	// 注册各模块路由
+	// geili hook: invitation-scoped public credential intake.
+	routes.RegisterAccountSubmissionPublicRoutes(v1, h, redisClient)
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, auditLog, redisClient, settingService, panelRateLimiter)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, panelRateLimiter)
 	routes.RegisterModelPlazaRoutes(v1, h, optionalJWTAuth, settingService, panelRateLimiter)
