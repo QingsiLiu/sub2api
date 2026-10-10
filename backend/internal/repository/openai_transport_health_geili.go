@@ -114,3 +114,9 @@ func (c *tempUnschedCache) OpenAITransportBlocksGeili(ctx context.Context, ids [
 	}
 	return blocks, nil
 }
+
+// Keep the configured OpenAI pool available to short-cooldown snapshot builds;
+// the service retains only transport-cooled accounts and still enforces blocks.
+func (r *accountRepository) ListOpenAITransportSnapshotCandidatesGeili(ctx context.Context, groupID *int64, includeGrouped bool) ([]service.Account, error) {
+	return r.ListModelAvailabilityCandidates(ctx, groupID, []string{service.PlatformOpenAI}, includeGrouped)
+}

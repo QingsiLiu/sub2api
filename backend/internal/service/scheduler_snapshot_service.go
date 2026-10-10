@@ -1470,6 +1470,10 @@ func (s *SchedulerSnapshotService) loadAccountsFromDB(ctx context.Context, bucke
 	if s.accountRepo == nil {
 		return nil, ErrSchedulerCacheNotReady
 	}
+	// geili hook: retain transport-cooled members so expiry needs no bucket rebuild.
+	if accounts, handled, err := s.loadOpenAITransportSnapshotGeili(ctx, bucket, useMixed); handled {
+		return accounts, err
+	}
 	groupID := bucket.GroupID
 	if s.isRunModeSimple() {
 		groupID = 0
