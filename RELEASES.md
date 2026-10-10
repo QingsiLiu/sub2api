@@ -1,4 +1,4 @@
-## 0.2.14-geili.7（候选 CI 通过，待 Stage 验收）
+## 0.2.14-geili.7（Stage 已验收，待当次生产授权）
 
 在 `.6` 基础上新增后台「邀请录入」与免登录 `/submit-key` 页面，支持 Claude/OpenAI 官方 API Key。管理员预设账号、分组、代理、并发、优先级与倍率，对方只填写 Key；新上游账号从落库起停用、不可调度，录入不调用供应商、不自动探测能力，检查测试后由管理员启用。
 
@@ -6,8 +6,8 @@
 - 页面使用密码框，Key 仅在内存和提交请求体中，成功清空；同标签页切换邀请时清空旧状态，隔离迟到响应。接口限制 JSON 字段与大小，共享每 IP 每分钟 30 次限流，Redis 故障拒绝。外部不能指定自定义上游地址。
 - 持久来源记录不能通过编辑 Extra 清除。控制台账号导出跳过外部账号并提示数量，复制被拒绝；含外部凭据的原始数据库备份禁止控制台下载，服务器备份任务不变。普通账号导出保持兼容。页面明确服务器、数据库或备份存储权限持有人仍可读取 Key。
 - 新增迁移 `276_account_submission_invites_geili.sql`，不修改旧迁移。继承已提交 `.6` 健康调度修正；原工作区未提交的 GPT 加密路由工作不在本候选中。
-- 验证：本机双进程模拟 HTTP 43 项、真实 PostgreSQL 并发与撤销竞争、事务回滚、共享限流/故障拒绝、桌面/手机浏览器流程通过；前端完整测试、构建、Go default/unit、相关 race、增量 lint、Geili 验证和 Stage 精确 ID 恢复离线检查通过。真实供应商 Key 和付费请求未执行。本候选 CI 38062929359 已通过；Stage 业务、同镜像双实例及凭据保护验收待重新执行，不能继承其他版本契约或报告。
-- revision：`e6976640790da79f4ab7e29c43205daddbda2552`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:80b57e2f145230c46a36ab70aad917b8de5dff5d278d33e987de60eb2bfc4e13`。[候选 CI 38062929359](https://github.com/QingsiLiu/sub2api/actions/runs/38062929359) 全部门禁通过。部署状态：尚未部署本候选，生产仍 `.5` / `0d7340ba61e48ba1139202822b029419fd625121` / `sha256:2b0d12761ba559a9a16e20a6ea82ebef269a2c8b9dec248797bc79df445d6931`。Stage 通过后，须取得具体候选的当次生产授权，并使用 Stage 同一 digest。功能与验证边界见 [外部 Key 录入说明](.github/geili/account-submission.md)。
+- 验证：本机双进程模拟 HTTP 43 项、真实 PostgreSQL 并发与撤销竞争、事务回滚、共享限流/故障拒绝、桌面/手机浏览器流程通过；前端完整测试、构建、Go default/unit、相关 race、增量 lint、Geili 验证和 Stage 精确 ID 恢复离线检查通过。真实供应商 Key 和付费请求未执行。本候选 CI 38062929359 已通过；当前镜像 Stage：外部录入43、非支付业务51、双实例缓存17、传输冷却38、Astra协议55、复合Key36、响应审计25、手机/桌面页面13、迁移完整性6项全部通过；生产保全12项通过。夹具恢复、邀请精确清理及临时副本删除通过。本次使用独立 contract v9 及本候选原始报告，未继承其他版本验收。
+- revision：`e6976640790da79f4ab7e29c43205daddbda2552`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:80b57e2f145230c46a36ab70aad917b8de5dff5d278d33e987de60eb2bfc4e13`。[候选 CI 38062929359](https://github.com/QingsiLiu/sub2api/actions/runs/38062929359) 全部门禁通过。部署状态：本候选已通过 canonical 入口部署 Stage，公网 health200、版本`.7`，备份`20261010T154900Z-candidate`。生产仍 `.5` / `0d7340ba61e48ba1139202822b029419fd625121` / `sha256:2b0d12761ba559a9a16e20a6ea82ebef269a2c8b9dec248797bc79df445d6931`。Stage 通过后，须取得具体候选的当次生产授权，并使用 Stage 同一 digest。功能与验证边界见 [外部 Key 录入说明](.github/geili/account-submission.md)。
 
 ## 0.2.14-geili.6（Stage 已验收，未发布生产）
 
