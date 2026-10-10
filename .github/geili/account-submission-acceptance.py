@@ -15,6 +15,7 @@ def literal(value):
 
 def verify(f):
     calls = []
+    f.intake_canaries = []  # Memory-only: used to inspect logs without disclosing credentials/tokens.
 
     def reserve(number=1):
         nonlocal calls
@@ -41,6 +42,7 @@ def verify(f):
                   'proxy_id': None, 'concurrency': 2, 'priority': 50, 'rate_multiplier': 0}
         result = f.api('/admin/accounts/submission-invites', config, f.admin)
         f.remember_invite(result['invite']['id'])
+        f.intake_canaries.append(result['token'])
         return result, config
 
     def account(invite):
@@ -66,6 +68,7 @@ def verify(f):
         invite, config = make(platform, group['id'])
         token = invite['token']
         secret = 'synthetic-key-intake-' + platform + '-' + f.suffix
+        f.intake_canaries.append(secret)
         stored = account(invite)
         f.check(platform + ' stores only SHA256 invitation hash', stored['hash'] == hashlib.sha256(token.encode()).hexdigest() and stored['hash'] != token)
         inspected = public('inspect', {'token': token})
@@ -74,6 +77,8 @@ def verify(f):
         f.check(platform + ' external caller cannot set upstream URL', bad[0] == 400 and account(invite)['account_id'] is None and no_secret(bad[1], [secret, token]))
         bad = public('submit', {'token': token, 'api_key': ''})
         f.check(platform + ' empty key does not consume invitation', bad[0] == 400 and account(invite)['account_id'] is None)
+        bad = public('submit', {'token': token, 'api_key': 'synthetic-oversized-' + 'x' * 9000})
+        f.check(platform + ' oversized request does not consume invitation', bad[0] == 400 and account(invite)['account_id'] is None and no_secret(bad[1], [token, 'synthetic-oversized-']))
         reserve(6)
         def submit(index):
             caller = f.replica_request if getattr(f, 'has_replica', False) and index % 2 else f.request

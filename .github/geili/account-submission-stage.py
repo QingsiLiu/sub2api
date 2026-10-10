@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import subprocess
 
 
 def load(path, name):
@@ -41,12 +42,14 @@ def fixture_type(cache, source, checks):
         def run_checks(self):
             checks.verify(self)
             # Credentials are synthetic and only searched in logs, never printed or returned.
-            secrets = ['synthetic-key-intake-' + platform + '-' + self.suffix for platform in ('anthropic', 'openai')]
-            logs = cache.b.stage.command(['docker', 'logs', cache.b.stage.APP])
-            self.check('primary access/error logs contain no submitted keys', all(secret not in logs for secret in secrets))
+            secrets = self.intake_canaries
+            logs = subprocess.run(['docker', 'logs', cache.b.stage.APP], check=True, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+            self.check('primary stdout/stderr contain no submitted keys or invitation tokens', all(secret not in logs for secret in secrets))
             record = self.snapshot['cache_replica']
-            logs = cache.b.stage.command(['docker', 'logs', record['name']])
-            self.check('replica logs contain no submitted keys', all(secret not in logs for secret in secrets))
+            logs = subprocess.run(['docker', 'logs', record['name']], check=True, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+            self.check('replica stdout/stderr contain no submitted keys or invitation tokens', all(secret not in logs for secret in secrets))
 
         def restore(self):
             if self.snapshot:
