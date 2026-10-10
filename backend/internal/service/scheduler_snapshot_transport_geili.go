@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 type openAITransportSnapshotRepositoryGeili interface {
@@ -31,8 +32,9 @@ func (s *SchedulerSnapshotService) loadOpenAITransportSnapshotGeili(ctx context.
 		return nil, true, err
 	}
 	retained := make([]Account, 0, len(accounts))
+	now := time.Now()
 	for _, account := range accounts {
-		if account.IsSchedulable() {
+		if openAITransportSnapshotEligibleGeili(account, now) {
 			retained = append(retained, account)
 			continue
 		}
@@ -47,9 +49,19 @@ func (s *SchedulerSnapshotService) loadOpenAITransportSnapshotGeili(ctx context.
 		}
 		withoutTransportBlock := account
 		withoutTransportBlock.TempUnschedulableUntil = nil
-		if withoutTransportBlock.IsSchedulable() {
+		if openAITransportSnapshotEligibleGeili(withoutTransportBlock, now) {
 			retained = append(retained, account)
 		}
 	}
 	return retained, true, nil
+}
+
+// Match the original repository predicates, without moving rolling API-key
+// quota checks into snapshot membership. Those remain request-time checks.
+func openAITransportSnapshotEligibleGeili(account Account, now time.Time) bool {
+	return account.IsActive() && account.Schedulable &&
+		(!account.AutoPauseOnExpired || account.ExpiresAt == nil || now.Before(*account.ExpiresAt)) &&
+		(account.OverloadUntil == nil || !now.Before(*account.OverloadUntil)) &&
+		(account.RateLimitResetAt == nil || !now.Before(*account.RateLimitResetAt)) &&
+		(account.TempUnschedulableUntil == nil || !now.Before(*account.TempUnschedulableUntil))
 }

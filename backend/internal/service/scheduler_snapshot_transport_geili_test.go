@@ -58,6 +58,20 @@ func TestSchedulerSnapshotTransportCooldownGeili(t *testing.T) {
 	elapsed := now.Add(-time.Second)
 	pool[0].TempUnschedulableUntil = &elapsed
 	require.True(t, pool[0].IsSchedulable())
+	quota := b
+	quota.ID = 8
+	quota.Extra = map[string]any{"quota_daily_limit": 10.0, "quota_daily_used": 10.0, "quota_daily_start": now.Add(-time.Hour).Format(time.RFC3339)}
+	cooledQuota := quota
+	cooledQuota.ID = 9
+	cooledQuota.TempUnschedulableUntil = &until
+	cooledQuota.TempUnschedulableReason = a.TempUnschedulableReason
+	repo.accounts = append(repo.accounts, quota, cooledQuota)
+	pool, err = snapshot.loadAccountsFromDB(context.Background(), SchedulerBucket{GroupID: 42, Platform: PlatformOpenAI}, false)
+	require.NoError(t, err)
+	require.Len(t, pool, 4, "quota membership must keep the original repository semantics")
+	require.Equal(t, int64(8), pool[2].ID)
+	require.Equal(t, int64(9), pool[3].ID)
+	require.False(t, pool[2].IsSchedulable(), "request-time quota gate must still reject exhausted accounts")
 	for _, simple := range []bool{false, true} {
 		if simple {
 			snapshot.cfg.RunMode = config.RunModeSimple
