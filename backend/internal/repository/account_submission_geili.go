@@ -138,6 +138,9 @@ func (r *accountSubmissionRepository) RevokeInvite(ctx context.Context, id int64
 }
 
 func (r *accountSubmissionRepository) SubmitInvite(ctx context.Context, hash, key string) error {
+	return r.SubmitInviteWithOptions(ctx, hash, key, service.SubmissionOptions{})
+}
+func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Context, hash, key string, options service.SubmissionOptions) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return service.ErrSubmissionUnavailable
@@ -159,11 +162,29 @@ func (r *accountSubmissionRepository) SubmitInvite(ctx context.Context, hash, ke
 		return service.ErrSubmissionInactive
 	}
 	c := invite.Config
+	if options.Name != nil {
+		c.Name = *options.Name
+	}
+	if options.Concurrency != nil {
+		c.Concurrency = *options.Concurrency
+	}
+	if options.Connection != nil && options.Connection.Mode != "preset" {
+		c.ProxyID = nil
+	}
 	if err := service.ValidateAccountSubmissionConfig(&c); err != nil {
 		return err
 	}
 	if err := validateSubmissionReferences(ctx, tx, c); err != nil {
 		return err
+	}
+	if options.Connection != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO account_submission_connections_geili(invite_id) VALUES($1) ON CONFLICT DO NOTHING`, invite.ID); err != nil {
+			return service.ErrSubmissionUnavailable
+		}
+		c.ProxyID, err = writeSubmissionProxy(ctx, tx, invite, *options.Connection)
+		if err != nil {
+			return err
+		}
 	}
 	baseURL := "https://api.anthropic.com"
 	if c.Platform == service.PlatformOpenAI {

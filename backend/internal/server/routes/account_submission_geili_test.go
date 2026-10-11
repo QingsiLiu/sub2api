@@ -53,7 +53,7 @@ func TestAccountSubmissionPublicRateLimitFailClosed(t *testing.T) {
 	defer func() { _ = rdb.Close() }()
 	router := gin.New()
 	RegisterAccountSubmissionPublicRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: &admin.AccountHandler{}}}, rdb)
-	for _, action := range []string{"inspect", "submit"} {
+	for _, action := range []string{"inspect", "submit", "connection", "connection/update"} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/account-submissions/"+action, strings.NewReader(`{"token":"synthetic-token","api_key":"synthetic-key"}`))
 		req.RemoteAddr = "203.0.113.20:1234"
 		rec := httptest.NewRecorder()

@@ -56,6 +56,10 @@ func ConfigureTransportProxy(transport *http.Transport, proxyURL *url.URL) error
 	if proxyURL == nil {
 		return nil
 	}
+	// geili hook: external proxies validate and dial the same public IP, on every connection.
+	if handled, err := configurePublicProxyGeili(transport, proxyURL); handled {
+		return err
+	}
 
 	scheme := strings.ToLower(proxyURL.Scheme)
 	switch scheme {

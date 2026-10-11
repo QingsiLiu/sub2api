@@ -123,6 +123,10 @@ func (s *ProxyService) Update(ctx context.Context, id int64, req UpdateProxyRequ
 	if err != nil {
 		return nil, fmt.Errorf("get proxy: %w", err)
 	}
+	// geili hook: preserve external proxy routing policy and masked credentials.
+	if err := protectExternalProxyEditGeili(ctx, proxy, &req); err != nil {
+		return nil, err
+	}
 
 	// 更新字段
 	if req.Name != nil {

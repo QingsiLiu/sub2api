@@ -30,4 +30,13 @@ func RegisterAccountSubmissionPublicRoutes(v1 *gin.RouterGroup, h *handler.Handl
 	})
 	usage.Use(limiter.LimitWithOptions("account-submission-usage", 30, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
 	usage.POST("/usage", h.Admin.Account.SubmissionUsage)
+	usage.POST("/connection", h.Admin.Account.SubmissionConnection)
+	writes := v1.Group("/account-submissions")
+	writes.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Next()
+	})
+	writes.Use(limiter.LimitWithOptions("account-submission-connection", 10, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
+	writes.POST("/connection/update", h.Admin.Account.UpdateSubmissionConnection)
 }

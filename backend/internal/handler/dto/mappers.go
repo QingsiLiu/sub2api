@@ -595,7 +595,7 @@ func ProxyFromServiceAdmin(p *service.Proxy) *AdminProxy {
 	}
 	return &AdminProxy{
 		Proxy:    *base,
-		Password: p.Password,
+		Password: proxyPasswordForResponseGeili(p),
 	}
 }
 

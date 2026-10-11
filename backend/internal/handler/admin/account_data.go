@@ -34,7 +34,8 @@ type DataPayload struct {
 	// 导入侧忽略该字段;omitempty 保持向后兼容。
 	SkippedShadows int `json:"skipped_shadows,omitempty"`
 	// geili hook: externally supplied credentials never enter console exports.
-	SkippedExternal int `json:"skipped_external,omitempty"`
+	SkippedExternal        int `json:"skipped_external,omitempty"`
+	SkippedExternalProxies int `json:"skipped_external_proxies,omitempty"`
 }
 
 type DataProxy struct {
@@ -172,8 +173,14 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 
 	proxyKeyByID := make(map[int64]string, len(proxies))
 	dataProxies := make([]DataProxy, 0, len(proxies))
+	skippedExternalProxies := 0
 	for i := range proxies {
 		p := proxies[i]
+		// geili hook: proxy credentials supplied by holders are write-only too.
+		if service.IsExternalProxyGeili(&p) {
+			skippedExternalProxies++
+			continue
+		}
 		key := buildProxyKey(p.Protocol, p.Host, p.Port, p.Username, p.Password)
 		proxyKeyByID[p.ID] = key
 
@@ -233,11 +240,12 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 	}
 
 	payload := DataPayload{
-		ExportedAt:      time.Now().UTC().Format(time.RFC3339),
-		Proxies:         dataProxies,
-		Accounts:        dataAccounts,
-		SkippedShadows:  skippedShadows,
-		SkippedExternal: skippedExternal,
+		ExportedAt:             time.Now().UTC().Format(time.RFC3339),
+		Proxies:                dataProxies,
+		Accounts:               dataAccounts,
+		SkippedShadows:         skippedShadows,
+		SkippedExternal:        skippedExternal,
+		SkippedExternalProxies: skippedExternalProxies,
 	}
 
 	response.Success(c, payload)

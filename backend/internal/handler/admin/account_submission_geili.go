@@ -83,6 +83,7 @@ func (h *AccountHandler) RevokeSubmissionInvite(c *gin.Context) {
 type submissionPublicRequest struct {
 	Token  string `json:"token"`
 	APIKey string `json:"api_key"`
+	service.SubmissionOptions
 }
 
 func (h *AccountHandler) InspectSubmissionInvite(c *gin.Context) {
@@ -101,8 +102,8 @@ func (h *AccountHandler) InspectSubmissionInvite(c *gin.Context) {
 		response.ErrorFrom(c, service.ErrSubmissionInactive)
 		return
 	}
-	// No internal names, IDs, groups or proxy configuration on this public endpoint.
-	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt, "view_available": invite.Status == "submitted" && invite.ViewRevokedAt == nil})
+	// Editable defaults only; never disclose IDs, groups, pricing or preset proxy credentials.
+	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt, "view_available": invite.Status == "submitted" && invite.ViewRevokedAt == nil, "name": invite.Config.Name, "concurrency": invite.Config.Concurrency, "has_preset_proxy": invite.Config.ProxyID != nil})
 }
 
 func (h *AccountHandler) SubmitAccountKey(c *gin.Context) {
@@ -110,7 +111,7 @@ func (h *AccountHandler) SubmitAccountKey(c *gin.Context) {
 	if !decodeSubmissionJSON(c, &req) {
 		return
 	}
-	if err := h.accountSubmission.Submit(c.Request.Context(), req.Token, req.APIKey); err != nil {
+	if err := h.accountSubmission.SubmitWithOptions(c.Request.Context(), req.Token, req.APIKey, req.SubmissionOptions); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

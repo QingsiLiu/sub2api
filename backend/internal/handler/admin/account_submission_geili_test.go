@@ -34,7 +34,7 @@ func TestAccountSubmissionExportAndDuplicateProtection(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "protected", true: "lookup-failure"}[fail], func(t *testing.T) {
 			adminSvc := newStubAdminService()
-			adminSvc.accounts = []service.Account{{ID: 21, Name: "external", Platform: service.PlatformOpenAI, Type: "apikey", Credentials: map[string]any{"api_key": "external-synthetic-secret"}}, {ID: 22, Name: "ordinary", Platform: service.PlatformOpenAI, Type: "apikey", Credentials: map[string]any{"api_key": "ordinary-synthetic-secret"}}}
+			adminSvc.accounts = []service.Account{{ID: 21, Name: "external", Platform: service.PlatformOpenAI, Type: "apikey", Credentials: map[string]any{"api_key": "external-test-key"}}, {ID: 22, Name: "ordinary", Platform: service.PlatformOpenAI, Type: "apikey", Credentials: map[string]any{"api_key": "ordinary-test-key"}}}
 			repo := &submissionHandlerRepo{protected: map[int64]bool{21: true}}
 			if fail {
 				repo.err = service.ErrSubmissionUnavailable
@@ -45,18 +45,18 @@ func TestAccountSubmissionExportAndDuplicateProtection(t *testing.T) {
 			router.POST("/accounts/:id/duplicate", h.Duplicate)
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/data?include_proxies=false", nil))
-			require.NotContains(t, recorder.Body.String(), "external-synthetic-secret")
+			require.NotContains(t, recorder.Body.String(), "external-test-key")
 			if fail {
 				require.Equal(t, 503, recorder.Code)
 			} else {
 				require.Equal(t, 200, recorder.Code)
-				require.Contains(t, recorder.Body.String(), "ordinary-synthetic-secret")
+				require.Contains(t, recorder.Body.String(), "ordinary-test-key")
 				require.Contains(t, recorder.Body.String(), `"skipped_external":1`)
 			}
 			duplicate := httptest.NewRecorder()
 			router.ServeHTTP(duplicate, httptest.NewRequest(http.MethodPost, "/accounts/21/duplicate", nil))
 			require.Contains(t, []int{400, 503}, duplicate.Code)
-			require.NotContains(t, duplicate.Body.String(), "external-synthetic-secret")
+			require.NotContains(t, duplicate.Body.String(), "external-test-key")
 		})
 	}
 }
@@ -73,14 +73,16 @@ func TestAccountSubmissionPublicMetadataAndMalformedRequests(t *testing.T) {
 	router.ServeHTTP(inspect, httptest.NewRequest(http.MethodPost, "/inspect", strings.NewReader(`{"token":"`+token+`"}`)))
 	require.Equal(t, 200, inspect.Code)
 	require.Equal(t, "no-store", inspect.Header().Get("Cache-Control"))
-	require.NotContains(t, inspect.Body.String(), "private account")
+	require.Contains(t, inspect.Body.String(), "private account")
+	require.NotContains(t, inspect.Body.String(), "priority")
+	require.NotContains(t, inspect.Body.String(), "proxy_id")
 	require.NotContains(t, inspect.Body.String(), "group_ids")
 	require.NotContains(t, inspect.Body.String(), token)
-	for _, body := range []string{`{"token":"x","api_key":"synthetic-should-not-leak","platform":"openai"}`, `{"token":false,"api_key":"synthetic-should-not-leak"}`, `{"token":"x","api_key":"synthetic-should-not-leak"} {}`, `{"api_key":"` + strings.Repeat("x", 9000) + `"}`} {
+	for _, body := range []string{`{"token":"x","api_key":"synthetic-test-key","platform":"openai"}`, `{"token":false,"api_key":"synthetic-test-key"}`, `{"token":"x","api_key":"synthetic-test-key"} {}`, `{"api_key":"` + strings.Repeat("x", 9000) + `"}`} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader(body)))
 		require.Equal(t, 400, rec.Code)
-		require.NotContains(t, rec.Body.String(), "synthetic-should-not-leak")
+		require.NotContains(t, rec.Body.String(), "synthetic-test-key")
 	}
 }
 

@@ -1,9 +1,11 @@
 package service
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,6 +48,10 @@ func (p *Proxy) URL() string {
 	}
 	if p.Username != "" && p.Password != "" {
 		u.User = url.UserPassword(p.Username, p.Password)
+	}
+	// geili hook: the DB preserves this reserved prefix for externally owned proxies.
+	if strings.HasPrefix(p.Name, proxyutil.ExternalProxyNamePrefix) {
+		u.Fragment = proxyutil.PublicProxyMarker
 	}
 	return u.String()
 }

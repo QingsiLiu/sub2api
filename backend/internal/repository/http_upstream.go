@@ -1449,6 +1449,8 @@ func enableHTTP2KeepAlive(transport *http.Transport, protocolMode string) (*http
 //   - http/https: HTTP 代理，使用 HTTPProxyDialer（CONNECT 隧道 + utls 握手）
 //   - socks5: SOCKS5 代理，使用 SOCKS5ProxyDialer（SOCKS5 隧道 + utls 握手）
 func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *url.URL, profile *tlsfingerprint.Profile) (*http.Transport, error) {
+	// geili hook: use the guarded transport for external proxies, including HTTPS and SOCKS.
+	if proxyURL != nil && proxyURL.Fragment == proxyutil.PublicProxyMarker { return buildUpstreamTransport(settings, proxyURL, upstreamProtocolModeDefault) }
 	transport := &http.Transport{
 		MaxIdleConns:          settings.maxIdleConns,
 		MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,

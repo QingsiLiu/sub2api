@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"io"
 	"net/http"
 	"net/url"
@@ -197,6 +198,12 @@ func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client,
 		ForceAttemptHTTP2:   true,
 	}
 	client := &http.Client{Transport: transport}
+	// geili hook: WebSocket handshakes must apply the same external-proxy dial policy.
+	if parsedProxyURL.Fragment == proxyutil.PublicProxyMarker {
+		if err := proxyutil.ConfigureTransportProxy(transport, parsedProxyURL); err != nil {
+			return nil, err
+		}
+	}
 	d.proxyClients[normalizedProxy] = &openAIWSProxyClientEntry{
 		client:           client,
 		lastUsedUnixNano: now,

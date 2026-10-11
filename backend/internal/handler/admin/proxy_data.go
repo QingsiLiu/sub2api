@@ -53,8 +53,14 @@ func (h *ProxyHandler) ExportData(c *gin.Context) {
 	}
 
 	dataProxies := make([]DataProxy, 0, len(proxies))
+	skippedExternalProxies := 0
 	for i := range proxies {
 		p := proxies[i]
+		// geili hook: never export externally supplied proxy credentials.
+		if service.IsExternalProxyGeili(&p) {
+			skippedExternalProxies++
+			continue
+		}
 		key := buildProxyKey(p.Protocol, p.Host, p.Port, p.Username, p.Password)
 
 		var expiresAt *int64
@@ -83,9 +89,10 @@ func (h *ProxyHandler) ExportData(c *gin.Context) {
 	}
 
 	payload := DataPayload{
-		ExportedAt: time.Now().UTC().Format(time.RFC3339),
-		Proxies:    dataProxies,
-		Accounts:   []DataAccount{},
+		ExportedAt:             time.Now().UTC().Format(time.RFC3339),
+		Proxies:                dataProxies,
+		Accounts:               []DataAccount{},
+		SkippedExternalProxies: skippedExternalProxies,
 	}
 
 	response.Success(c, payload)

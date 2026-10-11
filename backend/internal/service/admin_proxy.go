@@ -105,6 +105,10 @@ func (s *adminServiceImpl) UpdateProxy(ctx context.Context, id int64, input *Upd
 	if err != nil {
 		return nil, err
 	}
+	// geili hook: masked external passwords and the public-only policy survive admin edits.
+	if err := protectAdminExternalProxyEditGeili(ctx, proxy, input); err != nil {
+		return nil, err
+	}
 
 	// Merge only supplied fields, then validate the resulting fallback configuration.
 	mode := proxy.FallbackMode
