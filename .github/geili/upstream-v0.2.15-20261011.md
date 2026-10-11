@@ -39,7 +39,7 @@
 
 ## 验证与候选
 
-验证结果和候选 SHA / digest 在构建完成后补全。首次全量前端 3198 通过、1 个 Select 操作不适配失败，并发现一个测试清理错误；修复后 390 文件 / 3199 用例全通过，ESLint 通过。首次后端全量受上游心跳夹具与 Geili 终态校验不兼容阻塞，主动中止后修正夹具，最终结果单列，不把中止运行记作通过。
+合并 revision：`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2`；[候选 CI 38109660131](https://github.com/QingsiLiu/sub2api/actions/runs/38109660131)，候选镜像：`ghcr.io/qingsiliu/sub2api@sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。13 项候选门禁全部通过；artifact 中的 revision / image 一致，336 份迁移校验与该提交逐文件匹配，旧 335 份与合并前一致，`production_ready=false`。未部署 Stage / 生产。首次全量前端 3198 通过、1 个 Select 操作不适配失败，并发现一个测试清理错误；修复后 390 文件 / 3199 用例全通过，ESLint 通过。首次后端全量受上游心跳夹具与 Geili 终态校验不兼容阻塞，主动中止后修正夹具，最终结果单列，不把中止运行记作通过。
 
 - 本机模拟 HTTP 订阅 V2 验收 104 项通过，环境为独立 PostgreSQL / Redis，无真实支付或供应商调用；验收服务、容器已清理，私密原始报告保存在主工作区被忽略的 `deploy/.secrets/upstream-v0215-20261011/`。
 - 335 个旧 SQL 校验和逐文件保全，仅新增官方 242 迁移；PostgreSQL 集成测试覆盖重复执行及保留监控能力约束。
@@ -47,3 +47,5 @@
 
 - `.github/geili/verify.sh`、前端构建 / ESLint / 3199 测试、embed 网关别名、Stage 恢复脚本 5 项通过；受影响的订阅 PostgreSQL、协议转换、WS 定价、多分组新平台路由及空流 race 检查通过。
 - 最终同一份源码的 `go test ./...`、`CI=true go test -tags=unit ./...`、`CI=true go test -tags=integration ./...` 全量通过，增量 lint 复核仍为 0 issues。
+- 原工作区 4 个修改文件与 5 个新增文件恢复为未提交；5 个新增文件逐个 SHA256 与合并前一致。重叠恢复条件保留加密会话保护，原工作区另行 `go build ./...` 与加密路由专项测试通过。私密备份保留原始差异及 stash，候选不包含这些实验改动。
+- 远程 [Geili CI 38109660129](https://github.com/QingsiLiu/sub2api/actions/runs/38109660129) 与[安全扫描 38109660145](https://github.com/QingsiLiu/sub2api/actions/runs/38109660145) 通过。普通 [CI 38109660123](https://github.com/QingsiLiu/sub2api/actions/runs/38109660123) 的全量 lint 同样报告既有 52 项（errcheck29 / ineffassign2 / staticcheck14 / unused7）；前端、脚本及 Go unit / integration 全通过，唯一失败项是全量 lint，不能将本次 CI 宣称为全绿。

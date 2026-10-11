@@ -7,7 +7,8 @@
 - 修复 WS 后续轮次的最新分组价格与图片输入用量、OAuth web_search 历史声明、加密 reasoning 签名拒绝恢复、Chat/Responses 工具与角色转换、Grok 空流恢复、Anthropic 缓存 TTL / beta 头等问题。保留 Geili 完成校验：非法负索引和仅心跳的未完成流不会被包装成成功；客户断开后的已观察用量继续保留且停止下游写入。
 - 修复支付回调、轮询、弹窗、资料草稿和多处过期异步响应覆盖问题。协议规则编辑器保留官方 Select 组件并接入多协议集合功能。
 - 新增官方原名迁移 `242_drop_platform_check_constraints.sql`，把平台白名单约束移到应用层；旧迁移文件与校验和保持。该文件与 Geili `242_group_subscription_rate_multiplier.sql` 文件名不同，迁移账本按完整文件名识别；重复执行验证另见同步报告。
-- revision：本次合并提交，候选构建后补全；镜像 digest：候选 CI 待生成。部署：未部署 Stage / 生产，生产继续 `0.2.14-geili.8`。本轮完成源码同步与候选构建，不代表线上验收或生产发布。
+- revision：`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。[候选 CI 38109660131](https://github.com/QingsiLiu/sub2api/actions/runs/38109660131) 13 项门禁通过，336 份迁移校验匹配且原 335 份保全。部署：未部署 Stage / 生产，生产继续 `0.2.14-geili.8`。本轮完成源码同步与候选构建，不代表线上验收或生产发布。
+- 验证：前端 390 文件 / 3199 测试、Go default / unit / integration、受影响 race、Geili 验证和本机模拟 HTTP 104 项通过。Geili CI 与安全扫描通过；普通 CI 仅全量 lint 失败于既有 52 条诊断（同工具合并前 68 条，本次修改行增量 0）。
 - 变更、冲突处理与验证记录：[上游 v0.2.15 同步报告](.github/geili/upstream-v0.2.15-20261011.md)。
 
 ## 0.2.14-geili.8（已发布生产，Stage 同镜像）
