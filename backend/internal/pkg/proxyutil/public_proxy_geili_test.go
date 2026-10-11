@@ -32,7 +32,7 @@ func TestPublicProxyGeiliProtocolsAndInternalMarker(t *testing.T) {
 	for _, scheme := range []string{"http", "https", "socks5", "socks5h"} {
 		u, err := url.Parse(scheme + "://proxy.example:8080#" + PublicProxyMarker)
 		require.NoError(t, err)
-		transport := &http.Transport{}
+		transport := &http.Transport{Proxy: http.ProxyURL(u)}
 		require.NoError(t, ConfigureTransportProxy(transport, u))
 		require.NotNil(t, transport.DialContext)
 		if scheme == "http" || scheme == "https" {
@@ -40,6 +40,8 @@ func TestPublicProxyGeiliProtocolsAndInternalMarker(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, p.Fragment)
 			require.Equal(t, "proxy.example", p.Hostname())
+		} else {
+			require.Nil(t, transport.Proxy, "a WebSocket transport must not apply the SOCKS proxy twice")
 		}
 	}
 }

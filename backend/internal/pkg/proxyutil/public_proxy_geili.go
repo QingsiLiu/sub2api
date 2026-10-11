@@ -94,6 +94,8 @@ func configurePublicProxyGeili(t *http.Transport, u *url.URL) (bool, error) {
 	if !ok {
 		return true, errors.New("public proxy context unavailable")
 	}
+	// The SOCKS dialer owns the single proxy hop, including WebSocket clients.
+	t.Proxy = nil
 	t.DialContext = cd.DialContext
 	return true, nil
 }
