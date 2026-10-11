@@ -1,8 +1,19 @@
 export default {
     accounts: {
       keyIntake: {
+        proxyExportSkipped: '已跳过 {count} 条外部提供的代理，代理密码不导出。',
+        connectionTitle: "代理设置",
+        connectionHint: "仅管理此账号的代理，可使用公网代理或选择不使用代理；提交不会自动测试连接。",
+        presetProxy: "管理员预设代理",
+        passwordKeep: "已有密码不会显示；留空保留原密码，填写新值替换。",
+        passwordClear: "清除已保存的代理密码",
+        linkControl: "此链接可查看用量并管理本账号代理，请勿公开转发。",
+        connectionSaved: "代理已保存，后续请求使用新配置。",
+        connectionConflict: "配置已被修改，请刷新后重新操作。",
+        connectionUncertain: "保存结果未确认，请刷新查看当前配置后再操作。",
+
         usageTitle: "这条 Key 的使用情况",
-        viewHint: "收藏当前链接，之后可免登录查看。持有链接的人都能查看用量；管理员可撤销或重置。",
+        viewHint: '收藏当前链接，之后可免登录查看用量和管理此账号代理；管理员可撤销或重置。',
         period: "统计日期（北京时间）",
         today: "今日",
         sevenDays: "近 7 天",
@@ -27,12 +38,12 @@ export default {
         dateInvalid: "请选择有效日期，最多 90 天，结束日期不能超过今天。",
         viewUnavailable: "查看权限已撤销、链接已重置或账号已删除，请联系管理员。",
         usageFailed: "暂时无法读取用量，请稍后刷新；这不代表零消耗。",
-        revokeView: "撤销查看权限",
-        resetView: "重置查看链接",
-        viewRevoked: "查看权限已撤销",
+        revokeView: '撤销访问权限',
+        resetView: '重置访问链接',
+        viewRevoked: '访问权限已撤销',
 
         keyInvalid: 'Key 不能为空或包含空格、换行，请检查后重试。',
-        submitRejected: '未能保存，请检查 Key 或联系管理员检查邀请配置。',
+        submitRejected: '未能保存，请检查名称、并发、Key 和代理配置；代理必须使用公网地址。',
         title: "录入官方 API Key",
         checking: "正在检查邀请…",
         success: "已录入。录入成功不代表 Key 已验证可用，启用状态见下方。",

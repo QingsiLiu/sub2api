@@ -1,8 +1,19 @@
 export default {
     accounts: {
       keyIntake: {
+        proxyExportSkipped: 'Skipped {count} externally supplied proxies. Proxy passwords are not exported.',
+        connectionTitle: "Proxy settings",
+        connectionHint: "Manage only this account’s proxy. Use a public proxy or no proxy. Saving does not test the connection.",
+        presetProxy: "Administrator preset proxy",
+        passwordKeep: "The saved password is never displayed. Leave blank to keep it, or enter a replacement.",
+        passwordClear: "Clear the saved proxy password",
+        linkControl: "This link can view usage and manage this account’s proxy. Do not share it publicly.",
+        connectionSaved: "Proxy saved. Subsequent requests use the new configuration.",
+        connectionConflict: "Configuration changed. Refresh before saving again.",
+        connectionUncertain: "Save result is uncertain. Refresh to check the current configuration before retrying.",
+
         usageTitle: "Usage for this Key",
-        viewHint: "Bookmark this link to view usage without signing in. Anyone holding it can view usage; the administrator can revoke or reset access.",
+        viewHint: 'Bookmark this link to view usage and manage this account’s proxy without signing in. Administrators can revoke or reset access.',
         period: "Date range (Beijing time)",
         today: "Today",
         sevenDays: "Last 7 days",
@@ -27,12 +38,12 @@ export default {
         dateInvalid: "Choose a valid range of up to 90 days ending no later than today.",
         viewUnavailable: "Access was revoked, the link was reset, or the account was deleted. Contact the administrator.",
         usageFailed: "Unable to load usage. Try refreshing later; this does not mean zero usage.",
-        revokeView: "Revoke viewing access",
-        resetView: "Reset viewing link",
-        viewRevoked: "Viewing access revoked",
+        revokeView: 'Revoke access',
+        resetView: 'Reset access link',
+        viewRevoked: 'Access revoked',
 
         keyInvalid: 'The key must not be empty or contain whitespace or line breaks.',
-        submitRejected: 'Unable to save. Check the key or ask the administrator to review the invitation configuration.',
+        submitRejected: 'Could not save. Check the name, concurrency, key and proxy configuration. Proxies must use public addresses.',
         title: "Submit an official API key",
         checking: "Checking invitation…",
         success: "Submitted. Submission does not verify that the key works; see activation status below.",

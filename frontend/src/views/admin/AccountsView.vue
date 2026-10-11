@@ -2294,6 +2294,7 @@ const handleExportData = async () => {
     link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+    if (dataPayload.skipped_external_proxies) appStore.showWarning(t('admin.accounts.keyIntake.proxyExportSkipped', { count: dataPayload.skipped_external_proxies }))
     // spark 影子账号被后端排除出备份(其凭据透传母账号、调度配置不可经凭据型导入重建);
     // 跳过非零时明确提示用户,避免「下载成功但少了账号」的静默丢失。
     if (dataPayload.skipped_external && dataPayload.skipped_external > 0) {

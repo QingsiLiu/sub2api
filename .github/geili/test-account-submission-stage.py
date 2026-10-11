@@ -21,6 +21,7 @@ class BaseFixture:
 
     def sql(self, query):
         self.queries.append(query)
+        if query.startswith("SELECT json_build_object('proxy_id'"):return []
         return self.rows if query.startswith('SELECT') else []
 
     def restore(self):

@@ -21,6 +21,9 @@ export interface SubmissionInvite {
   account_id: number | null
 }
 export interface PublicSubmissionInvite {
+	name?: string
+	concurrency?: number
+	has_preset_proxy?: boolean
   platform: SubmissionPlatform
   expires_at: string
   status: 'pending' | 'submitted'
@@ -46,7 +49,7 @@ export async function revokeSubmissionInvite(id: number) {
 export class SubmissionRequestError extends Error {
   constructor(public readonly status: number) { super('Submission request failed') }
 }
-async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage', payload: { token: string; api_key?: string; start_date?: string; end_date?: string }): Promise<T> {
+async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage' | 'connection' | 'connection/update', payload: { token: string } & Record<string, unknown>): Promise<T> {
   const controller = new AbortController()
   const timer = window.setTimeout(() => controller.abort(), 15000)
   try {
@@ -74,8 +77,17 @@ async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage'
 export function inspectSubmissionInvite(token: string) {
   return publicSubmissionRequest<PublicSubmissionInvite>('inspect', { token })
 }
-export function submitAccountKey(token: string, api_key: string) {
-  return publicSubmissionRequest<{ status: 'submitted' }>('submit', { token, api_key })
+export function submitAccountKey(token: string, api_key: string, options?: SubmissionOptions) {
+  return publicSubmissionRequest<{ status: 'submitted' }>('submit', { token, api_key, ...options })
+}
+
+export interface SubmissionProxyDraft { name: string; protocol: string; host: string; port: number; username: string; password?: string; clear_password?: boolean }
+export interface SubmissionConnectionInput { mode: 'preset' | 'direct' | 'custom'; proxy?: SubmissionProxyDraft }
+export interface SubmissionOptions { name: string; concurrency: number; connection: SubmissionConnectionInput }
+export interface SubmissionConnection extends SubmissionConnectionInput { version: number; has_preset: boolean; has_password: boolean }
+export function getSubmissionConnection(token: string) { return publicSubmissionRequest<SubmissionConnection>('connection', { token }) }
+export function updateSubmissionConnection(token: string, version: number, request_id: string, connection: SubmissionConnectionInput) {
+  return publicSubmissionRequest<SubmissionConnection>('connection/update', { token, version, request_id, connection })
 }
 
 export interface SubmissionUsageBucket {

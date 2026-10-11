@@ -38,7 +38,7 @@
             />
           </div>
           <button
-            v-if="proxies.length > 0"
+            v-if="!publicMode && proxies.length > 0"
             type="button"
             @click.stop="handleBatchTest"
             :disabled="batchTesting"
@@ -113,13 +113,14 @@
                   </span>
                 </template>
               </div>
-              <div class="truncate text-xs text-gray-500 dark:text-gray-400">
+              <div v-if="proxy.host" class="truncate text-xs text-gray-500 dark:text-gray-400">
                 {{ proxy.protocol }}://{{ proxy.host }}:{{ proxy.port }}
               </div>
             </div>
 
             <!-- Individual test button -->
             <button
+              v-if="!publicMode"
               type="button"
               @click.stop="handleTestProxy(proxy)"
               :disabled="testingProxyIds.has(proxy.id)"
@@ -172,7 +173,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Icon from '@/components/icons/Icon.vue'
-import type { Proxy } from '@/types'
+type ProxyOption = { id: number; name: string; host: string; port: number; protocol: string; account_count?: number }
 
 const { t } = useI18n()
 
@@ -188,12 +189,14 @@ interface ProxyTestResult {
 
 interface Props {
   modelValue: number | null
-  proxies: Proxy[]
+  proxies: ProxyOption[]
   disabled?: boolean
+  publicMode?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  disabled: false
+  disabled: false,
+  publicMode: false
 })
 
 const emit = defineEmits<{
@@ -258,8 +261,8 @@ const selectOption = (value: number | null) => {
   searchQuery.value = ''
 }
 
-const handleTestProxy = async (proxy: Proxy) => {
-  if (testingProxyIds.has(proxy.id)) return
+const handleTestProxy = async (proxy: ProxyOption) => {
+  if (props.publicMode || testingProxyIds.has(proxy.id)) return
 
   testingProxyIds.add(proxy.id)
   try {
@@ -276,6 +279,7 @@ const handleTestProxy = async (proxy: Proxy) => {
 }
 
 const handleBatchTest = async () => {
+  if (props.publicMode) return
   if (batchTesting.value || props.proxies.length === 0) return
 
   batchTesting.value = true

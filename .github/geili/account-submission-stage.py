@@ -65,10 +65,28 @@ def fixture_type(cache, source, checks):
                         if row['account_id']:
                             self.remember_account(row['account_id'])
                     # Only synthetic invite provenance is removed. Production/user records are never touched.
+                    proxies=self.sql("SELECT json_build_object('proxy_id',p.id,'name',p.name) FROM account_submission_connections_geili c JOIN proxies p ON p.id=c.proxy_id WHERE c.invite_id IN ("+selected+');')
+                    for proxy in proxies:
+                        if type(proxy['proxy_id']) is not int or proxy['proxy_id']<=0 or not proxy['name'].startswith('[external] ') or not proxy['name'].endswith(' '+self.snapshot['fixture_suffix']):
+                            raise RuntimeError('refuse cleanup of non-owned external proxy')
+                    self.snapshot.setdefault('intake_proxy_ids',[])
+                    self.snapshot['intake_proxy_ids']=sorted(set(self.snapshot['intake_proxy_ids']+[p['proxy_id'] for p in proxies]))
+                    cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
+                    self.sql('DELETE FROM account_submission_connections_geili WHERE invite_id IN ('+selected+');')
                     self.sql('DELETE FROM account_submission_invites_geili WHERE id IN (' + selected + ');')
                     self.snapshot['intake_invites_removed'] = True
                     cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
-            return super().restore()
+            result=super().restore()
+            proxies=self.snapshot.get('intake_proxy_ids',[]) if self.snapshot else []
+            if proxies:
+                if any(type(i) is not int or i<=0 for i in proxies):raise RuntimeError('invalid owned external proxy IDs')
+                selected=','.join(str(i) for i in proxies)
+                self.sql('DELETE FROM proxies WHERE id IN ('+selected+") AND name LIKE '[external] %' AND NOT EXISTS(SELECT 1 FROM accounts WHERE accounts.proxy_id=proxies.id) AND NOT EXISTS(SELECT 1 FROM proxies backup WHERE backup.backup_proxy_id=proxies.id);")
+                if self.sql("SELECT json_build_object('id',id) FROM proxies WHERE id IN ("+selected+');'):raise RuntimeError('external fixture proxies remain')
+            if self.snapshot:
+                self.snapshot['intake_proxies_removed']=True
+                cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
+            return result
     return IntakeFixture
 
 
@@ -98,8 +116,10 @@ def main():
             'checks': len(fixture.checks), 'restored': fixture.snapshot.get('restored', False),
             'replica_removed': fixture.snapshot.get('cache_replica', {}).get('removed', False),
             'invites_removed': fixture.snapshot.get('intake_invites_removed', False),
+            'proxies_removed': fixture.snapshot.get('intake_proxies_removed',False),
             'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'checks_sha256': hashlib.sha256(Path(__file__).with_name('account-submission-acceptance.py').read_bytes()).hexdigest(),
+            'connection_checks_sha256': hashlib.sha256(Path(__file__).with_name('account-submission-connection-acceptance.py').read_bytes()).hexdigest(),
             'synthetic_only': True, 'production_ready': False}
         cache.b.stage.private_json(fixture.private / 'intake-result.json', result)
         print('RESULT ' + str(fixture.private / 'intake-result.json'), flush=True)

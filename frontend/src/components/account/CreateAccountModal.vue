@@ -45,17 +45,8 @@
       @submit.prevent="handleSubmit"
       class="space-y-5"
     >
-      <div>
-        <label class="input-label">{{ t('admin.accounts.accountName') }}</label>
-        <input
-          v-model="form.name"
-          type="text"
-          :required="!isGrokSSOInputMethod"
-          class="input"
-          :placeholder="t('admin.accounts.enterAccountName')"
-          data-tour="account-form-name"
-        />
-      </div>
+      <!-- geili hook: shared account fields also serve invitation holders. -->
+      <AccountInputFieldGeili v-model="form.name" kind="name" :required="!isGrokSSOInputMethod" data-tour="account-form-name" />
       <div>
         <label class="input-label">{{ t('admin.accounts.notes') }}</label>
         <textarea
@@ -1453,17 +1444,7 @@
           :platform="form.platform"
           :plan="currentOpenCodeOrCNMode()"
         />
-        <div>
-          <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
-          <input
-            v-model="apiKeyValue"
-            type="password"
-            required
-            class="input font-mono"
-            :placeholder="apiKeyValuePlaceholder"
-          />
-          <p v-if="apiKeyHint" class="input-hint">{{ apiKeyHint }}</p>
-        </div>
+        <AccountInputFieldGeili v-model="apiKeyValue" kind="key" :placeholder="apiKeyValuePlaceholder" :hint="apiKeyHint || undefined" />
 
         <!-- 上游倍率自动探测：全部 API-key 平台可用（所在区块已限定 apikey 类型） -->
         <div
@@ -3036,11 +3017,7 @@
       />
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div>
-          <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
-          <input v-model.number="form.concurrency" type="number" min="1" class="input"
-            @input="form.concurrency = Math.max(1, form.concurrency || 1)" />
-        </div>
+        <AccountInputFieldGeili v-model="form.concurrency" kind="concurrency" />
         <div>
           <label class="input-label">{{ t('admin.accounts.loadFactor') }}</label>
           <input v-model.number="form.load_factor" type="number" min="1"
@@ -3957,6 +3934,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AccountInputFieldGeili from './AccountInputFieldGeili.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'

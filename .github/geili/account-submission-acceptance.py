@@ -89,7 +89,7 @@ def verify(f):
         stored = account(invite)
         f.check(platform + ' stores only SHA256 invitation hash', stored['hash'] == hashlib.sha256(token.encode()).hexdigest() and stored['hash'] != token)
         inspected = public('inspect', {'token': token})
-        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status', 'view_available'} and no_secret(inspected[1], [token, secret, config['name']]))
+        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status', 'view_available', 'name', 'concurrency', 'has_preset_proxy'} and inspected[1]['data']['name'] == config['name'] and inspected[1]['data']['concurrency'] == config['concurrency'] and no_secret(inspected[1], [token, secret]))
         bad = public('submit', {'token': token, 'api_key': secret, 'base_url': f.mock_base})
         f.check(platform + ' external caller cannot set upstream URL', bad[0] == 400 and account(invite)['account_id'] is None and no_secret(bad[1], [secret, token]))
         bad = public('submit', {'token': token, 'api_key': ''})
@@ -187,6 +187,10 @@ def verify(f):
     backup = f.request('/api/v1/admin/backups/synthetic-fixture/download-url', token=f.admin)
     f.check('raw database backup download cannot bypass credential protection', backup[0] == 403 and backup[1].get('reason') == 'SUBMISSION_BACKUP_PROTECTED')
     f.check('submitted accounts remain absent from all-account exports', f.api('/admin/accounts/data?search=' + f.suffix + '&include_proxies=false', token=f.admin).get('skipped_external') == 2)
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('intake_connections',Path(__file__).with_name('account-submission-connection-acceptance.py'))
+    connections=importlib.util.module_from_spec(spec);spec.loader.exec_module(connections)
+    connections.verify(f,public,make,account)
     return len(f.checks)
 
 

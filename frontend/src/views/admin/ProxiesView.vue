@@ -427,71 +427,8 @@
         @submit.prevent="handleCreateProxy"
         class="space-y-5"
       >
-        <div>
-          <label class="input-label">{{ t('admin.proxies.name') }}</label>
-          <input
-            v-model="createForm.name"
-            type="text"
-            required
-            class="input"
-            :placeholder="t('admin.proxies.enterProxyName')"
-          />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.proxies.protocol') }}</label>
-          <Select v-model="createForm.protocol" :options="protocolSelectOptions" />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="input-label">{{ t('admin.proxies.host') }}</label>
-            <input
-              v-model="createForm.host"
-              type="text"
-              required
-              :placeholder="t('admin.proxies.form.hostPlaceholder')"
-              class="input"
-            />
-          </div>
-          <div>
-            <label class="input-label">{{ t('admin.proxies.port') }}</label>
-            <input
-              v-model.number="createForm.port"
-              type="number"
-              required
-              min="1"
-              max="65535"
-              :placeholder="t('admin.proxies.form.portPlaceholder')"
-              class="input"
-            />
-          </div>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.proxies.username') }}</label>
-          <input
-            v-model="createForm.username"
-            type="text"
-            class="input"
-            :placeholder="t('admin.proxies.optionalAuth')"
-          />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.proxies.password') }}</label>
-          <div class="relative">
-            <input
-              v-model="createForm.password"
-              :type="createPasswordVisible ? 'text' : 'password'"
-              class="input pr-10"
-              :placeholder="t('admin.proxies.optionalAuth')"
-            />
-            <button
-              type="button"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              @click="createPasswordVisible = !createPasswordVisible"
-            >
-              <Icon :name="createPasswordVisible ? 'eyeOff' : 'eye'" size="md" />
-            </button>
-          </div>
-        </div>
+        <!-- geili hook: shared single-proxy fields; batch and expiry remain admin-only. -->
+        <ProxyDraftFieldsGeili :model-value="createForm" @update:model-value="Object.assign(createForm, $event)" />
         <div>
           <label class="input-label">{{ t('admin.proxies.expiresAt') }}</label>
           <div class="mb-2 flex flex-wrap gap-2">
@@ -964,6 +901,7 @@
 </template>
 
 <script setup lang="ts">
+import ProxyDraftFieldsGeili from '@/components/common/ProxyDraftFieldsGeili.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -1058,7 +996,7 @@ const sortState = reactive({
 })
 
 const showCreateModal = ref(false)
-const createPasswordVisible = ref(false)
+
 const showEditModal = ref(false)
 const editPasswordVisible = ref(false)
 const editPasswordDirty = ref(false)
@@ -1266,7 +1204,6 @@ const closeCreateModal = () => {
   createForm.fallback_mode = 'none'
   createForm.backup_proxy_id = null
   createForm.expiry_warn_days = 7
-  createPasswordVisible.value = false
   batchInput.value = ''
   batchParseResult.total = 0
   batchParseResult.valid = 0
@@ -1939,6 +1876,7 @@ const handleExportData = async () => {
     link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+    if (dataPayload.skipped_external_proxies) appStore.showWarning(t('admin.accounts.keyIntake.proxyExportSkipped', { count: dataPayload.skipped_external_proxies }))
     appStore.showSuccess(t('admin.proxies.dataExported'))
   } catch (error: any) {
     appStore.showError(error?.message || t('admin.proxies.dataExportFailed'))

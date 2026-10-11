@@ -21,6 +21,14 @@ async function openSelector() {
 }
 
 describe('proxy connection tests', () => {
+  it('external mode hides admin connection tests and only shows supplied own options', async () => {
+    const wrapper = mount(ProxySelector, { props: { modelValue: null, publicMode: true, proxies: [{ id: -2, name: 'Own proxy', protocol: 'http', host: '8.8.8.8', port: 8080 }] }, global: { stubs: { Icon: true } } })
+    await wrapper.get('.select-trigger').trigger('click')
+    expect(wrapper.text()).toContain('Own proxy')
+    expect(wrapper.find('.test-btn').exists()).toBe(false)
+    expect(wrapper.find('.batch-test-btn').exists()).toBe(false)
+    expect(testProxy).not.toHaveBeenCalled()
+  })
   it('does not restart an individual test when a batch is started', async () => {
     let finish!: (result: object) => void
     testProxy.mockImplementation((id: number) => id === 1
