@@ -6,7 +6,7 @@
 - 合并目标：`upstream/main` / `3a6fd1c9d`，包含发布 tag `f2669c8cf` 和随后 VERSION 同步提交。
 - 当前上游祖先：`0363b8cdba8cec3e2ba4b2dbd49c4481143fa55d` / v0.2.14；差异 147 个提交（含 merge）、278 个文件。
 - Geili 起点：`3a5b4716a`，现网 revision `a86c4778f063d2fa976c746731101a51f07b59a7` 仍是祖先。原目录未提交的加密路由工作单独保留，没有提交到本候选。
-- 新对外版本：`0.2.15-geili.1`。未部署 Stage 或生产。
+- 新对外版本：`0.2.15-geili.1`。2026-10-11已部署Stage并以同一digest发布生产。
 
 ## 上游变更
 
@@ -49,3 +49,11 @@
 - 最终同一份源码的 `go test ./...`、`CI=true go test -tags=unit ./...`、`CI=true go test -tags=integration ./...` 全量通过，增量 lint 复核仍为 0 issues。
 - 原工作区 4 个修改文件与 5 个新增文件恢复为未提交；5 个新增文件逐个 SHA256 与合并前一致。重叠恢复条件保留加密会话保护，原工作区另行 `go build ./...` 与加密路由专项测试通过。私密备份保留原始差异及 stash，候选不包含这些实验改动。
 - 远程 [Geili CI 38109660129](https://github.com/QingsiLiu/sub2api/actions/runs/38109660129) 与[安全扫描 38109660145](https://github.com/QingsiLiu/sub2api/actions/runs/38109660145) 通过。普通 [CI 38109660123](https://github.com/QingsiLiu/sub2api/actions/runs/38109660123) 的全量 lint 同样报告既有 52 项（errcheck29 / ineffassign2 / staticcheck14 / unused7）；前端、脚本及 Go unit / integration 全通过，唯一失败项是全量 lint，不能将本次 CI 宣称为全绿。
+
+## Stage与生产发布
+
+2026-10-11 22:04左右（UTC14:04）经 `CONFIRM=BUMP_PRODUCTION bin/release-geili-sub2api.sh prod` 发布 `0.2.15-geili.1` / `da6b2fd9233fe3acfd9fbec84218aa2bacd160c2` / `sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`，Stage与生产同一digest。上游新增Cline/Command Code、输出TPS、平台清单及协议/价格/异步修复，Geili二开保留。用户授权生产并限定仅模拟及非支付验收；候选CI13门禁通过，当前镜像Stage481项及生产保全6项通过，夹具、邀请、临时实例和原存储行均恢复，独立v11 proof及18个篡改拒绝测试通过。真实支付、付费供应商和真实媒体生成明确排除。应用健康恢复9.813秒，生产只读45、公网页面/同Stage资源24项通过，六核心容器healthy/restart0。生产PG/Redis及StagePG/Redis完整指纹保持；336个迁移执行器校验匹配，新平台两个白名单CHECK删除、两个监控能力CHECK保留，邀请表约束完整。Compose仅换应用镜像，env/config.yaml/Nginx及既有媒体开关保持；实际Compose私密回收并与带变量占位符的入库版本核对，rates候选镜像/revision同步，费率规则未改。
+
+备份 `/root/backups/subscription-prod-image-bump-20261011T140423Z`（发布前实际Compose与数据指纹）及 `/root/backups/geili-upstream-v0215-preflight-20261011T134717Z`（配置、数据库完整结构、迁移ledger及受影响约束）。回退上一枚`.8` / `sha256:5d19236efa2e399652d47441fc49827bf49e1ead41c5dbce4b88187286d7e45f`，按runbook以当前rates候选镜像作基线执行既定回退入口；保留新增业务数据，不回灌旧账或盲目重加平台CHECK。未创建生产测试账号，没有生产历史用量整库dump。
+
+首轮Stage媒体沿用既有R2写入合成PNG的失败及恢复保留；修正mock存储隔离后完整108项通过，未做真实生成或支付。执行版源文件SHA与原始回执匹配，维护版额外异常清理分支五项隔离测试通过，旧v8路径保持。原所有失败留私密目录。正式证据在运维仓 `docs/reports/upstream-v0215-20261011/`；独立contract v11排除项不能伪填passed。

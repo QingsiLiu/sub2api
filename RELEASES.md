@@ -1,4 +1,4 @@
-## 0.2.15-geili.1（源码候选，未部署）
+## 0.2.15-geili.1（已发布生产，Stage同镜像）
 
 在 `0.2.14-geili.8` 基础上合并上游最新正式版 `v0.2.15` 及随后仅同步 VERSION 的主干提交 `3a6fd1c9d`。保留 Geili 独立结算、订阅 V2、多分组 Key、媒体任务、传输隔离、响应审计、邀请录入与自更新禁用守卫；原工作区未提交的 GPT 加密路由不纳入候选。
 
@@ -7,8 +7,9 @@
 - 修复 WS 后续轮次的最新分组价格与图片输入用量、OAuth web_search 历史声明、加密 reasoning 签名拒绝恢复、Chat/Responses 工具与角色转换、Grok 空流恢复、Anthropic 缓存 TTL / beta 头等问题。保留 Geili 完成校验：非法负索引和仅心跳的未完成流不会被包装成成功；客户断开后的已观察用量继续保留且停止下游写入。
 - 修复支付回调、轮询、弹窗、资料草稿和多处过期异步响应覆盖问题。协议规则编辑器保留官方 Select 组件并接入多协议集合功能。
 - 新增官方原名迁移 `242_drop_platform_check_constraints.sql`，把平台白名单约束移到应用层；旧迁移文件与校验和保持。该文件与 Geili `242_group_subscription_rate_multiplier.sql` 文件名不同，迁移账本按完整文件名识别；重复执行验证另见同步报告。
-- revision：`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。[候选 CI 38109660131](https://github.com/QingsiLiu/sub2api/actions/runs/38109660131) 13 项门禁通过，336 份迁移校验匹配且原 335 份保全。部署：未部署 Stage / 生产，生产继续 `0.2.14-geili.8`。本轮完成源码同步与候选构建，不代表线上验收或生产发布。
+- revision：`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。[候选 CI 38109660131](https://github.com/QingsiLiu/sub2api/actions/runs/38109660131) 13 项门禁通过，336 份迁移校验匹配且原 335 份保全。部署：2026-10-11经canonical入口先部署Stage，再按当次用户非支付条件授权发布生产，同一digest。
 - 验证：前端 390 文件 / 3199 测试、Go default / unit / integration、受影响 race、Geili 验证和本机模拟 HTTP 104 项通过。Geili CI 与安全扫描通过；普通 CI 仅全量 lint 失败于既有 52 条诊断（同工具合并前 68 条，本次修改行增量 0）。
+- 上线验收：当前镜像Stage481项、生产保全6项、生产只读45项及公网24项通过。六核心容器healthy/restart0，数据容器未重建；336迁移匹配，平台白名单CHECK删除且监控能力约束保留。仅模拟及非支付，真实支付、付费供应商和真实媒体生成排除；夹具、临时副本及存储设置行均恢复。健康恢复9.813秒；备份 `/root/backups/subscription-prod-image-bump-20261011T140423Z` 和 `/root/backups/geili-upstream-v0215-preflight-20261011T134717Z`。回退旧`.8`镜像保留新数据，不回灌账目或盲目重加平台CHECK。
 - 变更、冲突处理与验证记录：[上游 v0.2.15 同步报告](.github/geili/upstream-v0.2.15-20261011.md)。
 
 ## 0.2.14-geili.8（已发布生产，Stage 同镜像）
