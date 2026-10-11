@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -316,11 +317,7 @@ func bindExplicitAttempt(c *gin.Context, original *service.APIKey, decision serv
 
 func explicitGatewayHandler(h *handler.Handlers, path string) gin.HandlerFunc {
 	openAICompatible := func(c *gin.Context) bool {
-		switch getGroupPlatform(c) {
-		case service.PlatformOpenAI, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo:
-			return true
-		}
-		return false
+		return domain.UsesOpenAIGateway(getGroupPlatform(c))
 	}
 	switch {
 	case strings.HasSuffix(path, "/chat/completions"):

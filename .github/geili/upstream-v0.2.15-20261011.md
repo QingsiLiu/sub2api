@@ -1,0 +1,49 @@
+# 上游 v0.2.15 同步记录（2026-10-11）
+
+## 同步范围
+
+- 上游：Wei-Shaw/sub2api，最新正式版 [v0.2.15](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.15)，2026-10-09 发布。
+- 合并目标：`upstream/main` / `3a6fd1c9d`，包含发布 tag `f2669c8cf` 和随后 VERSION 同步提交。
+- 当前上游祖先：`0363b8cdba8cec3e2ba4b2dbd49c4481143fa55d` / v0.2.14；差异 147 个提交（含 merge）、278 个文件。
+- Geili 起点：`3a5b4716a`，现网 revision `a86c4778f063d2fa976c746731101a51f07b59a7` 仍是祖先。原目录未提交的加密路由工作单独保留，没有提交到本候选。
+- 新对外版本：`0.2.15-geili.1`。未部署 Stage 或生产。
+
+## 上游变更
+
+1. Cline / ClinePass 与 Command Code 平台，统一平台清单、provider profile、多协议转发和模型目录缓存。
+2. 每请求输出 TPS、监控分位数、紧凑账号筛选和更准确的长上下文展示。
+3. WS 新分组价格 / 图片用量，OAuth web_search 历史声明与 Responses Lite，加密 reasoning 签名恢复。
+4. Chat / Responses 的 developer、具名 tool_choice、legacy function_call、refusal 转换；Anthropic TTL、signature、beta；Grok 空流与 SSO；OpenCode 模型、403 与 Retry-After。
+5. 组合分组别名与 Codex 目录映射、裸 API 路径、监控采样、零倍率费用明细及价格指数。
+6. 多处异步竞态、支付离页回调、轮询清理、资料草稿、选择器禁用和 Esc 弹窗栈。
+
+## 冲突与二开适配
+
+共 14 个冲突文件。逐块合并，保留现有 Geili 字段和完成校验，不使用单边树覆盖。
+
+- VERSION 升为 `0.2.15-geili.1`；依赖保留现有 Go1.27.2、x/net0.60 与 x/tools0.51，不降级。
+- ent runtime 合并上游 target_platform 双校验和 Geili target_group_id / profile_key 字段；由 ent 生成器复核。
+- 分组请求保留 subscription_enabled、subscription_rate_multiplier、usage_panel、目标分组与 profile_key，并使用新平台验证标签。
+- 四个缓冲转换路径保留 Geili 完成追踪器；它已拒绝负索引、验证块闭合与终态，不恢复上游旧的宽松聚合器。上游负索引测试适配为“无 panic、拒绝错误流、没有成功响应”。
+- 流式心跳转换为 SSE comment；心跳写失败标记客户断开，继续读已发送请求的真实用量且禁止后续下游帧。上游心跳夹具补足 content_block_stop，适配 Geili 在 message_stop 即完成、不等待 EOF 的合同；仅心跳仍失败。
+- 上游 thinking_signature_invalid 精确消息判断与既有 invalid_request_error 保守恢复共同保留。
+- 协议规则编辑器保留官方 Select，接入首选与额外协议集合；配套测试用组件事件验证协议交换。
+- 配额测试使用完整平台清单，保留 Geili Codex 配置断言与“今日”用量查询断言，加入 TPS 列断言。
+- Grok 空流检测保存整理前的终态证据，避免终态整理器补出 output:[] 后掩盖不完整响应；完整、明确的合法空答案仍不重放。回归同时覆盖不完整空流切换、合法空答案及正常文本输出。
+- 自动合并外额外修复 Geili explicitKeyRouting 的旧平台白名单，HTTP 回归覆盖 Cline / Command Code × Messages / Responses / Chat 三入口。
+- 账号全选测试清理 wrapper 和模拟计时器，等待筛选防抖请求完成，消除异步任务跨测试泄漏。
+
+## 迁移与保全
+
+官方新增 `242_drop_platform_check_constraints.sql` 保留原名和内容。迁移账本按 filename 主键识别，与 Geili 同编号不同文件的倍率迁移互不覆盖。现有全部 SQL 文件按合并前 checksum 保全。新迁移删除两条数据库平台白名单约束，应用层 schema / repository / handler 继续校验平台；监控 provider 能力约束保留。
+
+## 验证与候选
+
+验证结果和候选 SHA / digest 在构建完成后补全。首次全量前端 3198 通过、1 个 Select 操作不适配失败，并发现一个测试清理错误；修复后 390 文件 / 3199 用例全通过，ESLint 通过。首次后端全量受上游心跳夹具与 Geili 终态校验不兼容阻塞，主动中止后修正夹具，最终结果单列，不把中止运行记作通过。
+
+- 本机模拟 HTTP 订阅 V2 验收 104 项通过，环境为独立 PostgreSQL / Redis，无真实支付或供应商调用；验收服务、容器已清理，私密原始报告保存在主工作区被忽略的 `deploy/.secrets/upstream-v0215-20261011/`。
+- 335 个旧 SQL 校验和逐文件保全，仅新增官方 242 迁移；PostgreSQL 集成测试覆盖重复执行及保留监控能力约束。
+- 兼容 lint2.14.0 的修改行增量为 0 issues；同一工具全量基线 68、合并后 52 条历史诊断仍保留，未宣称全量 lint 通过。由旧工具升级解决的导出格式解析错误不能解释为历史诊断已清零。
+
+- `.github/geili/verify.sh`、前端构建 / ESLint / 3199 测试、embed 网关别名、Stage 恢复脚本 5 项通过；受影响的订阅 PostgreSQL、协议转换、WS 定价、多分组新平台路由及空流 race 检查通过。
+- 最终同一份源码的 `go test ./...`、`CI=true go test -tags=unit ./...`、`CI=true go test -tags=integration ./...` 全量通过，增量 lint 复核仍为 0 issues。

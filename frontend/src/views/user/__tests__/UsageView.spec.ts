@@ -161,7 +161,7 @@ function mountUsageView() {
         DateRangePicker: true,
         Icon: true,
         UsageStatsCards: chartStub,
-        UsageTable: chartStub,
+        UsageTable: { ...chartStub, props: ['columns'] },
         UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
@@ -223,9 +223,10 @@ describe('user UsageView', () => {
   afterEach(() => { vi.useRealTimers() })
 
   it('loads logs, stats, model stats, and snapshot for today on first render', async () => {
-    mountUsageView()
+    const wrapper = mountUsageView()
     await flushPromises()
 
+    expect(wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)).toContain('latency')
     const todayString = '2026-09-21'
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({ start_date: todayString, end_date: todayString }),

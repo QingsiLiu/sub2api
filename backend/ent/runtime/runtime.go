@@ -925,7 +925,21 @@ func init() {
 	// compositemodelroute.DefaultTargetPlatform holds the default value on creation for the target_platform field.
 	compositemodelroute.DefaultTargetPlatform = compositemodelrouteDescTargetPlatform.Default.(string)
 	// compositemodelroute.TargetPlatformValidator is a validator for the "target_platform" field. It is called by the builders before save.
-	compositemodelroute.TargetPlatformValidator = compositemodelrouteDescTargetPlatform.Validators[0].(func(string) error)
+	compositemodelroute.TargetPlatformValidator = func() func(string) error {
+		validators := compositemodelrouteDescTargetPlatform.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(target_platform string) error {
+			for _, fn := range fns {
+				if err := fn(target_platform); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// compositemodelrouteDescProfileKey is the schema descriptor for profile_key field.
 	compositemodelrouteDescProfileKey := compositemodelrouteFields[5].Descriptor()
 	// compositemodelroute.DefaultProfileKey holds the default value on creation for the profile_key field.

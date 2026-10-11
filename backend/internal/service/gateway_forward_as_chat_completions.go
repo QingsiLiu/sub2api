@@ -366,13 +366,19 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		if event == nil {
 			return false
 		}
-		// Drop Anthropic keepalive pings before OpenAI conversion:
-		// leaking `event: ping` frames crashes OpenAI-stream clients.
-		// Error events must still forward — they carry upstream failures.
 		if event.Type == "ping" {
+			if clientDisconnected {
+				return true
+			}
+			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
+				clientDisconnected = true
+				GeiliMarkTextClientDisconnect(c)
+				return true
+			}
+			c.Writer.Flush()
 			return false
 		}
-		if firstChunk && anthropicEventHasSemanticOutputGeili(event) {
+		if !clientDisconnected && firstChunk && anthropicEventHasSemanticOutputGeili(event) {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
@@ -385,6 +391,12 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		// Also capture usage from message_start (carries cache fields)
 		if event.Type == "message_start" && event.Message != nil {
 			mergeAnthropicUsage(&usage, event.Message.Usage)
+		}
+
+		// geili hook: drain observed provider usage after disconnect without writing
+		// another downstream frame or finalizing a failed client response.
+		if clientDisconnected {
+			return true
 		}
 
 		// Keep the outward Responses/Chat usage on the same normalized buckets used

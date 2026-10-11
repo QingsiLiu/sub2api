@@ -231,3 +231,82 @@ func TestOpenAIResponsesCompletedEventIsEmpty(t *testing.T) {
 		})
 	}
 }
+
+// TestOpenAIResponsesEmptyCompletedFailsOverGrok verifies that Grok platform
+// accounts — which reach the stream relay through forwardGrokResponses instead
+// of the passthrough path — get the same #5009 silent-refusal failover for an
+// empty response.completed (issue #7774).
+func TestOpenAIResponsesEmptyCompletedFailsOverGrok(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name       string
+		completion string
+		failover   bool
+	}{
+		{"incomplete compatibility envelope", `{"id":"resp_grok","object":"response","status":"completed"}`, true},
+		// geili hook: an explicit, canonical empty answer is legal and must not
+		// trigger replay. Missing output evidence still uses upstream Grok failover.
+		{"canonical empty answer", `{"id":"resp_grok","object":"response","status":"completed","output":[]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body: io.NopCloser(strings.NewReader(
+					"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_grok\",\"object\":\"response\",\"status\":\"in_progress\"}}\n\n" +
+						"data: {\"type\":\"response.completed\",\"response\":" + tc.completion + "}\n\n",
+				)),
+			}}
+			svc := newOpenAIImageGenerationControlTestService(upstream)
+			c, recorder := newOpenAIImageGenerationControlTestContext(true, "codex_cli_rs/0.144.1")
+			account := newOpenAIImageGenerationControlTestAccount()
+			account.Platform = PlatformGrok
+			body := []byte(`{"model":"grok-4.7","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
+			result, err := svc.Forward(context.Background(), c, account, body)
+			if tc.failover {
+				var failoverErr *UpstreamFailoverError
+				require.ErrorAs(t, err, &failoverErr)
+				require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+				require.Empty(t, recorder.Body.String(), "no incomplete success stream may reach the client")
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				require.Contains(t, recorder.Body.String(), "response.completed")
+			}
+		})
+	}
+}
+
+// TestOpenAIResponsesEmptyCompletedWithOutputSucceedsGrok ensures normal Grok
+// streams with real semantic output still succeed.
+func TestOpenAIResponsesEmptyCompletedWithOutputSucceedsGrok(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_grok_ok\",\"object\":\"response\",\"status\":\"in_progress\"}}\n\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello grok\"}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_grok_ok\",\"object\":\"response\",\"status\":\"completed\",\"usage\":{\"input_tokens\":11,\"output_tokens\":4,\"total_tokens\":15}}}\n\n",
+		)),
+	}}
+	svc := newOpenAIImageGenerationControlTestService(upstream)
+	c, recorder := newOpenAIImageGenerationControlTestContext(true, "codex_cli_rs/0.144.1")
+	account := newOpenAIImageGenerationControlTestAccount()
+	account.Platform = PlatformGrok
+
+	body := []byte(`{
+		"model":"grok-4.7",
+		"stream":true,
+		"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]
+	}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, recorder.Body.String(), "hello grok")
+	require.NotNil(t, result.Usage)
+	require.Equal(t, 11, result.Usage.InputTokens)
+	require.Equal(t, 4, result.Usage.OutputTokens)
+}

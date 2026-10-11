@@ -372,3 +372,25 @@ func TestGeminiRoutingRejectionRetainsNativeStreamingType(t *testing.T) {
 		})
 	}
 }
+
+// Both new provider platforms must use the OpenAI handler even for explicit
+// multi-group Key routes. The empty service exposes its dependency guard; a
+// mistaken Anthropic dispatch reaches a deliberately absent handler instead.
+func TestExplicitKeyRoutesDispatchNewProvidersToOpenAI(t *testing.T) {
+	for _, platform := range []string{service.PlatformCline, service.PlatformCommandCode} {
+		for _, path := range []string{"/v1/chat/completions", "/v1/responses", "/v1/messages"} {
+			t.Run(platform+path, func(t *testing.T) {
+				recorder := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(recorder)
+				c.Request = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"test"}`))
+				groupID := int64(42)
+				c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{ID: 7, GroupID: &groupID, Group: &service.Group{ID: groupID, Platform: platform}})
+				c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 9})
+				h := &handler.Handlers{OpenAIGateway: &handler.OpenAIGatewayHandler{}}
+				require.NotPanics(t, func() { explicitGatewayHandler(h, path)(c) })
+				require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "Service temporarily unavailable")
+			})
+		}
+	}
+}
