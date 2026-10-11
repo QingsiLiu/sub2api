@@ -268,7 +268,7 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	if proxyURL != "" {
 		proxyInfo = proxyURL
 	}
-	slog.Debug("tls_fingerprint_enabled", "account_id", accountID, "target", targetHost, "proxy", proxyInfo, "profile", profile.Name)
+	slog.Debug("tls_fingerprint_enabled", "account_id", accountID, "target", targetHost, "proxy", redactExternalProxyLogGeili(proxyInfo), "profile", profile.Name)
 
 	if err := s.validateRequestHost(req); err != nil {
 		return nil, err
@@ -579,7 +579,7 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 			atomic.AddInt64(&entry.inFlight, 1)
 		}
 		s.mu.RUnlock()
-		slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", cacheKey)
+		slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", redactExternalProxyLogGeili(cacheKey))
 		return entry, nil
 	}
 	s.mu.RUnlock()
@@ -593,12 +593,12 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 				atomic.AddInt64(&entry.inFlight, 1)
 			}
 			s.mu.Unlock()
-			slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", cacheKey)
+			slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", redactExternalProxyLogGeili(cacheKey))
 			return entry, nil
 		}
 		slog.Debug("tls_fingerprint_evicting_stale_client",
 			"account_id", accountID,
-			"cache_key", cacheKey,
+			"cache_key", redactExternalProxyLogGeili(cacheKey),
 			"proxy_changed", entry.proxyKey != proxyKey,
 			"pool_changed", entry.poolKey != poolKey)
 		s.removeClientLocked(cacheKey, entry)
@@ -616,7 +616,7 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 	}
 
 	// 创建带 TLS 指纹的 Transport
-	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", cacheKey, "proxy", proxyKey)
+	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", redactExternalProxyLogGeili(cacheKey), "proxy", redactExternalProxyLogGeili(proxyKey))
 	transport, err := buildUpstreamTransportWithTLSFingerprint(settings, parsedProxy, profile)
 	if err != nil {
 		s.mu.Unlock()
@@ -1188,7 +1188,7 @@ func (s *httpUpstreamService) recordOpenAIHTTP2Failure(profile service.HTTPUpstr
 	activated, until := state.recordFailure(time.Now(), settings.fallbackErrorThreshold, settings.fallbackWindow, settings.fallbackTTL)
 	if activated {
 		slog.Warn("openai_http2_proxy_fallback_activated",
-			"proxy", proxyKey,
+			"proxy", redactExternalProxyLogGeili(proxyKey),
 			"fallback_until", until.Format(time.RFC3339))
 	}
 }
@@ -1291,7 +1291,12 @@ func normalizeProxyURL(raw string) (string, *url.URL, error) {
 	parsed.Path = ""
 	parsed.RawPath = ""
 	parsed.RawQuery = ""
-	parsed.Fragment = ""
+	// geili hook: keep the external public-dial policy in the parsed transport
+	// and pool key; ordinary fragments remain ignored as upstream intended.
+	if parsed.Fragment != proxyutil.PublicProxyMarker {
+		parsed.Fragment = ""
+		parsed.RawFragment = ""
+	}
 	parsed.ForceQuery = false
 	if hostname := parsed.Hostname(); hostname != "" {
 		port := parsed.Port()
@@ -1450,7 +1455,9 @@ func enableHTTP2KeepAlive(transport *http.Transport, protocolMode string) (*http
 //   - socks5: SOCKS5 代理，使用 SOCKS5ProxyDialer（SOCKS5 隧道 + utls 握手）
 func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *url.URL, profile *tlsfingerprint.Profile) (*http.Transport, error) {
 	// geili hook: use the guarded transport for external proxies, including HTTPS and SOCKS.
-	if proxyURL != nil && proxyURL.Fragment == proxyutil.PublicProxyMarker { return buildUpstreamTransport(settings, proxyURL, upstreamProtocolModeDefault) }
+	if proxyURL != nil && proxyURL.Fragment == proxyutil.PublicProxyMarker {
+		return buildUpstreamTransport(settings, proxyURL, upstreamProtocolModeDefault)
+	}
 	transport := &http.Transport{
 		MaxIdleConns:          settings.maxIdleConns,
 		MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,
