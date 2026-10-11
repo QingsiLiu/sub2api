@@ -50,15 +50,16 @@ func (c AccountSubmissionConfig) ExpiryHours() int {
 }
 
 type AccountSubmissionInvite struct {
-	ID          int64                   `json:"id"`
-	CreatedBy   int64                   `json:"created_by"`
-	Config      AccountSubmissionConfig `json:"config"`
-	CreatedAt   time.Time               `json:"created_at"`
-	ExpiresAt   time.Time               `json:"expires_at"`
-	RevokedAt   *time.Time              `json:"revoked_at"`
-	SubmittedAt *time.Time              `json:"submitted_at"`
-	AccountID   *int64                  `json:"account_id"`
-	Status      string                  `json:"status"`
+	ID            int64                   `json:"id"`
+	CreatedBy     int64                   `json:"created_by"`
+	Config        AccountSubmissionConfig `json:"config"`
+	CreatedAt     time.Time               `json:"created_at"`
+	ExpiresAt     time.Time               `json:"expires_at"`
+	RevokedAt     *time.Time              `json:"revoked_at"`
+	ViewRevokedAt *time.Time              `json:"view_revoked_at"`
+	SubmittedAt   *time.Time              `json:"submitted_at"`
+	AccountID     *int64                  `json:"account_id"`
+	Status        string                  `json:"status"`
 }
 
 func (i *AccountSubmissionInvite) State(now time.Time) string {
@@ -130,11 +131,10 @@ func (s *AccountSubmissionService) Create(ctx context.Context, actor int64, c Ac
 	if err := s.validateGroups(ctx, c); err != nil {
 		return nil, "", err
 	}
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return nil, "", ErrSubmissionUnavailable
+	token, err := newSubmissionToken()
+	if err != nil {
+		return nil, "", err
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
 	hash, _ := AccountSubmissionTokenHash(token)
 	invite, err := s.repo.CreateInvite(ctx, hash, actor, c)
 	if err != nil {
@@ -198,4 +198,12 @@ func (s *AccountSubmissionService) ProtectedAccountIDs(ctx context.Context, ids 
 }
 func (s *AccountSubmissionService) HasProtectedAccounts(ctx context.Context) (bool, error) {
 	return s.repo.HasProtectedAccounts(ctx)
+}
+
+func newSubmissionToken() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", ErrSubmissionUnavailable
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
 }

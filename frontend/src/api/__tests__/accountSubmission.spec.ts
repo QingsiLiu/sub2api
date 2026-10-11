@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { post, get } = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: { post, get } }))
-import { inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, createSubmissionInvite } from '@/api/accountSubmission'
+import { getSubmissionUsage, inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, createSubmissionInvite } from '@/api/accountSubmission'
 
 describe('external key submission requests', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -35,4 +35,15 @@ describe('external key submission requests', () => {
     await createSubmissionInvite({ name: 'test', platform: 'openai', group_ids: [], proxy_id: null, priority: 50, concurrency: 1, rate_multiplier: 0 })
     expect(post.mock.calls[0][1].rate_multiplier).toBe(0)
   })
+  it('sends usage capabilities and dates in the body with no cookies or credentials in errors', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 0, data: { summary: {} } }) })
+    vi.stubGlobal('fetch', fetch)
+    await getSubmissionUsage('private-view-token', '2026-10-01', '2026-10-11')
+    const [url, options] = fetch.mock.calls[0]
+    expect(url).toBe('/api/v1/account-submissions/usage')
+    expect(url).not.toContain('private-view-token')
+    expect(options.credentials).toBe('omit')
+    expect(JSON.parse(options.body)).toEqual({ token: 'private-view-token', start_date: '2026-10-01', end_date: '2026-10-11' })
+  })
+
 })

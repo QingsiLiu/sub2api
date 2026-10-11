@@ -94,3 +94,18 @@ func TestAccountSubmissionDatabaseBackupDownloadProtection(t *testing.T) {
 	require.Equal(t, 403, rec.Code)
 	require.Contains(t, rec.Body.String(), "SUBMISSION_BACKUP_PROTECTED")
 }
+
+func TestAccountSubmissionUsageStrictRequestBoundary(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	h := &AccountHandler{}
+	router.POST("/usage", h.SubmissionUsage)
+	for _, body := range []string{`{"token":"private-link","account_id":7}`, `{"token":"private-link","api_key":"synthetic-private-key"}`, `{"token":true}`, `{"token":"private-link"} {}`, `{"token":"` + strings.Repeat("x", 9000) + `"}`} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/usage", strings.NewReader(body)))
+		require.Equal(t, 400, rec.Code)
+		require.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+		require.NotContains(t, rec.Body.String(), "private-link")
+		require.NotContains(t, rec.Body.String(), "synthetic-private-key")
+	}
+}

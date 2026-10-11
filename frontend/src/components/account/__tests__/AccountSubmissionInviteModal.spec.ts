@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const { create, list, revoke } = vi.hoisted(() => ({ create: vi.fn(), list: vi.fn(), revoke: vi.fn() }))
-vi.mock('@/api/accountSubmission', () => ({ createSubmissionInvite: create, listSubmissionInvites: list, revokeSubmissionInvite: revoke }))
+const { create, list, revoke, revokeView, resetView } = vi.hoisted(() => ({ create: vi.fn(), list: vi.fn(), revoke: vi.fn(), revokeView: vi.fn(), resetView: vi.fn() }))
+vi.mock('@/api/accountSubmission', () => ({ createSubmissionInvite: create, listSubmissionInvites: list, revokeSubmissionInvite: revoke, revokeSubmissionView: revokeView, resetSubmissionView: resetView }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/components/common/BaseDialog.vue', () => ({ default: { props: ['show'], template: '<div v-if="show"><slot /></div>' } }))
@@ -13,6 +13,8 @@ describe('administrator key invitation', () => {
     list.mockResolvedValue({ items: [], total: 0 })
     create.mockResolvedValue({ invite: { id: 1 }, token: 'synthetic-token' })
     revoke.mockResolvedValue(undefined)
+    revokeView.mockResolvedValue(undefined)
+    resetView.mockResolvedValue({ token: 'new-view-token' })
   })
   it('generates a fragment link with explicit platform configuration and zero multiplier', async () => {
     const wrapper = mount(AccountSubmissionInviteModal, { props: { show: false, groups: [], proxies: [] } })
@@ -53,4 +55,17 @@ describe('administrator key invitation', () => {
     expect(wrapper.get('[role="alert"]').text()).toBe('admin.accounts.keyIntake.expiryInvalid')
     wrapper.unmount()
   })
+  it('revokes and resets submitted account viewing access without creating another account', async () => {
+    list.mockResolvedValue({ items: [{ id: 3, config: { name: 'owner', platform: 'openai' }, status: 'submitted', account_id: 9, expires_at: '2020-01-01T00:00:00Z' }], total: 1 })
+    const w = mount(AccountSubmissionInviteModal, { props: { show: false, groups: [], proxies: [] } })
+    await w.setProps({ show: true }); await flushPromises()
+    await w.findAll('button').find(b => b.text().includes('revokeView'))!.trigger('click'); await flushPromises()
+    expect(revokeView).toHaveBeenCalledWith(3)
+    await w.findAll('button').find(b => b.text().includes('resetView'))!.trigger('click'); await flushPromises()
+    expect(resetView).toHaveBeenCalledWith(3)
+    expect((w.get('input[readonly]').element as HTMLInputElement).value).toContain('#token=new-view-token')
+    expect(create).not.toHaveBeenCalled()
+    w.unmount()
+  })
+
 })

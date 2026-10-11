@@ -18,14 +18,14 @@ func NewAccountSubmissionRepository(db *sql.DB) service.AccountSubmissionReposit
 	return &accountSubmissionRepository{db: db}
 }
 
-const submissionColumns = `id, created_by, config, created_at, expires_at, revoked_at, submitted_at, account_id`
+const submissionColumns = `id, created_by, config, created_at, expires_at, revoked_at, submitted_at, account_id, view_revoked_at`
 
 type submissionScanner interface{ Scan(...any) error }
 
 func scanSubmission(row submissionScanner) (*service.AccountSubmissionInvite, error) {
 	i := &service.AccountSubmissionInvite{}
 	var config []byte
-	if err := row.Scan(&i.ID, &i.CreatedBy, &config, &i.CreatedAt, &i.ExpiresAt, &i.RevokedAt, &i.SubmittedAt, &i.AccountID); err != nil {
+	if err := row.Scan(&i.ID, &i.CreatedBy, &config, &i.CreatedAt, &i.ExpiresAt, &i.RevokedAt, &i.SubmittedAt, &i.AccountID, &i.ViewRevokedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrSubmissionInvalid
 		}

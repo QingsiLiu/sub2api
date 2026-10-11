@@ -19,13 +19,13 @@ describe('public key submission page', () => {
     submit.mockResolvedValue({ status: 'submitted' })
   })
   afterEach(() => window.history.replaceState({}, '', '/'))
-  const render = () => mount(SubmitKeyView, { global: { stubs: { AuthLayout: { template: '<main><slot /></main>' } } } })
+  const render = () => mount(SubmitKeyView, { global: { stubs: { AuthLayout: { template: '<main><slot /></main>' }, AccountSubmissionUsage: true } } })
   const switchLink = () => {
     window.history.replaceState({}, '', '/submit-key#token=second-token')
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   }
 
-  it('needs no login, masks the key and clears it and the link after submission', async () => {
+  it('needs no login, masks the key and clears it and retains the read-only link after submission', async () => {
     const wrapper = render()
     await flushPromises()
     expect(inspect).toHaveBeenCalledWith('synthetic-token')
@@ -38,7 +38,7 @@ describe('public key submission page', () => {
     expect(submit).toHaveBeenCalledWith('synthetic-token', 'synthetic-private-key')
     expect(wrapper.find('input').exists()).toBe(false)
     expect(wrapper.text()).toContain('keyIntake.success')
-    expect(window.location.hash).toBe('')
+    expect(window.location.hash).toBe('#token=synthetic-token')
     expect(wrapper.html()).not.toContain('synthetic-private-key')
     wrapper.unmount()
   })

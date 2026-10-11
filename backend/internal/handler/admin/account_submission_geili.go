@@ -102,7 +102,7 @@ func (h *AccountHandler) InspectSubmissionInvite(c *gin.Context) {
 		return
 	}
 	// No internal names, IDs, groups or proxy configuration on this public endpoint.
-	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt})
+	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt, "view_available": invite.Status == "submitted" && invite.ViewRevokedAt == nil})
 }
 
 func (h *AccountHandler) SubmitAccountKey(c *gin.Context) {

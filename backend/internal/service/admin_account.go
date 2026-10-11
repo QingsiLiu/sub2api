@@ -591,6 +591,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
+	// geili hook: externally submitted credentials have a permanent usage identity.
+	if err := protectSubmissionCredentialUpdate(ctx, s.accountRepo, account, input); err != nil {
+		return nil, err
+	}
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
 	}

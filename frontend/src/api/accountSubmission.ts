@@ -17,12 +17,14 @@ export interface SubmissionInvite {
   created_at: string
   expires_at: string
   status: 'pending' | 'submitted' | 'revoked' | 'expired'
+  view_revoked_at?: string | null
   account_id: number | null
 }
 export interface PublicSubmissionInvite {
   platform: SubmissionPlatform
   expires_at: string
   status: 'pending' | 'submitted'
+  view_available?: boolean
 }
 
 export async function createSubmissionInvite(config: SubmissionConfig) {
@@ -44,7 +46,7 @@ export async function revokeSubmissionInvite(id: number) {
 export class SubmissionRequestError extends Error {
   constructor(public readonly status: number) { super('Submission request failed') }
 }
-async function publicSubmissionRequest<T>(action: 'inspect' | 'submit', payload: { token: string; api_key?: string }): Promise<T> {
+async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage', payload: { token: string; api_key?: string; start_date?: string; end_date?: string }): Promise<T> {
   const controller = new AbortController()
   const timer = window.setTimeout(() => controller.abort(), 15000)
   try {
@@ -74,4 +76,38 @@ export function inspectSubmissionInvite(token: string) {
 }
 export function submitAccountKey(token: string, api_key: string) {
   return publicSubmissionRequest<{ status: 'submitted' }>('submit', { token, api_key })
+}
+
+export interface SubmissionUsageBucket {
+  date?: string
+  model?: string
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  reference_cost: number
+}
+export interface SubmissionUsage {
+  name: string
+  platform: SubmissionPlatform
+  enabled: boolean
+  start_date: string
+  end_date: string
+  timezone: string
+  currency: string
+  updated_at: string
+  summary: SubmissionUsageBucket
+  daily: SubmissionUsageBucket[]
+  models: SubmissionUsageBucket[]
+}
+export function getSubmissionUsage(token: string, start_date: string, end_date: string) {
+  return publicSubmissionRequest<SubmissionUsage>('usage', { token, start_date, end_date })
+}
+export async function revokeSubmissionView(id: number) {
+  await apiClient.post(`/admin/accounts/submission-invites/${id}/revoke-view`)
+}
+export async function resetSubmissionView(id: number) {
+  const { data } = await apiClient.post<{ token: string }>(`/admin/accounts/submission-invites/${id}/reset-view`)
+  return data
 }

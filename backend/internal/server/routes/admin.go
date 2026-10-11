@@ -377,6 +377,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/submission-invites", h.Admin.Account.ListSubmissionInvites)
 		accounts.POST("/submission-invites", h.Admin.Account.CreateSubmissionInvite)
 		accounts.POST("/submission-invites/:id/revoke", h.Admin.Account.RevokeSubmissionInvite)
+		accounts.POST("/submission-invites/:id/revoke-view", h.Admin.Account.RevokeSubmissionView)
+		accounts.POST("/submission-invites/:id/reset-view", h.Admin.Account.ResetSubmissionView)
 		accounts.GET("/upstream-billing-rates", h.Admin.Account.GetUpstreamBillingRates)
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)

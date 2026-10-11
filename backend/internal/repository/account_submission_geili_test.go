@@ -21,7 +21,7 @@ func submissionMockRow(t *testing.T, platform string, submitted bool) *sqlmock.R
 		submittedAt = time.Now()
 		accountID = int64(9)
 	}
-	return sqlmock.NewRows([]string{"id", "created_by", "config", "created_at", "expires_at", "revoked_at", "submitted_at", "account_id"}).AddRow(1, 1, config, time.Now(), time.Now().Add(time.Hour), nil, submittedAt, accountID)
+	return sqlmock.NewRows([]string{"id", "created_by", "config", "created_at", "expires_at", "revoked_at", "submitted_at", "account_id", "view_revoked_at"}).AddRow(1, 1, config, time.Now(), time.Now().Add(time.Hour), nil, submittedAt, accountID, nil)
 }
 
 func TestAccountSubmissionRollbackSanitizesCredentialWriteFailure(t *testing.T) {

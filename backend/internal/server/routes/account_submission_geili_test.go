@@ -63,3 +63,26 @@ func TestAccountSubmissionPublicRateLimitFailClosed(t *testing.T) {
 		require.NotContains(t, rec.Body.String(), "synthetic-key")
 	}
 }
+
+func TestAccountSubmissionUsageRateLimitSeparateAndFailClosed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
+	defer func() { _ = rdb.Close() }()
+	router := gin.New()
+	RegisterAccountSubmissionPublicRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: &admin.AccountHandler{}}}, rdb)
+	request := func(action string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/account-submissions/"+action, strings.NewReader(`{"token":`)))
+		return rec
+	}
+	for i := 0; i < 30; i++ {
+		require.Equal(t, 400, request("usage").Code)
+	}
+	require.Equal(t, 429, request("usage").Code)
+	require.Equal(t, 400, request("inspect").Code)
+	mr.Close()
+	rec := request("usage")
+	require.Equal(t, 429, rec.Code)
+	require.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+}

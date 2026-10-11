@@ -21,4 +21,13 @@ func RegisterAccountSubmissionPublicRoutes(v1 *gin.RouterGroup, h *handler.Handl
 	group.Use(limiter.LimitWithOptions("account-submission", 30, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
 	group.POST("/inspect", h.Admin.Account.InspectSubmissionInvite)
 	group.POST("/submit", h.Admin.Account.SubmitAccountKey)
+	// Separate fail-closed budget for read-only capability polling.
+	usage := v1.Group("/account-submissions")
+	usage.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Next()
+	})
+	usage.Use(limiter.LimitWithOptions("account-submission-usage", 30, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
+	usage.POST("/usage", h.Admin.Account.SubmissionUsage)
 }

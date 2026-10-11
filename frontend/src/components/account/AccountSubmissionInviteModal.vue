@@ -32,6 +32,11 @@
         <p class="text-xs text-gray-500">{{ t('admin.accounts.keyIntake.enableHint') }}</p>
         <div v-for="item in items" :key="item.id" class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
           <div class="min-w-0"><p class="break-words text-sm font-medium">{{ item.config.name }} · {{ item.config.platform === 'openai' ? 'OpenAI' : 'Claude' }}</p><p class="text-xs text-gray-500">{{ statusLabel(item.status) }} · {{ t('admin.accounts.keyIntake.expires') }} {{ new Date(item.expires_at).toLocaleString() }}</p><p v-if="item.account_id" class="text-xs text-gray-500">{{ t('admin.accounts.keyIntake.accountId', { id: item.account_id }) }}</p></div>
+          <div v-if="item.status === 'submitted'" class="flex flex-wrap gap-2">
+            <span v-if="item.view_revoked_at" class="text-xs text-gray-500">{{ t('admin.accounts.keyIntake.viewRevoked') }}</span>
+            <button v-else class="btn btn-secondary" :disabled="revoking !== null" @click="manageView(item.id, false)">{{ t('admin.accounts.keyIntake.revokeView') }}</button>
+            <button class="btn btn-secondary" :disabled="revoking !== null || busy" @click="manageView(item.id, true)">{{ t('admin.accounts.keyIntake.resetView') }}</button>
+          </div>
           <button v-if="item.status === 'pending'" class="btn btn-secondary" :disabled="revoking === item.id" @click="revoke(item.id)">{{ t('admin.accounts.keyIntake.revoke') }}</button>
         </div>
         <p v-if="!items.length && !listLoading" class="text-sm text-gray-500">{{ t('admin.accounts.keyIntake.empty') }}</p>
@@ -46,7 +51,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useAppStore } from '@/stores/app'
-import { createSubmissionInvite, listSubmissionInvites, revokeSubmissionInvite, type SubmissionConfig, type SubmissionInvite } from '@/api/accountSubmission'
+import { createSubmissionInvite, listSubmissionInvites, revokeSubmissionInvite, revokeSubmissionView, resetSubmissionView, type SubmissionConfig, type SubmissionInvite } from '@/api/accountSubmission'
 import type { AdminGroup, Proxy } from '@/types'
 const props = defineProps<{ show: boolean; groups: AdminGroup[]; proxies: Proxy[] }>()
 const emit = defineEmits<{ close: [] }>()
@@ -96,10 +101,25 @@ async function revoke(id: number) {
   catch { error.value = t('admin.accounts.keyIntake.adminFailed') }
   finally { revoking.value = null }
 }
+async function manageView(id: number, reset: boolean) {
+  if (revoking.value !== null || busy.value) return
+  revoking.value = id
+  error.value = ''
+  try {
+    if (reset) {
+      const data = await resetSubmissionView(id)
+      link.value = `${window.location.origin}/submit-key#token=${encodeURIComponent(data.token)}`
+    } else {
+      await revokeSubmissionView(id)
+    }
+    await load()
+  } catch { error.value = t('admin.accounts.keyIntake.adminFailed') }
+  finally { revoking.value = null }
+}
 async function copy() {
   try { await navigator.clipboard.writeText(link.value); appStore.showSuccess(t('admin.accounts.keyIntake.copied')) }
   catch { error.value = t('admin.accounts.keyIntake.copyFailed') }
 }
-function close() { if (!busy.value) { link.value = ''; emit('close') } }
+function close() { if (!busy.value && revoking.value === null) { link.value = ''; emit('close') } }
 watch(() => props.show, show => { if (show) { error.value = ''; page.value = 1; void load() } else { link.value = '' } })
 </script>

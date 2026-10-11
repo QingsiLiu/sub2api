@@ -3,9 +3,12 @@
     <div class="space-y-5">
       <h2 class="text-center text-2xl font-bold text-gray-900 dark:text-white">{{ t('admin.accounts.keyIntake.title') }}</h2>
       <p v-if="loading" class="text-center text-sm text-gray-500" role="status">{{ t('admin.accounts.keyIntake.checking') }}</p>
-      <div v-else-if="submitted" class="rounded-xl bg-green-50 p-5 text-green-800 dark:bg-green-900/20 dark:text-green-200" role="status">
+      <section v-else-if="submitted" class="space-y-4">
+      <div class="rounded-xl bg-green-50 p-5 text-green-800 dark:bg-green-900/20 dark:text-green-200" role="status">
         {{ t('admin.accounts.keyIntake.success') }}
       </div>
+      <AccountSubmissionUsage :token="token" />
+      </section>
       <template v-else>
         <p v-if="error" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert">{{ error }}</p>
         <form v-if="invite" class="space-y-5" @submit.prevent="submit">
@@ -28,6 +31,7 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
+import AccountSubmissionUsage from '@/components/account/AccountSubmissionUsage.vue'
 import { inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, type PublicSubmissionInvite } from '@/api/accountSubmission'
 
 const { t } = useI18n()
@@ -44,10 +48,8 @@ const platformName = computed(() => invite.value?.platform === 'openai' ? 'OpenA
 
 function finish() {
   apiKey.value = ''
-  token = ''
   submitted.value = true
   error.value = ''
-  window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
 }
 function showError(cause: unknown) {
   const status = cause instanceof SubmissionRequestError ? cause.status : 0

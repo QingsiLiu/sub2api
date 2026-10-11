@@ -89,7 +89,7 @@ def verify(f):
         stored = account(invite)
         f.check(platform + ' stores only SHA256 invitation hash', stored['hash'] == hashlib.sha256(token.encode()).hexdigest() and stored['hash'] != token)
         inspected = public('inspect', {'token': token})
-        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status'} and no_secret(inspected[1], [token, secret, config['name']]))
+        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status', 'view_available'} and no_secret(inspected[1], [token, secret, config['name']]))
         bad = public('submit', {'token': token, 'api_key': secret, 'base_url': f.mock_base})
         f.check(platform + ' external caller cannot set upstream URL', bad[0] == 400 and account(invite)['account_id'] is None and no_secret(bad[1], [secret, token]))
         bad = public('submit', {'token': token, 'api_key': ''})
@@ -121,6 +121,12 @@ def verify(f):
         f.check(platform + ' retry confirms success without replacing the key', changed[0] == 200 and same)
         leaked = f.sql('SELECT json_build_object(\'n\',count(*)) FROM audit_logs WHERE request_body LIKE ' + literal('%' + secret + '%') + ' OR request_body LIKE ' + literal('%' + token + '%') + ';')[0]['n']
         f.check(platform + ' audit records contain neither submitted key nor invitation token', leaked == 0)
+        usage_read = public('usage', {'token': token})
+        f.check(platform + ' submitted inactive account supports empty usage without login', usage_read[0] == 200 and usage_read[1]['data']['enabled'] is False and usage_read[1]['data']['summary']['requests'] == 0)
+        bad = public('usage', {'token': token, 'account_id': ident + 1})
+        f.check(platform + ' usage rejects arbitrary account IDs', bad[0] == 400)
+        replaced = f.request('/api/v1/admin/accounts/' + str(ident), {'credentials': {'api_key': 'synthetic-replacement'}}, f.admin, 'PUT')
+        f.check(platform + ' administrator cannot replace external Key identity', replaced[0] == 400 and no_secret(replaced[1], [secret, token]))
         # Only this synthetic fixture is redirected by an administrator to the loopback mock.
         f.api('/admin/accounts/' + str(ident), {'credentials': {'base_url': f.mock_base + '/upstream', 'model_mapping': {model: model}}, 'extra': {}, 'status': 'active'}, f.admin, 'PUT')
         f.api('/admin/accounts/' + str(ident) + '/schedulable', {'schedulable': True}, f.admin)
@@ -134,6 +140,34 @@ def verify(f):
             if usage['n'] or time.monotonic() >= deadline: break
             time.sleep(.1)
         f.check(platform + ' inference settles once under existing billing rules', usage['n'] == 1 and usage['account'] == ident and usage['cost'] > 0)
+        expected = f.sql('SELECT json_build_object(\'requests\',count(*),\'cost\',sum(total_cost),\'input\',sum(input_tokens),\'output\',sum(output_tokens),\'cache_create\',sum(cache_creation_tokens),\'cache_read\',sum(cache_read_tokens)) FROM usage_logs WHERE account_id=' + str(ident) + ';')[0]
+        view = public('usage', {'token': token})
+        data = view[1].get('data', {})
+        summary = data.get('summary', {})
+        f.check(platform + ' usage includes only bound account and recorded reference pricing', view[0] == 200 and summary.get('requests') == expected['requests'] == 1 and abs(summary.get('reference_cost', 0) - expected['cost']) < 1e-8)
+        f.check(platform + ' usage reports enabled state and separate token dimensions', data.get('enabled') is True and summary.get('input_tokens') == expected['input'] and summary.get('output_tokens') == expected['output'] and summary.get('cache_creation_tokens') == expected['cache_create'] and summary.get('cache_read_tokens') == expected['cache_read'])
+        f.check(platform + ' reference cost ignores zero account multiplier and customer identity', summary.get('reference_cost', 0) > 0 and no_secret(data, [secret, token, user.get('email', 'never-a-user')]) and not any(field in str(data) for field in ('user_id', 'api_key_id', 'group_id', 'credentials', 'ip_address', 'request_id')))
+        f.check(platform + ' daily and model totals equal summary', sum(item['requests'] for item in data.get('daily', [])) == 1 and sum(item['requests'] for item in data.get('models', [])) == 1)
+        if getattr(f, 'has_replica', False):
+            replica = f.replica_request('/api/v1/account-submissions/usage', {'token': token})
+            f.check(platform + ' second instance reads identical usage', replica[0] == 200 and replica[1]['data']['summary'] == summary)
+        for dates in ({'start_date': 'invalid', 'end_date': 'invalid'}, {'start_date': '2000-01-01', 'end_date': '2001-01-01'}):
+            bad = public('usage', {'token': token, **dates})
+            f.check(platform + ' rejects invalid or unbounded usage date range ' + dates['start_date'], bad[0] == 400)
+        f.sql('UPDATE account_submission_invites_geili SET expires_at=now()-interval \'1 hour\' WHERE id=' + str(invite['invite']['id']) + ';')
+        f.check(platform + ' submitted invitation expiry does not end usage access', public('usage', {'token': token})[0] == 200)
+        f.api('/admin/accounts/submission-invites/' + str(invite['invite']['id']) + '/revoke-view', {}, f.admin)
+        reader = f.replica_request if getattr(f, 'has_replica', False) else f.request
+        revoked = reader('/api/v1/account-submissions/usage', {'token': token})
+        f.check(platform + ' viewing revocation applies across instances', revoked[0] == 410)
+        reset = f.api('/admin/accounts/submission-invites/' + str(invite['invite']['id']) + '/reset-view', {}, f.admin)
+        new_token = reset['token']
+        f.intake_canaries.append(new_token)
+        f.check(platform + ' viewing reset invalidates old link', reader('/api/v1/account-submissions/usage', {'token': token})[0] == 410)
+        renewed = reader('/api/v1/account-submissions/usage', {'token': new_token})
+        f.check(platform + ' new read-only link retains original usage', renewed[0] == 200 and renewed[1]['data']['summary'] == summary)
+        new_hash = f.sql('SELECT json_build_object(\'hash\',token_hash) FROM account_submission_invites_geili WHERE id=' + str(invite['invite']['id']) + ';')[0]['hash']
+        f.check(platform + ' reset persists hash only and cannot create another account', new_hash == hashlib.sha256(new_token.encode()).hexdigest() and public('submit', {'token': new_token, 'api_key': 'synthetic-new-key'})[0] == 200 and account(invite)['account_id'] == ident)
         detail = f.api('/admin/accounts/' + str(ident), token=f.admin)
         f.check(platform + ' metadata edit preserves stored credential presence', detail.get('credentials_status', {}).get('has_api_key') is True)
         exported = f.api('/admin/accounts/data?ids=' + str(ident) + '&include_proxies=false', token=f.admin)
