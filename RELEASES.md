@@ -1,11 +1,13 @@
-## 0.2.15-geili.2（候选 CI 已通过，待 Stage 验收）
+## 0.2.15-geili.2（Stage 验收通过，生产待本次授权）
 
 在 `.1` 基础上，外部 Key 录入链接提交后成为只读用量查看入口。免登录查看绑定上游账号的请求、输入/输出/缓存 Token、本站参考费用、每日趋势和模型分布；支持北京时间今日、近7/30天及最多90天自定义范围。
 
 - 录入期限仅限制提交；已提交的旧链接兼容查看。后台支持撤销查看权限、重置链接，重置只替换令牌哈希，不替换 Key 或创建账号。
 - 费用按请求时保存的 `total_cost` 展示，不叠加客户折扣或账号倍率；只统计本站留存记录，不是官方余额/账单，不包括站外使用。只读白名单响应不含客户身份、凭据、分组、IP或请求内容。
 - 查看接口独立共享限流且Redis故障拒绝；查询限定绑定账号及90天范围、只读快照与超时，不恢复已停用财务事实表。追加迁移277，增加查看撤销字段与外部Key身份不可替换保护；原迁移校验和保留。
-- revision：`8dc1a9d1f8a58be006735882652ca2d03f0c35e3`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:aedb4b9f1573de41a92f71a70c27549cffee65c48ecaf52c935d6eeb58e9c214`。[候选 CI 38148536760](https://github.com/QingsiLiu/sub2api/actions/runs/38148536760) 13 项门禁通过。部署状态：待 Stage 验收，生产/Stage仍为`.1`的`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2` / `sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。未包含工作区未提交GPT路由工作。
+- revision：`8dc1a9d1f8a58be006735882652ca2d03f0c35e3`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:aedb4b9f1573de41a92f71a70c27549cffee65c48ecaf52c935d6eeb58e9c214`。[候选 CI 38148536760](https://github.com/QingsiLiu/sub2api/actions/runs/38148536760) 13 项门禁通过。部署状态：2026-10-11经正式入口部署Stage，同一镜像195项验收通过；生产仍为`.1`的`da6b2fd9233fe3acfd9fbec84218aa2bacd160c2` / `sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`。未包含工作区未提交GPT路由工作。
+- 验证：前端391文件/3206测试、Go default/unit/integration、相关race、Geili验证、候选CI13门禁及安全扫描通过。普通CI只有既有52条lint诊断，本次修改文件增量0。当前镜像Stage：录入及用量99、非支付业务51、双实例缓存17、手机/桌面14、337份迁移与字段/触发器8、生产保全6，共195项通过。邀请与夹具恢复、临时副本删除；全部使用合成Key和模拟上游，没有真实付费调用。
+- 发布草稿采用独立contract v12并绑定本次原始报告、SHA256和截图，`production_ready=false`，仅等待本候选生产授权；未沿用其他版本的限定验收或授权。Stage备份：`/opt/sub2api-subscription-lab/backups/20261011T152029Z-candidate`。生产回退点仍为`.1` / `sha256:f1b7e2b14ea8bbcc9f782d4d031b17ce10bc8c83b5e4829df0e94dcd9d008cbc`，回退时保留新增字段、表和业务数据。
 
 ## 0.2.15-geili.1（已发布生产，Stage同镜像）
 
