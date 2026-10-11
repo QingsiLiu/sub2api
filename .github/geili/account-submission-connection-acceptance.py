@@ -47,7 +47,7 @@ def verify(f, public, make, account):
         proxy['clear_password']=True
         cleared=write(token,1,{'mode':'custom','proxy':proxy})
         f.check(platform+' explicit password clearing works',cleared[0]==200 and not cleared[1]['data']['has_password'])
-        _,fresh=public('connection',{'token':token},secondary=bool(getattr(f,'has_replica',False)))
+        fresh=public('connection',{'token':token},secondary=bool(getattr(f,'has_replica',False)))[1]
         f.check(platform+' both instances observe the same current proxy',fresh['data']==cleared[1]['data'])
         direct=write(token,2,{'mode':'direct'})
         f.check(platform+' direct selection cleans replaced unshared proxy',direct[0]==200 and f.sql("SELECT json_build_object('count',count(*)) FROM proxies WHERE name='[external] "+proxy['name']+"';")[0]['count']==0)
