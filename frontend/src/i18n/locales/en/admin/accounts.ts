@@ -73,7 +73,7 @@ export default {
         noGroups: "No groups for this platform. You can configure them after submission.",
         generate: "Generate invitation link",
         creating: "Generating…",
-        linkHint: "Copy this link for the Key owner. After submission it provides long-term usage access. The link is shown only now; recreate a pending invitation or reset viewing access for a submitted account if lost.",
+        linkHint: "Copy this link for the Key owner. After submission it provides long-term usage access and proxy management for this account. The link is shown only now; recreate a pending invitation or reset access for a submitted account if lost.",
         link: "Invitation link",
         copy: "Copy link",
         copied: "Link copied",

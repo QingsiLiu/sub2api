@@ -223,7 +223,7 @@ const selectedLabel = computed(() => {
     return t('admin.accounts.noProxy')
   }
   const proxy = selectedProxy.value
-  return `${proxy.name} (${proxy.protocol}://${proxy.host}:${proxy.port})`
+  return proxy.host ? `${proxy.name} (${proxy.protocol}://${proxy.host}:${proxy.port})` : proxy.name
 })
 
 const filteredProxies = computed(() => {

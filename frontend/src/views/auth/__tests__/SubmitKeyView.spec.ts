@@ -35,7 +35,7 @@ describe('public key submission page', () => {
     await input.setValue('synthetic-private-key')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(submit).toHaveBeenCalledWith('synthetic-token', 'synthetic-private-key', expect.objectContaining({ name: 'Holder account', concurrency: 1 }))
+    expect(submit).toHaveBeenCalledWith('synthetic-token', 'synthetic-private-key', expect.objectContaining({ name: 'Holder account', concurrency: 1, connection: { mode: 'direct' } }))
     expect(wrapper.find('input').exists()).toBe(false)
     expect(wrapper.text()).toContain('keyIntake.success')
     expect(window.location.hash).toBe('#token=synthetic-token')

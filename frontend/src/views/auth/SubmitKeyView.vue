@@ -88,6 +88,7 @@ async function inspect() {
     invite.value = state
     accountName.value = state.name || ''
     concurrency.value = state.concurrency || 1
+    connection.value = { mode: state.has_preset_proxy ? 'preset' : 'direct' }
     if (invite.value.status === 'submitted') finish()
   } catch (cause) { if (epoch === requestEpoch) showError(cause) }
   finally { if (epoch === requestEpoch) loading.value = false }
