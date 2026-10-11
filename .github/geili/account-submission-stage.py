@@ -72,6 +72,9 @@ def fixture_type(cache, source, checks):
                     self.snapshot.setdefault('intake_proxy_ids',[])
                     self.snapshot['intake_proxy_ids']=sorted(set(self.snapshot['intake_proxy_ids']+[p['proxy_id'] for p in proxies]))
                     cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
+                    # Billing restoration retains inactive accounts. Detach only our
+                    # tracked synthetic accounts before removing owned proxies.
+                    self.sql('UPDATE accounts SET proxy_id=NULL,updated_at=NOW() WHERE id IN (SELECT account_id FROM account_submission_invites_geili WHERE id IN ('+selected+')) AND proxy_id IN (SELECT proxy_id FROM account_submission_connections_geili WHERE invite_id IN ('+selected+'));')
                     self.sql('DELETE FROM account_submission_connections_geili WHERE invite_id IN ('+selected+');')
                     self.sql('DELETE FROM account_submission_invites_geili WHERE id IN (' + selected + ');')
                     self.snapshot['intake_invites_removed'] = True
