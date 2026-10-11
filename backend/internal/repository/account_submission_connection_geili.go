@@ -94,7 +94,7 @@ func (r *accountSubmissionRepository) ReadSubmissionConnection(ctx context.Conte
 	if err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SET LOCAL statement_timeout='4s'`); err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
@@ -116,7 +116,7 @@ func (r *accountSubmissionRepository) UpdateSubmissionConnection(ctx context.Con
 	if err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SET LOCAL statement_timeout='4s'`); err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
