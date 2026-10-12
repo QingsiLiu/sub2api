@@ -3,7 +3,7 @@
 相对 `.6`，修复部分客户端把自适应思考强度写入 `thinking.effort` 时，Claude 官方 API 返回 `thinking.adaptive.effort: Extra inputs are not permitted` 的 400。网关在模型映射后、校验与签名前将其迁移至 `output_config.effort`；已有显式强度优先，普通转发、自动透传及 token 计数统一处理，用量记录同步正确强度。
 
 - 仅处理实际上游为 `claude-*` 且 `thinking.type=adaptive` 的请求；保留输出格式、工具输入与大整数。第三方模型协议、错误类型的参数及正确请求保持原行为，无新增迁移。
-- revision：`da193f309961d9f393a96c74b01eaf9b0d655f03`；镜像 digest：[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 构建中，待产出；部署状态：Stage 与生产均未部署。本候选不包含工作区未提交的 OpenAI 加密路由改动。
+- revision：`da193f309961d9f393a96c74b01eaf9b0d655f03`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:12d193311b6e180720829498f5d36d4de2e9a7470e306c679250661ba830f3b0`；[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 全部门禁通过；部署状态：Stage 与生产均未部署。本候选不包含工作区未提交的 OpenAI 加密路由改动。
 - 验证：干净源码旧实现下6条出站回归用例失败，修复后17项全部通过；精确候选revision的完整service unit通过（223.252秒），相关Anthropic转发与参数兼容race通过。未调用真实供应商。
 - 取证与验证：[Claude 官方 Key 思考参数兼容修复](.github/geili/claude-thinking-effort-20261013.md)。
 
