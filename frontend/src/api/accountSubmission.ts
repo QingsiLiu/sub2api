@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { adminAPI } from './admin'
 
 export type SubmissionPlatform = 'anthropic' | 'openai'
 export interface SubmissionConfig {
@@ -21,6 +22,8 @@ export interface SubmissionInvite {
   account_id: number | null
 }
 export interface PublicSubmissionInvite {
+  priority?: number
+  rate_multiplier?: number
 	name?: string
 	concurrency?: number
 	has_preset_proxy?: boolean
@@ -49,9 +52,9 @@ export async function revokeSubmissionInvite(id: number) {
 export class SubmissionRequestError extends Error {
   constructor(public readonly status: number) { super('Submission request failed') }
 }
-async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage' | 'connection' | 'connection/update', payload: { token: string } & Record<string, unknown>): Promise<T> {
+async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage' | 'connection' | 'connection/update' | 'form', payload: { token: string } & Record<string, unknown>): Promise<T> {
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 15000)
+  const timer = window.setTimeout(() => controller.abort(), action === 'form' ? 120000 : 15000)
   try {
     const response = await fetch(`/api/v1/account-submissions/${action}`, {
       method: 'POST',
@@ -122,4 +125,44 @@ export async function revokeSubmissionView(id: number) {
 export async function resetSubmissionView(id: number) {
   const { data } = await apiClient.post<{ token: string }>(`/admin/accounts/submission-invites/${id}/reset-view`)
   return data
+}
+
+// Reuse the entire official modal/OAuth API surface without an administrator
+// session or interceptors. Every request carries only this invitation capability.
+export function createSubmissionFormAPI(token: string, connection: () => SubmissionConnectionInput): typeof adminAPI {
+  const request = async <T>(action: string, payload: Record<string, unknown> = {}): Promise<T> => {
+    try { return await publicSubmissionRequest<T>('form', { token, action, payload, connection: connection() }) }
+    catch (cause) {
+      // An uncertain create only inspects the committed state; never retries a
+      // credential-bearing operation or another invitation's request.
+      if (['create','codex-import','codex-pat'].includes(action)) {
+        try {
+          const state = await inspectSubmissionInvite(token)
+          if (state.status === 'submitted' && state.view_available !== false) {
+            return (action === 'codex-import' ? {created:1,updated:0,skipped:0,failed:0} : {id:0,status:'submitted'}) as T
+          }
+        } catch { /* Keep only the original sanitized status. */ }
+      }
+      throw cause
+    }
+  }
+  const accounts = {
+    create: (payload: Record<string, unknown>) => request('create', payload),
+    checkMixedChannelRisk: (payload: Record<string, unknown>) => request('mixed-risk', payload),
+    generateAuthUrl: (endpoint: string, payload: Record<string, unknown>) => request(endpoint, payload),
+    exchangeCode: (endpoint: string, payload: Record<string, unknown>) => request(endpoint, payload),
+    refreshOpenAIToken: (refresh_token: string, _proxyId?: number, endpoint = '/admin/openai/refresh-token', client_id?: string) => request(endpoint, {refresh_token, client_id}),
+    importCodexSession: (payload: Record<string, unknown>) => request('codex-import', payload),
+    createOpenAICodexPAT: (payload: Record<string, unknown>) => request('codex-pat', payload),
+    syncUpstreamModelsPreview: (payload: Record<string, unknown>) => request('models-preview', payload),
+  }
+  return {
+    accounts,
+    settings: {
+      getSettings: () => request('settings'),
+      getWebSearchEmulationConfig: () => request('web-search'),
+      getOpenAISyncModelIDs: () => request('openai-models'),
+    },
+    tlsFingerprintProfiles: { list: () => request('profiles') },
+  } as unknown as typeof adminAPI
 }

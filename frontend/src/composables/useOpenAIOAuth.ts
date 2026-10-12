@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { adminAPI } from '@/api/admin'
+import { useAccountAdminAPIGeili } from '@/composables/useAccountAdminAPIGeili'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 
 export interface OpenAITokenInfo {
@@ -28,6 +28,8 @@ export interface OpenAITokenInfo {
 export type OpenAIOAuthPlatform = 'openai'
 
 export function useOpenAIOAuth() {
+  // geili hook: reuse this flow in the invitation account form.
+  const adminAPI = useAccountAdminAPIGeili()
   const appStore = useAppStore()
   const { t } = useI18n()
   const endpointPrefix = '/admin/openai'

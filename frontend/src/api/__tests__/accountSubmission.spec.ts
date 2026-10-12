@@ -47,3 +47,23 @@ describe('external key submission requests', () => {
   })
 
 })
+
+import { createSubmissionFormAPI } from '@/api/accountSubmission'
+describe('full account form capability adapter', () => {
+ afterEach(() => vi.unstubAllGlobals())
+ it('routes OAuth, import and create calls through one public boundary with the holder proxy', async () => {
+  const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({code:0,data:{id:0,status:'submitted'}})});vi.stubGlobal('fetch',fetch)
+  const api=createSubmissionFormAPI('owner-capability',()=>({mode:'custom',proxy:{name:'Own',protocol:'http',host:'8.8.8.8',port:8080,username:'holder',password:'synthetic-proxy-secret'}}))
+  await api.accounts.generateAuthUrl('/admin/openai/generate-auth-url',{})
+  await api.accounts.exchangeCode('/admin/openai/exchange-code',{session_id:'owned-session',code:'synthetic-code',state:'owned-state'})
+  await api.accounts.create({name:'Holder',platform:'openai',type:'oauth',credentials:{access_token:'synthetic-access'},concurrency:1,priority:5})
+  expect(fetch).toHaveBeenCalledTimes(3)
+  for(const [url,options] of fetch.mock.calls){expect(url).toBe('/api/v1/account-submissions/form');expect(options.credentials).toBe('omit');expect(JSON.parse(options.body).connection.proxy.password).toBe('synthetic-proxy-secret')}
+ })
+ it('confirms an uncertain create without repeating credentials', async () => {
+  const fetch=vi.fn().mockRejectedValueOnce(new Error('synthetic-secret')).mockResolvedValueOnce({ok:true,json:async()=>({code:0,data:{status:'submitted',view_available:true}})});vi.stubGlobal('fetch',fetch)
+  const api=createSubmissionFormAPI('owner-capability',()=>({mode:'direct'}))
+  const result=await api.accounts.create({name:'Holder',platform:'anthropic',type:'setup-token',credentials:{access_token:'synthetic-secret'},concurrency:1,priority:5})
+  expect(result).toMatchObject({status:'submitted'});expect(fetch.mock.calls.map(([url])=>url)).toEqual(['/api/v1/account-submissions/form','/api/v1/account-submissions/inspect'])
+ })
+})

@@ -65,6 +65,7 @@
           <button
             type="button"
             @click="form.platform = 'anthropic'"
+            :disabled="!!invitationForm && invitationForm.platform !== 'anthropic'"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'anthropic'
@@ -78,6 +79,7 @@
           <button
             type="button"
             @click="form.platform = 'openai'"
+            :disabled="!!invitationForm && invitationForm.platform !== 'openai'"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'openai'
@@ -103,6 +105,7 @@
           <button
             type="button"
             @click="form.platform = 'gemini'"
+            :disabled="!!invitationForm && invitationForm.platform !== 'gemini'"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'gemini'
@@ -128,6 +131,7 @@
           <button
             type="button"
             @click="form.platform = 'antigravity'"
+            :disabled="!!invitationForm && invitationForm.platform !== 'antigravity'"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'antigravity'
@@ -141,6 +145,7 @@
           <button
             type="button"
             @click="form.platform = 'grok'"
+            :disabled="!!invitationForm && invitationForm.platform !== 'grok'"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'grok'
@@ -154,6 +159,7 @@
           <button
             type="button"
             @click="selectTypeSafePlatform()"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'typesafe'
@@ -170,6 +176,7 @@
           <button
             type="button"
             @click="selectCNPlatform('kimi')"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === 'kimi'
@@ -183,6 +190,7 @@
           <button
             type="button"
             @click="selectCNPlatform('zhipu')"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === 'zhipu'
@@ -196,6 +204,7 @@
           <button
             type="button"
             @click="selectCNPlatform('deepseek')"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === 'deepseek'
@@ -209,6 +218,7 @@
           <button
             type="button"
             @click="selectCNPlatform('minimax')"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === 'minimax'
@@ -227,6 +237,7 @@
             type="button"
             data-testid="platform-button-opencode_go"
             @click="selectOpenCodeGoPlatform()"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === 'opencode_go'
@@ -244,6 +255,7 @@
             type="button"
             :data-testid="`platform-button-${spec.id}`"
             @click="selectGenericMultiProtocolPlatform(spec.id)"
+            :disabled="!!invitationForm"
             :class="[
               'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-all',
               form.platform === spec.id
@@ -3007,7 +3019,8 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
+        <slot name="invitation-proxy" v-if="invitationForm" />
+        <ProxySelector v-else v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -3529,6 +3542,7 @@
 
         <!-- Group Selection - 仅标准模式显示 -->
         <GroupSelector
+          v-if="!invitationForm"
           v-model="form.group_ids"
           :groups="groups"
           :platform="form.platform"
@@ -3891,6 +3905,7 @@
 </template>
 
 <script setup lang="ts">
+import { inject } from 'vue'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3904,7 +3919,7 @@ import {
   fetchAntigravityDefaultMappings,
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
-import { adminAPI } from '@/api/admin'
+import { useAccountAdminAPIGeili, accountInvitationFormKeyGeili } from '@/composables/useAccountAdminAPIGeili'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
 import {
   useAccountOAuth,
@@ -4097,6 +4112,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+// geili hook: keep the complete official form and authentication flows.
+const adminAPI = useAccountAdminAPIGeili()
+const invitationForm = inject(accountInvitationFormKeyGeili, null)
 const emit = defineEmits<{
   close: []
   created: []
@@ -4869,6 +4887,13 @@ watch(
       adminAPI.tlsFingerprintProfiles.list()
         .then(profiles => { tlsFingerprintProfiles.value = profiles.map(p => ({ id: p.id, name: p.name })) })
         .catch(() => { tlsFingerprintProfiles.value = [] })
+      if (invitationForm) {
+        form.platform = invitationForm.platform as AccountPlatform
+        form.name = invitationForm.name
+        form.concurrency = invitationForm.concurrency
+        form.priority = invitationForm.priority ?? form.priority
+        form.rate_multiplier = invitationForm.rate_multiplier ?? form.rate_multiplier
+      }
       // Modal opened - fill related models
       allowedModels.value = [...getModelsByPlatform(form.platform)]
       // Antigravity: 默认使用映射模式并填充默认映射
@@ -5342,7 +5367,7 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
       Object.values(modelMapping).some((target) =>
         typeof target === 'string' && target.trim() !== '' && !target.includes('*')
       )
-    if (upstreamModelsPreviewed.value || hasConcreteMappedTarget) {
+    if (!invitationForm && (upstreamModelsPreviewed.value || hasConcreteMappedTarget)) {
       try {
         const result = await adminAPI.accounts.syncUpstreamModels(account.id)
         const warnings = result.warnings ?? []
@@ -5356,7 +5381,7 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
       }
     }
     if (
-      payload.type === 'apikey' &&
+      !invitationForm && payload.type === 'apikey' &&
       payload.upstream_billing_probe_enabled === true
     ) {
       try {

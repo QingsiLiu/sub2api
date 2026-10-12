@@ -1,5 +1,5 @@
 import { reactive, ref } from 'vue'
-import { adminAPI } from '@/api/admin'
+import { useAccountAdminAPIGeili } from '@/composables/useAccountAdminAPIGeili'
 import { QUOTA_THRESHOLD_TYPE_FIXED, type QuotaThresholdType } from '@/constants/account'
 
 export const QUOTA_NOTIFY_DIMS = ['daily', 'weekly', 'total'] as const
@@ -12,6 +12,8 @@ interface DimState {
 }
 
 export function useQuotaNotifyState() {
+  // geili hook: reuse this flow in the invitation account form.
+  const adminAPI = useAccountAdminAPIGeili()
   const globalEnabled = ref(false)
   const state = reactive<Record<QuotaNotifyDim, DimState>>({
     daily: { enabled: null, threshold: null, thresholdType: null },

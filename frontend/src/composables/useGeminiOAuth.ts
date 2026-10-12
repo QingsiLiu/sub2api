@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { adminAPI } from '@/api/admin'
+import { useAccountAdminAPIGeili } from '@/composables/useAccountAdminAPIGeili'
 import type { GeminiOAuthCapabilities } from '@/api/admin/gemini'
 
 export interface GeminiTokenInfo {
@@ -18,6 +18,8 @@ export interface GeminiTokenInfo {
 }
 
 export function useGeminiOAuth() {
+  // geili hook: reuse this flow in the invitation account form.
+  const adminAPI = useAccountAdminAPIGeili()
   const appStore = useAppStore()
   const { t } = useI18n()
 

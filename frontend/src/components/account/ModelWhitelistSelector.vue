@@ -149,7 +149,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { accountsAPI } from '@/api/admin/accounts'
+import { accountAdminAPIKeyGeili, accountInvitationFormKeyGeili } from '@/composables/accountFormContextGeili'
+import { accountsAPI as defaultAccountsAPI } from '@/api/admin/accounts'
+import { inject } from 'vue'
 import { getOpenAISyncModelIDs } from '@/api/admin/settings'
 import type { SyncUpstreamPreviewParams } from '@/api/admin/accounts'
 import { useClipboard } from '@/composables/useClipboard'
@@ -159,6 +161,10 @@ import { allModels, getModelsByPlatform } from '@/composables/useModelWhitelist'
 import { supportsUpstreamModelSync } from '@/constants/platformCatalog'
 
 const { t } = useI18n()
+// geili hook: the same model controls use invitation-scoped requests.
+const formAPI = inject(accountAdminAPIKeyGeili, null)
+const getAccountsAPI = () => formAPI?.accounts || defaultAccountsAPI
+const invitationForm = inject(accountInvitationFormKeyGeili, null)
 
 const props = defineProps<{
   modelValue: string[]
@@ -288,7 +294,7 @@ const fillRelated = async () => {
   try {
     const related = await Promise.all(platforms.map(platform =>
       platform.toLowerCase() === 'openai'
-        ? getOpenAISyncModelIDs()
+        ? (invitationForm ? formAPI!.settings.getSettings().then(settings => settings.openai_sync_model_ids) : getOpenAISyncModelIDs())
         : getModelsByPlatform(platform)
     ))
     // A pending fetch must not append a former platform's models after the form changes.
@@ -308,9 +314,9 @@ const syncUpstreamModels = async () => {
   try {
     let result
     if (props.accountId) {
-      result = await accountsAPI.syncUpstreamModels(props.accountId)
+      result = await getAccountsAPI().syncUpstreamModels(props.accountId)
     } else if (props.syncCredentials) {
-      result = await accountsAPI.syncUpstreamModelsPreview(props.syncCredentials as SyncUpstreamPreviewParams)
+      result = await getAccountsAPI().syncUpstreamModelsPreview(props.syncCredentials as SyncUpstreamPreviewParams)
     } else {
       return
     }

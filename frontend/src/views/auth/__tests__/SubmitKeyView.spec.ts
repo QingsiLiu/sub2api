@@ -1,136 +1,32 @@
+import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-const { inspect, submit } = vi.hoisted(() => ({ inspect: vi.fn(), submit: vi.fn() }))
-vi.mock('@/api/accountSubmission', async () => {
-  const actual = await vi.importActual<typeof import('@/api/accountSubmission')>('@/api/accountSubmission')
-  return { ...actual, inspectSubmissionInvite: inspect, submitAccountKey: submit }
-})
+const { inspect } = vi.hoisted(() => ({ inspect: vi.fn() }))
+vi.mock('@/api/accountSubmission', async () => ({...(await vi.importActual<object>('@/api/accountSubmission')),inspectSubmissionInvite: inspect}))
 vi.mock('@/api/client', () => ({ apiClient: {} }))
-vi.mock('@/components/layout/AuthLayout.vue', () => ({ default: { template: '<main><slot /></main>' } }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
-import SubmitKeyView from '@/views/auth/SubmitKeyView.vue'
+vi.mock('vue-i18n', async () => ({...(await vi.importActual<object>('vue-i18n')),useI18n: () => ({t: (key: string) => key})}))
+import SubmitKeyView from '../SubmitKeyView.vue'
 import { SubmissionRequestError } from '@/api/accountSubmission'
-
-describe('public key submission page', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    window.history.replaceState({}, '', '/submit-key#token=synthetic-token')
-    inspect.mockResolvedValue({ platform: 'anthropic', status: 'pending', name: 'Holder account', concurrency: 1, expires_at: '2099-01-01T00:00:00Z' })
-    submit.mockResolvedValue({ status: 'submitted' })
-  })
-  afterEach(() => window.history.replaceState({}, '', '/'))
-  const render = () => mount(SubmitKeyView, { global: { stubs: { AuthLayout: { template: '<main><slot /></main>' }, AccountSubmissionUsage: true, SubmissionConnectionGeili: true } } })
-  const switchLink = () => {
-    window.history.replaceState({}, '', '/submit-key#token=second-token')
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
-  }
-
-  it('needs no login, masks the key and clears it and retains the read-only link after submission', async () => {
-    const wrapper = render()
-    await flushPromises()
-    expect(inspect).toHaveBeenCalledWith('synthetic-token')
-    const input = wrapper.get('#upstream-key')
-    expect(input.attributes('type')).toBe('password')
-    expect(input.attributes('autocomplete')).toBe('off')
-    await input.setValue('synthetic-private-key')
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-    expect(submit).toHaveBeenCalledWith('synthetic-token', 'synthetic-private-key', expect.objectContaining({ name: 'Holder account', concurrency: 1, connection: { mode: 'direct' } }))
-    expect(wrapper.find('input').exists()).toBe(false)
-    expect(wrapper.text()).toContain('keyIntake.success')
-    expect(window.location.hash).toBe('#token=synthetic-token')
-    expect(wrapper.html()).not.toContain('synthetic-private-key')
-    wrapper.unmount()
-  })
-  it('confirms a lost success response without submitting twice', async () => {
-    const wrapper = render()
-    await flushPromises()
-    submit.mockRejectedValueOnce(new SubmissionRequestError(0))
-    inspect.mockResolvedValueOnce({ platform: 'anthropic', status: 'submitted' })
-    await wrapper.get('#upstream-key').setValue('synthetic-private-key')
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-    expect(submit).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('keyIntake.success')
-    wrapper.unmount()
-  })
-  it('blocks a revoked invitation and never sends a key', async () => {
-    inspect.mockRejectedValueOnce(new SubmissionRequestError(410))
-    const wrapper = render()
-    await flushPromises()
-    expect(wrapper.find('input').exists()).toBe(false)
-    expect(wrapper.text()).toContain('keyIntake.invalid')
-    expect(submit).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-  it('rejects multiline keys locally without consuming the invite', async () => {
-    const wrapper = render()
-    await flushPromises()
-    await wrapper.get('#upstream-key').setValue('synthetic key')
-    await wrapper.get('form').trigger('submit')
-    expect(wrapper.text()).toContain('keyIntake.keyInvalid')
-    expect(submit).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-  it('opens the second invitation in the same tab after a successful submission', async () => {
-    const wrapper = render()
-    await flushPromises()
-    await wrapper.get('#upstream-key').setValue('first-private-key')
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-    expect(wrapper.text()).toContain('keyIntake.success')
-    switchLink()
-    await flushPromises()
-    expect(inspect).toHaveBeenLastCalledWith('second-token')
-    expect(wrapper.find('input').exists()).toBe(true)
-    expect((wrapper.get('#upstream-key').element as HTMLInputElement).value).toBe('')
-    expect(wrapper.text()).not.toContain('keyIntake.success')
-    wrapper.unmount()
-  })
-  it('ignores the previous invitation inspection arriving after the link changed', async () => {
-    let complete!: (value: unknown) => void
-    inspect.mockReturnValueOnce(new Promise(resolve => { complete = resolve }))
-    const wrapper = render()
-    switchLink()
-    await flushPromises()
-    complete({ platform: 'anthropic', status: 'submitted' })
-    await flushPromises()
-    expect(wrapper.find('input').exists()).toBe(true)
-    expect(window.location.hash).toBe('#token=second-token')
-    expect(wrapper.text()).not.toContain('keyIntake.success')
-    wrapper.unmount()
-  })
-  it('does not clear a new key when the previous submission completes late', async () => {
-    let complete!: (value: unknown) => void
-    submit.mockReturnValueOnce(new Promise(resolve => { complete = resolve }))
-    const wrapper = render()
-    await flushPromises()
-    await wrapper.get('#upstream-key').setValue('first-private-key')
-    await wrapper.get('form').trigger('submit')
-    switchLink()
-    await flushPromises()
-    await wrapper.get('#upstream-key').setValue('second-private-key')
-    complete({ status: 'submitted' })
-    await flushPromises()
-    expect((wrapper.get('#upstream-key').element as HTMLInputElement).value).toBe('second-private-key')
-    expect(window.location.hash).toBe('#token=second-token')
-    expect(submit).toHaveBeenCalledWith('synthetic-token', 'first-private-key', expect.any(Object))
-    wrapper.unmount()
-  })
-  it('does not inspect or error on a new link when the previous submission fails late', async () => {
-    let fail!: (reason: unknown) => void
-    submit.mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
-    const wrapper = render()
-    await flushPromises()
-    await wrapper.get('#upstream-key').setValue('first-private-key')
-    await wrapper.get('form').trigger('submit')
-    switchLink()
-    await flushPromises()
-    fail(new SubmissionRequestError(410))
-    await flushPromises()
-    expect(inspect).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('input').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('keyIntake.invalid')
-    wrapper.unmount()
-  })
+const Form = defineComponent({name:'SubmissionAccountFormGeili',props:['token','invite'],emits:['created'],template:'<button @click="$emit(\'created\', token)">Complete official form</button>'})
+const render = () => mount(SubmitKeyView,{global:{stubs:{AuthLayout:{template:'<main><slot /></main>'},SubmissionAccountFormGeili:Form,AccountSubmissionUsage:true,SubmissionConnectionGeili:true}}})
+const switchLink = () => {window.history.replaceState({},'', '/submit-key#token=second-token');window.dispatchEvent(new HashChangeEvent('hashchange'))}
+beforeEach(() => {vi.clearAllMocks();window.history.replaceState({},'', '/submit-key#token=synthetic-token');inspect.mockResolvedValue({platform:'anthropic',status:'pending',name:'Holder',concurrency:1})})
+afterEach(() => window.history.replaceState({},'', '/'))
+describe('invitation page delegates to the full official form', () => {
+ it('passes the capability and defaults, then opens usage and proxy management', async () => {
+  const w=render();await flushPromises();expect(w.getComponent(Form).props('token')).toBe('synthetic-token');expect(w.getComponent(Form).props('invite').name).toBe('Holder')
+  await w.get('button').trigger('click');await flushPromises();expect(w.text()).toContain('keyIntake.success');expect(w.findComponent(Form).exists()).toBe(false);expect(window.location.hash).toContain('synthetic-token');w.unmount()
+ })
+ it('a revoked invitation cannot mount the credential form', async () => {
+  inspect.mockRejectedValueOnce(new SubmissionRequestError(410));const w=render();await flushPromises();expect(w.findComponent(Form).exists()).toBe(false);expect(w.text()).toContain('keyIntake.invalid');w.unmount()
+ })
+ it('an old consumed link opens usage without mounting the form', async () => {
+  inspect.mockResolvedValueOnce({platform:'openai',status:'submitted'});const w=render();await flushPromises();expect(w.findComponent(Form).exists()).toBe(false);expect(w.text()).toContain('keyIntake.success');w.unmount()
+ })
+ it('ignores an inspection for the old capability after fragment navigation', async () => {
+  let complete!: (state: unknown)=>void;inspect.mockReturnValueOnce(new Promise(resolve=>{complete=resolve}));const w=render();switchLink();await flushPromises();complete({status:'submitted',platform:'anthropic'});await flushPromises();expect(w.getComponent(Form).props('token')).toBe('second-token');expect(w.text()).not.toContain('keyIntake.success');w.unmount()
+ })
+ it('ignores an old credential form completing after fragment navigation', async () => {
+  const w=render();await flushPromises();const old=w.getComponent(Form);switchLink();await flushPromises();old.vm.$emit('created','synthetic-token');await flushPromises();expect(w.getComponent(Form).props('token')).toBe('second-token');expect(w.text()).not.toContain('keyIntake.success');w.unmount()
+ })
 })

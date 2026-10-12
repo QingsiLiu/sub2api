@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { useAppStore } from '@/stores/app'
-import { adminAPI } from '@/api/admin'
+import { useAccountAdminAPIGeili } from '@/composables/useAccountAdminAPIGeili'
 
 export type AddMethod = 'oauth' | 'setup-token'
 export type AuthInputMethod =
@@ -33,6 +33,8 @@ export interface TokenInfo {
 }
 
 export function useAccountOAuth() {
+  // geili hook: reuse this flow in the invitation account form.
+  const adminAPI = useAccountAdminAPIGeili()
   const appStore = useAppStore()
 
   // State
