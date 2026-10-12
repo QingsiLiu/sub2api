@@ -34,6 +34,12 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		}
 	}
 	if account != nil && account.Platform == PlatformAnthropic {
+		// geili hook: count_tokens uses the same adaptive thinking schema as messages.
+		if body, changed := normalizeAnthropicThinkingEffortGeili(parsed.Body.Bytes(), validationModel); changed {
+			if err := parsed.ReplaceBody(body); err != nil {
+				return err
+			}
+		}
 		if err := validateClaude55Request(parsed.Body.Bytes(), validationModel); err != nil {
 			s.countTokensError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 			return err

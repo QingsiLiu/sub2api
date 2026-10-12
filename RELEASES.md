@@ -1,3 +1,12 @@
+## 0.2.15-geili.7（候选，尚未部署）
+
+相对 `.6`，修复部分客户端把自适应思考强度写入 `thinking.effort` 时，Claude 官方 API 返回 `thinking.adaptive.effort: Extra inputs are not permitted` 的 400。网关在模型映射后、校验与签名前将其迁移至 `output_config.effort`；已有显式强度优先，普通转发、自动透传及 token 计数统一处理，用量记录同步正确强度。
+
+- 仅处理实际上游为 `claude-*` 且 `thinking.type=adaptive` 的请求；保留输出格式、工具输入与大整数。第三方模型协议、错误类型的参数及正确请求保持原行为，无新增迁移。
+- revision：待提交后补齐；镜像 digest：候选 CI 待构建；部署状态：Stage 与生产均未部署。本候选不包含工作区未提交的 OpenAI 加密路由改动。
+- 验证：干净源码旧实现下6条出站回归用例失败，修复后17项全部通过；相关Anthropic转发与参数兼容race通过。未调用真实供应商。
+- 取证与验证：[Claude 官方 Key 思考参数兼容修复](.github/geili/claude-thinking-effort-20261013.md)。
+
 ## 0.2.15-geili.6（已发布生产，Stage同镜像）
 
 相对 `.5`，外部账号录入后的用量与代理页面使用桌面可用宽度，紧凑显示品牌与录入状态；桌面用量统计、图表在主区域，代理设置置于右侧，手机保持单列。日期筛选和刷新在宽屏同排，六项用量指标响应式排列；没有使用记录时不显示大块空图表和空模型列表。

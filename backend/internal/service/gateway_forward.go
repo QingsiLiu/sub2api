@@ -105,6 +105,12 @@ func (s *GatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.Context
 		}
 	}
 	if account != nil && account.Platform == PlatformAnthropic {
+		// geili hook: repair misplaced adaptive effort before validation, signing and usage parsing.
+		if body, changed := normalizeAnthropicThinkingEffortGeili(parsed.Body.Bytes(), validationModel); changed {
+			if err := parsed.ReplaceBody(body); err != nil {
+				return nil, err
+			}
+		}
 		if err := validateClaude55Request(parsed.Body.Bytes(), validationModel); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
 			return nil, err
