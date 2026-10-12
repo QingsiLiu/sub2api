@@ -5,7 +5,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -22,7 +22,7 @@ func RegisterAccountSubmissionPublicRoutes(v1 *gin.RouterGroup, h *handler.Handl
 	group.Use(limiter.LimitWithOptions("account-submission", 30, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
 	group.POST("/inspect", h.Admin.Account.InspectSubmissionInvite)
 	group.POST("/submit", h.Admin.Account.SubmitAccountKey)
-	group.POST("/form", handler.NewSubmissionFormHandlerGeili(h.Admin, service.NewSubmissionOAuthSessionStoreGeili(redisClient)).Handle)
+	group.POST("/form", handler.NewSubmissionFormHandlerGeili(h.Admin, repository.NewSubmissionOAuthSessionStoreGeili(redisClient)).Handle)
 	// Separate fail-closed budget for read-only capability polling.
 	usage := v1.Group("/account-submissions")
 	usage.Use(func(c *gin.Context) {
