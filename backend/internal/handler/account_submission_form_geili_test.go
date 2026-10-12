@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -30,13 +28,10 @@ func (r *submissionFormRepoFixture) PrepareSubmissionProxy(context.Context, stri
 }
 func TestSubmissionFormGeiliRejectsForeignOAuthSessionAndUnknownActions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	mr := miniredis.RunT(t)
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
 	repo := &submissionFormRepoFixture{}
 	account := &admin.AccountHandler{}
 	account.SetAccountSubmissionService(service.NewAccountSubmissionService(repo, nil))
-	bridge := NewSubmissionFormHandlerGeili(&AdminHandlers{Account: account}, client)
+	bridge := NewSubmissionFormHandlerGeili(&AdminHandlers{Account: account}, unavailableSubmissionSessions{})
 	token := strings.Repeat("B", 42) + "A"
 	for _, action := range []string{"/admin/accounts/1/refresh-token", "/admin/openai/exchange-code", "/admin/accounts/exchange-code"} {
 		raw, _ := json.Marshal(map[string]any{"token": token, "action": action, "payload": map[string]any{"session_id": "foreign-session", "code": "synthetic-secret-code"}, "connection": map[string]any{"mode": "direct"}})
@@ -51,5 +46,13 @@ func TestSubmissionFormGeiliRejectsForeignOAuthSessionAndUnknownActions(t *testi
 		require.NotContains(t, w.Body.String(), token)
 		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	}
-	require.NotContains(t, submissionOAuthSessionKeyGeili("foreign-session"), "foreign-session")
+}
+
+type unavailableSubmissionSessions struct{}
+
+func (unavailableSubmissionSessions) Save(context.Context, string, string, []byte, time.Duration) error {
+	return service.ErrSubmissionUnavailable
+}
+func (unavailableSubmissionSessions) Take(context.Context, string, string) ([]byte, error) {
+	return nil, service.ErrSubmissionInvalid
 }

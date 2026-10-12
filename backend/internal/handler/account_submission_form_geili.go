@@ -3,13 +3,10 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,11 +16,11 @@ import (
 
 type SubmissionFormHandlerGeili struct {
 	handlers *AdminHandlers
-	redis    *redis.Client
+	sessions service.SubmissionOAuthSessionStoreGeili
 }
 
-func NewSubmissionFormHandlerGeili(h *AdminHandlers, r *redis.Client) *SubmissionFormHandlerGeili {
-	return &SubmissionFormHandlerGeili{h, r}
+func NewSubmissionFormHandlerGeili(h *AdminHandlers, sessions service.SubmissionOAuthSessionStoreGeili) *SubmissionFormHandlerGeili {
+	return &SubmissionFormHandlerGeili{h, sessions}
 }
 
 type submissionFormRequestGeili struct {
@@ -33,10 +30,6 @@ type submissionFormRequestGeili struct {
 	Connection service.SubmissionConnectionInput `json:"connection"`
 }
 
-func submissionOAuthSessionKeyGeili(id string) string {
-	v := sha256.Sum256([]byte(id))
-	return "account-submission-oauth:" + hex.EncodeToString(v[:])
-}
 func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Referrer-Policy", "no-referrer")
@@ -44,7 +37,7 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 	var req submissionFormRequestGeili
 	dec := json.NewDecoder(c.Request.Body)
 	dec.DisallowUnknownFields()
-	if dec.Decode(&req) != nil || dec.Decode(&struct{}{}) != io.EOF || req.Payload == nil || h.redis == nil {
+	if dec.Decode(&req) != nil || dec.Decode(&struct{}{}) != io.EOF || req.Payload == nil || h.sessions == nil {
 		response.ErrorFrom(c, service.ErrSubmissionInvalid)
 		return
 	}
@@ -173,19 +166,15 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 		flow = strings.Replace(flow, "exchange-code", "generate-auth-url", 1)
 		// Compare the invitation and flow before atomically consuming shared PKCE
 		// state, so another invitation cannot burn a valid session or race a replay.
-		raw, e := h.redis.Eval(c.Request.Context(), `local v=redis.call('GET',KEYS[1]); if not v then return false end; local d=cjson.decode(v); if d.owner~=ARGV[1] then return false end; redis.call('DEL',KEYS[1]); return v`, []string{submissionOAuthSessionKeyGeili(id)}, tokenHash+":"+invite.Config.Platform+":"+flow).Text()
-		var session struct {
-			Owner string `json:"owner"`
-			State []byte `json:"state"`
-		}
-		if id == "" || e != nil || json.Unmarshal([]byte(raw), &session) != nil {
+		state, e := h.sessions.Take(c.Request.Context(), id, tokenHash+":"+invite.Config.Platform+":"+flow)
+		if id == "" || e != nil {
 			response.ErrorFrom(c, service.ErrSubmissionInvalid)
 			return
 		}
 		if invite.Config.Platform == service.PlatformOpenAI {
-			e = h.handlers.OpenAIOAuth.RestoreSubmissionSessionGeili(id, session.State)
+			e = h.handlers.OpenAIOAuth.RestoreSubmissionSessionGeili(id, state)
 		} else {
-			e = h.handlers.OAuth.RestoreSubmissionSessionGeili(id, session.State)
+			e = h.handlers.OAuth.RestoreSubmissionSessionGeili(id, state)
 		}
 		if e != nil {
 			response.ErrorFrom(c, service.ErrSubmissionInvalid)
@@ -283,15 +272,11 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 			response.ErrorFrom(c, service.ErrSubmissionUnavailable)
 			return
 		}
-		session, _ := json.Marshal(struct {
-			Owner string `json:"owner"`
-			State []byte `json:"state"`
-		}{tokenHash + ":" + invite.Config.Platform + ":" + req.Action, state})
 		ttl := time.Until(invite.ExpiresAt)
 		if ttl > 30*time.Minute {
 			ttl = 30 * time.Minute
 		}
-		if ttl <= 0 || h.redis.Set(c.Request.Context(), submissionOAuthSessionKeyGeili(id), session, ttl).Err() != nil {
+		if ttl <= 0 || h.sessions.Save(c.Request.Context(), id, tokenHash+":"+invite.Config.Platform+":"+req.Action, state, ttl) != nil {
 			response.ErrorFrom(c, service.ErrSubmissionUnavailable)
 			return
 		}
