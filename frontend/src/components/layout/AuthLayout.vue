@@ -1,5 +1,8 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+  <div
+    class="relative flex min-h-screen justify-center overflow-hidden p-4"
+    :class="wide ? 'items-start sm:p-6 lg:p-8' : 'items-center'"
+  >
     <!-- Background -->
     <div
       class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
@@ -25,17 +28,19 @@
     </div>
 
     <!-- Content Container -->
-    <div class="relative z-10 w-full max-w-md">
+    <!-- geili hook: submitted account dashboards use the available desktop width. -->
+    <div class="relative z-10 w-full" :class="wide ? 'max-w-none' : 'max-w-md'">
       <!-- Logo/Brand -->
-      <div class="mb-8 text-center">
+      <div :class="wide ? 'mb-5 grid grid-cols-[48px_1fr] gap-x-3 text-left' : 'mb-8 text-center'">
         <!-- Custom Logo or Default Logo -->
         <template v-if="settingsLoaded">
           <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+            class="inline-flex items-center justify-center overflow-hidden shadow-lg shadow-primary-500/30"
+            :class="wide ? 'row-span-2 h-12 w-12 rounded-xl' : 'mb-4 h-16 w-16 rounded-2xl'"
           >
             <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </div>
-          <h1 class="text-gradient mb-2 text-3xl font-bold">
+          <h1 class="text-gradient font-bold" :class="wide ? 'self-end text-xl' : 'mb-2 text-3xl'">
             {{ siteName }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-dark-400">
@@ -45,17 +50,17 @@
       </div>
 
       <!-- Card Container -->
-      <div class="card-glass rounded-2xl p-8 shadow-glass">
+      <div class="card-glass rounded-2xl shadow-glass" :class="wide ? 'p-4 sm:p-6' : 'p-8'">
         <slot />
       </div>
 
       <!-- Footer Links -->
-      <div class="mt-6 text-center text-sm">
+      <div v-if="!wide || $slots.footer" class="mt-6 text-center text-sm">
         <slot name="footer" />
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+      <div class="text-center text-xs text-gray-400 dark:text-dark-500" :class="wide ? 'mt-5' : 'mt-8'">
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>
@@ -66,6 +71,9 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+
+// geili hook: ordinary authentication pages retain their existing narrow layout.
+withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
 
 const appStore = useAppStore()
 

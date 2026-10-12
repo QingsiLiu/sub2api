@@ -1,14 +1,18 @@
 <template>
-  <AuthLayout>
+  <AuthLayout :wide="submitted">
     <div class="space-y-5">
-      <h2 class="text-center text-2xl font-bold text-gray-900 dark:text-white">{{ t('admin.accounts.keyIntake.title') }}</h2>
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white" :class="submitted ? 'text-left' : 'text-center'">{{ t('admin.accounts.keyIntake.title') }}</h2>
       <p v-if="loading" class="text-center text-sm text-gray-500" role="status">{{ t('admin.accounts.keyIntake.checking') }}</p>
       <section v-else-if="submitted" class="space-y-4">
-      <div class="rounded-xl bg-green-50 p-5 text-green-800 dark:bg-green-900/20 dark:text-green-200" role="status">
-        {{ t('admin.accounts.keyIntake.success') }}
-      </div>
-      <AccountSubmissionUsage :token="token" />
-      <SubmissionConnectionGeili :key="token" :token="token" />
+        <div class="rounded-xl bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200" role="status">
+          {{ t('admin.accounts.keyIntake.success') }}
+        </div>
+        <div class="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div class="card min-w-0 p-4 sm:p-5">
+            <AccountSubmissionUsage :token="token" />
+          </div>
+          <SubmissionConnectionGeili :key="token" :token="token" class="min-w-0" />
+        </div>
       </section>
       <template v-else>
         <p v-if="error" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert">{{ error }}</p>

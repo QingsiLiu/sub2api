@@ -2,32 +2,34 @@
   <section class="space-y-4" :aria-label="t('admin.accounts.keyIntake.usageTitle')">
     <h3 class="text-lg font-semibold">{{ t('admin.accounts.keyIntake.usageTitle') }}</h3>
     <p class="text-xs text-gray-500">{{ t('admin.accounts.keyIntake.viewHint') }}</p>
-    <form class="space-y-3" @submit.prevent="load">
-      <label class="input-label" for="usage-period">{{ t('admin.accounts.keyIntake.period') }}</label>
-      <select id="usage-period" v-model="period" class="input w-full" @change="setPeriod">
-        <option value="1">{{ t('admin.accounts.keyIntake.today') }}</option>
-        <option value="7">{{ t('admin.accounts.keyIntake.sevenDays') }}</option>
-        <option value="30">{{ t('admin.accounts.keyIntake.thirtyDays') }}</option>
-        <option value="custom">{{ t('admin.accounts.keyIntake.custom') }}</option>
-      </select>
-      <div v-if="period === 'custom'" class="grid grid-cols-2 gap-2">
+    <form class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end" @submit.prevent="load">
+      <div class="min-w-0 sm:w-48">
+        <label class="input-label" for="usage-period">{{ t('admin.accounts.keyIntake.period') }}</label>
+        <select id="usage-period" v-model="period" class="input w-full" @change="setPeriod">
+          <option value="1">{{ t('admin.accounts.keyIntake.today') }}</option>
+          <option value="7">{{ t('admin.accounts.keyIntake.sevenDays') }}</option>
+          <option value="30">{{ t('admin.accounts.keyIntake.thirtyDays') }}</option>
+          <option value="custom">{{ t('admin.accounts.keyIntake.custom') }}</option>
+        </select>
+      </div>
+      <div v-if="period === 'custom'" class="grid min-w-0 grid-cols-2 gap-2 sm:flex-1">
         <label class="min-w-0 text-xs">{{ t('admin.accounts.keyIntake.from') }}<input v-model="start" type="date" class="input w-full min-w-0" :max="end" required /></label>
         <label class="min-w-0 text-xs">{{ t('admin.accounts.keyIntake.to') }}<input v-model="end" type="date" class="input w-full min-w-0" :min="start" :max="beijingDate()" required /></label>
       </div>
-      <button class="btn btn-secondary w-full" :disabled="loading || unavailable">{{ t('admin.accounts.keyIntake.refreshUsage') }}</button>
+      <button class="btn btn-secondary w-full sm:w-auto" :disabled="loading || unavailable">{{ t('admin.accounts.keyIntake.refreshUsage') }}</button>
     </form>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
     <p v-if="loading" role="status" class="text-sm text-gray-500">{{ t('admin.accounts.keyIntake.loadingUsage') }}</p>
     <template v-if="usage && !error">
       <p class="break-words text-sm font-medium">{{ usage.name }} · {{ usage.platform === 'openai' ? 'OpenAI' : 'Claude' }} · {{ t(usage.enabled ? 'admin.accounts.keyIntake.enabled' : 'admin.accounts.keyIntake.inactive') }}</p>
       <p class="text-xs text-gray-500">{{ usage.start_date }} — {{ usage.end_date }} · {{ usage.timezone }}</p>
-      <dl class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+      <dl class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700 sm:grid-cols-3 xl:grid-cols-6">
         <div v-for="metric in metrics" :key="metric.label"><dt class="text-xs text-gray-500">{{ t(metric.label) }}</dt><dd class="break-all text-sm font-semibold">{{ metric.value }}</dd></div>
       </dl>
       <p v-if="usage.summary.requests === 0" class="text-sm text-gray-500">{{ t('admin.accounts.keyIntake.noUsage') }}</p>
-      <TokenUsageTrend :trend-data="trend" />
-      <h4 class="text-sm font-semibold">{{ t('admin.accounts.keyIntake.models') }}</h4>
-      <ul class="space-y-2">
+      <TokenUsageTrend v-if="usage.summary.requests > 0" :trend-data="trend" />
+      <h4 v-if="usage.models.length" class="text-sm font-semibold">{{ t('admin.accounts.keyIntake.models') }}</h4>
+      <ul v-if="usage.models.length" class="grid gap-2 sm:grid-cols-2">
         <li v-for="model in usage.models" :key="model.model" class="rounded-lg border border-gray-200 p-2 text-xs dark:border-dark-700">
           <p class="break-all font-medium">{{ model.model }}</p>
           <p>{{ model.requests.toLocaleString() }} {{ t('admin.accounts.keyIntake.requests') }} · ${{ model.reference_cost.toFixed(6) }}</p>
