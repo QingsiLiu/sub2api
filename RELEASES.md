@@ -1,10 +1,12 @@
-## 0.2.15-geili.5（Stage已验收，待发布生产）
+## 0.2.15-geili.5（已发布生产，Stage同镜像）
 
 相对 `.4`，账号管理恢复搜索、平台、类型、状态、Privacy、分组直接平铺；移除“更多筛选”折叠，桌面宽度足够时同一行显示，窄屏自动换行。筛选选项、搜索与筛选请求保持原行为。
 
 - 仅修改账号筛选前端、对应测试和中英文文案；后端运行代码与全部迁移保持 `.4` 字节一致，未包含工作区未提交 GPT 路由改动。
-- revision：`01ff793dd1cb02fb4fedd324185928eeb734121b`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`；部署状态：候选 CI 38202359445 及13项制品门禁通过，Stage经正式入口部署同一镜像，160项当前镜像验收通过；生产待正式脚本切换。
+- revision：`01ff793dd1cb02fb4fedd324185928eeb734121b`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`；部署状态：候选 CI 38202359445 及13项制品门禁通过，Stage经正式入口部署同一镜像，160项当前镜像验收通过；2026-10-12按本次授权经正式prod入口发布生产同一镜像，37项发布后复核通过。
 - 验证：14项本地相关测试、前端类型检查/构建、修改文件 ESLint 与官方视觉守卫通过；Stage非支付51、双实例缓存17、认证页面与筛选API69、迁移14、生产保全9，共160项通过；339份迁移校验匹配，夹具与临时副本恢复。用户当次授权“部署到生产环境去”，生产使用Stage同一digest。Stage备份 `/opt/sub2api-subscription-lab/backups/20261012T042021Z-candidate`；生产预检备份 `/root/backups/geili-account-filters-preflight-20261012T042427Z`。
+
+- 生产：应用健康恢复9.755秒，六核心容器healthy/restart0；339份迁移、生产PG/Redis及Stage三容器指纹保持，Compose只替换app镜像，env/config.yaml/Nginx和媒体开关保持。Docker环境变量仅列表顺序变化，全部名称和值相同；首轮严格列表比较失败记录保留，按名比较复核通过。生产只读运行/保全13、公网版本/页面/同Stage资源24，共37项通过；未创建生产测试账号或调用真实付费供应商、支付。生产备份 `/root/backups/subscription-prod-image-bump-20261012T043058Z` 和 `/root/backups/geili-account-filters-preflight-20261012T042427Z`；回退上一枚`.4`镜像保留全部业务数据及339份迁移，不整库回灌。源代码与运维记录均已回收；发布证明v15绑定本次窄范围、实际CI与Stage证据及当次条件授权，22个篡改证明被拒绝。
 
 ## 0.2.15-geili.4（已发布生产，Stage同镜像）
 
