@@ -45,3 +45,14 @@ func TestPublicProxyGeiliProtocolsAndInternalMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicDirectGeiliPinsDialPolicyAndRejectsLoopback(t *testing.T) {
+	u, err := url.Parse(PublicDirectURLGeili)
+	require.NoError(t, err)
+	tr := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	require.NoError(t, ConfigureTransportProxy(tr, u))
+	require.Nil(t, tr.Proxy)
+	require.NotNil(t, tr.DialContext)
+	_, err = tr.DialContext(context.Background(), "tcp", "127.0.0.1:80")
+	require.Error(t, err)
+}

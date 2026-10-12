@@ -103,7 +103,7 @@ func (h *AccountHandler) InspectSubmissionInvite(c *gin.Context) {
 		return
 	}
 	// Editable defaults only; never disclose IDs, groups, pricing or preset proxy credentials.
-	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt, "view_available": invite.Status == "submitted" && invite.ViewRevokedAt == nil, "name": invite.Config.Name, "concurrency": invite.Config.Concurrency, "has_preset_proxy": invite.Config.ProxyID != nil})
+	response.Success(c, gin.H{"platform": invite.Config.Platform, "status": invite.Status, "expires_at": invite.ExpiresAt, "view_available": invite.Status == "submitted" && invite.ViewRevokedAt == nil, "name": invite.Config.Name, "concurrency": invite.Config.Concurrency, "has_preset_proxy": invite.Config.ProxyID != nil, "priority": invite.Config.Priority, "rate_multiplier": invite.Config.RateMultiplier})
 }
 
 func (h *AccountHandler) SubmitAccountKey(c *gin.Context) {

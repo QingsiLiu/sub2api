@@ -74,7 +74,7 @@ func TestAccountSubmissionPublicMetadataAndMalformedRequests(t *testing.T) {
 	require.Equal(t, 200, inspect.Code)
 	require.Equal(t, "no-store", inspect.Header().Get("Cache-Control"))
 	require.Contains(t, inspect.Body.String(), "private account")
-	require.NotContains(t, inspect.Body.String(), "priority")
+	require.Contains(t, inspect.Body.String(), `"priority":0`)
 	require.NotContains(t, inspect.Body.String(), "proxy_id")
 	require.NotContains(t, inspect.Body.String(), "group_ids")
 	require.NotContains(t, inspect.Body.String(), token)

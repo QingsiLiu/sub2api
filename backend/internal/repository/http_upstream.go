@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,9 +164,13 @@ type openAIHTTP2FallbackState struct {
 // 7. 代理变更时清空旧连接池，避免复用错误代理
 // 8. 账号并发数与连接池上限对应（账号隔离策略下）
 type httpUpstreamService struct {
-	cfg     *config.Config                  // 全局配置
-	mu      sync.RWMutex                    // 保护 clients map 的读写锁
-	clients map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
+	// geili hook: public invitation accounts retain their egress policy.
+	submissionDB            *sql.DB
+	submissionPolicyCache   sync.Map
+	submissionPolicyEntries atomic.Int64
+	cfg                     *config.Config                  // 全局配置
+	mu                      sync.RWMutex                    // 保护 clients map 的读写锁
+	clients                 map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
 	// OpenAI 走 HTTP/HTTPS 代理时的 H2->H1 回退状态（key=标准化 proxyKey）
 	openAIHTTP2Fallbacks sync.Map
 }
@@ -202,6 +207,12 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 //   - 调用方必须关闭 resp.Body，否则会导致 inFlight 计数泄漏
 //   - inFlight > 0 的客户端不会被淘汰，确保活跃请求不被中断
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	// geili hook: keep public direct/proxy policies in pool selection.
+	var policyErr error
+	proxyURL, policyErr = s.submissionProxyPolicyGeili(req, proxyURL, accountID)
+	if policyErr != nil {
+		return nil, policyErr
+	}
 	applyGrokCLIProxyHeaders(req)
 	if err := s.validateRequestHost(req); err != nil {
 		return nil, err
@@ -246,6 +257,12 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 // profile 为 nil 时不启用 TLS 指纹，行为与 Do 方法相同。
 // profile 非 nil 时使用指定的 Profile 进行 TLS 指纹伪装。
 func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	// geili hook: keep public direct/proxy policies in pool selection.
+	var policyErr error
+	proxyURL, policyErr = s.submissionProxyPolicyGeili(req, proxyURL, accountID)
+	if policyErr != nil {
+		return nil, policyErr
+	}
 	if profile == nil {
 		return s.Do(req, proxyURL, accountID, accountConcurrency)
 	}
@@ -1293,7 +1310,7 @@ func normalizeProxyURL(raw string) (string, *url.URL, error) {
 	parsed.RawQuery = ""
 	// geili hook: keep the external public-dial policy in the parsed transport
 	// and pool key; ordinary fragments remain ignored as upstream intended.
-	if parsed.Fragment != proxyutil.PublicProxyMarker {
+	if parsed.Fragment != proxyutil.PublicProxyMarker && parsed.Fragment != proxyutil.PublicDirectMarkerGeili {
 		parsed.Fragment = ""
 		parsed.RawFragment = ""
 	}
@@ -1469,7 +1486,11 @@ func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *u
 	}
 
 	// 根据代理类型选择合适的 TLS 指纹 Dialer
-	if proxyURL == nil {
+	if proxyURL != nil && proxyURL.Fragment == proxyutil.PublicDirectMarkerGeili {
+		transport.Proxy = nil
+		transport.DialContext = proxyutil.PublicDialContextGeili
+		transport.DialTLSContext = tlsfingerprint.NewDialer(profile, proxyutil.PublicDialContextGeili).DialTLSContext
+	} else if proxyURL == nil {
 		// 直连：使用 TLSFingerprintDialer
 		slog.Debug("tls_fingerprint_transport_direct")
 		dialer := tlsfingerprint.NewDialer(profile, nil)

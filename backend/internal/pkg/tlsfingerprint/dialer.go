@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/proxy"
 )
@@ -160,7 +161,12 @@ func (d *SOCKS5ProxyDialer) DialTLSContext(ctx context.Context, network, addr st
 		proxyAddr = net.JoinHostPort(d.proxyURL.Hostname(), "1080") // Default SOCKS5 port
 	}
 
-	socksDialer, err := proxy.SOCKS5("tcp", proxyAddr, auth, proxy.Direct)
+	forward := proxy.Dialer(proxy.Direct)
+	// geili hook: TLS fingerprinting must obey the owned proxy's public policy too.
+	if d.proxyURL.Fragment == proxyutil.PublicProxyMarker {
+		forward = submissionPublicForwardDialerGeili{}
+	}
+	socksDialer, err := proxy.SOCKS5("tcp", proxyAddr, auth, forward)
 	if err != nil {
 		slog.Debug("tls_fingerprint_socks5_dialer_failed", "error", err)
 		return nil, fmt.Errorf("create SOCKS5 dialer: %w", err)
@@ -198,7 +204,12 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 	}
 
 	dialer := &net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "tcp", proxyAddr)
+	dial := dialer.DialContext
+	// geili hook: validate and pin the proxy address at the actual TLS dial.
+	if d.proxyURL.Fragment == proxyutil.PublicProxyMarker {
+		dial = proxyutil.PublicDialContextGeili
+	}
+	conn, err := dial(ctx, "tcp", proxyAddr)
 	if err != nil {
 		slog.Debug("tls_fingerprint_http_proxy_connect_failed", "error", err)
 		return nil, fmt.Errorf("connect to proxy: %w", err)

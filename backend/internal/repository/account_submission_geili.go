@@ -162,6 +162,19 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 		return service.ErrSubmissionInactive
 	}
 	c := invite.Config
+	prepared := options.PreparedAccount
+	if prepared != nil {
+		if prepared.Platform != c.Platform {
+			return service.ErrSubmissionInvalid
+		}
+		c.Name = prepared.Name
+		c.Concurrency = prepared.Concurrency
+		c.Priority = prepared.Priority
+		if prepared.RateMultiplier != nil {
+			c.RateMultiplier = *prepared.RateMultiplier
+		}
+		c.ProxyID = prepared.ProxyID
+	}
 	if options.Name != nil {
 		c.Name = *options.Name
 	}
@@ -190,7 +203,13 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 	if c.Platform == service.PlatformOpenAI {
 		baseURL = "https://api.openai.com"
 	}
-	credentials, err := json.Marshal(map[string]any{"api_key": key, "base_url": baseURL})
+	credentialValues := map[string]any{"api_key": key, "base_url": baseURL}
+	accountType := "apikey"
+	if prepared != nil {
+		credentialValues = prepared.Credentials
+		accountType = prepared.Type
+	}
+	credentials, err := json.Marshal(credentialValues)
 	if err != nil {
 		return service.ErrSubmissionInvalid
 	}
@@ -198,10 +217,30 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 	if c.Platform == service.PlatformOpenAI {
 		extra = `{"openai_long_context_billing_enabled":false}`
 	}
+	var notes *string
+	var loadFactor *int
+	var expiresAt *time.Time
+	autoPause := true
+	if prepared != nil {
+		encoded, e := json.Marshal(prepared.Extra)
+		if e != nil {
+			return service.ErrSubmissionInvalid
+		}
+		extra = string(encoded)
+		notes = prepared.Notes
+		loadFactor = prepared.LoadFactor
+		expiresAt = prepared.ExpiresAt
+		autoPause = prepared.AutoPauseOnExpired
+	}
 	var accountID int64
 	// Never return/log database errors from this write: a PostgreSQL detail can contain secrets.
-	err = tx.QueryRowContext(ctx, `INSERT INTO accounts (name,platform,type,credentials,extra,proxy_id,concurrency,priority,rate_multiplier,status,schedulable,auto_pause_on_expired)
+	if prepared == nil {
+		err = tx.QueryRowContext(ctx, `INSERT INTO accounts (name,platform,type,credentials,extra,proxy_id,concurrency,priority,rate_multiplier,status,schedulable,auto_pause_on_expired)
         VALUES ($1,$2,'apikey',$3,$4,$5,$6,$7,$8,'inactive',false,true) RETURNING id`, c.Name, c.Platform, string(credentials), extra, c.ProxyID, c.Concurrency, c.Priority, c.RateMultiplier).Scan(&accountID)
+	} else {
+		err = tx.QueryRowContext(ctx, `INSERT INTO accounts (name,platform,type,credentials,extra,proxy_id,concurrency,priority,rate_multiplier,status,schedulable,auto_pause_on_expired,notes,load_factor,expires_at)
+        VALUES ($1,$2,$9,$3,$4,$5,$6,$7,$8,'inactive',false,$13,$10,$11,$12) RETURNING id`, c.Name, c.Platform, string(credentials), extra, c.ProxyID, c.Concurrency, c.Priority, c.RateMultiplier, accountType, notes, loadFactor, expiresAt, autoPause).Scan(&accountID)
+	}
 	if err != nil {
 		return service.ErrSubmissionUnavailable
 	}
@@ -256,7 +295,7 @@ func protectedSubmissionAccountIDs(ctx context.Context, db sqlExecutor, ids []in
 
 func (r *accountSubmissionRepository) HasProtectedAccounts(ctx context.Context) (bool, error) {
 	var exists bool
-	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_submission_invites_geili WHERE submitted_at IS NOT NULL)`).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_submission_invites_geili WHERE submitted_at IS NOT NULL) OR EXISTS(SELECT 1 FROM proxies WHERE name LIKE '[external] %')`).Scan(&exists)
 	if err != nil {
 		return false, service.ErrSubmissionUnavailable
 	}

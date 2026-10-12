@@ -164,7 +164,8 @@ var ProviderSet = wire.NewSet(
 	NewProxyExitInfoProber,
 	NewClaudeUsageFetcher,
 	NewClaudeOAuthClient,
-	NewHTTPUpstream,
+	// geili hook: apply public invitation egress while retaining the official pool.
+	ProvideSubmissionHTTPUpstreamGeili,
 	NewOpenAIOAuthClient,
 	NewOpenAIReferralClient,
 	NewGrokOAuthClient,

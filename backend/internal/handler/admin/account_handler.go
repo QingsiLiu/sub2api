@@ -3124,6 +3124,11 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 		},
 	}
 
+	// geili hook: keep the selected invitation-owned proxy in model preview.
+	if !h.applySubmissionPreviewProxyGeili(c, tempAccount) {
+		return
+	}
+
 	if h.accountTestService == nil {
 		response.InternalError(c, "Account test service is not configured")
 		return

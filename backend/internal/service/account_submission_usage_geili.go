@@ -97,7 +97,7 @@ func (s *AccountSubmissionService) ResetView(ctx context.Context, id int64) (str
 // geili hook: metadata edits remain allowed; a new Key requires a new account.
 func protectSubmissionCredentialUpdate(ctx context.Context, repo AccountRepository, account *Account, input *UpdateAccountInput) error {
 	changed := input.Type != "" && input.Type != account.Type
-	for _, key := range []string{"api_key"} {
+	for _, key := range SensitiveCredentialKeys {
 		if value, ok := input.Credentials[key]; ok && !reflect.DeepEqual(value, account.Credentials[key]) {
 			changed = true
 		}

@@ -536,6 +536,8 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
+	// geili hook: external full-form accounts preserve public dialing in WS.
+	proxyURL = submissionAccountProxyPolicyGeili(account, proxyURL)
 	if c != nil {
 		c.Set("openai_passthrough", true)
 		c.Set("openai_ws_http_bridge", true)

@@ -21,6 +21,7 @@ func RegisterAccountSubmissionPublicRoutes(v1 *gin.RouterGroup, h *handler.Handl
 	group.Use(limiter.LimitWithOptions("account-submission", 30, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
 	group.POST("/inspect", h.Admin.Account.InspectSubmissionInvite)
 	group.POST("/submit", h.Admin.Account.SubmitAccountKey)
+	group.POST("/form", handler.NewSubmissionFormHandlerGeili(h.Admin, redisClient).Handle)
 	// Separate fail-closed budget for read-only capability polling.
 	usage := v1.Group("/account-submissions")
 	usage.Use(func(c *gin.Context) {

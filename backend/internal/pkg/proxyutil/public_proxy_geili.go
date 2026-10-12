@@ -14,6 +14,13 @@ import (
 
 // PublicProxyMarker is an internal routing policy, never sent to the proxy.
 const PublicProxyMarker = "geili-public-proxy"
+const PublicDirectMarkerGeili = "geili-public-direct"
+const PublicDirectURLGeili = "http://public-upstream.invalid#geili-public-direct"
+
+func PublicDialContextGeili(ctx context.Context, network, address string) (net.Conn, error) {
+	return publicProxyDialer{}.DialContext(ctx, network, address)
+}
+
 const ExternalProxyNamePrefix = "[external] "
 
 var publicProxyLookup = net.DefaultResolver.LookupNetIP
@@ -75,6 +82,11 @@ func (publicProxyDialer) DialContext(ctx context.Context, network, address strin
 }
 
 func configurePublicProxyGeili(t *http.Transport, u *url.URL) (bool, error) {
+	if u.Fragment == PublicDirectMarkerGeili {
+		t.Proxy = nil
+		t.DialContext = publicProxyDialer{}.DialContext
+		return true, nil
+	}
 	if u.Fragment != PublicProxyMarker {
 		return false, nil
 	}

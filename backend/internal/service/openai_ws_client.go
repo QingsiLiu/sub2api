@@ -199,7 +199,7 @@ func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client,
 	}
 	client := &http.Client{Transport: transport}
 	// geili hook: WebSocket handshakes must apply the same external-proxy dial policy.
-	if parsedProxyURL.Fragment == proxyutil.PublicProxyMarker {
+	if parsedProxyURL.Fragment == proxyutil.PublicProxyMarker || parsedProxyURL.Fragment == proxyutil.PublicDirectMarkerGeili {
 		if err := proxyutil.ConfigureTransportProxy(transport, parsedProxyURL); err != nil {
 			return nil, err
 		}

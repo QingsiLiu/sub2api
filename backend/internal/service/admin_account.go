@@ -547,6 +547,11 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
+	// geili hook: invitation writes consume the capability and create the inactive
+	// account, group bindings and outbox in one transaction. No post-create probes.
+	if create := submissionAccountCreate(ctx); create != nil {
+		return create(ctx, account, groupIDs)
+	}
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
 	}
