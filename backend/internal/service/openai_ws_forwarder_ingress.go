@@ -83,6 +83,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if account == nil {
 		return errors.New("account is nil")
 	}
+	// geili hook: freeze encrypted-state ownership before any ingress normalization.
+	var encryptedErr error
+	ctx, hooks, encryptedErr = s.withOpenAIEncryptedWSHooksGeili(ctx, c, clientConn, account, firstClientMessage, hooks)
+	if encryptedErr != nil {
+		return encryptedErr
+	}
 	// A handler may reuse the same gin context across account failover attempts.
 	// Never let an OAuth attempt's response aliases leak into the next account.
 	setCodexToolNameReverse(c, nil)
@@ -488,9 +494,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		writeCtx, cancel := newOpenAIWSDownstreamWriteContext(ctx, hooks, s.openAIWSWriteTimeout())
 		defer cancel()
 		message = restoreCodexToolNamesFromContext(c, message)
+		message = normalizeOpenAIEncryptedWSFailureGeili(ctx, message)
 		// geili hook: observe after the actual WS write.
 		err := clientConn.Write(writeCtx, coderws.MessageText, message)
 		ObserveResponseAuditWSWrite(ctx, message, err)
+		observeOpenAIEncryptedWSOutputGeili(ctx, message, err)
 		return err
 	}
 
@@ -606,7 +614,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			// 剥离本会话已知失效的加密项，阻断同一失效密文随历史反复触发上游拒绝。
 			// 历史序列须同步剥离，否则与已剥离的当前 input 项错位，prefix 复用失配。
-			if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 {
+			if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 && !openAIEncryptedWSTurnProtectedGeili(ctx) {
 				strippedPayload, strippedCount := s.stripSessionInvalidEncryptedContentLogged(
 					currentBridgePayload.payloadRaw, invalidDigests, "ingress_ws_http_bridge_invalid_encrypted_lineage_strip", account.ID, turn,
 				)
@@ -680,21 +688,33 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return fmt.Errorf("resolve Grok websocket cache identity: %w", err)
 				}
 			}
-			result, bridgeErr := s.proxyOpenAIWSHTTPBridgeTurn(
-				ctx,
-				c,
-				account,
-				token,
-				bridgePayloadRaw,
-				bridgePayloadBytes,
-				currentBridgePayload.originalModel,
-				currentBridgePayload.imageBillingModel,
-				currentBridgePayload.imageSizeTier,
-				currentBridgePayload.imageInputSize,
-				grokCacheIdentity,
-				turn,
-				writeClientMessage,
-			)
+			var result *OpenAIForwardResult
+			var bridgeErr error
+			for {
+				result, bridgeErr = s.proxyOpenAIWSHTTPBridgeTurn(
+					ctx,
+					c,
+					account,
+					token,
+					bridgePayloadRaw,
+					bridgePayloadBytes,
+					currentBridgePayload.originalModel,
+					currentBridgePayload.imageBillingModel,
+					currentBridgePayload.imageSizeTier,
+					currentBridgePayload.imageInputSize,
+					grokCacheIdentity,
+					turn,
+					writeClientMessage,
+				)
+				var reasoningRetry *openAIWSRejectedFieldRetryError
+				if errors.As(bridgeErr, &reasoningRetry) && reasoningRetry.reason == "encrypted_reasoning_recovery" {
+					bridgePayloadRaw = reasoningRetry.body
+					bridgePayloadBytes = len(bridgePayloadRaw)
+					continue
+				}
+				break
+			}
+
 			if bridgeErr != nil && isOpenAIWSSessionPreempted(ctx) {
 				return errOpenAIWSSessionPreempted
 			}
@@ -1049,8 +1069,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if eventType == "error" {
 				s.handleOpenAIWSErrorEventTransientFailure(ctx, account, mappedModel, lease.HandshakeHeaders(), upstreamMessage)
 				errCodeRaw, errTypeRaw, errMsgRaw := parseOpenAIWSErrorEventFields(upstreamMessage)
+				// geili hook: a single safe reasoning retry retains this account and turn.
+				if retryBody, recoverable := prepareOpenAIEncryptedWSRecoveryGeili(ctx, payload, upstreamMessage, wroteDownstream, usage); recoverable {
+					return nil, &openAIWSRejectedFieldRetryError{body: retryBody, reason: "encrypted_reasoning_recovery"}
+				}
 				statusCode := openAIWSRejectedFieldRetryHTTPStatus(upstreamMessage)
-				if !wroteDownstream && statusCode == http.StatusBadRequest && rejectedFieldRetryState != nil {
+				if !wroteDownstream && statusCode == http.StatusBadRequest && rejectedFieldRetryState != nil && !(openAIEncryptedWSTurnProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(upstreamMessage)) {
 					retryBody, retryReason, changed, retryErr := normalizeOpenAIResponsesRejectedFieldRetryBody(
 						statusCode,
 						payload,
@@ -1075,7 +1099,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 				s.persistOpenAIWSRateLimitSignal(ctx, account, lease.HandshakeHeaders(), upstreamMessage, errCodeRaw, errTypeRaw, errMsgRaw, mappedModel)
 				fallbackReason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
-				if fallbackReason == openAIWSFallbackReasonInvalidEncryptedContent {
+				if fallbackReason == openAIWSFallbackReasonInvalidEncryptedContent && !openAIEncryptedWSTurnProtectedGeili(ctx) {
 					// 记录被上游拒绝的密文摘要；错误照旧透传，下一轮进场时按摘要预剥离。
 					if digests := collectOpenAIEncryptedContentDigestsRaw(payload); len(digests) > 0 {
 						s.markOpenAIWSInvalidEncryptedContentLineage(groupID, sessionHash, digests)
@@ -1479,7 +1503,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		skipBeforeTurn = false
 		// 剥离本会话已知失效的加密项，阻断同一失效密文随历史反复触发上游拒绝。
 		// 历史序列须同步剥离，否则与已剥离的当前 input 项错位，prefix 复用失配。
-		if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 {
+		if invalidDigests := s.sessionInvalidEncryptedContentDigests(groupID, sessionHash); len(invalidDigests) > 0 && !openAIEncryptedWSTurnProtectedGeili(ctx) {
 			strippedPayload, strippedCount := s.stripSessionInvalidEncryptedContentLogged(
 				currentPayload, invalidDigests, "ingress_ws_invalid_encrypted_lineage_strip", account.ID, turn,
 			)

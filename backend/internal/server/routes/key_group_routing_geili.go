@@ -226,6 +226,26 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 				}
 			}
 		}
+		// geili hook: route ownership crosses candidate groups but never Key permissions.
+		authorizedCandidates := append([]service.CompositeRouteDecision(nil), candidates...)
+		hasOpenAIRoute := false
+		for _, candidate := range candidates {
+			hasOpenAIRoute = hasOpenAIRoute || candidate.TargetPlatform == service.PlatformOpenAI
+		}
+		if hasOpenAIRoute && (strings.HasSuffix(path, "/responses") || strings.HasSuffix(path, "/responses/compact")) {
+			owner, routeErr := h.OpenAIGateway.PrepareOpenAIEncryptedRouteGeili(c, key, body)
+			if routeErr != nil {
+				h.OpenAIGateway.WriteOpenAIEncryptedRouteErrorGeili(c, routeErr)
+				return
+			}
+			if owner != nil {
+				candidates = service.FilterOpenAIEncryptedRoutesGeili(candidates, owner)
+				if len(candidates) == 0 {
+					c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "encrypted_session_route_conflict", "type": "api_error", "message": "原会话线路已不在此 Key 的可用渠道中，请恢复原线路或新建会话并带入可读进度"}})
+					return
+				}
+			}
+		}
 		next := explicitGatewayHandler(h, path)
 		if next == nil {
 			// Async/task/other specialized handlers keep their existing transaction and
@@ -236,7 +256,8 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		}
 		c.Abort()
 		attempts := []service.KeyRouteAttempt{}
-		for index, decision := range candidates {
+		for index := 0; index < len(candidates); index++ {
+			decision := candidates[index]
 			if err := c.Request.Context().Err(); err != nil {
 				writeKeyRouteTimeout(c, "REQUEST_TIMEOUT", "request timeout budget exhausted")
 				return
@@ -257,7 +278,17 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 			bindExplicitAttempt(attempt, key, decision, history)
 			next(attempt)
 			writer.upstreamFailure = attempt.GetBool("geili_upstream_failure_final")
-			retry := key.UsesGroupListRouting() && index+1 < len(candidates) && writer.canRetry() && service.BeginRequestRecovery(c.Request.Context())
+			if service.OpenAIEncryptedRoutePinnedGeili(c.Request.Context()) && key.UsesGroupListRouting() && writer.canRetry() {
+				if recovered, ok := service.ReleaseOpenAIEncryptedReasoningRouteGeili(c.Request.Context(), body); ok {
+					body = recovered
+					for _, alternative := range authorizedCandidates {
+						if alternative.TargetGroupID != nil && *alternative.TargetGroupID != *decision.TargetGroupID {
+							candidates = append(candidates, alternative)
+						}
+					}
+				}
+			}
+			retry := !service.OpenAIEncryptedRoutePinnedGeili(c.Request.Context()) && key.UsesGroupListRouting() && index+1 < len(candidates) && writer.canRetry() && service.BeginRequestRecovery(c.Request.Context())
 			if retry {
 				attempts = append(attempts, service.KeyRouteAttempt{GroupID: *decision.TargetGroupID, Reason: http.StatusText(writer.Status())})
 				continue

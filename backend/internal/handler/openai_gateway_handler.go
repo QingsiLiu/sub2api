@@ -469,6 +469,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	if _, routeErr := h.PrepareOpenAIEncryptedRouteGeili(c, apiKey, sessionHashBody); routeErr != nil {
+		h.WriteOpenAIEncryptedRouteErrorGeili(c, routeErr)
+		return
+	}
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
 	if !openAICompatibleTextTargetAllowed(c, apiKey, reqModel) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by this OpenAI-compatible endpoint for composite groups")
@@ -703,6 +707,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				reqLog.Info("openai.account_select_aborted_client_disconnected", zap.Error(err))
 				return
 			}
+			// geili hook: an unavailable state owner is a continuity failure,
+			// not permission to try an unrelated supplier.
+			if errors.Is(err, service.ErrOpenAIEncryptedRouteUnavailableGeili) {
+				h.WriteOpenAIEncryptedRouteErrorGeili(c, err)
+				return
+			}
 			reqLog.Warn("openai.account_select_failed",
 				zap.Error(openAICompatibleSelectionErrorForLog(err, requestPlatform)),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
@@ -799,7 +809,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// 跨 passthrough 边界的 failover：从 Kiro 等透传账号切到 Bedrock 等非透传账号前，
 		// 从不可变的 canonical forwardBody 派生本次尝试 body 并整块剔除上游私有的加密
 		// reasoning item（含耦合的 id/summary），避免非透传上游 400 拒绝 Kiro reasoning 形态。
-		attemptBody := h.deriveOpenAIForwardAttemptBody(reqLog, forwardBody, account, &passthroughFailoverState)
+		attemptBody := forwardBody
+		if !service.OpenAIEncryptedRouteProtectedGeili(c.Request.Context()) {
+			attemptBody = h.deriveOpenAIForwardAttemptBody(reqLog, forwardBody, account, &passthroughFailoverState)
+		}
+		c.Request = c.Request.WithContext(service.WithOpenAIEncryptedOutputOriginGeili(c.Request.Context(), apiKey.GroupID, account, forwardModel))
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer func() {
 				if accountReleaseFunc != nil {
@@ -916,6 +930,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					if c.Writer.Written() {
 						streamStarted = true
 					}
+					if service.OpenAIEncryptedRoutePinnedGeili(c.Request.Context()) {
+						h.WriteOpenAIEncryptedRouteErrorGeili(c, service.ErrOpenAIEncryptedRouteUnavailableGeili)
+						return
+					}
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, forwardModel, requireCompact, nil), false, nil, err)
 					}
@@ -950,6 +968,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 							}
 							continue
 						}
+					}
+					// geili hook: after bounded same-account retries, do not replay opaque
+					// tool results against a different account or composite group.
+					if service.OpenAIEncryptedRoutePinnedGeili(c.Request.Context()) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
 					}
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
@@ -2569,6 +2593,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	// geili hook: upgrade routing has no ciphertext; resolve the first frame now.
+	apiKey, err = h.prepareEncryptedWSFirstRouteGeili(c, apiKey, firstMessage, reqModel)
+	if err != nil {
+		writeEncryptedWSRouteErrorGeili(ctx, wsConn, err)
+		return
+	}
+	ctx = c.Request.Context()
 	// 分组级模型白名单：首帧校验客户端模型，不通过则关闭连接并标记运维原因。
 	// 必须在合成路由解析和上游模型映射之前执行。
 	// 与 HTTP 准入一致：帧内重复 model 键/大小写变体可能被上游按末值绑定，
@@ -2764,6 +2795,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 	wsAttemptMessage := append([]byte(nil), firstMessage...)
 	waitForWSSameAccountRetry := func(account *service.Account, failoverErr *service.UpstreamFailoverError) bool {
+		if service.OpenAIEncryptedRoutePinnedGeili(ctx) {
+			return false
+		}
 		if account == nil || failoverErr == nil || failoverErr.StatusCode != http.StatusTooManyRequests || failoverErr.SameAccountRetryDeadline.IsZero() {
 			return false
 		}
@@ -2788,6 +2822,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 	handleWSFailover := func(account *service.Account, failoverErr *service.UpstreamFailoverError) bool {
 		if ctx.Err() != nil {
+			return false
+		}
+		if service.OpenAIEncryptedRoutePinnedGeili(ctx) {
+			releaseAccountSlot()
+			writeEncryptedWSRouteErrorGeili(ctx, wsConn, service.ErrOpenAIEncryptedRouteUnavailableGeili)
 			return false
 		}
 		if failoverErr.ShouldReportAccountScheduleFailure() {
@@ -2865,6 +2904,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				zap.Error(openAICompatibleSelectionErrorForLog(err, requestPlatform)),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
+			if service.OpenAIEncryptedRoutePinnedGeili(ctx) {
+				writeEncryptedWSRouteErrorGeili(ctx, wsConn, err)
+				return
+			}
 			if lastFailoverErr != nil {
 				closeOpenAIWSFailoverExhausted(c, wsConn, lastFailoverErr)
 			} else {
@@ -3022,6 +3065,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
+			// geili hook: protected turns must use current Key/group permissions.
+			AuthorizeEncryptedTurn: func(turnCtx context.Context, turn int, payload []byte, originalModel string) error {
+				model := strings.TrimSpace(originalModel)
+				if model == "" {
+					model = reqModel
+				}
+				return h.authorizeEncryptedWSTurnGeili(turnCtx, apiKey, model)
+			},
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
 				// geili hook: accepted WS turns are observed independently.
 				auditModel := originalModel
@@ -3272,7 +3323,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		// 说明该会话链不属于本次调度到的账号，原样转发会触发上游会话链鉴权失败（“鉴权失败，请检查 API Key”）。
 		// 故剥离首包里的 previous_response_id，改用首包内 input 重建上下文；带 function_call_output 的
 		// 工具续链无法重建，保持原样。仅作用于首轮首包，后续 turn 的续链由 WS 转发层既有逻辑处理。
-		if previousResponseID != "" && !scheduleDecision.StickyPreviousHit && previousResponseCanMove {
+		if !service.OpenAIEncryptedRouteProtectedGeili(ctx) && previousResponseID != "" && !scheduleDecision.StickyPreviousHit && previousResponseCanMove {
 			wsFirstMessage = service.RemovePreviousResponseIDFromBody(wsFirstMessage)
 			reqLog.Debug("openai.websocket_previous_response_id_stripped_cross_group",
 				zap.Int64("account_id", account.ID),

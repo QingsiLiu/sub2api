@@ -359,6 +359,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	var resp *http.Response
 	var usage *OpenAIUsage
+	var encryptedFailure error
 	var firstTokenMs *int
 	responseID := ""
 	imageCount := 0
@@ -390,6 +391,18 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			probeBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(probeBody))
+			// geili hook: wrapped encrypted errors are input-state failures, never account health failures.
+			if OpenAIEncryptedRouteProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(probeBody) {
+				partialUsage, _ := extractOpenAIUsageFromJSONBytes(probeBody)
+				if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, probeBody, &partialUsage, true); retry {
+					body = retryBody
+					continue
+				}
+				s.recordOpenAIStreamUpstreamError(c, account, true, resp.Header.Get("x-request-id"), "encrypted_state", probeBody, extractUpstreamErrorMessage(probeBody))
+				usage = &partialUsage
+				encryptedFailure = RenderOpenAIEncryptedFailureGeili(c, probeBody)
+				break
+			}
 			if retryBody, reason, changed, retryErr := normalizeOpenAIResponsesRejectedFieldRetryBody(resp.StatusCode, body, probeBody); retryErr != nil {
 				return nil, fmt.Errorf("normalize passthrough rejected Responses field retry body: %w", retryErr)
 			} else if changed && rejectedFieldRetryState.Allow(retryBody) {
@@ -450,6 +463,21 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		if reqStream {
 			result, handleErr := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
 			if handleErr != nil {
+				var encryptedErr *OpenAIEncryptedRecoveryErrorGeili
+				if errors.As(handleErr, &encryptedErr) {
+					var observedUsage *OpenAIUsage
+					if result != nil {
+						observedUsage = result.usage
+					}
+					if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, encryptedErr.Body, observedUsage, encryptedErr.Retryable); retry {
+						_ = resp.Body.Close()
+						body = retryBody
+						continue
+					}
+					usage = observedUsage
+					encryptedFailure = RenderOpenAIEncryptedFailureGeili(c, encryptedErr.Body)
+					break
+				}
 				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
 					c, account, requestedModel, body, handleErr, compactModelFallbackRetried, resp,
 				); retry {
@@ -477,6 +505,21 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		} else {
 			result, handleErr := s.handleNonStreamingResponsePassthrough(ctx, resp, c, account, reqModel, upstreamPassthroughModel)
 			if handleErr != nil {
+				var encryptedErr *OpenAIEncryptedRecoveryErrorGeili
+				if errors.As(handleErr, &encryptedErr) {
+					var observedUsage *OpenAIUsage
+					if result != nil {
+						observedUsage = result.usage
+					}
+					if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, encryptedErr.Body, observedUsage, encryptedErr.Retryable); retry {
+						_ = resp.Body.Close()
+						body = retryBody
+						continue
+					}
+					usage = observedUsage
+					encryptedFailure = RenderOpenAIEncryptedFailureGeili(c, encryptedErr.Body)
+					break
+				}
 				if retryBody, fallbackModel, retry := s.applyOpenAIPassthroughCompactFallbackFromSignal(
 					c, account, requestedModel, body, handleErr, compactModelFallbackRetried, resp,
 				); retry {
@@ -505,7 +548,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 	defer func() { _ = resp.Body.Close() }()
 	serviceTier := extractOpenAIServiceTierFromBody(body)
-	s.bindHTTPResponseAccount(ctx, c, account, responseID)
+	if encryptedFailure == nil {
+		s.bindHTTPResponseAccount(ctx, c, account, responseID)
+	}
 
 	// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
 	if !account.IsShadow() {
@@ -544,7 +589,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		forwardResult.ImageOutputSizes = imageOutputSizes
 		forwardResult.BillingModel = imageBillingModel
 	}
-	return forwardResult, nil
+	return forwardResult, encryptedFailure
 }
 
 func logOpenAIPassthroughInstructionsRejected(
@@ -1965,11 +2010,18 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	// flushPending 表示已写入但未到 SSE 空行边界的脏状态；defer 兜底函数退出前的残留，断连后不再 Flush。
 	flushPending := false
 	pendingSSEEventType := ""
+	pendingEncryptedOutput := [][]byte{}
 	flushPendingOutput := func() {
 		if clientDisconnected || !flushPending {
 			return
 		}
 		flusher.Flush()
+		if encryptedOutputDeliveredGeili(c) {
+			for _, payload := range pendingEncryptedOutput {
+				ObserveOpenAIEncryptedOutputGeili(ctx, payload)
+			}
+			pendingEncryptedOutput = pendingEncryptedOutput[:0]
+		}
 		flushPending = false
 	}
 	defer flushPendingOutput()
@@ -2112,6 +2164,13 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 					})
 				}
 				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
+				// geili hook: preserve encrypted failure semantics before ordinary retry classification.
+				encryptedStateFailure := OpenAIEncryptedRouteProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(dataBytes)
+				// A bare error can precede a metered response.failed: wait for the authoritative terminal.
+				if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, dataBytes, usage, outputStarted); encryptedErr != nil && eventType != "error" {
+					s.recordOpenAIStreamUpstreamError(c, account, true, upstreamRequestID, "encrypted_state", dataBytes, failedMessage)
+					return resultWithUsage(), encryptedErr
+				}
 				if !outputStarted && !cyberHit {
 					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
 						return resultWithUsage(), compactErr
@@ -2134,7 +2193,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				}
 				if !outputStarted {
 					shouldFailover := false
-					if !cyberHit {
+					if !cyberHit && !encryptedStateFailure {
 						if eventType == "error" {
 							shouldFailover = openAIStreamErrorEventShouldFailover(dataBytes, failedMessage)
 						} else {
@@ -2145,7 +2204,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 						return resultWithUsage(),
 							s.newOpenAIStreamFailoverErrorWithModel(c, account, true, upstreamRequestID, dataBytes, failedMessage, mappedModel, resp.Header)
 					}
-					if !cyberHit && !sawBareError {
+					if !cyberHit && !encryptedStateFailure && !sawBareError {
 						if status, errType, errMsg, matched := applyOpenAIStreamFailedErrorPassthroughRule(c, account.Platform, dataBytes, failedMessage); matched {
 							// 命中透传规则也要记录 ops 上游错误事件（对齐 CC/Messages 与
 							// antigravity 先例），否则透传命中的 failed 在监控中不可见。
@@ -2215,6 +2274,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
+			if !clientDisconnected && !failureDelivered && !suppressCurrentEvent && queuedEncryptedOutputGeili(ctx, dataBytes) {
+				pendingEncryptedOutput = append(pendingEncryptedOutput, dataBytes)
+			}
 			s.parseSSEUsageBytesWithType(dataBytes, eventType, usage)
 		}
 		if line == "" {
@@ -2263,6 +2325,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		// 必须继续读取，不适用提前结束。
 		if (sawDone || sawTerminalEvent) && line == "" && (!codexFailureTerminal || !sawBareError) {
 			break
+		}
+	}
+	if sawBareError && !sawResponseFailed {
+		if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, bareErrorPayload, usage, openAIStreamClientOutputStarted(c, clientOutputStarted)); encryptedErr != nil {
+			return resultWithUsage(), encryptedErr
 		}
 	}
 	ensureResponseFailedTerminal()
@@ -2358,6 +2425,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		return s.handlePassthroughSSEToJSON(resp, c, account, body, originalModel, mappedModel)
 	}
 
+	{
+		partialUsage, _ := extractOpenAIUsageFromJSONBytes(body)
+		if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, body, &partialUsage, false); encryptedErr != nil {
+			return &openaiNonStreamingResultPassthrough{OpenAIUsage: &partialUsage, usage: &partialUsage}, encryptedErr
+		}
+	}
 	if err := geiliSyncJSONFailure(c, resp, body); err != nil {
 		return nil, err
 	}
@@ -2396,6 +2469,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	if encryptedOutputDeliveredGeili(c) {
+		ObserveOpenAIEncryptedOutputGeili(c.Request.Context(), body)
+	}
 	return &openaiNonStreamingResultPassthrough{
 		OpenAIUsage:      usage,
 		usage:            usage,
@@ -2416,6 +2492,10 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 		msg := extractOpenAISSEErrorMessage(terminalPayload)
 		if msg == "" {
 			msg = "Upstream compact response failed"
+		}
+		partialUsage := s.parseSSEUsageFromBody(bodyText)
+		if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, terminalPayload, partialUsage, false); encryptedErr != nil {
+			return &openaiNonStreamingResultPassthrough{OpenAIUsage: partialUsage, usage: partialUsage}, encryptedErr
 		}
 		if compactErr := newOpenAICompactFallbackSignal(c, terminalPayload, msg); compactErr != nil {
 			return nil, compactErr
@@ -2480,6 +2560,9 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 	}
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
+	}
+	if encryptedOutputDeliveredGeili(c) {
+		ObserveOpenAIEncryptedOutputGeili(c.Request.Context(), body)
 	}
 
 	return &openaiNonStreamingResultPassthrough{

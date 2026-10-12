@@ -570,13 +570,22 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, openAIWSHTTPBridgeErrorBodyLimitBytes))
 		_ = resp.Body.Close()
 		markOpenAICyberPolicyEvent(c, respBody, resp.StatusCode, nil)
+		// geili hook: retry only a safe reasoning-state failure before output.
+		if retryBody, recoverable := prepareOpenAIEncryptedWSRecoveryGeili(ctx, body, respBody, false, OpenAIUsage{}); recoverable {
+			body = retryBody
+			payloadBytes = len(body)
+			continue
+		}
 		if resp.StatusCode == http.StatusBadRequest &&
-			extractUpstreamErrorCode(respBody) == openAIWSFallbackReasonInvalidEncryptedContent {
+			extractUpstreamErrorCode(respBody) == openAIWSFallbackReasonInvalidEncryptedContent && !openAIEncryptedWSTurnProtectedGeili(ctx) {
 			s.markOpenAIWSInvalidEncryptedContentLineageFromPayload(
 				c, body, "ingress_ws_http_bridge_invalid_encrypted_lineage_mark", account.ID, turn,
 			)
 		}
 		retryBody, retryReason, changed, retryErr := normalizeOpenAIResponsesRejectedFieldRetryBody(resp.StatusCode, body, respBody)
+		if openAIEncryptedWSTurnProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(respBody) {
+			changed = false
+		}
 		if retryErr != nil {
 			return nil, fmt.Errorf("normalize websocket http bridge rejected field retry: %w", retryErr)
 		}
@@ -597,6 +606,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			upstreamMsg = http.StatusText(resp.StatusCode)
 		}
 		shouldFailover := s.shouldFailoverOpenAIUpstreamResponse(account, resp.StatusCode, upstreamMsg, respBody)
+		if openAIEncryptedWSTurnProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(respBody) {
+			shouldFailover = false
+		}
 		if account.Platform == PlatformGrok {
 			shouldFailover = s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody)
 			s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, resolveGrokWSUpstreamModel(account, body, originalModel)), account, resp.StatusCode, resp.Header, respBody)
@@ -821,7 +833,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 				if account.Platform == PlatformGrok {
 					statusCode = openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw)
 				}
-				if reason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMessage); reason == openAIWSFallbackReasonInvalidEncryptedContent {
+				if reason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMessage); reason == openAIWSFallbackReasonInvalidEncryptedContent && !openAIEncryptedWSTurnProtectedGeili(ctx) {
 					s.markOpenAIWSInvalidEncryptedContentLineageFromPayload(
 						c, body, "ingress_ws_http_bridge_invalid_encrypted_lineage_mark", account.ID, turn,
 					)
@@ -839,6 +851,15 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 					shouldFailover = s.shouldFailoverGrokUpstreamError(statusCode, upstreamMessage)
 					s.handleGrokAccountUpstreamError(ctx, account, statusCode, resp.Header, upstreamMessage)
 				}
+			}
+			// geili hook: recover once before any output and preserve failures otherwise.
+			if !clientDisconnected {
+				if retryBody, recoverable := prepareOpenAIEncryptedWSRecoveryGeili(ctx, body, upstreamMessage, wroteDownstream, usage); recoverable {
+					return nil, &openAIWSRejectedFieldRetryError{body: retryBody, reason: "encrypted_reasoning_recovery"}
+				}
+			}
+			if openAIEncryptedWSTurnProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(upstreamMessage) {
+				shouldFailover = false
 			}
 			// A disconnected client needs this attempt drained for usage, not replayed,
 			// even when only non-semantic heartbeats were delivered.

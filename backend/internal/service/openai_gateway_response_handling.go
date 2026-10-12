@@ -145,6 +145,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		}
 		return int64(bufferedWriter.Buffered())
 	}
+	pendingEncryptedOutput := [][]byte{}
 	flushBuffered := func() error {
 		if firstOutputStage != nil && !firstOutputStage.closed {
 			if err := firstOutputStage.CommitTo(w); err != nil {
@@ -156,6 +157,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			}
 		}
 		flusher.Flush()
+		if encryptedOutputDeliveredGeili(c) {
+			for _, payload := range pendingEncryptedOutput {
+				ObserveOpenAIEncryptedOutputGeili(ctx, payload)
+			}
+			pendingEncryptedOutput = pendingEncryptedOutput[:0]
+		}
 		return nil
 	}
 
@@ -427,6 +434,11 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		return true
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
+		if sawBareError && !sawResponseFailed {
+			if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, bareErrorPayload, usage, openAIStreamClientOutputStarted(c, clientOutputStarted)); encryptedErr != nil {
+				return resultWithUsage(), encryptedErr // A bare error alone never authorizes replay.
+			}
+		}
 		if failNativeCompactionMissingItem() {
 			return resultWithUsage(), streamEarlyErr
 		}
@@ -617,6 +629,15 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 					})
 				}
 				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
+				// geili hook: encrypted state has its own bounded recovery and never random failover.
+				encryptedStateFailure := OpenAIEncryptedRouteProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(dataBytes)
+				// A bare error can precede a metered response.failed: wait for the authoritative terminal.
+				if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, dataBytes, usage, outputStarted); encryptedErr != nil && eventType != "error" {
+					s.recordOpenAIStreamUpstreamError(c, account, false, upstreamRequestID, "encrypted_state", dataBytes, failedMessage)
+					sawFailedEvent = true
+					streamEarlyErr = encryptedErr
+					return
+				}
 				if !outputStarted && !cyberHit {
 					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
 						sawFailedEvent = true
@@ -642,7 +663,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				}
 				if !outputStarted {
 					shouldFailover := false
-					if !cyberHit {
+					if !cyberHit && !encryptedStateFailure {
 						if eventType == "error" {
 							shouldFailover = openAIStreamErrorEventShouldFailover(dataBytes, failedMessage)
 						} else {
@@ -655,7 +676,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 						return
 					}
 					// geili hook: API Key custom error rules still apply before output.
-					if !cyberHit && (!sawBareError || (account != nil && account.Type == AccountTypeAPIKey)) {
+					if !cyberHit && !encryptedStateFailure && (!sawBareError || (account != nil && account.Type == AccountTypeAPIKey)) {
 						if status, errType, errMsg, matched := applyOpenAIStreamFailedErrorPassthroughRule(c, account.Platform, dataBytes, failedMessage); matched {
 							sawFailedEvent = true
 							// 命中透传规则也要记录 ops 上游错误事件（对齐 CC/Messages 与
@@ -701,6 +722,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				streamImageOutputs = append(streamImageOutputs, imageOutput)
 			}
 			streamDoneItems.Observe(dataBytes)
+			// geili hook: record complete items only after successful downstream delivery.
+			if !clientDisconnected && !failureDelivered && !suppressCurrentEvent && queuedEncryptedOutputGeili(ctx, dataBytes) {
+				pendingEncryptedOutput = append(pendingEncryptedOutput, dataBytes)
+			}
 			if responsesStreamEventMayContributeToOutput(eventType) {
 				var streamEvent apicompat.ResponsesStreamEvent
 				if err := json.Unmarshal(dataBytes, &streamEvent); err == nil {
@@ -1743,6 +1768,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		}
 	}
 
+	{
+		partialUsage, _ := extractOpenAIUsageFromJSONBytes(body)
+		if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, body, &partialUsage, false); encryptedErr != nil {
+			return &openaiNonStreamingResult{OpenAIUsage: &partialUsage, usage: &partialUsage}, encryptedErr
+		}
+	}
 	if err := geiliSyncJSONFailure(c, resp, body); err != nil {
 		return nil, err
 	}
@@ -1793,6 +1824,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
 	}
+	if encryptedOutputDeliveredGeili(c) {
+		ObserveOpenAIEncryptedOutputGeili(c.Request.Context(), body)
+	}
 
 	return &openaiNonStreamingResult{
 		OpenAIUsage:      usage,
@@ -1832,6 +1866,10 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 		msg := extractOpenAISSEErrorMessage(terminalPayload)
 		if msg == "" {
 			msg = "Upstream compact response failed"
+		}
+		partialUsage := s.parseSSEUsageFromBody(bodyText)
+		if encryptedErr := newOpenAIEncryptedStreamRecoveryGeili(c, terminalPayload, partialUsage, false); encryptedErr != nil {
+			return &openaiNonStreamingResult{OpenAIUsage: partialUsage, usage: partialUsage}, encryptedErr
 		}
 		if compactErr := newOpenAICompactFallbackSignal(c, terminalPayload, msg); compactErr != nil {
 			return nil, compactErr
@@ -1907,6 +1945,9 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 	}
 	if !writeOpenAICompactSSEBridge(c, resp.StatusCode, body) {
 		c.Data(resp.StatusCode, contentType, body)
+	}
+	if encryptedOutputDeliveredGeili(c) {
+		ObserveOpenAIEncryptedOutputGeili(c.Request.Context(), body)
 	}
 
 	return &openaiNonStreamingResult{

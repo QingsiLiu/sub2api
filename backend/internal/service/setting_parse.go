@@ -777,6 +777,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.FallbackModelGemini = s.getStringOrDefault(settings, SettingKeyFallbackModelGemini, "gemini-2.5-pro")
 	result.FallbackModelAntigravity = s.getStringOrDefault(settings, SettingKeyFallbackModelAntigravity, "gemini-2.5-pro")
 	// geili hook: curated account sync catalog, separate from gateway model support.
+	encryptedRoute := ParseOpenAIEncryptedRouteSettingsGeili(settings[SettingKeyOpenAIEncryptedRouteGeili])
+	result.OpenAIEncryptedRoute = &encryptedRoute
 	result.OpenAISyncModelIDs = ParseOpenAISyncModelIDs(settings[SettingKeyOpenAISyncModelIDs])
 
 	// Identity patch settings (default: enabled, to preserve existing behavior)

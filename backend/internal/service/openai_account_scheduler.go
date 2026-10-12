@@ -2340,6 +2340,16 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	}
 	platform = NormalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}
+	// geili hook: opaque tool/history state may only return to its successful owner.
+	if selection, handled, err := s.selectOpenAIEncryptedRouteGeili(ctx, groupID, sessionHash, requestedModel, platform, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, requireCompactionCapability); handled {
+		decision.Layer = "encrypted_session_owner"
+		if selection != nil && selection.Account != nil {
+			decision.StickySessionHit = true
+			decision.SelectedAccountID = selection.Account.ID
+			decision.SelectedAccountType = selection.Account.Type
+		}
+		return selection, decision, err
+	}
 	preserveGuardianParentBinding := preserveOpenAIGuardianParentBinding(ctx, sessionHash)
 	guardianParentAccountID := int64(0)
 	if strings.TrimSpace(previousResponseID) == "" {

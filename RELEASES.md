@@ -1,3 +1,12 @@
+## 0.2.15-geili.8（候选准备，未部署生产）
+
+相对 `.7`，新增 OpenAI 加密会话来源保护和有限推理恢复。默认 off；observe 只记录来源，protect 初始名单仅用户3885。已知密文优先原账号的授权分组，避免跨官转/AZ线路盲目重放；只有安全纯推理状态允许一次恢复，工具密文/压缩历史不会被自动删除。HTTP/SSE/compact/WebSocket保留真实终态与用量。
+
+- 新增迁移280，来源仅存用户＋密文摘要和路由元数据，PG180天访问保留、Redis24小时；旧迁移保持。原计价、余额、订阅权限仍按实际选择分组检查与结算。
+- revision：待本版本实现提交与候选CI绑定；镜像 digest：待候选CI产出；部署状态：尚未部署Stage或生产。生产启用及扩大保护名单须本候选当次授权。
+- 验证：完整 `go test ./...`、service unit（228.601秒）、完整handler/routes、加密协议/存储/设置race及隔离PostgreSQL/Redis集成通过；后续WS别名/权限映射回归通过。全部模型调用为合成上游，未主动请求付费供应商。
+- 方案、边界与灰度验收：[加密会话来源保护](.github/geili/encrypted-route-protection-20261013.md)。本地验证记录与候选制品将在实际完成后补齐，不把微基准当线上改善证明。
+
 ## 0.2.15-geili.7（已发布生产，Stage同镜像）
 
 相对 `.6`，修复部分客户端把自适应思考强度写入 `thinking.effort` 时，Claude 官方 API 返回 `thinking.adaptive.effort: Extra inputs are not permitted` 的 400。网关在模型映射后、校验与签名前将其迁移至 `output_config.effort`；已有显式强度优先，普通转发、自动透传及 token 计数统一处理，用量记录同步正确强度。

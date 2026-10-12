@@ -653,10 +653,12 @@ func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderw
 			payload = c.restoreToolNames(payload)
 		}
 	}
+	payload = normalizeOpenAIEncryptedWSFailureGeili(c.controlCtx, payload)
 	// geili hook: controlCtx retains request audit; writeCtx is detached.
 	err := c.conn.Write(ctx, msgType, payload)
 	if msgType == coderws.MessageText || msgType == coderws.MessageBinary {
 		ObserveResponseAuditWSWrite(c.controlCtx, payload, err)
+		observeOpenAIEncryptedWSOutputGeili(c.controlCtx, payload, err)
 	}
 	return err
 }
@@ -1272,6 +1274,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 			},
 			BeforeRelayCancel: func(exit openaiwsv2.RelayExit) {
+				var reasoningRetry *openAIWSRejectedFieldRetryError
+				if errors.As(exit.Err, &reasoningRetry) && reasoningRetry.reason == "encrypted_reasoning_recovery" {
+					return
+				}
 				if context.Cause(ctx) != nil {
 					return
 				}
@@ -1291,6 +1297,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+				// geili hook: before the first delivered frame, reconnect this
+				// same account once with safely cleaned reasoning history.
+				if completedTurns.Load() == 0 && !wroteDownstream {
+					usage := OpenAIUsage{}
+					if gjson.GetBytes(payload, "usage").Exists() || gjson.GetBytes(payload, "response.usage").Exists() {
+						usage.InputTokens = 1
+					}
+					if retryBody, recoverable := prepareOpenAIEncryptedWSRecoveryGeili(ctx, originalFirstClientMessage, payload, false, usage); recoverable {
+						return &openAIWSRejectedFieldRetryError{body: retryBody, reason: "encrypted_reasoning_recovery"}
+					}
+				}
 				if eventType == "response.created" {
 					failureAccountSideEffectsApplied = false
 				}
@@ -1340,6 +1357,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			},
 		},
 	})
+	if relayExit != nil && !relayExit.WroteDownstream && completedTurns.Load() == 0 {
+		var reasoningRetry *openAIWSRejectedFieldRetryError
+		if errors.As(relayExit.Err, &reasoningRetry) && reasoningRetry.reason == "encrypted_reasoning_recovery" {
+			_ = upstreamConn.Close()
+			return s.proxyResponsesWebSocketV2Passthrough(ctx, c, clientConn, account, token, reasoningRetry.body, hooks, wsDecision)
+		}
+	}
 	if cause := context.Cause(ctx); cause != nil {
 		if isOpenAIWSSessionPreempted(ctx) {
 			return errOpenAIWSSessionPreempted

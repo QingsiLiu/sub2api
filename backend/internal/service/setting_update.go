@@ -86,6 +86,7 @@ func (s *SettingService) UpdateSettingsWithAuthSourceDefaultsOmitting(ctx contex
 // it omitted, so in that case the caches are rebuilt from storage rather than
 // from the request struct.
 func (s *SettingService) refreshCachedSettingsAfterWrite(ctx context.Context, settings *SystemSettings, omitted OmittedSettingKeys) {
+	s.invalidateOpenAIEncryptedRouteSettingsGeili()
 	if len(omitted) == 0 {
 		s.refreshCachedSettings(settings)
 		return
@@ -390,6 +391,20 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, fmt.Errorf("marshal default subscriptions: %w", err)
 	}
 	updates[SettingKeyDefaultSubscriptions] = string(defaultSubsJSON)
+
+	// geili hook: omitted encrypted route settings preserve existing policy.
+	if settings.OpenAIEncryptedRoute != nil {
+		normalized, err := NormalizeOpenAIEncryptedRouteSettingsGeili(*settings.OpenAIEncryptedRoute)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_OPENAI_ENCRYPTED_ROUTE", err.Error())
+		}
+		settings.OpenAIEncryptedRoute = &normalized
+		data, err := json.Marshal(normalized)
+		if err != nil {
+			return nil, err
+		}
+		updates[SettingKeyOpenAIEncryptedRouteGeili] = string(data)
+	}
 
 	// Model fallback configuration
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)

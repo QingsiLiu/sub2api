@@ -280,6 +280,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelGemini:                                    settings.FallbackModelGemini,
 		FallbackModelAntigravity:                               settings.FallbackModelAntigravity,
 		OpenAISyncModelIDs:                                     settings.OpenAISyncModelIDs,
+		OpenAIEncryptedRoute:                                   settings.OpenAIEncryptedRoute,
 		OpenAISyncModelCandidates:                              service.OpenAISyncModelCandidates(),
 		EnableIdentityPatch:                                    settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    settings.IdentityPatchPrompt,

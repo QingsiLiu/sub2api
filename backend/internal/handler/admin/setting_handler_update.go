@@ -217,12 +217,13 @@ type UpdateSettingsRequest struct {
 	ForceEmailOnThirdPartySignup              *bool                             `json:"force_email_on_third_party_signup"`
 
 	// Model fallback configuration
-	EnableModelFallback      bool     `json:"enable_model_fallback"`
-	FallbackModelAnthropic   string   `json:"fallback_model_anthropic"`
-	FallbackModelOpenAI      string   `json:"fallback_model_openai"`
-	FallbackModelGemini      string   `json:"fallback_model_gemini"`
-	FallbackModelAntigravity string   `json:"fallback_model_antigravity"`
-	OpenAISyncModelIDs       []string `json:"openai_sync_model_ids"`
+	EnableModelFallback      bool                                       `json:"enable_model_fallback"`
+	FallbackModelAnthropic   string                                     `json:"fallback_model_anthropic"`
+	FallbackModelOpenAI      string                                     `json:"fallback_model_openai"`
+	FallbackModelGemini      string                                     `json:"fallback_model_gemini"`
+	FallbackModelAntigravity string                                     `json:"fallback_model_antigravity"`
+	OpenAISyncModelIDs       []string                                   `json:"openai_sync_model_ids"`
+	OpenAIEncryptedRoute     *service.OpenAIEncryptedRouteSettingsGeili `json:"openai_encrypted_route"`
 
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
@@ -507,6 +508,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	// geili hook: null is not an omitted model catalog; reject it before any settings write.
 	if _, sent := sentFields[service.SettingKeyOpenAISyncModelIDs]; sent && req.OpenAISyncModelIDs == nil {
 		response.BadRequest(c, "openai_sync_model_ids must be a non-empty array")
+		return
+	}
+	if _, sent := sentFields[service.SettingKeyOpenAIEncryptedRouteGeili]; sent && req.OpenAIEncryptedRoute == nil {
+		response.BadRequest(c, "openai_encrypted_route must be an object")
 		return
 	}
 	auditReq := settingsAuditRequest(req)
@@ -1686,6 +1691,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelGemini:                    req.FallbackModelGemini,
 		FallbackModelAntigravity:               req.FallbackModelAntigravity,
 		OpenAISyncModelIDs:                     req.OpenAISyncModelIDs,
+		OpenAIEncryptedRoute:                   req.OpenAIEncryptedRoute,
 		EnableIdentityPatch:                    req.EnableIdentityPatch,
 		IdentityPatchPrompt:                    req.IdentityPatchPrompt,
 		MinClaudeCodeVersion:                   req.MinClaudeCodeVersion,
@@ -2357,6 +2363,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelGemini:                                    updatedSettings.FallbackModelGemini,
 		FallbackModelAntigravity:                               updatedSettings.FallbackModelAntigravity,
 		OpenAISyncModelIDs:                                     updatedSettings.OpenAISyncModelIDs,
+		OpenAIEncryptedRoute:                                   updatedSettings.OpenAIEncryptedRoute,
 		OpenAISyncModelCandidates:                              service.OpenAISyncModelCandidates(),
 		EnableIdentityPatch:                                    updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                                    updatedSettings.IdentityPatchPrompt,

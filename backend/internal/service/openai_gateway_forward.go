@@ -742,7 +742,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	lineageGroupID := getOpenAIGroupIDFromContext(c)
 	lineageEntryBody := body
 	lineageSessionHash := ""
-	if stateStore := s.getOpenAIWSStateStore(); stateStore != nil && stateStore.HasAnySessionInvalidEncryptedContent() {
+	if stateStore := s.getOpenAIWSStateStore(); !OpenAIEncryptedRouteProtectedGeili(ctx) && stateStore != nil && stateStore.HasAnySessionInvalidEncryptedContent() {
 		lineageSessionHash = s.GenerateSessionHash(c, body)
 		if invalidDigests := stateStore.GetSessionInvalidEncryptedContentDigests(lineageGroupID, lineageSessionHash); len(invalidDigests) > 0 {
 			strippedBody, strippedCount := s.stripSessionInvalidEncryptedContentLogged(
@@ -807,6 +807,9 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 		wsPrevResponseRecoveryTried := false
 		wsInvalidEncryptedContentRecoveryTried := false
 		recoverPrevResponseNotFound := func(attempt int) bool {
+			if OpenAIEncryptedRouteProtectedGeili(ctx) {
+				return false
+			}
 			if wsPrevResponseRecoveryTried {
 				return false
 			}
@@ -839,6 +842,28 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 			return true
 		}
 		recoverInvalidEncryptedContent := func(attempt int) bool {
+			// geili hook: protect opaque history; only a raw reasoning-only retry is allowed.
+			if OpenAIEncryptedRouteProtectedGeili(ctx) {
+				raw, marshalErr := marshalOpenAIUpstreamJSON(wsReqBody)
+				if marshalErr != nil {
+					return false
+				}
+				var observedUsage *OpenAIUsage
+				if wsResult != nil {
+					observedUsage = &wsResult.Usage
+				}
+				retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, raw, []byte(`{"error":{"code":"invalid_encrypted_content"}}`), observedUsage, true)
+				if !retry {
+					return false
+				}
+				var decoded map[string]any
+				if decodeErr := decodeOpenAIJSONUseNumber(retryBody, &decoded); decodeErr != nil {
+					return false
+				}
+				wsReqBody = decoded
+				wsInvalidEncryptedContentRecoveryTried = true
+				return true
+			}
 			if wsInvalidEncryptedContentRecoveryTried {
 				return false
 			}
@@ -1013,6 +1038,9 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 			}
 			return wsResult, nil
 		}
+		if OpenAIEncryptedRouteProtectedGeili(ctx) && wsLastFailureReason == "invalid_encrypted_content" && !c.Writer.Written() {
+			return wsResult, RenderOpenAIEncryptedFailureGeili(c, []byte(`{"error":{"code":"invalid_encrypted_content"}}`))
+		}
 		s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
 		return nil, wsErr
 	}
@@ -1023,6 +1051,14 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	reasoningEffortValue := ""
 	if reasoningEffort != nil {
 		reasoningEffortValue = *reasoningEffort
+	}
+	encryptedFailureResult := func(resp *http.Response, observed *OpenAIUsage) *OpenAIForwardResult {
+		if observed == nil || *observed == (OpenAIUsage{}) {
+			return nil
+		}
+		return &OpenAIForwardResult{RequestID: resp.Header.Get("x-request-id"), UpstreamHeaders: resp.Header, Usage: *observed,
+			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel, ReasoningEffort: reasoningEffort,
+			Stream: reqStream, Duration: time.Since(startTime), UpstreamTerminalEvent: "response.failed"}
 	}
 	firstOutputTimeout := time.Duration(0)
 	if reqStream && account.Platform == PlatformOpenAI {
@@ -1099,6 +1135,18 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 			upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 			upstreamCode := extractUpstreamErrorCode(respBody)
+			// geili hook: classify encrypted failure before ordinary retry or account health effects.
+			if OpenAIEncryptedRouteProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(respBody) {
+				partialUsage, _ := extractOpenAIUsageFromJSONBytes(respBody)
+				if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, respBody, &partialUsage, true); retry {
+					body = retryBody
+					requestView = newOpenAIRequestView(body)
+					reqBody = nil
+					continue
+				}
+				s.recordOpenAIStreamUpstreamError(c, account, false, resp.Header.Get("x-request-id"), "encrypted_state", respBody, upstreamMsg)
+				return encryptedFailureResult(resp, &partialUsage), RenderOpenAIEncryptedFailureGeili(c, respBody)
+			}
 			if !agentTaskRecoveryTried && s.isAgentIdentityAccount(ctx, account) && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, respBody) {
 				agentTaskRecoveryTried = true
 				expectedTaskID := account.GetCredential("task_id")
@@ -1116,7 +1164,8 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 					strings.Contains(upstreamMsg, "could not be decrypted or parsed"))
 			// geili hook: some providers wrap decryption failures as invalid_request_error;
 			// allow one reasoning-only recovery without discarding opaque conversation history.
-			if !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest &&
+			// geili hook: opaque tool/agent/history state must not be repaired by deleting context.
+			if !OpenAIEncryptedRouteProtectedGeili(ctx) && !httpInvalidEncryptedContentRetryTried && resp.StatusCode == http.StatusBadRequest &&
 				(invalidEncryptedContentError || canRecoverOpenAIWrappedEncryptedReasoningGeili(resp.StatusCode, upstreamCode, upstreamMsg, body)) {
 				decoded, decodeErr := ensureReqBody()
 				if decodeErr != nil {
@@ -1230,6 +1279,21 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 		if reqStream {
 			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
 			if err != nil {
+				var encryptedErr *OpenAIEncryptedRecoveryErrorGeili
+				if errors.As(err, &encryptedErr) {
+					var observedUsage *OpenAIUsage
+					if streamResult != nil {
+						observedUsage = streamResult.usage
+					}
+					if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, encryptedErr.Body, observedUsage, encryptedErr.Retryable); retry {
+						_ = resp.Body.Close()
+						body = retryBody
+						requestView = newOpenAIRequestView(body)
+						reqBody = nil
+						continue
+					}
+					return encryptedFailureResult(resp, observedUsage), RenderOpenAIEncryptedFailureGeili(c, encryptedErr.Body)
+				}
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,
@@ -1283,6 +1347,21 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 		} else {
 			nonStreamResult, err := s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
+				var encryptedErr *OpenAIEncryptedRecoveryErrorGeili
+				if errors.As(err, &encryptedErr) {
+					var observedUsage *OpenAIUsage
+					if nonStreamResult != nil {
+						observedUsage = nonStreamResult.usage
+					}
+					if retryBody, retry := prepareOpenAIEncryptedHTTPRecoveryGeili(c, body, encryptedErr.Body, observedUsage, encryptedErr.Retryable); retry {
+						_ = resp.Body.Close()
+						body = retryBody
+						requestView = newOpenAIRequestView(body)
+						reqBody = nil
+						continue
+					}
+					return encryptedFailureResult(resp, observedUsage), RenderOpenAIEncryptedFailureGeili(c, encryptedErr.Body)
+				}
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
 						c, account, requestedModel, body, http.StatusBadRequest, signal.message, signal.payload, compactModelFallbackRetried,

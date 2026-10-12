@@ -3,11 +3,13 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -19,11 +21,22 @@ const openAIResponsesSessionWindowPrefix = "openai_responses_session_window:"
 const liveCallPrefix = "live:call:"
 
 type gatewayCache struct {
-	rdb *redis.Client
+	rdb                     *redis.Client
+	encryptedRouteDB        *sql.DB
+	encryptedRouteLastPrune atomic.Int64
 }
 
-func NewGatewayCache(rdb *redis.Client) service.GatewayCache {
-	return &gatewayCache{rdb: rdb}
+func NewGatewayCache(rdb *redis.Client, db ...*sql.DB) service.GatewayCache {
+	c := &gatewayCache{rdb: rdb}
+	if len(db) > 0 {
+		c.encryptedRouteDB = db[0]
+	}
+	return c
+}
+
+// geili hook: production provenance survives Redis eviction and instance restarts.
+func ProvideGatewayCache(rdb *redis.Client, db *sql.DB) service.GatewayCache {
+	return NewGatewayCache(rdb, db)
 }
 
 // buildSessionKey 构建 session key，包含 groupID 实现分组隔离

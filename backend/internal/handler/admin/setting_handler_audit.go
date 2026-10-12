@@ -33,6 +33,9 @@ func (h *SettingHandler) auditSettingsUpdate(c *gin.Context, before *service.Sys
 
 func diffSettings(before *service.SystemSettings, after *service.SystemSettings, beforeAuthSourceDefaults *service.AuthSourceDefaultSettings, afterAuthSourceDefaults *service.AuthSourceDefaultSettings, req UpdateSettingsRequest) []string {
 	changed := make([]string, 0, 20)
+	if !reflect.DeepEqual(before.OpenAIEncryptedRoute, after.OpenAIEncryptedRoute) {
+		changed = append(changed, service.SettingKeyOpenAIEncryptedRouteGeili)
+	}
 	if !equalStringSlice(before.OpenAISyncModelIDs, after.OpenAISyncModelIDs) {
 		changed = append(changed, service.SettingKeyOpenAISyncModelIDs)
 	}
