@@ -1,10 +1,10 @@
-## 0.2.15-geili.5（候选已通过，待部署Stage）
+## 0.2.15-geili.5（Stage已验收，待发布生产）
 
 相对 `.4`，账号管理恢复搜索、平台、类型、状态、Privacy、分组直接平铺；移除“更多筛选”折叠，桌面宽度足够时同一行显示，窄屏自动换行。筛选选项、搜索与筛选请求保持原行为。
 
 - 仅修改账号筛选前端、对应测试和中英文文案；后端运行代码与全部迁移保持 `.4` 字节一致，未包含工作区未提交 GPT 路由改动。
-- revision：`01ff793dd1cb02fb4fedd324185928eeb734121b`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`；部署状态：候选 CI 38202359445 及13项制品门禁通过，尚未部署 Stage 或生产。
-- 本地验证：14 项相关测试、前端类型检查/构建、修改文件 ESLint 与官方视觉守卫通过。用户当次授权“部署到生产环境去”；仍先 Stage 验收，再以同一 digest 经正式脚本发布生产。
+- revision：`01ff793dd1cb02fb4fedd324185928eeb734121b`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`；部署状态：候选 CI 38202359445 及13项制品门禁通过，Stage经正式入口部署同一镜像，160项当前镜像验收通过；生产待正式脚本切换。
+- 验证：14项本地相关测试、前端类型检查/构建、修改文件 ESLint 与官方视觉守卫通过；Stage非支付51、双实例缓存17、认证页面与筛选API69、迁移14、生产保全9，共160项通过；339份迁移校验匹配，夹具与临时副本恢复。用户当次授权“部署到生产环境去”，生产使用Stage同一digest。Stage备份 `/opt/sub2api-subscription-lab/backups/20261012T042021Z-candidate`；生产预检备份 `/root/backups/geili-account-filters-preflight-20261012T042427Z`。
 
 ## 0.2.15-geili.4（已发布生产，Stage同镜像）
 
