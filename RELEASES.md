@@ -1,9 +1,11 @@
-## 0.2.15-geili.6（宽版用量页候选，待CI与Stage验收）
+## 0.2.15-geili.6（宽版用量页已部署Stage并验收，生产待当次授权）
 
 相对 `.5`，外部账号录入后的用量与代理页面使用桌面可用宽度，紧凑显示品牌与录入状态；桌面用量统计、图表在主区域，代理设置置于右侧，手机保持单列。日期筛选和刷新在宽屏同排，六项用量指标响应式排列；没有使用记录时不显示大块空图表和空模型列表。
 
 - 复用官方AuthLayout和现有用量、代理组件；宽版选项仅用于已录入的外部账号页，普通登录/注册和完整添加账号弹窗保留原交互。凭据、权限、认证与API请求不变，后端除VERSION与339份迁移保持上一版字节一致，不包含工作区GPT路由。
-- revision：`ce7f63cce4f7b3524ac190d77bff221864e90fe6`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`；部署状态：17项相关测试、修改文件ESLint、类型检查及前端构建通过；桌面1440空用量页面无纵向或横向溢出，主区域宽904px、代理侧栏360px；手机390有用量图表和代理单列无横向溢出，本机仅合成预览。Stage/生产仍 `.5` / `01ff793dd1cb02fb4fedd324185928eeb734121b` / `sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`。只用合成用量和模拟接口验证页面，不调用真实供应商。
+- revision：`ce7f63cce4f7b3524ac190d77bff221864e90fe6`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`；部署状态：17项相关测试、修改文件ESLint、类型检查及前端构建通过；桌面1440空用量页面无纵向或横向溢出，主区域宽904px、代理侧栏360px；手机390有用量图表和代理单列无横向溢出，本机仅合成预览。Stage已完成132项验收，生产仍 `.5` / `01ff793dd1cb02fb4fedd324185928eeb734121b` / `sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`。只用合成用量和模拟接口验证页面，不调用真实供应商。
+
+- Stage `0.2.15-geili.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6` / `ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`，已通过正式stage入口部署，132项当前镜像验收通过：非支付业务51、双实例17、迁移14、生产保全9、页面夹具与恢复8、桌面/手机33。339份迁移一致，后端除VERSION与生产`.5`字节相同；旧后端证明仅记carried_forward_unchanged_backend。桌面主区域与代理并排，零用量页面单屏显示，手机单列无横向溢出，日期及图表保留。候选全部13门禁、Geili及安全扫描通过；所有合成夹具、邀请、临时副本/卷恢复，生产仍`.5`。没有供应商模型请求、真实支付或媒体调用。独立v16草稿 production_ready=false、remaining=[explicit_production_authorization]；17种证据篡改及5种未授权发布均被拒绝。Stage备份 `/opt/sub2api-subscription-lab/backups/20261012T072651Z-candidate`。
 
 ## 0.2.15-geili.5（已发布生产，Stage同镜像）
 
