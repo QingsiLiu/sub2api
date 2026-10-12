@@ -245,6 +245,10 @@ func (s *OpenAIGatewayService) prepareOpenAICompactFallbackRetry(
 	upstreamBody []byte,
 	alreadyRetried bool,
 ) ([]byte, string, bool) {
+	// geili hook: encrypted history belongs to its generating model as well as its backend.
+	if c != nil && c.Request != nil && OpenAIEncryptedRouteProtectedGeili(c.Request.Context()) {
+		return currentBody, "", false
+	}
 	if alreadyRetried || !isExplicitOpenAICompactRequest(c, currentBody) ||
 		!isOpenAICompactModelFailure(statusCode, upstreamMsg, upstreamBody) {
 		return currentBody, "", false

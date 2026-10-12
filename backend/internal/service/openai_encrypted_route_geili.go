@@ -269,6 +269,7 @@ func encryptedBackendFingerprintGeili(a *Account) string {
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(digest[:])
 }
+
 func ValidateOpenAIEncryptedAccountGeili(ctx context.Context, a *Account, model string) error {
 	state := encryptedRouteStateGeili(ctx)
 	if state == nil || !state.protected || state.owner == nil {
@@ -280,7 +281,16 @@ func ValidateOpenAIEncryptedAccountGeili(ctx context.Context, a *Account, model 
 	}
 	return nil
 }
+
+func openAIEncryptedTargetGroupGeili(ctx context.Context, groupID *int64) *int64 {
+	if target, ok := CompositeTargetGroupIDFromContext(ctx); ok {
+		return &target
+	}
+	return groupID
+}
+
 func WithOpenAIEncryptedOutputOriginGeili(ctx context.Context, groupID *int64, a *Account, model string) context.Context {
+	groupID = openAIEncryptedTargetGroupGeili(ctx, groupID)
 	state := encryptedRouteStateGeili(ctx)
 	if state == nil || groupID == nil || a == nil || a.Platform != PlatformOpenAI {
 		return ctx
@@ -478,6 +488,7 @@ func (s *OpenAIGatewayService) selectOpenAIEncryptedRouteGeili(ctx context.Conte
 	if state == nil || !state.protected || state.owner == nil || platform != PlatformOpenAI {
 		return nil, false, nil
 	}
+	groupID = openAIEncryptedTargetGroupGeili(ctx, groupID)
 	if groupID == nil || s.accountRepo == nil || s.checkChannelPricingRestriction(ctx, groupID, model) {
 		return nil, true, ErrOpenAIEncryptedRouteUnavailableGeili
 	}
@@ -498,6 +509,8 @@ func (s *OpenAIGatewayService) selectOpenAIEncryptedRouteGeili(ctx context.Conte
 		if !allowed {
 			return nil, true, encryptedRouteErrorGeili(409, "encrypted_session_route_conflict", "原会话线路不在此 Key 的可用分组中")
 		}
+		// Canonical scheduling already mirrors ordinary passthrough's raw model
+		// and native mapping once. Protected compact also keeps this wire rule.
 		if err := ValidateOpenAIEncryptedAccountGeili(ctx, account, model); err != nil {
 			return nil, true, err
 		}
@@ -546,4 +559,18 @@ func (s *OpenAIGatewayService) selectOpenAIEncryptedRouteGeili(ctx context.Conte
 
 func (s *OpenAIGatewayService) ValidateOpenAIEncryptedAccountGeili(ctx context.Context, account *Account, model string) error {
 	return ValidateOpenAIEncryptedAccountGeili(ctx, account, model)
+}
+
+// WithOpenAIEncryptedActualOutputOriginGeili receives an already-mapped model
+// immediately before transport send. Never apply account aliases twice.
+func WithOpenAIEncryptedActualOutputOriginGeili(ctx context.Context, groupID *int64, account *Account, upstreamModel string) context.Context {
+	groupID = openAIEncryptedTargetGroupGeili(ctx, groupID)
+	state := encryptedRouteStateGeili(ctx)
+	if state == nil || groupID == nil || account == nil || account.Platform != PlatformOpenAI {
+		return ctx
+	}
+	state.mu.Lock()
+	state.origin = &OpenAIEncryptedRouteGeili{GroupID: *groupID, AccountID: account.ID, Model: strings.TrimSpace(upstreamModel), BackendFingerprint: encryptedBackendFingerprintGeili(account)}
+	state.mu.Unlock()
+	return ctx
 }

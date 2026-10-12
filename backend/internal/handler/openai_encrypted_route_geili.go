@@ -50,6 +50,19 @@ func (h *OpenAIGatewayHandler) authorizeEncryptedWSTurnGeili(ctx context.Context
 	if fresh.GroupID == nil || *fresh.GroupID != *key.GroupID || fresh.Group == nil || !fresh.Group.IsActive() || !fresh.Group.ModelAllowlist.Allows(model) {
 		return denied()
 	}
+	if fresh.Group.Platform == service.PlatformComposite {
+		if h.compositeResolver == nil {
+			return denied()
+		}
+		decision, resolveErr := h.compositeResolver.Resolve(check, fresh.Group.ID, model, service.CompositeRouteEndpointResponses)
+		if resolveErr != nil {
+			return service.ErrOpenAIEncryptedRouteUnavailableGeili
+		}
+		currentTarget, ok := service.CompositeTargetGroupIDFromContext(ctx)
+		if !ok || !decision.Matched || decision.TargetGroupID == nil || *decision.TargetGroupID != currentTarget || decision.TargetPlatform != service.PlatformOpenAI {
+			return denied()
+		}
+	}
 	groups, err := h.apiKeyService.GetAvailableGroups(check, fresh.UserID)
 	if err != nil {
 		return service.ErrOpenAIEncryptedRouteUnavailableGeili
@@ -88,9 +101,30 @@ func (h *OpenAIGatewayHandler) prepareEncryptedWSFirstRouteGeili(c *gin.Context,
 		if key.GroupID == nil {
 			return key, service.ErrOpenAIEncryptedRouteUnavailableGeili
 		}
-		candidates := service.FilterOpenAIEncryptedRoutesGeili([]service.CompositeRouteDecision{{TargetGroupID: key.GroupID, TargetGroup: key.Group, TargetPlatform: service.PlatformOpenAI}}, owner)
+		decision := service.CompositeRouteDecision{TargetGroupID: key.GroupID, TargetGroup: key.Group, TargetPlatform: service.PlatformOpenAI}
+		if key.Group != nil && key.Group.Platform == service.PlatformComposite {
+			if h.compositeResolver == nil {
+				return key, service.ErrOpenAIEncryptedRouteUnavailableGeili
+			}
+			resolved, resolveErr := h.compositeResolver.Resolve(c.Request.Context(), key.Group.ID, model, service.CompositeRouteEndpointResponses)
+			if resolveErr != nil {
+				return key, resolveErr
+			}
+			if !resolved.Matched || resolved.TargetGroupID == nil {
+				return key, service.ErrOpenAIEncryptedRouteUnavailableGeili
+			}
+			decision = resolved
+		}
+		candidates := service.FilterOpenAIEncryptedRoutesGeili([]service.CompositeRouteDecision{decision}, owner)
 		if len(candidates) == 0 {
 			return key, &service.OpenAIEncryptedRouteErrorGeili{Status: 409, Code: "encrypted_session_route_conflict", Message: "原会话线路不在此 Key 的可用分组中"}
+		}
+		if decision.Matched {
+			next := *key
+			next.CompositeRoute = &decision
+			c.Request = c.Request.WithContext(service.WithCompositeRouteDecision(c.Request.Context(), decision))
+			c.Set(string(middleware.ContextKeyAPIKey), &next)
+			return &next, nil
 		}
 		return key, nil
 	}

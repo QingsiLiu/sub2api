@@ -29,7 +29,9 @@ jobs:
           pnpm test:run
           pnpm build
       - name: Validate external key Stage restoration guards
-        run: python3 .github/geili/test-account-submission-stage.py
+        run: |
+          python3 .github/geili/test-account-submission-stage.py
+          python3 .github/geili/test_encrypted_route_stage.py
       - uses: actions/upload-artifact@v7
         with:
           name: geili-candidate-frontend

@@ -964,6 +964,7 @@ func TestAPIContracts(t *testing.T) {
 					"claude_code_client_version": "",
 					"claude_code_client_version_synced": "",
 					"claude_code_version_auto_sync_enabled": true,
+					"openai_encrypted_route": {"mode": "off", "protected_user_ids": [3885], "reasoning_recovery_enabled": false},
 					"openai_fast_policy_settings": {
 						"rules": []
 					},
@@ -1297,6 +1298,7 @@ func TestAPIContracts(t *testing.T) {
 					"claude_code_client_version": "",
 					"claude_code_client_version_synced": "",
 					"claude_code_version_auto_sync_enabled": true,
+					"openai_encrypted_route": {"mode": "off", "protected_user_ids": [3885], "reasoning_recovery_enabled": false},
 					"openai_fast_policy_settings": {
 						"rules": []
 					},

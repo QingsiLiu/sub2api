@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
@@ -428,5 +429,111 @@ func TestEncryptedBareErrorWaitsForFailedMeteringGeili(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestEncryptedOAuthHTTPPreservesPreviousResponseGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{encryptedRecoveryResponseGeili(502, `{"error":{"code":"invalid_encrypted_content","message":"bad cipher"}}`)}}
+	svc, account := encryptedRecoveryFixtureGeili(upstream)
+	account.Type = AccountTypeOAuth
+	account.Credentials = map[string]any{"access_token": "test-oauth-token", "chatgpt_account_id": "synthetic-account"}
+	account.Extra = map[string]any{"openai_passthrough": false, "openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeOff}
+	cache := &encryptedRouteCacheFixtureGeili{}
+	svc.cache = cache
+	key := &APIKey{ID: 10, UserID: 3885}
+	group := int64(131)
+	ctx, _, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), key, []byte(`{"input":"hello"}`))
+	require.NoError(t, err)
+	ctx = WithOpenAIEncryptedOutputOriginGeili(ctx, &group, account, "gpt-6-astra")
+	ObserveOpenAIEncryptedOutputGeili(ctx, []byte(`{"type":"response.output_item.done","item":{"type":"reasoning","encrypted_content":"original-cipher","summary":[]}}`))
+	body := []byte(`{"model":"gpt-6-astra","previous_response_id":"resp_original","nonce":9007199254740993,"input":[{"type":"reasoning","encrypted_content":"original-cipher","summary":[]},{"type":"message","role":"user","content":"continue"}]}`)
+	ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), key, body)
+	require.NoError(t, err)
+	require.NotNil(t, owner)
+	c, rec := encryptedRecoveryContextGeili("oauth-preserve-prev")
+	c.Request = c.Request.WithContext(ctx)
+	_, err = svc.Forward(ctx, c, account, body)
+	require.Error(t, err)
+	require.Len(t, upstream.bodies, 1, "server-history dependencies cannot be repaired by deleting them")
+	require.Equal(t, "resp_original", gjson.GetBytes(upstream.bodies[0], "previous_response_id").String())
+	require.Equal(t, "original-cipher", gjson.GetBytes(upstream.bodies[0], "input.0.encrypted_content").String())
+	require.Equal(t, "9007199254740993", gjson.GetBytes(upstream.bodies[0], "nonce").Raw)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "invalid_encrypted_content", gjson.Get(rec.Body.String(), "error.code").String())
+}
+
+func TestEncryptedProtectedCompactCannotSwitchModelsGeili(t *testing.T) {
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{OpenAICompactModel: "compact-alternate"}}}
+	c, _ := encryptedRecoveryContextGeili("compact-model-protection")
+	c.Request.URL.Path = "/v1/responses/compact"
+	ctx := context.WithValue(context.Background(), openAIEncryptedRouteContextKeyGeili{}, &openAIEncryptedRouteStateGeili{protected: true, recovery: true})
+	c.Request = c.Request.WithContext(ctx)
+	body := []byte(`{"model":"gpt-6-astra","input":[{"type":"compaction","encrypted_content":"opaque"}]}`)
+	next, model, retry := svc.prepareOpenAICompactFallbackRetry(c, nil, "gpt-6-astra", body, 400, "", []byte(`{"response":{"status":"failed","error":null}}`), false)
+	require.False(t, retry)
+	require.Empty(t, model)
+	require.Equal(t, body, next)
+}
+
+func TestEncryptedCompactFallbackRecordsActualModelGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, passthrough := range []bool{false, true} {
+		t.Run(fmt.Sprintf("passthrough=%v", passthrough), func(t *testing.T) {
+			initial := encryptedRecoveryResponseGeili(400, `{"error":{"code":"model_not_found","message":"model not found"}}`)
+			final := encryptedRecoveryResponseGeili(200, `{"id":"compact_done","object":"response.compaction","status":"completed","output":[{"type":"compaction","encrypted_content":"fresh-compact-cipher"}],"usage":{"input_tokens":3,"output_tokens":2}}`)
+			upstream := &httpUpstreamRecorder{responses: []*http.Response{initial, final}}
+			svc, account := encryptedRecoveryFixtureGeili(upstream)
+			svc.cfg.Gateway.OpenAICompactModel = "compact-alternate"
+			account.Extra["openai_passthrough"] = passthrough
+			cache := &encryptedRouteCacheFixtureGeili{}
+			svc.cache = cache
+			body := []byte(`{"model":"gpt-6-astra","input":[{"type":"message","role":"user","content":"hello"},{"type":"compaction_trigger"}]}`)
+			ctx, _, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), &APIKey{ID: 10, UserID: 3885}, body)
+			require.NoError(t, err)
+			group := int64(131)
+			ctx = WithOpenAIEncryptedOutputOriginGeili(ctx, &group, account, "gpt-6-astra")
+			c, _ := encryptedRecoveryContextGeili("fallback-origin")
+			c.Request = c.Request.WithContext(ctx)
+			_, err = svc.Forward(ctx, c, account, body)
+			require.NoError(t, err)
+			require.Len(t, upstream.bodies, 2)
+			require.Equal(t, "compact-alternate", gjson.GetBytes(upstream.bodies[1], "model").String())
+			require.Equal(t, "compact-alternate", cache.routes[3885][openAIEncryptedContentDigest("fresh-compact-cipher")].Model)
+		})
+	}
+}
+
+func TestEncryptedActualOriginDoesNotRemapModelChainGeili(t *testing.T) {
+	svc, account := encryptedRecoveryFixtureGeili(nil)
+	account.Credentials["model_mapping"] = map[string]any{"client-model": "actual-model", "actual-model": "wrong-double-map"}
+	cache := &encryptedRouteCacheFixtureGeili{}
+	svc.cache = cache
+	ctx, _, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), &APIKey{ID: 10, UserID: 3885}, []byte(`{"input":"hello"}`))
+	require.NoError(t, err)
+	group := int64(131)
+	ctx = WithOpenAIEncryptedActualOutputOriginGeili(ctx, &group, account, "actual-model")
+	ObserveOpenAIEncryptedOutputGeili(ctx, []byte(`{"type":"response.output_item.done","item":{"type":"reasoning","encrypted_content":"model-chain-cipher","summary":[]}}`))
+	require.Equal(t, "actual-model", cache.routes[3885][openAIEncryptedContentDigest("model-chain-cipher")].Model)
+}
+
+func TestEncryptedProtectedCompactPreservesInitialModelGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, passthrough := range []bool{false, true} {
+		t.Run(fmt.Sprintf("passthrough=%v", passthrough), func(t *testing.T) {
+			upstream := &httpUpstreamRecorder{responses: []*http.Response{encryptedRecoveryResponseGeili(502, `{"error":{"code":"invalid_encrypted_content","message":"bad cipher"}}`)}}
+			svc, account := encryptedRecoveryFixtureGeili(upstream)
+			svc.cfg.Gateway.OpenAICompactModel = "compact-alternate"
+			account.Extra["openai_passthrough"] = passthrough
+			c, rec := encryptedRecoveryContextGeili("initial-compact-model")
+			c.Request.URL.Path = "/v1/responses/compact"
+			ctx := context.WithValue(context.Background(), openAIEncryptedRouteContextKeyGeili{}, &openAIEncryptedRouteStateGeili{protected: true})
+			c.Request = c.Request.WithContext(ctx)
+			_, err := svc.Forward(ctx, c, account, []byte(`{"model":"gpt-6-astra","input":[{"type":"reasoning","encrypted_content":"old-cipher","summary":[]}]}`))
+			require.Error(t, err)
+			require.Len(t, upstream.bodies, 1)
+			require.Equal(t, "gpt-6-astra", gjson.GetBytes(upstream.bodies[0], "model").String())
+			require.Equal(t, 400, rec.Code)
+		})
 	}
 }

@@ -20,7 +20,7 @@
 
 来源主键是用户ID＋cipher SHA256，跨同用户Key查找，不依赖session猜测。只记录完整且已交付的 output_item.done、completed输出、完整成功JSON/compact；added、输入回显、错误正文不是权威来源。已经交付完整项后发生断流仍可保留来源。
 
-PostgreSQL保存group/account/model/backend fingerprint/生成时间/冲突；Redis固定24小时，SQL按最后访问保留180天，每日冷缓存回源刷新访问。只存摘要与元数据，不存密文、提示或凭据；账号端点/身份/API Key变化使指纹改变，OAuth access token常规刷新不改变指纹。不同account/model/backend来源标记冲突，不能最后写入覆盖。
+PostgreSQL保存group/account/model/backend fingerprint/生成时间/冲突；Redis固定24小时，SQL按最后访问保持180天有效期，每日冷缓存回源刷新访问；过期记录不会参与选路，物理删除为写触发的增量回收，并非到期瞬间删除。只存摘要与元数据，不存密文、提示或凭据；账号端点/身份/API Key变化使指纹改变，OAuth access token常规刷新不改变指纹。不同account/model/backend来源标记冲突，不能最后写入覆盖。
 
 元数据查找含账号分组补查总预算50ms；故障与旧历史未知来源继续原选路，但保护名单内禁止旧自动密文删除路径。全部密文已知才允许自动推理恢复。已知来源优先原分组；原分组不被当前Key授权时，只能选同一原账号当前所属的其他授权分组，计价/额度/RPM使用实际分组，不能突破Key模型白名单/余额/订阅/权限限制。
 

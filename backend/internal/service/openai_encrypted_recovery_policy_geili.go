@@ -250,3 +250,23 @@ func queuedEncryptedOutputGeili(ctx context.Context, payload []byte) bool {
 	}
 	return len(encryptedDigestsGeili([]byte(`{"input":`+items.Raw+`}`))) > 0
 }
+
+// RefreshOpenAIEncryptedOutputOriginGeili runs immediately before each actual
+// send so a compact model retry cannot attribute fresh ciphers to the first model.
+func RefreshOpenAIEncryptedOutputOriginGeili(ctx context.Context, c *gin.Context, account *Account, upstreamModel string) {
+	state := encryptedRouteStateGeili(ctx)
+	if state == nil {
+		return
+	}
+	groupID := getOpenAIGroupIDFromContext(c)
+	if groupID <= 0 {
+		state.mu.Lock()
+		if state.origin != nil {
+			groupID = state.origin.GroupID
+		}
+		state.mu.Unlock()
+	}
+	if groupID > 0 {
+		WithOpenAIEncryptedActualOutputOriginGeili(ctx, &groupID, account, upstreamModel)
+	}
+}

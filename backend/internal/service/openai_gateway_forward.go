@@ -372,8 +372,8 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 
 	isCompactRequest := compactPath
 	requestedModel := reqModel
-	billingModel, upstreamModel := resolveOpenAIForwardMappedModels(account, requestedModel, isCompactRequest)
-	if isCompactRequest {
+	billingModel, upstreamModel := resolveOpenAIForwardMappedModels(account, requestedModel, isCompactRequest && !OpenAIEncryptedRouteProtectedGeili(ctx))
+	if isCompactRequest && !OpenAIEncryptedRouteProtectedGeili(ctx) {
 		if compactModel := s.resolveOpenAICompactFallbackModel(account, requestedModel); compactModel != "" {
 			upstreamModel = compactModel
 		}
@@ -632,7 +632,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	if clampedCap, ok := ollamaCloudResponsesMaxOutputTokensClamp(account, upstreamModel, body); ok {
 		markPatchSet("max_output_tokens", clampedCap)
 	}
-	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 &&
+	if !OpenAIEncryptedRouteProtectedGeili(ctx) && wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 &&
 		!account.IsOpenAIApiKey() && gjson.GetBytes(body, "previous_response_id").Exists() {
 		markPatchDelete("previous_response_id")
 	}
@@ -909,6 +909,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	wsRetryLoop:
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			wsAttempts = attempt
+			RefreshOpenAIEncryptedOutputOriginGeili(ctx, c, account, upstreamModel)
 			wsResult, wsErr = s.forwardOpenAIWSV2(
 				ctx,
 				c,
@@ -1070,6 +1071,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	agentTaskRecoveryTried := false
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	for {
+		RefreshOpenAIEncryptedOutputOriginGeili(ctx, c, account, upstreamModel)
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		var headerGuard *openAIFirstOutputHeaderGuard
