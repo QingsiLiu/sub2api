@@ -1,11 +1,13 @@
-## 0.2.15-geili.6（宽版用量页已部署Stage并验收，生产待当次授权）
+## 0.2.15-geili.6（已发布生产，Stage同镜像）
 
 相对 `.5`，外部账号录入后的用量与代理页面使用桌面可用宽度，紧凑显示品牌与录入状态；桌面用量统计、图表在主区域，代理设置置于右侧，手机保持单列。日期筛选和刷新在宽屏同排，六项用量指标响应式排列；没有使用记录时不显示大块空图表和空模型列表。
 
 - 复用官方AuthLayout和现有用量、代理组件；宽版选项仅用于已录入的外部账号页，普通登录/注册和完整添加账号弹窗保留原交互。凭据、权限、认证与API请求不变，后端除VERSION与339份迁移保持上一版字节一致，不包含工作区GPT路由。
-- revision：`ce7f63cce4f7b3524ac190d77bff221864e90fe6`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`；部署状态：17项相关测试、修改文件ESLint、类型检查及前端构建通过；桌面1440空用量页面无纵向或横向溢出，主区域宽904px、代理侧栏360px；手机390有用量图表和代理单列无横向溢出，本机仅合成预览。Stage已完成132项验收，生产仍 `.5` / `01ff793dd1cb02fb4fedd324185928eeb734121b` / `sha256:668adfffc65af9d4770dbdb4fe332e49d3d5a2f43b1d88d419d8a8fe1ae12fe7`。只用合成用量和模拟接口验证页面，不调用真实供应商。
+- revision：`ce7f63cce4f7b3524ac190d77bff221864e90fe6`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`；部署状态：17项相关测试、修改文件ESLint、类型检查及前端构建通过；桌面1440空用量页面无纵向或横向溢出，主区域宽904px、代理侧栏360px；手机390有用量图表和代理单列无横向溢出，本机仅合成预览。Stage已完成132项验收；已按本次授权发布生产同一镜像，42项发布后复核通过。只用合成用量和模拟接口验证页面，不调用真实供应商。
 
-- Stage `0.2.15-geili.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6` / `ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`，已通过正式stage入口部署，132项当前镜像验收通过：非支付业务51、双实例17、迁移14、生产保全9、页面夹具与恢复8、桌面/手机33。339份迁移一致，后端除VERSION与生产`.5`字节相同；旧后端证明仅记carried_forward_unchanged_backend。桌面主区域与代理并排，零用量页面单屏显示，手机单列无横向溢出，日期及图表保留。候选全部13门禁、Geili及安全扫描通过；所有合成夹具、邀请、临时副本/卷恢复，生产仍`.5`。没有供应商模型请求、真实支付或媒体调用。独立v16草稿 production_ready=false、remaining=[explicit_production_authorization]；17种证据篡改及5种未授权发布均被拒绝。Stage备份 `/opt/sub2api-subscription-lab/backups/20261012T072651Z-candidate`。
+- Stage `0.2.15-geili.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6` / `ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`，已通过正式stage入口部署，132项当前镜像验收通过：非支付业务51、双实例17、迁移14、生产保全9、页面夹具与恢复8、桌面/手机33。339份迁移一致，后端除VERSION与生产`.5`字节相同；旧后端证明仅记carried_forward_unchanged_backend。桌面主区域与代理并排，零用量页面单屏显示，手机单列无横向溢出，日期及图表保留。候选全部13门禁、Geili及安全扫描通过；所有合成夹具、邀请、临时副本/卷恢复；生产已发布同一`.6`镜像。没有供应商模型请求、真实支付或媒体调用。独立v16证明已绑定当次生产授权，production_ready=true、remaining=[]；17种证据篡改及5种未授权发布均被拒绝。Stage备份 `/opt/sub2api-subscription-lab/backups/20261012T072651Z-candidate`。
+
+- 生产：2026-10-12 经当次授权“授权发布宽版候选到生产”，通过正式prod入口发布 `0.2.15-geili.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6` / `ghcr.io/qingsiliu/sub2api@sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`，与Stage同一digest。桌面用量与代理并排，使用可用宽度；空用量隐藏空图表，手机保持单列，完整账号认证弹窗和账号筛选保留。Stage132项、候选13门禁通过；生产运行/配置保全13、公网版本/页面/同Stage资源29，共42项通过。应用健康恢复9.979秒，六核心容器healthy/restart0；339份迁移一致，PG/Redis及Stage应用指纹保持，Compose仅替换app镜像，全部env值、config.yaml、Nginx及媒体配置保持。备份 `/root/backups/subscription-prod-image-bump-20261012T081021Z`、`/root/backups/geili-key-owner-width-preflight-20261012T080919Z`。回退上一枚`.5`镜像保留业务数据，不整库回灌；未创建生产测试账号，未调用真实供应商、支付或媒体。发布证明v16绑定实际当次授权，production_ready=true、remaining=[]。
 
 ## 0.2.15-geili.5（已发布生产，Stage同镜像）
 

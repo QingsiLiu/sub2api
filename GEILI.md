@@ -6,7 +6,7 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 - GitHub 默认主干是 `geili/main`。现网跑的就是这条 0.2.5 线；以后只维护这一条主干。
 - 一个人开发时默认直接在 `geili/main` 上改。需要隔离开的大改再拉 `codex/<主题>`，验收后合回并删除。不要留第二主干。
-- 官方基线为 `v0.2.5`，当前源码已同步到上游 `v0.2.15` 线。对外版本号以 `backend/cmd/server/VERSION` 为准，当前源码为 `0.2.15-geili.6` 宽版候选；Stage为 `.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6`，132项已验收；生产仍 `.5` / `01ff793dd1cb02fb4fedd324185928eeb734121b`，本宽版候选待当次授权。候选构建必须注入该文件，不要再写 `*.acceptance`。
+- 官方基线为 `v0.2.5`，当前源码已同步到上游 `v0.2.15` 线。对外版本号以 `backend/cmd/server/VERSION` 为准，当前源码为 `0.2.15-geili.6`；生产与Stage为同一 `.6` / `ce7f63cce4f7b3524ac190d77bff221864e90fe6` / `sha256:85a8bcff855bcb7d24643eab55a78d329f579c6898ecab3b6989b2215fd58f28`，Stage132项、生产42项验收通过，已按当次授权发布。候选构建必须注入该文件，不要再写 `*.acceptance`。
 - 每次改版本号准备发布，把该版本做了什么追加到 [RELEASES.md](RELEASES.md) 顶部。缺这条说明不算完成发版。
 - 2026-09-15 用户决定恢复官方视觉；`frontend/src/geili/`、覆盖插件、Geist 字体及主题 token 已删除。
 - 前端功能扩展使用现有官方组件与样式；以后统一设计须另行提出。
