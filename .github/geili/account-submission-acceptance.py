@@ -89,7 +89,7 @@ def verify(f):
         stored = account(invite)
         f.check(platform + ' stores only SHA256 invitation hash', stored['hash'] == hashlib.sha256(token.encode()).hexdigest() and stored['hash'] != token)
         inspected = public('inspect', {'token': token})
-        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status', 'view_available', 'name', 'concurrency', 'has_preset_proxy'} and inspected[1]['data']['name'] == config['name'] and inspected[1]['data']['concurrency'] == config['concurrency'] and no_secret(inspected[1], [token, secret]))
+        f.check(platform + ' invitation inspection is public and minimal', inspected[0] == 200 and set(inspected[1]['data']) == {'platform', 'expires_at', 'status', 'view_available', 'name', 'concurrency', 'has_preset_proxy', 'priority', 'rate_multiplier'} and inspected[1]['data']['name'] == config['name'] and inspected[1]['data']['concurrency'] == config['concurrency'] and inspected[1]['data']['priority'] == config['priority'] and inspected[1]['data']['rate_multiplier'] == config['rate_multiplier'] and no_secret(inspected[1], [token, secret]))
         bad = public('submit', {'token': token, 'api_key': secret, 'base_url': f.mock_base})
         f.check(platform + ' external caller cannot set upstream URL', bad[0] == 400 and account(invite)['account_id'] is None and no_secret(bad[1], [secret, token]))
         bad = public('submit', {'token': token, 'api_key': ''})
