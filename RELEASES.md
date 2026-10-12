@@ -1,12 +1,14 @@
-## 0.2.15-geili.7（Stage已验收，生产待发布）
+## 0.2.15-geili.7（已发布生产，Stage同镜像）
 
 相对 `.6`，修复部分客户端把自适应思考强度写入 `thinking.effort` 时，Claude 官方 API 返回 `thinking.adaptive.effort: Extra inputs are not permitted` 的 400。网关在模型映射后、校验与签名前将其迁移至 `output_config.effort`；已有显式强度优先，普通转发、自动透传及 token 计数统一处理，用量记录同步正确强度。
 
 - 仅处理实际上游为 `claude-*` 且 `thinking.type=adaptive` 的请求；保留输出格式、工具输入与大整数。第三方模型协议、错误类型的参数及正确请求保持原行为，无新增迁移。
-- revision：`da193f309961d9f393a96c74b01eaf9b0d655f03`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:12d193311b6e180720829498f5d36d4de2e9a7470e306c679250661ba830f3b0`；[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 全部门禁通过；部署状态：Stage 已通过正式入口部署同一 digest，244项当前镜像验收通过；生产待按本次条件授权发布。本候选不包含工作区未提交的 OpenAI 加密路由改动。
+- revision：`da193f309961d9f393a96c74b01eaf9b0d655f03`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:12d193311b6e180720829498f5d36d4de2e9a7470e306c679250661ba830f3b0`；[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 全部门禁通过；部署状态：Stage 已通过正式入口部署同一 digest，244项当前镜像验收通过；已按本次条件授权发布生产同一镜像，生产45项复核通过。本候选不包含工作区未提交的 OpenAI 加密路由改动。
 - 验证：干净源码旧实现下6条出站回归用例失败，修复后17项全部通过；精确候选revision的完整service unit通过（223.252秒），相关Anthropic转发与参数兼容race通过。未调用真实供应商。
 - Stage：非支付51、双实例17、Claude协议153、迁移14、生产保全9，共244项通过；44条协议请求仅到loopback模拟上游，所有夹具与副本恢复。备份 `/opt/sub2api-subscription-lab/backups/20261012T170000Z-candidate`。独立v17证明通过，21项证据/授权篡改被拒绝；按当次“没问题就赶紧发到线上去”的条件授权准备生产，同Stage digest。
 - 取证与验证：[Claude 官方 Key 思考参数兼容修复](.github/geili/claude-thinking-effort-20261013.md)。
+
+- 生产：2026-10-13 经当次条件授权，正式prod入口发布 `0.2.15-geili.7` / `da193f309961d9f393a96c74b01eaf9b0d655f03` / `ghcr.io/qingsiliu/sub2api@sha256:12d193311b6e180720829498f5d36d4de2e9a7470e306c679250661ba830f3b0`，与Stage同一digest。只兼容错误位置的Claude adaptive字符串effort；正确请求、旧Claude思考模式、MiniMax及前端保持。Stage244项、本候选13制品门禁及生产45项复核通过；健康恢复9.622秒。六核心容器healthy/restart0，339份迁移及全部env/config/Nginx保持；四数据容器、Stage应用及三相邻应用指纹不变，Compose仅替换app镜像。备份 `/root/backups/subscription-prod-image-bump-20261012T171159Z`、`/root/backups/geili-claude-effort-preflight-20261012T170752Z`。回退上一枚`.6`镜像保留业务数据，不整库回灌。没有生产夹具或主动供应商/支付/媒体调用；约98秒自然流量观察有Claude25、OpenAI258次成功，目标enterprise-k1暂无新调用，不能将错误0次视为其真实请求已复验。当前v17证明绑定当次条件授权，production_ready=true、remaining=[]。
 
 ## 0.2.15-geili.6（已发布生产，Stage同镜像）
 

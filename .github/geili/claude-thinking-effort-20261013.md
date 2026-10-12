@@ -41,4 +41,4 @@ https://platform.claude.com/docs/en/api/messages/count_tokens
 
 ## 发布边界
 
-源码候选版本为 `0.2.15-geili.7`，revision 为 `da193f309961d9f393a96c74b01eaf9b0d655f03`，已推送 `origin/geili/main`，[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 构建中。生产仍为 `.6`；此任务未授权生产部署，后续必须先 Stage 验证，再按当次生产授权使用正式发布入口和同一 digest。
+源码候选版本为 `0.2.15-geili.7`，revision 为 `da193f309961d9f393a96c74b01eaf9b0d655f03`，已推送 `origin/geili/main`，[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 已通过。用户当次条件授权后经正式Stage→prod入口发布同一digest，Stage244项、生产45项复核通过。目标Key发布后暂无新调用，现有Claude/OpenAI自然流量成功；未主动调用真实供应商。具体回执见运维仓 `docs/reports/claude-effort-20261013/production-receipt.json`。
