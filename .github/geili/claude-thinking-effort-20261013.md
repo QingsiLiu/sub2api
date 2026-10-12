@@ -15,6 +15,9 @@
 官方文档将思考强度定义为顶层 `output_config.effort`：
 https://platform.claude.com/docs/en/build-with-claude/effort
 
+count_tokens 同样支持 `output_config.effort`：
+https://platform.claude.com/docs/en/api/messages/count_tokens
+
 在模型映射解析后、请求校验前执行 Geili 兼容函数，随后通过 `ParsedRequest.ReplaceBody` 同步原始 JSON 视图和 effort，用于计费与用量记录。普通/流式/自动透传消息与 count_tokens 共用相同规则。
 
 ```json
@@ -33,8 +36,9 @@ https://platform.claude.com/docs/en/build-with-claude/effort
 
 - 11 个参数与协议边界用例，6 个公开 Forward/ForwardCountTokens 出站用例（普通/透传 × 非流式/流式/count_tokens），检查实际 wire body、模型映射、大整数及 `ParsedRequest.OutputEffort`。
 - 干净源码快照从 `geili/main` 导出，不包含已有 OpenAI 工作区改动；旧转发代码下 6 条出站用例均因仍发送 `thinking.effort` 失败，加入两处挂钩后 17 个用例全部通过。相关 race（AnthropicThinkingEffortGeili / ClaudeOpus5 / AnthropicAPIKeyPassthrough / Claude55 / MidConversation / ContextManagement）通过。
+- 将已推送 revision `da193f309961d9f393a96c74b01eaf9b0d655f03` 单独导出后，`go test -tags=unit ./internal/service -count=1` 全部通过（223.252 秒）。首轮完整单测误用了旧转发对照代码，其 6 条新增回归用例失败；以精确候选源码重跑后的通过结果为准。
 - 不通过真实官方 Key 发送请求。生产效果需发布同一候选镜像后观察现有自然流量。
 
 ## 发布边界
 
-源码候选版本为 `0.2.15-geili.7`。生产仍为 `.6`；此任务未授权生产部署，后续必须先 Stage 验证，再按当次生产授权使用正式发布入口和同一 digest。
+源码候选版本为 `0.2.15-geili.7`，revision 为 `da193f309961d9f393a96c74b01eaf9b0d655f03`，已推送 `origin/geili/main`，[候选 CI 38279121683](https://github.com/QingsiLiu/sub2api/actions/runs/38279121683) 构建中。生产仍为 `.6`；此任务未授权生产部署，后续必须先 Stage 验证，再按当次生产授权使用正式发布入口和同一 digest。
