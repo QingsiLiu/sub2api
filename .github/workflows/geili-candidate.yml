@@ -10,7 +10,7 @@ concurrency:
   group: geili-candidate-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  build:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -22,10 +22,6 @@ jobs:
           node-version: '20'
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
       - name: Frontend validation and upstream visual build
         working-directory: frontend
         run: |
@@ -34,7 +30,68 @@ jobs:
           pnpm build
       - name: Validate external key Stage restoration guards
         run: python3 .github/geili/test-account-submission-stage.py
-      - name: Validate subscriptions and compile candidate
+      - uses: actions/upload-artifact@v7
+        with:
+          name: geili-candidate-frontend
+          path: backend/internal/web/dist
+          include-hidden-files: true
+          retention-days: 1
+  go_checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [default, unit, integration, gateway_race, postgres_race, billing_race, subscription_race]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Validate isolated Go suite
+        working-directory: backend
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          case "$SUITE" in
+            default)
+              go test ./...
+              ;;
+            unit)
+              go test -tags=unit ./...
+              ;;
+            integration)
+              CI=true go test -tags=integration ./...
+              ;;
+            gateway_race)
+              go test -race -tags=unit ./internal/service ./internal/handler ./internal/server/routes ./internal/config -run 'Geili|AnthropicCompletion|TextForwardGuard|RequestRecovery|GatewayConvertedPartialUsage|NativeAnthropic|OpenAIStreaming|ForwardAsAnthropic_ClientDisconnect|ForwardAsChatCompletions_ClientDisconnect' -count=1 -timeout=10m
+              ;;
+            postgres_race)
+              CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres|TestRefundJournalPostgres' -count=1
+              CI=true go test -race -tags=integration ./internal/repository -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestGroupUsage|TestUsageRecoveryIntegration|TestAUAPI|TestDurableVideo' -count=1 -timeout=10m
+              ;;
+            billing_race)
+              go test -race -tags=unit ./internal/service ./internal/handler/... ./internal/server/routes ./internal/server/middleware -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestDurableVideo|TestCredentialBilling|TestAUAPIRepeatedAccepted|TestSubscriptionVideoLookup|TestRefundJournal' -count=1
+              ;;
+            subscription_race)
+              go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch|Contract|SubscriptionBillingV2|SubscriptionV2|SubscriptionQuotaGeili|LegacyManagement|LegacyPreview|LegacyStore|LegacyRejects|LegacyCommercial' -count=1
+              ;;
+            *) exit 2 ;;
+          esac
+  build:
+    needs: [frontend, go_checks]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/download-artifact@v8
+        with:
+          name: geili-candidate-frontend
+          path: backend/internal/web/dist
+      - name: Compile candidate with validated embedded frontend
         working-directory: backend
         env:
           CANDIDATE_SHA: ${{ github.sha }}
@@ -42,15 +99,7 @@ jobs:
           VERSION="$(tr -d '[:space:]' < cmd/server/VERSION)"
           test -n "$VERSION"
           echo "GEILI_VERSION=$VERSION" >> "$GITHUB_ENV"
-          go test ./...
-          go test -tags=unit ./...
-          CI=true go test -tags=integration ./...
           go test -tags=embed ./internal/web -count=1
-          CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres|TestRefundJournalPostgres' -count=1
-          go test -race -tags=unit ./internal/service ./internal/handler ./internal/server/routes ./internal/config -run 'Geili|AnthropicCompletion|TextForwardGuard|RequestRecovery|GatewayConvertedPartialUsage|NativeAnthropic|OpenAIStreaming|ForwardAsAnthropic_ClientDisconnect|ForwardAsChatCompletions_ClientDisconnect' -count=1 -timeout=10m
-          CI=true go test -race -tags=integration ./internal/repository -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestGroupUsage|TestUsageRecoveryIntegration|TestAUAPI|TestDurableVideo' -count=1 -timeout=10m
-          go test -race -tags=unit ./internal/service ./internal/handler/... ./internal/server/routes ./internal/server/middleware -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestDurableVideo|TestCredentialBilling|TestAUAPIRepeatedAccepted|TestSubscriptionVideoLookup|TestRefundJournal' -count=1
-          go test -race -tags=unit ./internal/geili/subscription ./internal/service ./internal/repository ./internal/server/middleware -run 'Lot|Entitlement|SubscriptionAudit|SubscriptionAdmission|UpstreamDispatch|Contract|SubscriptionBillingV2|SubscriptionV2|SubscriptionQuotaGeili|LegacyManagement|LegacyPreview|LegacyStore|LegacyRejects|LegacyCommercial' -count=1
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${CANDIDATE_SHA} -X main.BuildType=release" -o ../sub2api ./cmd/server
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
