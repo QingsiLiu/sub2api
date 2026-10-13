@@ -73,6 +73,7 @@ type cachedOpenAIEncryptedRouteSettingsGeili struct {
 	settings   OpenAIEncryptedRouteSettingsGeili
 	expires    time.Time
 	refreshing chan struct{}
+	waitUntil  time.Time
 }
 
 func (s *SettingService) invalidateOpenAIEncryptedRouteSettingsGeili() {
@@ -89,9 +90,9 @@ func (s *SettingService) invalidateOpenAIEncryptedRouteSettingsGeili() {
 	}
 }
 
-// Hot reads are lock-free. One reader refreshes expired policy; peers use the
-// last validated policy, or wait within their own 50 ms budget on cold startup.
-// A database outage never serializes requests behind a slow refresh mutex.
+// Hot reads are lock-free. One bounded background reader refreshes expired
+// policy. Caller waits never exceed 50 ms; cold peers stop waiting after the
+// shared initial window, even when the database read is still in flight.
 func (s *SettingService) GetOpenAIEncryptedRouteSettingsGeili(ctx context.Context) OpenAIEncryptedRouteSettingsGeili {
 	if s == nil || s.settingRepo == nil {
 		return DefaultOpenAIEncryptedRouteSettingsGeili()
@@ -110,46 +111,67 @@ func (s *SettingService) GetOpenAIEncryptedRouteSettingsGeili(ctx context.Contex
 			if old.settings.Mode != "" {
 				return cloneEncryptedRouteSettingsGeili(old.settings)
 			}
-			select {
-			case <-old.refreshing:
-				current := s.encryptedRouteSettingsCache.Load()
-				if current != nil && current.settings.Mode != "" {
-					return cloneEncryptedRouteSettingsGeili(current.settings)
-				}
-				return DefaultOpenAIEncryptedRouteSettingsGeili()
-			case <-budget.Done():
-				return DefaultOpenAIEncryptedRouteSettingsGeili()
-			}
+			return s.waitOpenAIEncryptedRouteSettingsGeili(budget, old)
 		}
-		if budget.Err() != nil {
-			if old != nil && old.settings.Mode != "" {
-				return cloneEncryptedRouteSettingsGeili(old.settings)
-			}
-			return DefaultOpenAIEncryptedRouteSettingsGeili()
+		if budget.Err() != nil || !s.encryptedRouteSettingsRefreshInFlight.CompareAndSwap(false, true) {
+			return encryptedRouteSettingsFallbackGeili(old)
 		}
-		pending := &cachedOpenAIEncryptedRouteSettingsGeili{refreshing: make(chan struct{})}
+		pending := &cachedOpenAIEncryptedRouteSettingsGeili{refreshing: make(chan struct{}), waitUntil: time.Now().Add(50 * time.Millisecond)}
 		if old != nil {
 			pending.settings = old.settings
 		}
 		if !s.encryptedRouteSettingsCache.CompareAndSwap(old, pending) {
+			s.encryptedRouteSettingsRefreshInFlight.Store(false)
 			continue
 		}
-		raw, err := s.settingRepo.GetValue(budget, SettingKeyOpenAIEncryptedRouteGeili)
-		value := pending.settings
-		if err == nil {
-			value = ParseOpenAIEncryptedRouteSettingsGeili(raw)
-		} else {
-			if !errors.Is(err, ErrSettingNotFound) {
-				encryptedRouteSettingsRefreshFailuresGeili.Add(1)
-				slog.Warn("encrypted_route.settings_refresh_failed", "error_class", encryptedPersistenceFailureClassGeili(err))
-			}
-			if value.Mode == "" {
-				value = DefaultOpenAIEncryptedRouteSettingsGeili()
-			}
-		}
-		ready := &cachedOpenAIEncryptedRouteSettingsGeili{settings: value, expires: time.Now().Add(5 * time.Second)}
-		s.encryptedRouteSettingsCache.CompareAndSwap(pending, ready)
-		close(pending.refreshing)
-		return cloneEncryptedRouteSettingsGeili(value)
+		// A canceled request cannot cancel the shared administrative settings read.
+		// Its independent deadline bounds both the worker and repository operation.
+		refreshCtx, stopRefresh := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		go s.refreshOpenAIEncryptedRouteSettingsGeili(refreshCtx, stopRefresh, pending)
+		return s.waitOpenAIEncryptedRouteSettingsGeili(budget, pending)
 	}
+}
+func encryptedRouteSettingsFallbackGeili(cached *cachedOpenAIEncryptedRouteSettingsGeili) OpenAIEncryptedRouteSettingsGeili {
+	if cached != nil && cached.settings.Mode != "" {
+		return cloneEncryptedRouteSettingsGeili(cached.settings)
+	}
+	return DefaultOpenAIEncryptedRouteSettingsGeili()
+}
+func (s *SettingService) waitOpenAIEncryptedRouteSettingsGeili(ctx context.Context, pending *cachedOpenAIEncryptedRouteSettingsGeili) OpenAIEncryptedRouteSettingsGeili {
+	remaining := time.Until(pending.waitUntil)
+	if remaining <= 0 {
+		return encryptedRouteSettingsFallbackGeili(pending)
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case <-pending.refreshing:
+		return encryptedRouteSettingsFallbackGeili(s.encryptedRouteSettingsCache.Load())
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+	return encryptedRouteSettingsFallbackGeili(pending)
+}
+func (s *SettingService) refreshOpenAIEncryptedRouteSettingsGeili(ctx context.Context, cancel context.CancelFunc, pending *cachedOpenAIEncryptedRouteSettingsGeili) {
+	defer func() {
+		cancel()
+		s.encryptedRouteSettingsRefreshInFlight.Store(false)
+		close(pending.refreshing)
+	}()
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyOpenAIEncryptedRouteGeili)
+	value := pending.settings
+	if err == nil {
+		value = ParseOpenAIEncryptedRouteSettingsGeili(raw)
+	} else {
+		if !errors.Is(err, ErrSettingNotFound) {
+			encryptedRouteSettingsRefreshFailuresGeili.Add(1)
+			slog.Warn("encrypted_route.settings_refresh_failed", "error_class", encryptedPersistenceFailureClassGeili(err))
+		}
+		if value.Mode == "" {
+			value = DefaultOpenAIEncryptedRouteSettingsGeili()
+		}
+	}
+	ready := &cachedOpenAIEncryptedRouteSettingsGeili{settings: value, expires: time.Now().Add(5 * time.Second)}
+	// Invalidation detaches pending. Never publish a pre-update read into the new generation.
+	s.encryptedRouteSettingsCache.CompareAndSwap(pending, ready)
 }

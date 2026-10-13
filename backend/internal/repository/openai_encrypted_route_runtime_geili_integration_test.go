@@ -23,13 +23,13 @@ func TestEncryptedSourceGeiliRealRedisAndPGCaptureBudgetAndUserForeignKeyLock(t 
 		_, _ = integrationDB.Exec("DELETE FROM users WHERE id=$1", userID)
 		_ = integrationRedis.Del(context.Background(), encryptedRouteKeyGeili(userID, r.Digest)).Err()
 	})
-	// Use exactly the production capture deadline with real Redis8, not miniredis.
+	// Use the old short deadline for healthy-write baseline with real Redis8, not miniredis.
 	short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	start := time.Now()
 	err := a.SetOpenAIEncryptedRoutesGeili(short, userID, []service.OpenAIEncryptedRouteGeili{r})
 	cancel()
 	require.NoError(t, err)
-	t.Logf("healthy production-budget capture elapsed=%s", time.Since(start))
+	t.Logf("healthy short-budget capture elapsed=%s", time.Since(start))
 	key := encryptedRouteKeyGeili(userID, r.Digest)
 	raw, err := integrationRedis.Get(ctx, key).Result()
 	require.NoError(t, err)
@@ -75,4 +75,52 @@ func TestEncryptedSourceGeiliRealRedisAndPGCaptureBudgetAndUserForeignKeyLock(t 
 	got, err := b.GetOpenAIEncryptedRoutesGeili(ctx, userID, []string{r.Digest})
 	require.NoError(t, err)
 	require.Equal(t, r.AccountID, got[r.Digest].AccountID)
+}
+
+func TestEncryptedSourceGeiliRealPGWriteBudgetAllowsTransientLockButBoundsPersistentLock(t *testing.T) {
+	ctx := context.Background()
+	var userID int64
+	require.NoError(t, integrationDB.QueryRow(`INSERT INTO users(email,password_hash,role,status,balance,concurrency) VALUES($1,'test','user','active',10,10) RETURNING id`, uuid.NewString()+"@write-budget.invalid").Scan(&userID))
+	r := encryptedSourceFixtureGeili()
+	cache := NewGatewayCache(integrationRedis, integrationDB).(service.OpenAIEncryptedRouteCacheGeili)
+	t.Cleanup(func() {
+		_, _ = integrationDB.Exec("DELETE FROM users WHERE id=$1", userID)
+		_ = integrationRedis.Del(context.Background(), encryptedRouteKeyGeili(userID, r.Digest)).Err()
+	})
+	blocker, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = blocker.Rollback() }()
+	_, err = blocker.ExecContext(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID)
+	require.NoError(t, err)
+	released := make(chan error, 1)
+	go func() { time.Sleep(150 * time.Millisecond); released <- blocker.Rollback() }()
+	writeCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	start := time.Now()
+	err = cache.SetOpenAIEncryptedRoutesGeili(writeCtx, userID, []service.OpenAIEncryptedRouteGeili{r})
+	cancel()
+	require.NoError(t, err)
+	require.NoError(t, <-released)
+	require.GreaterOrEqual(t, time.Since(start), 140*time.Millisecond)
+	_, err = integrationDB.Exec("DELETE FROM openai_encrypted_sources_geili WHERE user_id=$1", userID)
+	require.NoError(t, err)
+	persistent, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = persistent.Rollback() }()
+	_, err = persistent.ExecContext(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID)
+	require.NoError(t, err)
+	writeCtx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+	start = time.Now()
+	err = cache.SetOpenAIEncryptedRoutesGeili(writeCtx, userID, []service.OpenAIEncryptedRouteGeili{r})
+	cancel()
+	require.Error(t, err)
+	require.GreaterOrEqual(t, time.Since(start), 450*time.Millisecond)
+	var count int
+	require.NoError(t, integrationDB.QueryRow("SELECT COUNT(*) FROM openai_encrypted_sources_geili WHERE user_id=$1", userID).Scan(&count))
+	require.Zero(t, count)
+	require.NoError(t, persistent.Rollback())
+	invalid := r
+	invalid.BackendFingerprint = "invalid"
+	require.Error(t, cache.SetOpenAIEncryptedRoutesGeili(ctx, userID, []service.OpenAIEncryptedRouteGeili{invalid}))
+	require.NoError(t, integrationDB.QueryRow("SELECT COUNT(*) FROM openai_encrypted_sources_geili WHERE user_id=$1", userID).Scan(&count))
+	require.Zero(t, count)
 }

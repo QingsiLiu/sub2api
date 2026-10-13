@@ -117,7 +117,8 @@ type WebSearchManagerBuilder func(cfg *WebSearchEmulationConfig, proxyURLs map[i
 
 // SettingService 系统设置服务
 type SettingService struct {
-	encryptedRouteSettingsCache atomic.Pointer[cachedOpenAIEncryptedRouteSettingsGeili]
+	encryptedRouteSettingsCache           atomic.Pointer[cachedOpenAIEncryptedRouteSettingsGeili]
+	encryptedRouteSettingsRefreshInFlight atomic.Bool
 
 	settingRepo                 SettingRepository
 	defaultSubGroupReader       DefaultSubscriptionGroupReader

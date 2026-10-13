@@ -223,8 +223,25 @@ def fixture_type(cache, source):
                     return rows
                 time.sleep(.1)
 
+        def warm_policy_processes(self):
+            # A cold settings cache may safely use off for its first caller.
+            # Warm both processes with isolated plaintext, then allow the one
+            # bounded background refresh to finish before producing ciphertext.
+            results = []
+            for label, request in (('primary', self.request), ('secondary', self.replica_request)):
+                payload = {'model': MODEL, 'input': [{'role': 'user', 'content': 'synthetic plaintext policy warmup'}],
+                           'stream': False, 'prompt_cache_key': 'policy-warmup-' + self.suffix + '-' + label}
+                results.append(request('/v1/responses', payload, self.seed_key['key']))
+            time.sleep(1.1)
+            ready = all(response[0] == 200 for response in results)
+            self.check('both processes complete stateless policy warmup before protected functional checks', ready,
+                       {'statuses': [response[0] for response in results], 'refresh_wait_seconds': 1.1})
+            if not ready:
+                raise RuntimeError('policy warmup failed before encrypted source seeding')
+
         def run_checks(self):
             self.start_replica()
+            self.warm_policy_processes()
             tools = self.call_encrypted(self.seed_key, [{'role': 'user', 'content': 'seed-tools'}], 'seed-tools')
             reasoning = self.call_encrypted(self.seed_key, [{'role': 'user', 'content': 'seed-reasoning'}], 'seed-reasoning')
             self.check('primary seed output records synthetic encrypted items', tools[0] == reasoning[0] == 200)

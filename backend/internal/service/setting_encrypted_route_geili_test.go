@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -89,6 +90,8 @@ func TestEncryptedRouteSettingsGeiliColdWaitHonorsOwnBudget(t *testing.T) {
 	require.Less(t, time.Since(start), 35*time.Millisecond)
 	<-leaderDone
 	require.EqualValues(t, 1, repo.calls.Load())
+	close(repo.release)
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, time.Second, time.Millisecond)
 }
 func TestEncryptedRouteSettingsGeiliExpiredPeersUseLastGoodWithoutWaiting(t *testing.T) {
 	repo := &blockedEncryptedSettingsRepoGeili{started: make(chan struct{}), release: make(chan struct{})}
@@ -153,6 +156,9 @@ func TestEncryptedRouteSettingsGeiliColdTimeoutCachesOffThenRetriesAndRecovers(t
 	start := time.Now()
 	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
 	require.GreaterOrEqual(t, time.Since(start), 40*time.Millisecond)
+	require.Less(t, time.Since(start), 100*time.Millisecond)
+	require.Equal(t, before, OpenAIEncryptedRouteSettingsRefreshFailuresGeili(), "caller deadline does not cancel the shared read")
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, 2*time.Second, time.Millisecond)
 	require.Equal(t, before+1, OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
 	cached := s.encryptedRouteSettingsCache.Load()
 	require.WithinDuration(t, time.Now().Add(5*time.Second), cached.expires, 100*time.Millisecond)
@@ -163,6 +169,7 @@ func TestEncryptedRouteSettingsGeiliColdTimeoutCachesOffThenRetriesAndRecovers(t
 	s.encryptedRouteSettingsCache.Store(&cachedOpenAIEncryptedRouteSettingsGeili{settings: cached.settings})
 	repo.timeout.Store(true)
 	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, 2*time.Second, time.Millisecond)
 	require.EqualValues(t, 2, repo.calls.Load(), "expired fallback retries the repository")
 	require.Equal(t, before+2, OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
 	repo.timeout.Store(false)
@@ -172,6 +179,7 @@ func TestEncryptedRouteSettingsGeiliColdTimeoutCachesOffThenRetriesAndRecovers(t
 	repo.timeout.Store(true)
 	s.invalidateOpenAIEncryptedRouteSettingsGeili()
 	require.Equal(t, "protect", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode, "failed refresh retains last good policy")
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, 2*time.Second, time.Millisecond)
 	require.Equal(t, before+3, OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
 }
 
@@ -182,4 +190,91 @@ func TestEncryptedRouteSettingsGeiliMissingSettingIsExpectedDefault(t *testing.T
 		require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
 		require.Equal(t, before, OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
 	}
+}
+
+type slowEncryptedSettingsRepoGeili struct {
+	settingRepoStub
+	calls     atomic.Int64
+	active    atomic.Int64
+	maxActive atomic.Int64
+	delay     time.Duration
+}
+
+func (r *slowEncryptedSettingsRepoGeili) GetValue(ctx context.Context, _ string) (string, error) {
+	r.calls.Add(1)
+	active := r.active.Add(1)
+	for old := r.maxActive.Load(); active > old; old = r.maxActive.Load() {
+		if r.maxActive.CompareAndSwap(old, active) {
+			break
+		}
+	}
+	defer r.active.Add(-1)
+	timer := time.NewTimer(r.delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return `{"mode":"protect","protected_user_ids":[3885]}`, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+func TestEncryptedRouteSettingsGeiliSlowReadPublishesAfterCallerCancellation(t *testing.T) {
+	repo := &slowEncryptedSettingsRepoGeili{delay: 150 * time.Millisecond}
+	s := NewSettingService(repo, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(ctx).Mode)
+	require.Less(t, time.Since(start), 50*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	start = time.Now()
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.Less(t, time.Since(start), 20*time.Millisecond, "cold shared wait window has elapsed")
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, time.Second, time.Millisecond)
+	require.Equal(t, "protect", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.EqualValues(t, 1, repo.calls.Load())
+	require.Zero(t, repo.active.Load())
+}
+func TestEncryptedRouteSettingsGeiliInvalidationFloodBoundsWorkerAndRejectsStale(t *testing.T) {
+	repo := &slowEncryptedSettingsRepoGeili{delay: 150 * time.Millisecond}
+	s := NewSettingService(repo, nil)
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	var callers sync.WaitGroup
+	modes := make(chan string, 100)
+	for range 100 {
+		callers.Add(1)
+		go func() {
+			defer callers.Done()
+			s.invalidateOpenAIEncryptedRouteSettingsGeili()
+			modes <- s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode
+		}()
+	}
+	callers.Wait()
+	close(modes)
+	for mode := range modes {
+		require.Equal(t, "off", mode)
+	}
+	require.EqualValues(t, 1, repo.calls.Load())
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, time.Second, time.Millisecond)
+	require.Empty(t, s.encryptedRouteSettingsCache.Load().settings.Mode, "detached old read must never publish protect")
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, time.Second, time.Millisecond)
+	require.Equal(t, "protect", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.EqualValues(t, 2, repo.calls.Load())
+	require.EqualValues(t, 1, repo.maxActive.Load())
+	require.Zero(t, repo.active.Load())
+}
+
+func TestEncryptedRouteSettingsGeiliBackgroundTimeoutReleasesWorker(t *testing.T) {
+	repo := &slowEncryptedSettingsRepoGeili{delay: 2 * time.Second}
+	s := NewSettingService(repo, nil)
+	before := OpenAIEncryptedRouteSettingsRefreshFailuresGeili()
+	start := time.Now()
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.Less(t, time.Since(start), 100*time.Millisecond)
+	require.Eventually(t, func() bool { return !s.encryptedRouteSettingsRefreshInFlight.Load() }, 1500*time.Millisecond, time.Millisecond)
+	require.Equal(t, before+1, OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
+	require.Zero(t, repo.active.Load(), "repository canceled by independent one-second deadline")
+	require.Equal(t, "off", s.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+	require.EqualValues(t, 1, repo.calls.Load(), "failed result is cached for five seconds")
 }

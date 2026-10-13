@@ -40,6 +40,69 @@ class StageRunnerTests(unittest.TestCase):
         fixture.sql = Mock(return_value=[{'n': 0}])
         return fixture, cache
 
+    def test_cold_policy_warmup_uses_both_processes_without_cipher_or_policy_mutation(self):
+        f, _ = self.make_fixture()
+        f.suffix = 'cold-fixture'
+        f.seed_key = {'key': 'synthetic-seed-token', 'id': 101}
+        f.cross_key = {'key': 'synthetic-cross-token', 'id': 102}
+        f.request = Mock(return_value=(200, {'status': 'completed'}))
+        f.replica_request = Mock(return_value=(200, {'status': 'completed'}))
+        f.set_policy = Mock()
+        f.audit_usage = Mock()
+        with patch.object(runner.time, 'sleep') as sleep:
+            f.warm_policy_processes()
+        sleep.assert_called_once_with(1.1)
+        for request in (f.request, f.replica_request):
+            request.assert_called_once()
+            endpoint, payload, key = request.call_args.args
+            self.assertEqual('/v1/responses', endpoint)
+            self.assertEqual('synthetic-seed-token', key)
+            self.assertFalse(payload['stream'])
+            self.assertNotIn('encrypted_content', json.dumps(payload))
+            self.assertNotIn('synthetic-encrypted-', json.dumps(payload))
+            self.assertNotIn('seed-tools', json.dumps(payload))
+            self.assertNotIn('seed-reasoning', json.dumps(payload))
+            self.assertNotIn('synthetic-cross-token', json.dumps(payload))
+        self.assertNotEqual(f.request.call_args.args[1]['prompt_cache_key'],
+                            f.replica_request.call_args.args[1]['prompt_cache_key'])
+        f.set_policy.assert_not_called()
+        f.sql.assert_not_called()
+        f.audit_usage.assert_not_called()
+        self.assertTrue(f.check.call_args.args[1])
+
+    def test_cold_policy_warmup_failure_is_recorded_once_and_not_retried(self):
+        f, _ = self.make_fixture()
+        f.suffix = 'cold-fixture'
+        f.seed_key = {'key': 'synthetic-seed-token'}
+        f.request = Mock(return_value=(503, {'error': 'synthetic warmup failure'}))
+        f.replica_request = Mock(return_value=(200, {}))
+        with patch.object(runner.time, 'sleep'), self.assertRaisesRegex(RuntimeError, 'warmup failed'):
+            f.warm_policy_processes()
+        f.request.assert_called_once()
+        f.replica_request.assert_called_once()
+        self.assertFalse(f.check.call_args.args[1])
+
+    def test_cold_policy_warmup_precedes_exact_source_seed_calls(self):
+        f, _ = self.make_fixture()
+        f.suffix = 'cold-fixture'
+        f.seed_key = {'key': 'synthetic-seed-token'}
+        events = []
+        f.start_replica = Mock(side_effect=lambda: events.append('replica-start'))
+        f.request = Mock(side_effect=lambda *args: (events.append('primary-warm') or (200, {})))
+        f.replica_request = Mock(side_effect=lambda *args: (events.append('secondary-warm') or (200, {})))
+        def seed(key, items, label):
+            events.append(label)
+            self.assertIs(f.seed_key, key)
+            return 200, runner.synthetic_response({'input': items}, 'A', f.suffix)
+        f.call_encrypted = Mock(side_effect=seed)
+        f.sql.side_effect = RuntimeError('stop after both exact source seeds')
+        with patch.object(runner.time, 'sleep', side_effect=lambda seconds: events.append(('wait', seconds))), \
+                self.assertRaisesRegex(RuntimeError, 'both exact source seeds'):
+            f.run_checks()
+        self.assertEqual(['replica-start', 'primary-warm', 'secondary-warm', ('wait', 1.1),
+                          'seed-tools', 'seed-reasoning'], events)
+        self.assertEqual(2, f.call_encrypted.call_count)
+
     def test_default_off_and_reject_nonobject_malformed_settings(self):
         self.assertEqual('off', runner.settings_mode([]))
         self.assertEqual('off', runner.settings_mode([{'key': runner.SETTING, 'value': '{"mode":"off"}'}]))

@@ -51,6 +51,8 @@ type openAIEncryptedRouteContextKeyGeili struct{}
 type openAIEncryptedRoutePolicyKeyGeili struct{}
 type openAIEncryptedRouteStateGeili struct {
 	mu                           sync.Mutex
+	captureMu                    sync.Mutex
+	captureSpent                 time.Duration
 	service                      *OpenAIGatewayService
 	userID                       int64
 	enabled, protected, recovery bool
@@ -324,6 +326,7 @@ type encryptedRouteWriteGeili struct {
 	cache   OpenAIEncryptedRouteCacheGeili
 	userID  int64
 	records []OpenAIEncryptedRouteGeili
+	budget  time.Duration
 }
 
 var encryptedRouteWritesGeili struct {
@@ -331,14 +334,40 @@ var encryptedRouteWritesGeili struct {
 	queue chan encryptedRouteWriteGeili
 }
 
+// Capture is a durable write, unlike the latency-sensitive 50ms route lookup.
+// Protect requests share this cap across all delivered output items; generation
+// time between items does not consume it. Observe batches retain a bounded queue.
+const encryptedRouteCaptureWriteBudgetGeili = 500 * time.Millisecond
+
 func persistEncryptedRoutesGeili(w encryptedRouteWriteGeili) {
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	budget := w.budget
+	if budget <= 0 {
+		budget = encryptedRouteCaptureWriteBudgetGeili
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	if err := w.cache.SetOpenAIEncryptedRoutesGeili(ctx, w.userID, w.records); err != nil {
 		encryptedRouteRecordFailuresGeili.Add(1)
 		slog.Warn("encrypted_route.record_failed", "user_id", w.userID, "error_class", encryptedPersistenceFailureClassGeili(err), "storage_phase", encryptedPersistenceStoragePhaseGeili(err))
 	}
 }
+
+// Serialization keeps concurrent delivery callbacks within one request cap.
+func persistProtectedEncryptedRoutesGeili(state *openAIEncryptedRouteStateGeili, w encryptedRouteWriteGeili) {
+	state.captureMu.Lock()
+	defer state.captureMu.Unlock()
+	remaining := encryptedRouteCaptureWriteBudgetGeili - state.captureSpent
+	if remaining <= 0 {
+		encryptedRouteRecordFailuresGeili.Add(1)
+		slog.Warn("encrypted_route.record_failed", "user_id", w.userID, "error_class", "deadline", "storage_phase", "write_budget")
+		return
+	}
+	w.budget = remaining
+	start := time.Now()
+	persistEncryptedRoutesGeili(w)
+	state.captureSpent += time.Since(start)
+}
+
 func ObserveOpenAIEncryptedOutputGeili(ctx context.Context, payload []byte) {
 	state := encryptedRouteStateGeili(ctx)
 	if state == nil || state.service == nil {
@@ -389,7 +418,7 @@ func ObserveOpenAIEncryptedOutputGeili(ctx context.Context, payload []byte) {
 	}
 	w := encryptedRouteWriteGeili{cache: cache, userID: state.userID, records: records}
 	if state.enabled {
-		persistEncryptedRoutesGeili(w)
+		persistProtectedEncryptedRoutesGeili(state, w)
 		return
 	}
 	encryptedRouteWritesGeili.once.Do(func() {
