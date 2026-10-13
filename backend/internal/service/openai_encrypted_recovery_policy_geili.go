@@ -270,3 +270,15 @@ func RefreshOpenAIEncryptedOutputOriginGeili(ctx context.Context, c *gin.Context
 		WithOpenAIEncryptedActualOutputOriginGeili(ctx, &groupID, account, upstreamModel)
 	}
 }
+
+// OpenAIEncryptedReasoningRecoveredGeili is request-local: it never changes
+// ordinary store=false cleanup or infers recovery from user-supplied body flags.
+func OpenAIEncryptedReasoningRecoveredGeili(ctx context.Context) bool {
+	state := encryptedRouteStateGeili(ctx)
+	if state == nil {
+		return false
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return state.protected && state.recovery && state.claimed
+}

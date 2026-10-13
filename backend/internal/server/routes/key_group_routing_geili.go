@@ -239,11 +239,13 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 				return
 			}
 			if owner != nil {
-				candidates = service.FilterOpenAIEncryptedRoutesGeili(candidates, owner)
-				if len(candidates) == 0 {
-					c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "encrypted_session_route_conflict", "type": "api_error", "message": "原会话线路已不在此 Key 的可用渠道中，请恢复原线路或新建会话并带入可读进度"}})
+				var routeErr error
+				body, candidates, routeErr = recoverUnavailableEncryptedRouteGeili(c.Request.Context(), body, candidates, authorizedCandidates, owner)
+				if routeErr != nil {
+					h.OpenAIGateway.WriteOpenAIEncryptedRouteErrorGeili(c, routeErr)
 					return
 				}
+				requestmodel.ResetRequestBody(c.Request, body)
 			}
 		}
 		next := explicitGatewayHandler(h, path)
@@ -604,4 +606,20 @@ func ownedAUAPIMediaLookup(c *gin.Context) bool {
 		}
 	}
 	return true
+}
+
+// recoverUnavailableEncryptedRouteGeili handles a source group absent from the
+// live catalog. The frozen alternatives were already filtered by Key permission
+// and forced platform; never rebuild them from an unfiltered catalog here.
+func recoverUnavailableEncryptedRouteGeili(ctx context.Context, body []byte, candidates, authorizedCandidates []service.CompositeRouteDecision, owner *service.OpenAIEncryptedRouteGeili) ([]byte, []service.CompositeRouteDecision, error) {
+	filtered := service.FilterOpenAIEncryptedRoutesGeili(candidates, owner)
+	if len(filtered) > 0 {
+		return body, filtered, nil
+	}
+	if len(authorizedCandidates) > 0 {
+		if recovered, ok := service.ReleaseOpenAIEncryptedReasoningRouteGeili(ctx, body); ok {
+			return recovered, append([]service.CompositeRouteDecision(nil), authorizedCandidates...), nil
+		}
+	}
+	return body, nil, &service.OpenAIEncryptedRouteErrorGeili{Status: http.StatusConflict, Code: "encrypted_session_route_conflict", Message: "原会话线路已不在此 Key 的可用渠道中，请恢复原线路或联系技术支持保留会话进度"}
 }

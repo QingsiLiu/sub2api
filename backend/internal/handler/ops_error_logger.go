@@ -1462,7 +1462,9 @@ func logOpsStreamErrorValue(c *gin.Context, ops *service.OpsService, wireStatus 
 	if streamErr.RequestScoped {
 		// 请求级带内结果只按错误类型分类，此前尝试残留的上游错误上下文不参与判定。
 		phase = classifyOpsPhase(normalizedType, streamErr.Message, streamErr.Code)
-		isBusinessLimited = true
+		// geili hook: continuity failures remain SLA failures without inheriting
+		// provider errors from an earlier attempt; permission conflicts stay local.
+		isBusinessLimited = encryptedOpsRequestScopedBusinessLimitedGeili(streamErr)
 		errorOwner = classifyOpsErrorOwner(phase, streamErr.Message)
 		errorSource = classifyOpsErrorSource(phase, streamErr.Message)
 	} else {
@@ -2258,6 +2260,11 @@ func classifyOpsErrorLog(c *gin.Context, errType, message, code string, status i
 }
 
 func classifyOpsIsBusinessLimited(errType, phase, code string, status int, message string, localClientAuthError ...bool) bool {
+	// geili hook: the same local encrypted permission conflict is business
+	// admission whether delivered as HTTP JSON or an in-band stream failure.
+	if code == "encrypted_session_route_conflict" && status == http.StatusConflict {
+		return true
+	}
 	if len(localClientAuthError) > 0 && localClientAuthError[0] {
 		return true
 	}

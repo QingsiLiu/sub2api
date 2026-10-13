@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
@@ -536,4 +537,110 @@ func TestEncryptedProtectedCompactPreservesInitialModelGeili(t *testing.T) {
 			require.Equal(t, 400, rec.Code)
 		})
 	}
+}
+
+func TestEncryptedReleasedReasoningSummaryReachesWireGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, passthrough := range []bool{false, true} {
+		for _, recovered := range []bool{false, true} {
+			t.Run(fmt.Sprintf("passthrough=%v/recovered=%v", passthrough, recovered), func(t *testing.T) {
+				upstream := &httpUpstreamRecorder{responses: []*http.Response{encryptedRecoveryResponseGeili(200, `{"id":"resp_ok","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1}}`)}}
+				svc, origin := encryptedRecoveryFixtureGeili(upstream)
+				cache := &encryptedRouteCacheFixtureGeili{}
+				svc.cache = cache
+				body := []byte(`{"model":"gpt-6-astra","store":false,"nonce":9007199254740993,"input":[{"type":"reasoning","id":"rs_old","encrypted_content":"known-cipher","summary":[{"type":"summary_text","text":"preserved task progress"}]},{"type":"message","role":"user","content":"continue"}]}`)
+				ctx := context.Background()
+				if recovered {
+					group := int64(128)
+					key := &APIKey{ID: 10, UserID: 3885}
+					var err error
+					ctx, _, err = svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), key, []byte(`{"input":"hello"}`))
+					require.NoError(t, err)
+					ctx = WithOpenAIEncryptedActualOutputOriginGeili(ctx, &group, origin, "gpt-6-astra")
+					ObserveOpenAIEncryptedOutputGeili(ctx, []byte(`{"type":"response.output_item.done","item":{"type":"reasoning","encrypted_content":"known-cipher","summary":[]}}`))
+					ctx, _, err = svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), key, body)
+					require.NoError(t, err)
+					var ok bool
+					body, ok = ReleaseOpenAIEncryptedReasoningRouteGeili(ctx, body)
+					require.True(t, ok)
+				} else {
+					next, ok, _ := PrepareOpenAIEncryptedReasoningRecoveryGeili(body)
+					require.True(t, ok)
+					body = next // The same plaintext input without a gateway recovery claim retains old cleanup.
+				}
+				target := *origin
+				target.ID = 11
+				target.Extra = map[string]any{"use_responses_api": true, "openai_passthrough": passthrough}
+				c, _ := encryptedRecoveryContextGeili("summary-wire")
+				c.Request = c.Request.WithContext(ctx)
+				_, err := svc.Forward(ctx, c, &target, body)
+				require.NoError(t, err)
+				require.Len(t, upstream.bodies, 1)
+				wire := upstream.bodies[0]
+				require.Equal(t, "9007199254740993", gjson.GetBytes(wire, "nonce").Raw)
+				if recovered {
+					require.Equal(t, "reasoning", gjson.GetBytes(wire, "input.0.type").String())
+					require.Equal(t, "preserved task progress", gjson.GetBytes(wire, "input.0.summary.0.text").String())
+				} else {
+					require.Equal(t, "message", gjson.GetBytes(wire, "input.0.type").String())
+				}
+			})
+		}
+	}
+}
+
+func TestEncryptedWSPassthroughStoreFalseSummaryReachesWireGeili(t *testing.T) {
+	first, second := newStagedPassthroughConn(), newStagedPassthroughConn()
+	first.Send(`{"type":"response.failed","response":{"error":{"code":"invalid_encrypted_content","message":"bad cipher"}}}`)
+	second.Send(`{"type":"response.completed","response":{"id":"resp_recovered","status":"completed","usage":{"input_tokens":3,"output_tokens":1}}}`)
+	svc := newPassthroughLifecycleService(passthroughLifecycleConfig(), first)
+	svc.openaiWSPassthroughDialer = &encryptedWSSequenceDialerGeili{conns: []*stagedPassthroughConn{first, second}}
+	ctx := context.WithValue(context.Background(), openAIEncryptedRouteContextKeyGeili{}, &openAIEncryptedRouteStateGeili{protected: true, recovery: true})
+	server, _ := startPassthroughLifecycleServerWithHooks(t, ctx, svc, passthroughLifecycleAccount(), nil)
+	defer server.Close()
+	clientCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, _, err := coderws.Dial(clientCtx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	require.NoError(t, err)
+	defer client.CloseNow()
+	body := []byte(`{"type":"response.create","model":"gpt-5.1","store":false,"nonce":9007199254740993,"input":[{"type":"reasoning","encrypted_content":"cipher","summary":[{"type":"summary_text","text":"recovered progress"}]}]}`)
+	require.NoError(t, client.Write(clientCtx, coderws.MessageText, body))
+	_, _, err = client.Read(clientCtx)
+	require.NoError(t, err)
+	select {
+	case outbound := <-second.writes:
+		require.Equal(t, "recovered progress", gjson.GetBytes(outbound, "input.0.summary.0.text").String())
+		require.Equal(t, "9007199254740993", gjson.GetBytes(outbound, "nonce").Raw)
+		require.False(t, gjson.GetBytes(outbound, "input.0.encrypted_content").Exists())
+	case <-clientCtx.Done():
+		t.Fatal("missing recovered upstream request")
+	}
+	// A later client-supplied turn must not inherit the local retry's preservation flag.
+	next := []byte(`{"type":"response.create","model":"gpt-5.1","store":false,"input":[{"type":"reasoning","summary":[{"type":"summary_text","text":"new unclaimed turn"}]},{"type":"message","role":"user","content":"continue"}]}`)
+	require.NoError(t, client.Write(clientCtx, coderws.MessageText, next))
+	select {
+	case outbound := <-second.writes:
+		require.Equal(t, "message", gjson.GetBytes(outbound, "input.0.type").String())
+		require.NotContains(t, string(outbound), "new unclaimed turn")
+	case <-clientCtx.Done():
+		t.Fatal("missing new-turn upstream request")
+	}
+}
+
+func TestEncryptedWSHTTPBridgeRecoveredSummaryReachesWireGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{encryptedRecoveryResponseGeili(200, "data: "+`{"type":"response.completed","response":{"id":"resp_ok","status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`+"\n\n")}}
+	upstream.responses[0].Header.Set("Content-Type", "text/event-stream")
+	svc, account := encryptedRecoveryFixtureGeili(upstream)
+	ctx := context.WithValue(context.Background(), openAIEncryptedRouteContextKeyGeili{}, &openAIEncryptedRouteStateGeili{protected: true, recovery: true, claimed: true})
+	body := []byte(`{"type":"response.create","model":"gpt-6-astra","store":false,"nonce":9007199254740993,"input":[{"type":"reasoning","summary":[{"type":"summary_text","text":"bridge progress"}]},{"type":"message","role":"user","content":"continue"}]}`)
+	normalized, _, err := normalizeOpenAIResponsesWebSocketCompatibilityBody(body, account, false, OpenAIEncryptedReasoningRecoveredGeili(ctx))
+	require.NoError(t, err)
+	c, _ := encryptedRecoveryContextGeili("bridge-summary")
+	c.Request = c.Request.WithContext(ctx)
+	_, err = svc.proxyOpenAIWSHTTPBridgeTurn(ctx, c, account, "test-token", normalized, len(normalized), "gpt-6-astra", "", "", "", "", 1, func([]byte) error { return nil })
+	require.NoError(t, err)
+	require.Len(t, upstream.bodies, 1)
+	require.Equal(t, "bridge progress", gjson.GetBytes(upstream.bodies[0], "input.0.summary.0.text").String())
+	require.Equal(t, "9007199254740993", gjson.GetBytes(upstream.bodies[0], "nonce").Raw)
 }

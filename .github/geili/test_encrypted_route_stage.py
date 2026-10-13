@@ -29,7 +29,8 @@ class FakeBase:
 class StageRunnerTests(unittest.TestCase):
     def make_fixture(self):
         cache = types.SimpleNamespace(fixture_type=lambda _: FakeBase,
-            b=types.SimpleNamespace(stage=types.SimpleNamespace(literal=literal, private_json=Mock())))
+            b=types.SimpleNamespace(stage=types.SimpleNamespace(literal=literal, private_json=Mock(),
+                validate_redis_environment=Mock(), REDIS='synthetic-stage-redis')))
         fixture = runner.fixture_type(cache, object())()
         fixture.private = Path(self.enterContext(tempfile.TemporaryDirectory()))
         fixture.fixture_ids = {'users': [12345]}
@@ -89,7 +90,7 @@ class StageRunnerTests(unittest.TestCase):
     def test_cleanup_metadata_exact_user_ids_and_settings_restored(self):
         f, _ = self.make_fixture()
         f.snapshot = {'encrypted_settings_snapshot': []}
-        f.sql.side_effect = [[], [], [], [{'n': 0}]]
+        f.sql.side_effect = [[], [], [], [], [{'n': 0}]]
         with patch.object(runner.time, 'sleep'):
             f.restore()
         queries = [c.args[0] for c in f.sql.call_args_list]
@@ -142,7 +143,7 @@ class StageRunnerTests(unittest.TestCase):
     def test_restoration_detects_unexpected_setting_drift_and_still_cleans_metadata(self):
         f, _ = self.make_fixture()
         f.snapshot = {'encrypted_settings_snapshot': []}
-        f.sql.side_effect = [[], [{'id': 42, 'key': 'unexpected', 'value': 'changed', 'updated_at': 'now'}], [], [{'n': 0}]]
+        f.sql.side_effect = [[], [{'id': 42, 'key': 'unexpected', 'value': 'changed', 'updated_at': 'now'}], [], [], [{'n': 0}]]
         def check(_, passed, *args):
             if not passed:
                 raise AssertionError('unexpected settings drift')
@@ -152,6 +153,116 @@ class StageRunnerTests(unittest.TestCase):
         self.assertFalse(f.snapshot['encrypted_settings_restored'])
         self.assertTrue(f.base_restored)
         self.assertTrue(any('DELETE FROM openai_encrypted_sources_geili' in c.args[0] for c in f.sql.call_args_list))
+
+    def perf_batches(self, latency_off=.010, latency_protect=.011, elapsed_off=1, elapsed_protect=1):
+        return [{'mode': mode, 'round': i, 'latencies_seconds': [latency_off if mode == 'off' else latency_protect] * 300,
+                 'elapsed_seconds': elapsed_off if mode == 'off' else elapsed_protect, 'failed_responses': 0}
+                for i in range(2) for mode in ('off', 'protect')]
+
+    def test_performance_aggregation_raw_samples_and_thresholds(self):
+        summary = runner.performance_summary(self.perf_batches())
+        self.assertTrue(summary['passed'])
+        self.assertEqual(600, summary['modes']['off']['samples'])
+        self.assertAlmostEqual(1, summary['p95_delta_ms'])
+        self.assertAlmostEqual(300, summary['modes']['protect']['throughput_per_second'])
+        self.assertFalse(runner.performance_summary(self.perf_batches(latency_protect=.021))['passed'])
+        self.assertFalse(runner.performance_summary(self.perf_batches(elapsed_protect=1.03))['passed'])
+        batches = self.perf_batches()
+        batches[0]['failed_responses'] = 1
+        self.assertFalse(runner.performance_summary(batches)['passed'])
+
+    def test_performance_sampler_uses_primary_four_interleaved_batches_and_separate_key(self):
+        f, cache = self.make_fixture()
+        f.args = types.SimpleNamespace(performance_samples=300, expected_revision='synthetic-revision', expected_image='sha256:synthetic')
+        f.groups = {'A': {'id': 42}}
+        f.suffix = 'synthetic-perf'
+        key = {'id': 345, 'key': 'synthetic-token-never-recorded'}
+        f.new_key = Mock(return_value=key)
+        f.set_policy = Mock()
+        f.request = Mock(return_value=[200, {'status': 'completed', 'output': [{'text': 'acceptance ok A'}]}, {}])
+        f.replica_request = Mock(side_effect=AssertionError('performance must not use netns subprocess'))
+        with patch.object(runner, 'performance_summary', return_value={'passed': True}):
+            f.sample_performance()
+        f.new_key.assert_called_once_with('performance-only', [42])
+        self.assertEqual(['off', 'protect', 'protect', 'off'], [c.args[0] for c in f.set_policy.call_args_list])
+        self.assertEqual(1280, f.request.call_count)
+        f.replica_request.assert_not_called()
+        self.assertEqual([300] * 4, [len(b['latencies_seconds']) for b in f.performance['batches']])
+        self.assertTrue(all(b['concurrency'] == 4 and b['warmup_requests'] == 20 for b in f.performance['batches']))
+        saved = cache.b.stage.private_json.call_args.args[1]
+        self.assertEqual('synthetic-revision', saved['revision'])
+        self.assertNotIn('synthetic-token-never-recorded', json.dumps(saved))
+
+    def test_performance_empty_zero_and_invalid_samples_fail_closed(self):
+        self.assertFalse(runner.performance_summary([])['passed'])
+        self.assertFalse(runner.performance_summary(self.perf_batches(elapsed_off=0))['passed'])
+        self.assertFalse(runner.performance_summary(self.perf_batches(latency_off=0))['passed'])
+        self.assertFalse(runner.performance_summary(self.perf_batches(latency_protect=float('nan')))['passed'])
+        batches = self.perf_batches()
+        batches[0]['latencies_seconds'].pop()
+        self.assertFalse(runner.performance_summary(batches)['passed'])
+
+    def test_source_cache_exact_prefix_and_user_ownership(self):
+        digest = 'a' * 64
+        rows = [{'user_id': 12345, 'cipher_digest': digest}]
+        self.assertEqual(['openai_encrypted_route_geili:v2:12345:' + digest], runner.source_cache_keys(rows * 2, [12345]))
+        for bad in [{'user_id': 3885, 'cipher_digest': digest}, {'user_id': 12345, 'cipher_digest': '*'},
+                    {'user_id': 12345, 'cipher_digest': 'A' * 64}]:
+            with self.assertRaises(RuntimeError):
+                runner.source_cache_keys([bad], [12345])
+
+    def configure_redis_fixture(self, f):
+        f.inspect = Mock(return_value=[{'Config': {'Env': ['REDIS_PASSWORD=synthetic-private-password', 'REDIS_DB=0']}}])
+
+    def test_source_cache_manifest_precedes_deletes_and_auth_not_in_arguments(self):
+        f, cache = self.make_fixture()
+        self.configure_redis_fixture(f)
+        rows = [{'user_id': 12345, 'cipher_digest': 'a' * 64}]
+        f.snapshot = {}
+        f.sql.return_value = rows
+        def command(args, **kwargs):
+            self.assertTrue(f.cache_manifest_ready)
+            self.assertEqual(rows, f.snapshot['encrypted_redis_sources'])
+            self.assertNotIn('synthetic-private-password', ' '.join(args))
+            self.assertEqual('synthetic-private-password', kwargs['env']['REDISCLI_AUTH'])
+            self.assertIn('openai_encrypted_route_geili:v2:12345:' + 'a' * 64, args)
+            self.assertEqual('0', args[args.index('-n') + 1])
+            return types.SimpleNamespace(returncode=0, stdout='1' if 'DEL' in args else '0')
+        with patch.object(runner.subprocess, 'run', side_effect=command) as calls:
+            f.cleanup_source_cache()
+        self.assertEqual(2, calls.call_count)
+        self.assertTrue(f.snapshot['encrypted_redis_restored'])
+
+    def test_source_cache_resume_manifest_after_sql_rows_deleted(self):
+        f, _ = self.make_fixture()
+        self.configure_redis_fixture(f)
+        f.snapshot = {'encrypted_redis_sources': [{'user_id': 12345, 'cipher_digest': 'b' * 64}]}
+        f.sql.return_value = []
+        with patch.object(runner.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stdout='0')) as call:
+            f.cleanup_source_cache()
+        self.assertIn('openai_encrypted_route_geili:v2:12345:' + 'b' * 64, call.call_args.args[0])
+
+    def test_source_cache_command_failure_still_cleans_sql_and_base(self):
+        f, _ = self.make_fixture()
+        self.configure_redis_fixture(f)
+        f.snapshot = {'encrypted_settings_snapshot': []}
+        f.sql.side_effect = [[], [], [{'user_id': 12345, 'cipher_digest': 'c' * 64}], [], [{'n': 0}]]
+        with patch.object(runner.time, 'sleep'), patch.object(runner.subprocess, 'run', side_effect=RuntimeError('private-command-detail')), self.assertRaises(RuntimeError) as failure:
+            f.restore()
+        self.assertNotIn('private-command-detail', str(failure.exception))
+        self.assertTrue(f.base_restored)
+        self.assertFalse(f.snapshot['encrypted_redis_restored'])
+        self.assertTrue(any('DELETE FROM openai_encrypted_sources_geili' in c.args[0] for c in f.sql.call_args_list))
+
+    def test_source_cache_refuses_production_redis(self):
+        f, cache = self.make_fixture()
+        self.configure_redis_fixture(f)
+        f.snapshot = {}
+        f.sql.return_value = [{'user_id': 12345, 'cipher_digest': 'd' * 64}]
+        cache.b.stage.REDIS = 'sub2api-redis'
+        with patch.object(runner.subprocess, 'run') as call, self.assertRaises(RuntimeError):
+            f.cleanup_source_cache()
+        call.assert_not_called()
 
     def test_synthetic_seed_and_recovery_response_have_stable_shape(self):
         tools = runner.synthetic_response({'input': 'seed-tools'}, 'A', 'fixture')

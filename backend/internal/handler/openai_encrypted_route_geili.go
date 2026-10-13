@@ -82,6 +82,7 @@ func (h *OpenAIGatewayHandler) WriteOpenAIEncryptedRouteErrorGeili(c *gin.Contex
 		status, code, message = typed.Status, typed.Code, typed.Message
 	}
 	if c.Writer.Written() {
+		service.MarkOpsStreamErrorValue(c, service.OpsStreamError{ErrType: "api_error", Code: code, Message: message, IntendedStatus: status, CountTowardsSLA: status >= 500 || code == "invalid_encrypted_content", RequestScoped: true})
 		payload, _ := json.Marshal(gin.H{"type": "response.failed", "response": gin.H{"status": "failed", "error": gin.H{"code": code, "message": message}}})
 		_, _ = c.Writer.Write(append(append([]byte("event: response.failed\ndata: "), payload...), []byte("\n\n")...))
 		c.Writer.Flush()
@@ -153,12 +154,18 @@ func (h *OpenAIGatewayHandler) prepareEncryptedWSFirstRouteGeili(c *gin.Context,
 	return &next, nil
 }
 
-func writeEncryptedWSRouteErrorGeili(ctx context.Context, conn *coderws.Conn, err error) {
+func writeEncryptedWSRouteErrorGeili(c *gin.Context, ctx context.Context, conn *coderws.Conn, err error) {
+	status := 503
 	code, message := "encrypted_session_route_unavailable", "原会话线路暂时不可用，请稍后重试或联系技术支持"
 	var typed *service.OpenAIEncryptedRouteErrorGeili
 	if errors.As(err, &typed) {
 		code, message = typed.Code, typed.Message
+		status = typed.Status
 	}
+	if c != nil && c.GetInt(service.OpsStreamTurnKey) <= 0 {
+		service.BeginOpsStreamTurn(c, 1)
+	}
+	service.MarkOpsStreamErrorValue(c, service.OpsStreamError{ErrType: "api_error", Code: code, Message: message, IntendedStatus: status, CountTowardsSLA: status >= 500 || code == "invalid_encrypted_content", RequestScoped: true})
 	payload, _ := json.Marshal(gin.H{"type": "error", "error": gin.H{"type": "api_error", "code": code, "message": message}})
 	_ = conn.Write(ctx, coderws.MessageText, payload)
 	closeOpenAIClientWS(conn, coderws.StatusTryAgainLater, code)

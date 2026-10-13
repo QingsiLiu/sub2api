@@ -728,7 +728,7 @@ func normalizeOpenAIResponsesReasoningContentReplay(body []byte) ([]byte, bool, 
 	return normalized, true, nil
 }
 
-func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse bool) ([]byte, bool, error) {
+func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse bool, preserveRecoveredSummary ...bool) ([]byte, bool, error) {
 	if !knownStoreFalse && gjson.GetBytes(body, "store").Type != gjson.False {
 		return body, false, nil
 	}
@@ -738,7 +738,7 @@ func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse
 		return body, false, nil
 	}
 	if !root.IsObject() || !gjson.ValidBytes(body) || !utf8.Valid(body) || hasDuplicateJSONObjectKeys(root) {
-		return normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body, knownStoreFalse)
+		return normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body, knownStoreFalse, preserveRecoveredSummary...)
 	}
 
 	// Only reasoning metadata needs decoding. Keep large image/tool results as
@@ -759,7 +759,9 @@ func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse
 		typ := strings.TrimSpace(item.Get("type").String())
 		id := strings.TrimSpace(item.Get("id").String())
 		encrypted := item.Get("encrypted_content")
-		if (typ == "reasoning" && (encrypted.Type != gjson.String || strings.TrimSpace(encrypted.Str) == "")) ||
+		// geili hook: a claimed safe recovery retains its only readable reasoning summary.
+		keepReadableSummary := len(preserveRecoveredSummary) > 0 && preserveRecoveredSummary[0] && item.Get("summary").IsArray() && len(item.Get("summary").Array()) > 0
+		if (typ == "reasoning" && !keepReadableSummary && (encrypted.Type != gjson.String || strings.TrimSpace(encrypted.Str) == "")) ||
 			(typ == "item_reference" && strings.HasPrefix(id, "rs_")) {
 			changed = true
 			return true
@@ -795,7 +797,7 @@ func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse
 		return true
 	})
 	if fallback {
-		return normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body, knownStoreFalse)
+		return normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body, knownStoreFalse, preserveRecoveredSummary...)
 	}
 	if itemErr != nil {
 		return body, false, fmt.Errorf("normalize API-key store=false reasoning replay: %w", itemErr)
@@ -807,7 +809,7 @@ func normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body []byte, knownStoreFalse
 }
 
 // Preserve the decoder's handling of unusual or duplicate-key input objects.
-func normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body []byte, knownStoreFalse bool) ([]byte, bool, error) {
+func normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body []byte, knownStoreFalse bool, preserveRecoveredSummary ...bool) ([]byte, bool, error) {
 	if !knownStoreFalse && gjson.GetBytes(body, "store").Type != gjson.False {
 		return body, false, nil
 	}
@@ -837,7 +839,9 @@ func normalizeOpenAIAPIKeyStoreFalseReasoningReplayDecoded(body []byte, knownSto
 		switch typ {
 		case "reasoning":
 			encryptedContent, hasEncryptedContent := item["encrypted_content"].(string)
-			if !hasEncryptedContent || strings.TrimSpace(encryptedContent) == "" {
+			summary, summaryOK := item["summary"].([]any)
+			keepReadableSummary := len(preserveRecoveredSummary) > 0 && preserveRecoveredSummary[0] && summaryOK && len(summary) > 0
+			if !keepReadableSummary && (!hasEncryptedContent || strings.TrimSpace(encryptedContent) == "") {
 				changed = true
 				continue
 			}
@@ -1429,12 +1433,15 @@ func normalizeOpenAIResponseFormatSchemasBody(body []byte) ([]byte, bool, error)
 	return normalized, true, nil
 }
 
-func normalizeOpenAIResponsesWebSocketCompatibilityBody(body []byte, account *Account, responsesLite bool) ([]byte, bool, error) {
-	return normalizeOpenAIResponsesCompatibilityBodyWithOptions(body, account, openAIResponsesCompatibilityOptions{ResponsesLite: responsesLite})
+func normalizeOpenAIResponsesWebSocketCompatibilityBody(body []byte, account *Account, responsesLite bool, preserveRecoveredSummary ...bool) ([]byte, bool, error) {
+	preserve := len(preserveRecoveredSummary) > 0 && preserveRecoveredSummary[0]
+	return normalizeOpenAIResponsesCompatibilityBodyWithOptions(body, account, openAIResponsesCompatibilityOptions{ResponsesLite: responsesLite, PreserveRecoveredReasoningSummary: preserve})
 }
 
 type openAIResponsesCompatibilityOptions struct {
 	ResponsesLite bool
+	// geili hook: only a request-wide claimed safe recovery can retain a plaintext summary.
+	PreserveRecoveredReasoningSummary bool
 	// Compact marks the /responses/compact wire shape, which is left as-is
 	// by request-shape compatibility rewrites such as web_search history.
 	Compact bool
@@ -1467,7 +1474,7 @@ func normalizeOpenAIResponsesCompatibilityBodyWithOptions(body []byte, account *
 			normalized = next
 			changed = true
 		}
-		if next, normalizedReasoning, err := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(normalized, false); err != nil {
+		if next, normalizedReasoning, err := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(normalized, false, opts.PreserveRecoveredReasoningSummary); err != nil {
 			return body, false, err
 		} else if normalizedReasoning {
 			normalized = next

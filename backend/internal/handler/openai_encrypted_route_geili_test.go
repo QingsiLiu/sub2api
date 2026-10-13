@@ -29,4 +29,16 @@ func TestEncryptedRouteGeiliHandlerPreservesWrappedConflictAndCommittedStream(t 
 	require.Contains(t, recorder.Body.String(), "event: response.failed")
 	require.Contains(t, recorder.Body.String(), `"status":"failed"`)
 	require.NotContains(t, recorder.Body.String(), "response.completed")
+	streamErr, ok := service.GetOpsStreamError(c)
+	require.True(t, ok)
+	require.Equal(t, "encrypted_session_route_conflict", streamErr.Code)
+	require.Equal(t, 409, streamErr.IntendedStatus)
+	require.False(t, streamErr.CountTowardsSLA, "permission conflict retains logical409 business rejection")
+}
+
+func TestEncryptedRouteGeiliWSAdmissionFailureDoesNotPenalizeUpstreamAccount(t *testing.T) {
+	for _, routeErr := range []error{service.ErrOpenAIEncryptedRouteUnavailableGeili, &service.OpenAIEncryptedRouteErrorGeili{Status: 409, Code: "encrypted_session_route_conflict", Message: "group revoked"}} {
+		err := service.NewOpenAIWSClientCloseError(1013, "reconnect", routeErr)
+		require.False(t, shouldReportOpenAIWSProxyAccountFailure(err))
+	}
 }

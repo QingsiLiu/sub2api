@@ -10,11 +10,11 @@
 {"openai_encrypted_route":{"mode":"off","protected_user_ids":[3885],"reasoning_recovery_enabled":false}}
 ```
 
-1. 当前候选 CI 全部通过后，正式 stage 脚本固定不可变 digest，确认版本和新增迁移280；全程合成上游，禁真实付费模型探测。
+1. 当前候选 CI 全部通过后，正式 stage 脚本固定不可变 digest，确认版本和新增迁移280/281；全程合成上游，禁真实付费模型探测。
 2. 获得本候选当次生产授权后，用与 Stage 同一 digest 发布。先设 observe，覆盖所有用户仅记录来源，不约束选路，观察24小时。
 3. 之后人工切 protect，名单仅3885，全部 Key 生效；开启 reasoning_recovery_enabled 才允许一次有限恢复。观察48小时且至少200次携带已追踪密文请求。
 4. 放大范围须零误路由、零上下文误删、零工具重放和重复计费，并且已追踪密文路由错误较观察期下降至少50%。样本不足不能宣称成功。
-5. 任一回归把 mode 设 off，最多5秒策略缓存刷新；已开始的请求/WS当前轮保持冻结策略。下一请求或下一WS轮取新设置。metadata不删除，回退镜像保留迁移280和业务数据，不整库回灌。
+5. 任一回归把 mode 设 off，最多5秒策略缓存刷新；已开始的请求/WS当前轮保持冻结策略。下一请求或下一WS轮取新设置。metadata不删除，回退镜像保留迁移280/281和业务数据，不整库回灌。
 
 ## 来源与路由
 
@@ -30,7 +30,7 @@ PostgreSQL保存group/account/model/backend fingerprint/生成时间/冲突；Re
 
 安全恢复必须纯reasoning密文，无previous_response_id、compaction、加密工具/agent/未知不透明项、内置工具；没有客户端输出、上游非零计量或已观察的服务端操作。只删reasoning密文和耦合id，保留summary、用户消息、工具定义/调用/结果、大整数、模型和effort；原始请求不修改。每轮一次，同账号优先；HTTP源账号不可用可在一次安全清理后按Key授权尝试其他分组。
 
-HTTP、SSE、compact、WS原生/HTTP bridge/passthrough均覆盖。WS首帧在选号前解析来源，后续轮校验当前账号，连接内不切账号。WS自动恢复仅明确response.failed且尚未交付帧，passthrough只首轮允许同账号重新拨号；后续轮或裸error预告直接保留失败，避免丢后续终态usage。
+HTTP、SSE、compact、WS原生/HTTP bridge/passthrough均覆盖。protect 下 compact 保持原模型，不执行自动模型切换。WS首帧在选号前解析来源，后续轮校验当前账号，连接内不切账号。WS自动恢复仅明确response.failed且尚未交付帧，passthrough只首轮允许同账号重新拨号；后续轮或裸error预告直接保留失败，避免丢后续终态usage。
 
 明确解密失败对外400 invalid_encrypted_content；来源冲突409 encrypted_session_route_conflict；已知原线路不可用503 encrypted_session_route_unavailable。HTTP已提交200时以合法response.failed结束，不能伪造completed。失败尝试有usage则不自动重放，沿用部分结果计费提交一次。
 

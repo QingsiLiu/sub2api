@@ -11,10 +11,13 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import math
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import re
 import signal
+import subprocess
 import time
 
 SETTING = 'openai_encrypted_route'
@@ -73,6 +76,48 @@ def restored_setting_sql(rows, literal):
     return ('UPDATE settings SET value=' + literal(row['value']) + ',updated_at=' + literal(row['updated_at']) +
             ' WHERE id=' + str(row['id']) + ' AND key=' + literal(SETTING) + ';')
 
+
+
+def performance_summary(batches):
+    """Aggregate every measured sample; never discard outliers or failed calls."""
+    result = {'passed': False, 'concurrency': 4, 'warmup_per_batch': 20,
+              'p95_delta_limit_ms': 10, 'throughput_ratio_minimum': .98}
+    stats = {}
+    for mode in ('off', 'protect'):
+        rows = [r for r in batches if r.get('mode') == mode]
+        if len(rows) != 2 or any(len(r.get('latencies_seconds', [])) < 300 for r in rows):
+            result['failure'] = 'insufficient_samples: require two batches of at least300 per mode'
+            return result
+        latencies = [v for row in rows for v in row['latencies_seconds']]
+        elapsed = sum(row.get('elapsed_seconds', 0) for row in rows)
+        if (elapsed <= 0 or not math.isfinite(elapsed) or any(not isinstance(v, (int, float))
+                or not math.isfinite(v) or v <= 0 for v in latencies)):
+            result['failure'] = 'invalid_or_zero_timings'
+            return result
+        ordered = sorted(latencies)
+        stats[mode] = {'samples': len(ordered), 'elapsed_seconds': elapsed,
+                       'throughput_per_second': len(ordered) / elapsed,
+                       'p95_ms': ordered[math.ceil(.95 * len(ordered)) - 1] * 1000,
+                       'failed_responses': sum(r.get('failed_responses', 0) for r in rows)}
+    result.update(modes=stats, p95_delta_ms=stats['protect']['p95_ms'] - stats['off']['p95_ms'],
+                  throughput_ratio=stats['protect']['throughput_per_second'] / stats['off']['throughput_per_second'])
+    result['passed'] = (result['p95_delta_ms'] <= 10 and result['throughput_ratio'] >= .98
+                        and all(r['failed_responses'] == 0 for r in stats.values()))
+    if not result['passed']:
+        result['failure'] = 'performance gate failed; investigate variance and rerun with more samples, never relabel as pass'
+    return result
+
+
+def source_cache_keys(rows, users):
+    if any(type(u) is not int or u <= 0 for u in users):
+        raise RuntimeError('invalid synthetic source ownership')
+    keys = set()
+    for row in rows:
+        uid, digest = row.get('user_id'), row.get('cipher_digest')
+        if type(uid) is not int or uid not in users or not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest):
+            raise RuntimeError('source cleanup outside exact synthetic ownership')
+        keys.add('openai_encrypted_route_geili:v2:' + str(uid) + ':' + digest)
+    return sorted(keys)
 
 
 def fixture_type(cache, source):
@@ -228,6 +273,102 @@ def fixture_type(cache, source):
             normal = self.call_encrypted(self.cross_key, [{'role': 'user', 'content': 'ordinary off request'}], 'off', True)
             self.check('mode off leaves existing ordered-group scheduling behavior', normal[0] == 200
                 and self.inference_count() == before + 1 and self.encrypted_attempts[-1]['label'] == 'B')
+            self.sample_performance()
+
+        def sample_performance(self):
+            # A separate Key ensures bulk performance settlements cannot pollute
+            # the functional checks' exactly-one usage assertions.
+            key = self.new_key('performance-only', [self.groups['A']['id']])
+            batches = []
+            self.performance = {'batches': batches, 'summary': {'passed': False, 'failure': 'incomplete'}}
+            sample_count = self.args.performance_samples
+            for round_index, modes in enumerate((('off', 'protect'), ('protect', 'off'))):
+                for mode in modes:
+                    self.guard()
+                    self.set_policy(mode)
+                    def call(index):
+                        began = time.monotonic()
+                        try:
+                            # Primary host request has no secondary netns subprocess
+                            # startup cost. Payload is ordinary plaintext in all modes.
+                            response = self.call_encrypted(key, [{'role': 'user', 'content': 'synthetic plain performance'}],
+                                'perf-' + str(round_index) + '-' + mode + '-' + str(index))
+                            body = response[1]
+                            ok = (response[0] == 200 and isinstance(body, dict) and body.get('status') == 'completed'
+                                  and 'acceptance ok A' in json.dumps(body) and 'encrypted_content' not in json.dumps(body))
+                            status = response[0]
+                        except Exception:
+                            ok, status = False, None
+                        return {'latency_seconds': time.monotonic() - began, 'ok': ok, 'status': status}
+                    with ThreadPoolExecutor(max_workers=4) as pool:
+                        warmup = list(pool.map(call, range(-20, 0)))
+                        self.check('performance warmup complete ' + str(round_index) + '/' + mode,
+                                   all(r['ok'] for r in warmup), {'requests': len(warmup)})
+                        began = time.monotonic()
+                        samples = list(pool.map(call, range(sample_count)))
+                        elapsed = time.monotonic() - began
+                    batch = {'round': round_index, 'mode': mode, 'concurrency': 4, 'warmup_requests': 20,
+                        'elapsed_seconds': elapsed, 'latencies_seconds': [r['latency_seconds'] for r in samples],
+                        'response_statuses': [r['status'] for r in samples],
+                        'failed_responses': sum(not r['ok'] for r in samples),
+                        'throughput_per_second': len(samples) / elapsed if elapsed > 0 else None}
+                    batches.append(batch)
+                    cache.b.stage.private_json(self.private / 'encrypted-performance.json', {
+                        'revision': self.args.expected_revision, 'image': self.args.expected_image,
+                        'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                        'synthetic_only': True, **self.performance})
+            self.performance['summary'] = performance_summary(batches)
+            cache.b.stage.private_json(self.private / 'encrypted-performance.json', {
+                'revision': self.args.expected_revision, 'image': self.args.expected_image,
+                'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                'synthetic_only': True, **self.performance})
+            self.check('normal plaintext performance p95 delta<=10ms and throughput loss<=2percent',
+                       self.performance['summary']['passed'], self.performance['summary'])
+
+        def cleanup_source_cache(self):
+            self.guard()
+            users = self.fixture_ids['users']
+            previous = self.snapshot.get('encrypted_redis_sources', [])
+            current = []
+            if users:
+                current = self.sql("SELECT json_build_object('user_id',user_id,'cipher_digest',cipher_digest) "
+                    'FROM openai_encrypted_sources_geili WHERE user_id IN (' + ','.join(str(int(u)) for u in users) + ');')
+            records = previous + current
+            keys = source_cache_keys(records, users)
+            self.snapshot['encrypted_redis_sources'] = records
+            self.snapshot['encrypted_redis_restored'] = False
+            # Persist exact deletion authority before Redis or PostgreSQL deletes.
+            cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
+            self.cache_manifest_ready = True
+            if keys:
+                app = self.inspect()[0]
+                env = dict(v.split('=', 1) for v in app['Config'].get('Env', []) if '=' in v)
+                cache.b.stage.validate_redis_environment(env)
+                redis_name = cache.b.stage.REDIS
+                if redis_name == 'sub2api-redis':
+                    raise RuntimeError('refuse production Redis source cleanup')
+                password = env.get('REDIS_PASSWORD')
+                if not isinstance(password, str) or not password or any(c in password for c in '\n\r\0'):
+                    raise RuntimeError('invalid Stage Redis authentication environment')
+                # Docker inherits this environment variable by NAME. Credentials
+                # never appear in argv, snapshots, command errors or reports.
+                private_env = dict(os.environ, REDISCLI_AUTH=password)
+                for offset in range(0, len(keys), 128):
+                    batch = keys[offset:offset + 128]
+                    for operation in ('DEL', 'EXISTS'):
+                        try:
+                            result = subprocess.run(['docker', 'exec', '-e', 'REDISCLI_AUTH', redis_name,
+                                'redis-cli', '-n', '0', '--raw', operation, *batch], env=private_env,
+                                text=True, capture_output=True, timeout=30)
+                            if result.returncode != 0 or not re.fullmatch(r'\d+\s*', result.stdout):
+                                raise RuntimeError('Redis command failed')
+                            if operation == 'EXISTS' and int(result.stdout.strip()) != 0:
+                                raise RuntimeError('source keys remain')
+                        except Exception:
+                            raise RuntimeError('owned Stage Redis source cleanup failed; retry canonical restore') from None
+            self.snapshot['encrypted_redis_restored'] = True
+            cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
+            self.check('exact owned Stage Redis source cache keys removed', True, {'keys': len(keys)})
 
         def restore(self):
             if not self.snapshot:
@@ -246,9 +387,15 @@ def fixture_type(cache, source):
             except BaseException as exc:
                 errors.append(type(exc).__name__)
             try:
+                self.cleanup_source_cache()
+            except BaseException as exc:
+                errors.append(type(exc).__name__)
+            try:
                 self.guard()
                 users = self.fixture_ids['users']
                 if users:
+                    if not getattr(self, 'cache_manifest_ready', False):
+                        raise RuntimeError('refuse losing source rows before durable cache cleanup manifest')
                     self.sql('DELETE FROM openai_encrypted_sources_geili WHERE user_id IN (' +
                              ','.join(str(int(u)) for u in users) + ');')
                     self.check('only this run source metadata removed', self.sql("SELECT json_build_object('n',COUNT(*)) "
@@ -273,8 +420,11 @@ def main():
     cache = load_ops(known.ops_bin)
     parser = cache.b.candidate_args()
     parser.add_argument('--replica-port', type=int, default=18517)
+    parser.add_argument('--performance-samples', type=int, default=300)
     args = parser.parse_args(remaining)
     cache.b.validate_args(args)
+    if not 300 <= args.performance_samples <= 1000:
+        raise RuntimeError('performance samples must be300..1000 per batch')
     if not cache.valid_replica_port(args.replica_port, args.mock_port):
         raise RuntimeError('invalid replica port')
     fixture = fixture_type(cache, cache.b.stage.load_source(args.source_root))(args)
@@ -290,8 +440,10 @@ def main():
             'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'passed': passed,
             'checks': fixture.checks, 'restored': fixture.snapshot.get('restored', False),
             'settings_restored': fixture.snapshot.get('encrypted_settings_restored', False),
+            'source_cache_removed': fixture.snapshot.get('encrypted_redis_restored', False),
             'replica_removed': fixture.snapshot.get('cache_replica', {}).get('removed', False),
-            'synthetic_only': True, 'real_suppliers_executed': False, 'production_ready': False}
+            'synthetic_only': True, 'real_suppliers_executed': False, 'production_ready': False,
+            'performance': getattr(fixture, 'performance', None)}
         cache.b.stage.private_json(fixture.private / 'encrypted-result.json', result)
         print('RESULT ' + str(fixture.private / 'encrypted-result.json'), flush=True)
     return 0 if passed else 1

@@ -185,7 +185,9 @@ func TestEncryptedWSAuthorizationGeiliRejectsBeforeDial(t *testing.T) {
 	state := &openAIEncryptedRouteStateGeili{protected: true}
 	ctx := context.WithValue(context.Background(), openAIEncryptedRouteContextKeyGeili{}, state)
 	group := int64(131)
-	server, _ := startPassthroughLifecycleServerWithHooks(t, ctx, svc, passthroughLifecycleAccount(), func(c *gin.Context) *OpenAIWSIngressHooks {
+	var serverContext *gin.Context
+	server, serverErr := startPassthroughLifecycleServerWithHooks(t, ctx, svc, passthroughLifecycleAccount(), func(c *gin.Context) *OpenAIWSIngressHooks {
+		serverContext = c
 		c.Set("api_key", &APIKey{ID: 4987, UserID: 3885, GroupID: &group})
 		return &OpenAIWSIngressHooks{AuthorizeEncryptedTurn: func(context.Context, int, []byte, string) error {
 			return &OpenAIEncryptedRouteErrorGeili{Status: 409, Code: "encrypted_session_route_conflict", Message: "group revoked"}
@@ -202,6 +204,16 @@ func TestEncryptedWSAuthorizationGeiliRejectsBeforeDial(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(body), "group revoked")
 	require.Equal(t, int32(0), dialer.calls.Load())
+	select {
+	case <-serverErr:
+		streamErr, ok := GetOpsStreamError(serverContext)
+		require.True(t, ok)
+		require.Equal(t, "encrypted_session_route_conflict", streamErr.Code)
+		require.Equal(t, 409, streamErr.IntendedStatus)
+		require.False(t, streamErr.CountTowardsSLA, "permission conflict remains a business rejection with logical409")
+	case <-clientCtx.Done():
+		t.Fatal("server did not finish rejected turn")
+	}
 	select {
 	case <-upstream.writes:
 		t.Fatal("revoked Key dispatched upstream")

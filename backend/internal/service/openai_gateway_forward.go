@@ -166,7 +166,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 			body = normalized
 			originalBody = normalized
 		}
-		if normalized, changed, normalizeErr := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body, isOpenAIResponsesCompactPath(c)); normalizeErr != nil {
+		if normalized, changed, normalizeErr := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body, isOpenAIResponsesCompactPath(c), OpenAIEncryptedReasoningRecoveredGeili(ctx)); normalizeErr != nil {
 			return nil, normalizeErr
 		} else if changed {
 			body = normalized

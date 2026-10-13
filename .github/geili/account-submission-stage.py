@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+from datetime import datetime, timezone
 
 
 def load(path, name):
@@ -124,7 +125,9 @@ def main():
     if fixture.snapshot:
         result = {'revision': args.expected_revision, 'image': args.expected_image,
             'kind': 'account-submission-stage', 'passed': passed,
+            'checked_at': datetime.now(timezone.utc).isoformat(),
             'checks': len(fixture.checks), 'restored': fixture.snapshot.get('restored', False),
+            'checks_detail': fixture.checks,
             'replica_removed': fixture.snapshot.get('cache_replica', {}).get('removed', False),
             'invites_removed': fixture.snapshot.get('intake_invites_removed', False),
             'proxies_removed': fixture.snapshot.get('intake_proxies_removed',False),

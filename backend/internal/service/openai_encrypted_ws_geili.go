@@ -140,10 +140,16 @@ func (s *OpenAIGatewayService) withOpenAIEncryptedWSHooksGeili(ctx context.Conte
 		if err != nil {
 			// No upstream write or new generation occurs after a source conflict.
 			code, message := "encrypted_session_route_conflict", "Encrypted session route changed; reconnect to the original route."
+			status := 409
 			var routeErr *OpenAIEncryptedRouteErrorGeili
 			if errors.As(err, &routeErr) {
 				code, message = routeErr.Code, routeErr.Message
+				status = routeErr.Status
+			} else if errors.Is(err, ErrOpenAIEncryptedRouteUnavailableGeili) {
+				code, message, status = "encrypted_session_route_unavailable", "原会话线路暂时不可用，请稍后重试或联系技术支持", 503
 			}
+			BeginOpsStreamTurn(c, turn)
+			MarkOpsStreamErrorValue(c, OpsStreamError{ErrType: "api_error", Code: code, Message: message, IntendedStatus: status, CountTowardsSLA: status >= 500 || code == "invalid_encrypted_content", RequestScoped: true})
 			frame, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]any{"type": "invalid_request_error", "code": code, "message": message}})
 			writeCtx, cancel := newOpenAIWSDownstreamWriteContext(base, hooks, s.openAIWSWriteTimeout())
 			defer cancel()

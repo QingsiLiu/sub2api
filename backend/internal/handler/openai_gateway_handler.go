@@ -79,7 +79,7 @@ func newOpenAIWSUnsupportedModelSwitchError(model string) error {
 }
 
 func shouldReportOpenAIWSProxyAccountFailure(err error) bool {
-	return err != nil && !errors.Is(err, errOpenAIWSUnsupportedModelSwitch) && !service.IsOpenAIWSSessionPreemptedError(err)
+	return err != nil && !errors.Is(err, errOpenAIWSUnsupportedModelSwitch) && !errors.Is(err, service.ErrOpenAIEncryptedRouteUnavailableGeili) && !service.IsOpenAIWSSessionPreemptedError(err)
 }
 
 // openAIWSIngressEndedByClient reports whether a finished ingress WebSocket turn
@@ -2596,7 +2596,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// geili hook: upgrade routing has no ciphertext; resolve the first frame now.
 	apiKey, err = h.prepareEncryptedWSFirstRouteGeili(c, apiKey, firstMessage, reqModel)
 	if err != nil {
-		writeEncryptedWSRouteErrorGeili(ctx, wsConn, err)
+		writeEncryptedWSRouteErrorGeili(c, ctx, wsConn, err)
 		return
 	}
 	ctx = c.Request.Context()
@@ -2826,7 +2826,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 		if service.OpenAIEncryptedRoutePinnedGeili(ctx) {
 			releaseAccountSlot()
-			writeEncryptedWSRouteErrorGeili(ctx, wsConn, service.ErrOpenAIEncryptedRouteUnavailableGeili)
+			writeEncryptedWSRouteErrorGeili(c, ctx, wsConn, service.ErrOpenAIEncryptedRouteUnavailableGeili)
 			return false
 		}
 		if failoverErr.ShouldReportAccountScheduleFailure() {
@@ -2905,7 +2905,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
 			if service.OpenAIEncryptedRoutePinnedGeili(ctx) {
-				writeEncryptedWSRouteErrorGeili(ctx, wsConn, err)
+				writeEncryptedWSRouteErrorGeili(c, ctx, wsConn, err)
 				return
 			}
 			if lastFailoverErr != nil {
