@@ -1,4 +1,12 @@
-## 0.2.16-geili.1（源码候选，未部署 Stage / 生产）
+## 0.2.16-geili.2（修复候选，待 CI / Stage）
+
+相对生产 `0.2.15-geili.8`，包含下方 `.1` 的上游 v0.2.16 同步和 Geili 计费适配；修复 Stage 发现的 Gemini 缓存创建兼容问题：标准 `models/模型名` 仅在缓存创建的路由授权时归一化为公开模型ID，原请求内容、账号映射、余额/订阅归属不改变。未知模型和冲突的重复 model 字段仍拒绝；普通文本请求不套用此归一化。
+
+- 路由回归12场景通过；原实现下标准资源名4场景失败，修复后通过；routes / middleware 竞态检查通过（20.176 / 4.290秒）。
+- 原341份迁移及新增官方242～245保持；新候选必须重建不可变镜像并重新执行当前镜像Stage矩阵，不把 `.1` 的结果重标为 `.2`。
+- revision / digest：本修复提交及候选CI产物生成后补记；部署状态：未部署新候选，生产仍 `.8`。用户已当次授权“验证后发送到线上”，验收限定模拟与非支付，全部门禁通过后发布同Stage digest。
+
+## 0.2.16-geili.1（已部署 Stage，验收未通过，未发布生产）
 
 相对生产 `0.2.15-geili.8`，同步上游正式版 [v0.2.16](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.16) 及随后仅同步 VERSION 的主干提交 `4d9ac3e48`。保留 Geili 独立计费、订阅 V2、多分组 Key、媒体任务、外部官方 Key 录入、加密会话来源保护与官方自更新禁用守卫。
 
@@ -6,7 +14,7 @@
 - 同步结构化输入回退、Gemini 图片工具结果与缓存不存在错误、模型限流隔离、Kimi 国际端点配额、支付倒计时及前端异步状态修复；同步 GPT-6.1 Sol 上游订阅凭据长上下文计价与默认上下文更新。
 - Gemini 固定缓存费用按 Key 的明确 billing_source 和 subscription_id 检查与结算；独立套餐 / 共享额度池与待结算费用共同参与校验，缓存续期接入订阅准入。零余额订阅 Key 不要求余额，零倍率仍有效。套餐名称与额度不被分组译文覆盖。
 - 新增上游原名迁移 `242_group_i18n.sql`、`243_gemini_cached_contents.sql`、`244_gemini_cached_contents_channel_usage.sql`、`245_gemini_cached_contents_mutation_lease.sql`；原 341 份 SQL 的内容及校验和全部保持。
-- revision：`3e349871f70ff90f104afca42411cd3e389750f8`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:0e38015fa8ca5974a74ef78601d485ae8a735c9d5362899c1bda8577b10f4df3`；[主干候选 CI 38396063756](https://github.com/QingsiLiu/sub2api/actions/runs/38396063756)全部 9 个任务及制品 13 项门禁通过；部署状态：仅源码合并与本地模拟验证，Stage 冒烟 / 业务验收待执行，生产保持 `.8`。本次请求仅同步源码，尚无本候选生产授权。
+- revision：`3e349871f70ff90f104afca42411cd3e389750f8`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:0e38015fa8ca5974a74ef78601d485ae8a735c9d5362899c1bda8577b10f4df3`；[主干候选 CI 38396063756](https://github.com/QingsiLiu/sub2api/actions/runs/38396063756)全部 9 个任务及制品 13 项门禁通过；部署状态：已通过正式入口部署 Stage；标准 Gemini 缓存 model 资源名被路由错误拒绝，加密恢复首次核验也曾失败，未放行生产。原始失败与恢复证据保留；由 `.2` 修复候选继续验收。生产保持 `.8`。
 - 验证与冲突处理详见[同步报告](.github/geili/upstream-v0.2.16-20261013.md)。
 
 ## 0.2.15-geili.8（已发布生产，Stage同镜像）

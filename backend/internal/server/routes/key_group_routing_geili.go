@@ -168,6 +168,11 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		if strings.Contains(path, "/v1beta/models/") {
 			model = compositeGeminiModelFromParams(c)
 		}
+		// geili hook: cache creation uses Google's resource-style model name.
+		// Authorize its bare public ID without changing the original payload.
+		if compositeRouteEndpointForPath(path) == service.CompositeRouteEndpointGemini && strings.HasSuffix(path, "/cachedContents") {
+			model = strings.TrimPrefix(strings.TrimSpace(model), "models/")
+		}
 		if key.UsesGroupListRouting() && recoveryTextRequest && service.IsLongThinkingRequestModel(model) {
 			gatewayConfig := config.GatewayConfig{}
 			if cfg != nil {
