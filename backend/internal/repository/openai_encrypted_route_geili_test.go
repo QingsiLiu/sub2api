@@ -26,10 +26,10 @@ func encryptedSourceRowsGeili(r service.OpenAIEncryptedRouteGeili) *sqlmock.Rows
 func TestEncryptedSourceGeiliDurableCacheMissAndUserIsolation(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	a := NewGatewayCache(rdb, db).(service.OpenAIEncryptedRouteCacheGeili)
 	b := NewGatewayCache(rdb, db).(service.OpenAIEncryptedRouteCacheGeili)
 	r := encryptedSourceFixtureGeili()
@@ -57,11 +57,11 @@ func TestEncryptedSourceGeiliDurableCacheMissAndUserIsolation(t *testing.T) {
 func TestEncryptedSourceGeiliRedisOutageUsesDatabase(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1, DialTimeout: 10 * time.Millisecond})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	mr.Close()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := encryptedSourceFixtureGeili()
 	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WillReturnRows(encryptedSourceRowsGeili(r))
 	got, err := NewGatewayCache(rdb, db).(service.OpenAIEncryptedRouteCacheGeili).GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
@@ -72,10 +72,10 @@ func TestEncryptedSourceGeiliRedisOutageUsesDatabase(t *testing.T) {
 func TestEncryptedSourceGeiliImmutableOriginAndMonotonicConflict(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	c := NewGatewayCache(rdb, db).(*gatewayCache)
 	c.encryptedRouteLastPrune.Store(time.Now().Unix())
 	old := encryptedSourceFixtureGeili()
@@ -103,7 +103,7 @@ func TestEncryptedSourceGeiliImmutableOriginAndMonotonicConflict(t *testing.T) {
 func TestEncryptedSourceGeiliValidationAndDBError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	c := NewGatewayCache(nil, db).(service.OpenAIEncryptedRouteCacheGeili)
 	r := encryptedSourceFixtureGeili()
 	_, err = c.GetOpenAIEncryptedRoutesGeili(context.Background(), 0, []string{r.Digest})
@@ -123,13 +123,15 @@ func BenchmarkEncryptedSourceGeiliCachedLookup(b *testing.B) {
 	}
 	defer mr.Close()
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	r := encryptedSourceFixtureGeili()
 	raw, err := json.Marshal(r)
 	if err != nil {
 		b.Fatal(err)
 	}
-	mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw))
+	if err := mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)); err != nil {
+		b.Fatal(err)
+	}
 	c := NewGatewayCache(rdb).(service.OpenAIEncryptedRouteCacheGeili)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -144,10 +146,10 @@ func BenchmarkEncryptedSourceGeiliCachedLookup(b *testing.B) {
 func TestEncryptedSourceGeiliCacheMissDoesNotRefreshUnrelatedHitTTL(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := encryptedSourceFixtureGeili()
 	raw, _ := json.Marshal(r)
 	key := encryptedRouteKeyGeili(3885, r.Digest)

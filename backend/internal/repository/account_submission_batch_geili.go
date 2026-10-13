@@ -24,7 +24,7 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 	if err != nil {
 		return service.ErrSubmissionUnavailable
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	invite, err := scanSubmission(tx.QueryRowContext(ctx, `SELECT `+submissionColumns+` FROM account_submission_invites_geili WHERE token_hash=$1 AND parent_invite_id IS NULL FOR UPDATE`, hash))
 	if err != nil {
 		return err

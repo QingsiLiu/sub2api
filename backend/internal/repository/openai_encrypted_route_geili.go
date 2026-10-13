@@ -137,7 +137,7 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	stored := make([]service.OpenAIEncryptedRouteGeili, 0, len(records))
 	for _, r := range records {
 		if r.GeneratedAt.IsZero() {

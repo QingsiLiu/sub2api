@@ -602,7 +602,7 @@ func TestEncryptedWSPassthroughStoreFalseSummaryReachesWireGeili(t *testing.T) {
 	defer cancel()
 	client, _, err := coderws.Dial(clientCtx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
 	require.NoError(t, err)
-	defer client.CloseNow()
+	defer func() { _ = client.CloseNow() }()
 	body := []byte(`{"type":"response.create","model":"gpt-5.1","store":false,"nonce":9007199254740993,"input":[{"type":"reasoning","encrypted_content":"cipher","summary":[{"type":"summary_text","text":"recovered progress"}]}]}`)
 	require.NoError(t, client.Write(clientCtx, coderws.MessageText, body))
 	_, _, err = client.Read(clientCtx)
