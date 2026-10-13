@@ -214,11 +214,12 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		return
 	}
 
-	out := make([]modelPlazaGroup, 0, len(visible))
-	for i := range visible {
-		dto := toModelPlazaGroupDTO(&visible[i], userRates)
-		dto.Currency = rt.Geili.PlazaGroupCurrency(visible[i].ID)
-		out = append(out, dto)
+	// 广场可匿名访问，分组文案随请求语言变化，提示中间缓存按语言区分。
+	// 追加而非覆盖：CORS 中间件已为具体来源写入 Vary: Origin。
+	c.Writer.Header().Add("Vary", "Accept-Language")
+	out := toLocalizedModelPlazaGroups(visible, userRates, c.GetHeader("Accept-Language"))
+	for i := range out {
+		out[i].Currency = rt.Geili.PlazaGroupCurrency(visible[i].ID)
 	}
 	response.Success(c, modelPlazaResponse{
 		Description:       rt.Description,
@@ -253,6 +254,17 @@ func filterPlazaVisibleGroups(
 		visible = append(visible, g)
 	}
 	return visible
+}
+
+// toLocalizedModelPlazaGroups 转换可见分组，并把名称与描述换成请求首选语言的版本。
+func toLocalizedModelPlazaGroups(visible []service.PlazaGroup, userRates map[int64]float64, acceptLanguage string) []modelPlazaGroup {
+	out := make([]modelPlazaGroup, 0, len(visible))
+	for i := range visible {
+		group := toModelPlazaGroupDTO(&visible[i], userRates)
+		group.Name, group.Description = visible[i].I18n.Localize(acceptLanguage, group.Name, group.Description)
+		out = append(out, group)
+	}
+	return out
 }
 
 // toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,并合并用户专属倍率。

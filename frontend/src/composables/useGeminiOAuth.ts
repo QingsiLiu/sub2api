@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAccountAdminAPIGeili } from '@/composables/useAccountAdminAPIGeili'
+import { extractApiErrorMessage } from '@/utils/apiError'
 import type { GeminiOAuthCapabilities } from '@/api/admin/gemini'
 
 export interface GeminiTokenInfo {
@@ -63,8 +64,8 @@ export function useGeminiOAuth() {
       sessionId.value = response.session_id
       state.value = response.state
       return true
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || t('admin.accounts.oauth.gemini.failedToGenerateUrl')
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, t('admin.accounts.oauth.gemini.failedToGenerateUrl'))
       appStore.showError(error.value)
       return false
     } finally {

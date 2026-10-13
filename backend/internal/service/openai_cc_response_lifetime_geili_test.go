@@ -178,7 +178,7 @@ func TestCCResponseLifetimeGeili_AllCallersReadAfterHelper(t *testing.T) {
 			case "/v1/chat/completions":
 				result, err = svc.forwardAsRawChatCompletions(ctx, c, account, []byte(test.body), "")
 			case "/v1/responses":
-				result, err = svc.forwardResponsesViaRawChatCompletions(ctx, c, account, []byte(test.body))
+				result, err = svc.forwardResponsesViaRawChatCompletions(ctx, c, account, []byte(test.body), time.Now())
 			case "/v1/messages":
 				result, err = svc.forwardAnthropicViaRawChatCompletions(ctx, c, account, []byte(test.body), "")
 			}

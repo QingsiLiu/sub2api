@@ -141,7 +141,7 @@ func (s *OpenAIGatewayService) PrepareGrokVideoTaskContext(ctx context.Context, 
 	costs := make([]*CostBreakdown, 3)
 	for i := range costs {
 		if seedance {
-			costs[i], err = s.calculateOpenAIRecordUsageTokenCost(ctx, key, model, mult, started, UsageTokens{OutputTokens: (i + 1) * 1000}, "", "", openAILongContextBillingGate(account))
+			costs[i], err = s.calculateOpenAIRecordUsageTokenCost(ctx, key, model, mult, started, UsageTokens{OutputTokens: (i + 1) * 1000}, "", "", openAILongContextBillingGate(account), false)
 			if err != nil {
 				return ctx, fmt.Errorf("seedance frozen token tariff: %w", err)
 			}

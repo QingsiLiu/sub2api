@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
@@ -31,7 +32,7 @@ func TestGeiliToolProtocolWireGuardCoversEveryChatFallback(t *testing.T) {
 			var err error
 			switch tc.name {
 			case "responses":
-				_, err = svc.forwardResponsesViaRawChatCompletions(context.Background(), c, &account, []byte(tc.body))
+				_, err = svc.forwardResponsesViaRawChatCompletions(context.Background(), c, &account, []byte(tc.body), time.Now())
 			case "chat":
 				_, err = svc.forwardAsRawChatCompletions(context.Background(), c, &account, []byte(tc.body), "")
 			case "messages":

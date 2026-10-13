@@ -222,7 +222,8 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			}
 
 			// geili hook: keep a durable admission across async billing and expiry.
-			if c.Request.Method == "POST" && !strings.Contains(c.Request.URL.Path, "count_tokens") && !strings.Contains(c.Request.URL.Path, "countTokens") {
+			// geili hook: extending explicit cache TTL is also a billable dispatch.
+			if (c.Request.Method == "POST" || (c.Request.Method == "PATCH" && strings.Contains(c.Request.URL.Path, "/cachedContents/"))) && !strings.Contains(c.Request.URL.Path, "count_tokens") && !strings.Contains(c.Request.URL.Path, "countTokens") {
 				admitted, admitErr := subscriptionService.AdmitConsumption(c.Request.Context(), subscription, apiKey.ID)
 				if admitErr != nil {
 					if abortSubscriptionQuotaGeili(c, admitErr, true) {

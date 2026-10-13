@@ -61,7 +61,7 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 
 	out := make([]dto.UserSubscription, 0, len(subscriptions))
 	for i := range subscriptions {
-		out = append(out, *dto.UserSubscriptionFromService(&subscriptions[i]))
+		out = append(out, *dto.UserSubscriptionFromService(&subscriptions[i]).Localized(c.GetHeader("Accept-Language")))
 	}
 	response.Success(c, out)
 }
@@ -83,7 +83,7 @@ func (h *SubscriptionHandler) GetActive(c *gin.Context) {
 
 	out := make([]dto.UserSubscription, 0, len(subscriptions))
 	for i := range subscriptions {
-		out = append(out, *dto.UserSubscriptionFromService(&subscriptions[i]))
+		out = append(out, *dto.UserSubscriptionFromService(&subscriptions[i]).Localized(c.GetHeader("Accept-Language")))
 	}
 	response.Success(c, out)
 }
@@ -112,8 +112,11 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 			// Skip subscriptions with errors
 			continue
 		}
+		if sub.Group != nil && sub.Plan == nil && sub.Contract == nil && len(sub.Entitlements) == 0 {
+			progress.GroupName = sub.Group.I18n.LocalizeName(c.GetHeader("Accept-Language"), progress.GroupName)
+		}
 		result = append(result, SubscriptionProgressInfo{
-			Subscription: dto.UserSubscriptionFromService(sub),
+			Subscription: dto.UserSubscriptionFromService(sub).Localized(c.GetHeader("Accept-Language")),
 			Progress:     progress,
 		})
 	}
@@ -153,6 +156,10 @@ func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 		}
 
 		item.GroupName = sub.QuotaName()
+		// geili hook: plan and entitlement names remain owned by their quota source.
+		if sub.Group != nil && sub.Plan == nil && sub.Contract == nil && len(sub.Entitlements) == 0 {
+			item.GroupName = sub.Group.I18n.LocalizeName(c.GetHeader("Accept-Language"), item.GroupName)
+		}
 		daily, weekly, monthly := sub.QuotaLimits(sub.Group)
 		if daily != nil {
 			item.DailyLimitUSD = *daily

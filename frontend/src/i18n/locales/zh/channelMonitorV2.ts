@@ -95,6 +95,8 @@ export default {
       refreshTitle: '汇总频率',
       refreshHint: '影响矩阵时间粒度与刷新节奏',
       refreshAria: '汇总频率',
+      selectPlatform: '选择平台',
+      addPlatform: '添加平台',
       platformsTitle: '平台与模型',
       platformsHint: '仅统计填写的模型；未填写的模型不参与统计，留空则不监控该平台。',
       modelsPlaceholder: '填写要统计的完整模型名，以英文逗号分隔；留空不统计',

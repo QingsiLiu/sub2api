@@ -96,6 +96,8 @@ export default {
       refreshTitle: 'Aggregation interval',
       refreshHint: 'Affects matrix time granularity and refresh cadence',
       refreshAria: 'Aggregation interval',
+      selectPlatform: 'Select a platform',
+      addPlatform: 'Add platform',
       platformsTitle: 'Platforms and models',
       platformsHint:
         'Only listed models are counted. Unlisted models are excluded; leave empty to stop monitoring this platform.',

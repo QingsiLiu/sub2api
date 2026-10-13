@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 本地合并上游 tag 到 geili/main（在 sync/<tag> 分支上进行）。
+# 本地合并上游 tag 到 geili/main（在 codex/sync-<tag> 分支上进行）。
 #
 # 用法：
 #   .github/geili/sync-upstream.sh            # 合并上游最新正式 tag
 #   .github/geili/sync-upstream.sh v0.2.3     # 合并指定 tag
 #   .github/geili/sync-upstream.sh --verify   # 合并后顺带跑本地验证
 #
-# 流程：fetch upstream → 从 geili/main 切出 sync/<tag> → git merge --no-ff <tag>
+# 流程：fetch upstream → 从 geili/main 切出 codex/sync-<tag> → git merge --no-ff <tag>
 #   * 无冲突：打印需要人工过目的上游改动文件，提示 push + 开 PR；
 #   * 有冲突：停在冲突状态，列出冲突文件和两处挂钩的恢复方法，由你手工解决。
 set -euo pipefail
@@ -39,7 +39,7 @@ if git merge-base --is-ancestor "${TAG}" "${BASE_REF}"; then
 fi
 
 PREV="$(geili_upstream_base_of "${BASE_REF}")"
-BRANCH="sync/${TAG}"
+BRANCH="codex/sync-${TAG}"
 if git show-ref --quiet "refs/heads/${BRANCH}"; then
   geili_die "本地已存在分支 ${BRANCH}，请先处理或删除"
 fi
@@ -49,7 +49,7 @@ echo "==> 创建 ${BRANCH}（基于 ${BASE_REF}）"
 git switch -c "${BRANCH}" "${BASE_REF}"
 
 MERGED=0
-if git merge --no-ff --no-edit -m "sync: merge upstream ${TAG} into ${GEILI_BASE_BRANCH}" "${TAG}"; then
+if git merge --no-ff --no-edit -m "chore: 合并上游 ${TAG} 到 ${GEILI_BASE_BRANCH}" "${TAG}"; then
   MERGED=1
 elif geili_resolve_version_only_conflict; then
   MERGED=1
@@ -68,7 +68,7 @@ if [ "$MERGED" = 1 ]; then
   echo
   echo "下一步："
   echo "  git push -u origin ${BRANCH}"
-  echo "  gh pr create --base ${GEILI_BASE_BRANCH} --title 'sync: upstream ${TAG}' --fill"
+  echo "  gh pr create --base ${GEILI_BASE_BRANCH} --title 'chore: 同步上游 ${TAG}' --fill"
 else
   echo
   echo "==> 合并冲突，已停在 ${BRANCH} 的冲突状态。冲突文件："
@@ -76,16 +76,15 @@ else
   cat <<'EOF'
 
 提示：
-  * frontend/vite.config.ts   需保留：import { geiliOverrides } ... 与 plugins 首项 geiliOverrides(__dirname)
-  * frontend/postcss.config.js 需保留：tailwindcss: { config: './src/geili/tailwind.config.js' }
+  * 前端保留官方组件和样式，不恢复已删除的 frontend/src/geili/ 主题覆盖
   * backend/internal/service/update_service.go 需保留四处 selfUpdateDisabled() 守卫
-  * frontend/src/geili/** 与 backend/**/update_service_geili*.go 是我们的文件，上游不会碰
+  * backend/**/update_service_geili*.go 是我们的文件，上游不会碰
   * backend/internal/geili/** 与 backend/migrations/234_user_subscription_groups.sql 是双分组订阅扩展；保留其独立边界并复核所有 geili hook
-  * backend/cmd/server/VERSION 任取一方即可，发布时 release.yml 会按 tag 重写
+  * backend/cmd/server/VERSION 保留 Geili 版本；准备候选时按新基线递增并补 RELEASES.md
 解决后：
   git add -A && git commit
   .github/geili/verify.sh
-  git push -u origin <branch> && gh pr create --base geili/main --title 'sync: upstream <tag>'
+  git push -u origin <branch> && gh pr create --base geili/main --title 'chore: 同步上游 <tag>'
 放弃：
   git merge --abort && git switch geili/main && git branch -D <branch>
 EOF
