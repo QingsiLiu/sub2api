@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 const openAIEncryptedRoutePrefixGeili = "openai_encrypted_route_geili:v2:"
 const encryptedRouteCacheTTLGeili = 24 * time.Hour
+const encryptedRouteRedisBudgetGeili = 10 * time.Millisecond
 
 func encryptedRouteKeyGeili(userID int64, digest string) string {
 	return openAIEncryptedRoutePrefixGeili + strconv.FormatInt(userID, 10) + ":" + digest
@@ -51,8 +53,10 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if len(keys) > 256 {
 		return result, fmt.Errorf("too many encrypted sources")
 	}
-	if c.rdb != nil {
-		values, err := c.rdb.MGet(ctx, keys...).Result()
+	if c.encryptedRouteRDB != nil {
+		redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
+		values, err := c.encryptedRouteRDB.MGet(redisCtx, keys...).Result()
+		cancel()
 		if err == nil {
 			for i, value := range values {
 				raw, ok := value.(string)
@@ -66,29 +70,30 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 			}
 		}
 	}
-	if len(result) == len(requested) {
-		return result, nil
-	}
 	if c.encryptedRouteDB == nil {
-		return result, nil
+		return nil, encryptedRouteStorageFailureGeili("store_unavailable", fmt.Errorf("encrypted provenance persistence unavailable"))
 	}
-	// Redis entries have a fixed 24-hour TTL; cache misses refresh durable access.
-	// Thus active sessions touch SQL daily without a database write on every turn.
-	args := []any{userID}
-	slots := []string{}
+	// Redis is only an access-refresh hint. Every authority comes from current
+	// durable metadata, including conflicts committed before a failed cache write.
+	// One SQL round trip touches misses daily and reads hits without extending
+	// their access timestamp or fixed Redis TTL. Deleted/expired rows disappear.
+	cached := result
+	result = map[string]service.OpenAIEncryptedRouteGeili{}
+	misses, hits := []string{}, []string{}
 	for _, d := range requested {
-		if _, ok := result[d]; ok {
-			continue
+		if _, ok := cached[d]; ok {
+			hits = append(hits, d)
+		} else {
+			misses = append(misses, d)
 		}
-		args = append(args, d)
-		slots = append(slots, fmt.Sprintf("$%d", len(args)))
 	}
-	q := `UPDATE openai_encrypted_sources_geili SET last_accessed_at=NOW() WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest IN (` + strings.Join(slots, ",") + `) RETURNING cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at`
+	args := []any{userID, pq.Array(misses), pq.Array(hits)}
+	q := `WITH touched AS (UPDATE openai_encrypted_sources_geili SET last_accessed_at=NOW() WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($2::CHAR(64)[]) RETURNING cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at) SELECT cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at FROM touched UNION ALL SELECT cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at FROM openai_encrypted_sources_geili WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($3::CHAR(64)[])`
 	rows, err := c.encryptedRouteDB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	// Only missed digests query durable metadata; cache writes monotonically retain conflicts.
 	sqlRecords := make([]service.OpenAIEncryptedRouteGeili, 0)
 	for rows.Next() {
@@ -97,18 +102,25 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 			return nil, err
 		}
 		result[r.Digest] = r
-		sqlRecords = append(sqlRecords, r)
+		if _, hit := cached[r.Digest]; !hit {
+			sqlRecords = append(sqlRecords, r)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if c.rdb != nil {
-		pipe := c.rdb.Pipeline()
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if c.encryptedRouteRDB != nil && len(sqlRecords) > 0 {
+		redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
+		pipe := c.encryptedRouteRDB.Pipeline()
 		for _, r := range sqlRecords {
 			raw, _ := json.Marshal(r)
-			pipe.Eval(ctx, encryptedRouteCacheWriteGeili, []string{encryptedRouteKeyGeili(userID, r.Digest)}, string(raw), int(encryptedRouteCacheTTLGeili.Seconds()))
+			pipe.Eval(redisCtx, encryptedRouteCacheWriteGeili, []string{encryptedRouteKeyGeili(userID, r.Digest)}, string(raw), int(encryptedRouteCacheTTLGeili.Seconds()))
 		}
-		_, _ = pipe.Exec(ctx)
+		_, _ = pipe.Exec(redisCtx)
+		cancel()
 	}
 	return result, nil
 }
@@ -183,13 +195,15 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if err = tx.Commit(); err != nil {
 		return encryptedRouteStorageFailureGeili("commit", err)
 	}
-	if c.rdb != nil {
-		pipe := c.rdb.Pipeline()
+	if c.encryptedRouteRDB != nil {
+		redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
+		pipe := c.encryptedRouteRDB.Pipeline()
 		for _, r := range stored {
 			raw, _ := json.Marshal(r)
-			pipe.Eval(ctx, encryptedRouteCacheWriteGeili, []string{encryptedRouteKeyGeili(userID, r.Digest)}, string(raw), int(encryptedRouteCacheTTLGeili.Seconds()))
+			pipe.Eval(redisCtx, encryptedRouteCacheWriteGeili, []string{encryptedRouteKeyGeili(userID, r.Digest)}, string(raw), int(encryptedRouteCacheTTLGeili.Seconds()))
 		}
-		_, _ = pipe.Exec(ctx)
+		_, _ = pipe.Exec(redisCtx)
+		cancel()
 	}
 	// Bounded periodic pruning; never touches usage or settlement tables.
 	now := time.Now().Unix()

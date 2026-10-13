@@ -17,7 +17,8 @@ import (
 
 func batchInviteFixture(t *testing.T, platform string) (*accountSubmissionRepository, *service.AccountSubmissionInvite, string) {
 	t.Helper()
-	repo := NewAccountSubmissionRepository(integrationDB).(*accountSubmissionRepository)
+	repo, ok := NewAccountSubmissionRepository(integrationDB).(*accountSubmissionRepository)
+	require.True(t, ok)
 	hash := fmt.Sprintf("%064x", time.Now().UnixNano())
 	i, err := repo.CreateInvite(context.Background(), hash, 1, service.AccountSubmissionConfig{Name: "batch-" + hash[45:], Platform: platform, Concurrency: 3, Priority: 50, RateMultiplier: 0})
 	require.NoError(t, err)
@@ -35,7 +36,7 @@ func batchInviteFixture(t *testing.T, platform string) (*accountSubmissionReposi
 				ids = append(ids, *id)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		_, _ = integrationDB.Exec(`DELETE FROM account_submission_connections_geili WHERE invite_id IN (SELECT id FROM account_submission_invites_geili WHERE id=$1 OR parent_invite_id=$1)`, i.ID)
 		_, _ = integrationDB.Exec(`DELETE FROM account_submission_invites_geili WHERE id=$1`, i.ID)
 		_, _ = integrationDB.Exec(`DELETE FROM scheduler_outbox WHERE account_id=ANY($1)`, pq.Array(ids))
@@ -87,7 +88,7 @@ func TestAccountSubmissionBatchPostgresConcurrentMaximumAndProtection(t *testing
 		require.Contains(t, name, fmt.Sprintf(" #%d", len(ids)))
 	}
 	require.NoError(t, rows.Err())
-	rows.Close()
+	require.NoError(t, rows.Close())
 	require.Len(t, ids, 100)
 	var bindings int
 	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM account_groups WHERE group_id=$1 AND account_id=ANY($2)`, group.ID, pq.Array(ids)).Scan(&bindings))

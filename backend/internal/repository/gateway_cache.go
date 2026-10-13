@@ -22,12 +22,20 @@ const liveCallPrefix = "live:call:"
 
 type gatewayCache struct {
 	rdb                     *redis.Client
+	encryptedRouteRDB       *redis.Client
 	encryptedRouteDB        *sql.DB
 	encryptedRouteLastPrune atomic.Int64
 }
 
 func NewGatewayCache(rdb *redis.Client, db ...*sql.DB) service.GatewayCache {
 	c := &gatewayCache{rdb: rdb}
+	if rdb != nil {
+		// geili hook: provenance alone honors request deadlines. WithTimeout clones options
+		// while sharing the parent's pool/lifecycle; never close this view.
+		c.encryptedRouteRDB = rdb.WithTimeout(50 * time.Millisecond)
+		c.encryptedRouteRDB.Options().ContextTimeoutEnabled = true
+		c.encryptedRouteRDB.Options().MaxRetries = 0
+	}
 	if len(db) > 0 {
 		c.encryptedRouteDB = db[0]
 	}

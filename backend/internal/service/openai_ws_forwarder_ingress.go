@@ -1074,7 +1074,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return nil, &openAIWSRejectedFieldRetryError{body: retryBody, reason: "encrypted_reasoning_recovery"}
 				}
 				statusCode := openAIWSRejectedFieldRetryHTTPStatus(upstreamMessage)
-				if !wroteDownstream && statusCode == http.StatusBadRequest && rejectedFieldRetryState != nil && !(openAIEncryptedWSTurnProtectedGeili(ctx) && ClassifyOpenAIEncryptedFailureGeili(upstreamMessage)) {
+				if !wroteDownstream && statusCode == http.StatusBadRequest && rejectedFieldRetryState != nil && (!openAIEncryptedWSTurnProtectedGeili(ctx) || !ClassifyOpenAIEncryptedFailureGeili(upstreamMessage)) {
 					retryBody, retryReason, changed, retryErr := normalizeOpenAIResponsesRejectedFieldRetryBody(
 						statusCode,
 						payload,

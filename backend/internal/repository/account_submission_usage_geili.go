@@ -68,7 +68,7 @@ func (r *accountSubmissionRepository) SubmissionUsage(ctx context.Context, hash 
 	for members.Next() {
 		var account service.SubmissionAccountUsage
 		if members.Scan(&id, &account.AccountRef, &account.Name, &account.Platform, &account.Enabled) != nil {
-			members.Close()
+			_ = members.Close()
 			return nil, service.ErrSubmissionUnavailable
 		}
 		positions[id] = len(result.Accounts)
@@ -76,8 +76,8 @@ func (r *accountSubmissionRepository) SubmissionUsage(ctx context.Context, hash 
 		result.Accounts = append(result.Accounts, account)
 	}
 	err = members.Err()
-	members.Close()
-	if err != nil || len(ids) == 0 {
+	closeErr := members.Close()
+	if err != nil || closeErr != nil || len(ids) == 0 {
 		return nil, service.ErrSubmissionUnavailable
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT account_id,(created_at AT TIME ZONE 'Asia/Shanghai')::date::text,COALESCE(NULLIF(upstream_model,''),model),COUNT(*),COALESCE(SUM(input_tokens),0),COALESCE(SUM(output_tokens),0),COALESCE(SUM(cache_creation_tokens),0),COALESCE(SUM(cache_read_tokens),0),COALESCE(SUM(total_cost),0) FROM usage_logs WHERE account_id=ANY($1) AND created_at >= $2 AND created_at < $3 GROUP BY 1,2,3 ORDER BY 2,3,1`, pq.Array(ids), from, to)
