@@ -21,7 +21,7 @@ func TestEncryptedSourcesGeiliDurabilityConflictRetentionAndBillingIsolation(t *
 	t.Cleanup(func() { _, _ = integrationDB.Exec("DELETE FROM users WHERE id=$1", userID) })
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	a := NewGatewayCache(rdb, integrationDB).(service.OpenAIEncryptedRouteCacheGeili)
 	r := encryptedSourceFixtureGeili()
 	require.NoError(t, a.SetOpenAIEncryptedRoutesGeili(ctx, userID, []service.OpenAIEncryptedRouteGeili{r}))

@@ -23,6 +23,17 @@ func (*runtimeEncryptedCaptureCacheGeili) SetSessionAccountID(context.Context, i
 
 type runtimeEncryptedSettingsGeili struct{ service.SettingRepository }
 
+func (s *runtimeEncryptedSettingsGeili) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	values := map[string]string{}
+	for _, key := range keys {
+		value, err := s.GetValue(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		values[key] = value
+	}
+	return values, nil
+}
 func (*runtimeEncryptedSettingsGeili) GetValue(_ context.Context, key string) (string, error) {
 	if key == service.SettingKeyOpenAIEncryptedRouteGeili {
 		return `{"mode":"protect","protected_user_ids":[9001],"reasoning_recovery_enabled":true}`, nil
@@ -100,4 +111,58 @@ func TestEncryptedHTTPRuntimeFailedWriteDoesNotRecordGeili(t *testing.T) {
 	_, err = gateway.Forward(c.Request.Context(), c, account, body)
 	require.Error(t, err)
 	require.Empty(t, cache.records, "no output was delivered to establish a replay source")
+}
+
+type runtimeEncryptedStreamHTTPGeili struct{ service.HTTPUpstream }
+
+func (*runtimeEncryptedStreamHTTPGeili) Do(*http.Request, string, int64, int) (*http.Response, error) {
+	body := `data: {"type":"response.output_text.delta","delta":"delivered"}` + "\n\n" +
+		`data: {"type":"response.output_item.done","item":{"type":"reasoning","encrypted_content":"undelivered-cipher","summary":[]}}` + "\n\n" +
+		`data: {"type":"response.completed","response":{"id":"resp_drained","status":"completed","usage":{"input_tokens":11,"output_tokens":7}}}` + "\n\n"
+	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
+}
+
+type disconnectingEncryptedRuntimeWriterGeili struct {
+	gin.ResponseWriter
+	writes int
+}
+
+func (w *disconnectingEncryptedRuntimeWriterGeili) Write(p []byte) (int, error) {
+	if w.writes > 0 {
+		return 0, io.ErrClosedPipe
+	}
+	w.writes++
+	return w.ResponseWriter.Write(p)
+}
+func (w *disconnectingEncryptedRuntimeWriterGeili) WriteString(s string) (int, error) {
+	return w.Write([]byte(s))
+}
+func TestEncryptedHTTPRuntimeStreamDisconnectDrainsWithoutUndeliveredSourceGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cache := &runtimeEncryptedCaptureCacheGeili{earlyEncryptedCacheGeili: &earlyEncryptedCacheGeili{records: map[string]service.OpenAIEncryptedRouteGeili{}}}
+	cfg := &config.Config{}
+	settings := service.NewSettingService(&runtimeEncryptedSettingsGeili{}, cfg)
+	gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, cache, cfg, nil, nil, nil, nil, nil, &runtimeEncryptedStreamHTTPGeili{}, nil, nil, nil, nil, nil, nil, settings, nil)
+	group := int64(131)
+	key := &service.APIKey{ID: 2001, UserID: 9001, GroupID: &group, Group: &service.Group{ID: group, Platform: service.PlatformOpenAI}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set("api_key", key)
+	body := []byte(`{"model":"gpt-6-astra","input":"seed","stream":true}`)
+	_, err := gateway.PrepareOpenAIEncryptedRouteGeili(c, key, body)
+	require.NoError(t, err)
+	writer := newKeyRouteWriter(&disconnectingEncryptedRuntimeWriterGeili{ResponseWriter: c.Writer})
+	writer.ctx = c
+	c.Writer = writer
+	account := &service.Account{ID: 3001, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Concurrency: 10, Credentials: map[string]any{"api_key": "synthetic-key", "base_url": "https://synthetic.example/fixture"}, Extra: map[string]any{"openai_responses_mode": "force_responses", "openai_passthrough": true}}
+	c.Request = c.Request.WithContext(service.WithOpenAIEncryptedOutputOriginGeili(c.Request.Context(), &group, account, "gpt-6-astra"))
+	result, err := gateway.Forward(c.Request.Context(), c, account, body)
+	require.NoError(t, err, "established streaming usage-drain contract remains successful")
+	require.NotNil(t, result)
+	require.Equal(t, 11, result.Usage.InputTokens)
+	require.Equal(t, 7, result.Usage.OutputTokens)
+	require.Contains(t, rec.Body.String(), "delivered")
+	require.NotContains(t, rec.Body.String(), "undelivered-cipher")
+	require.Empty(t, cache.records, "a cipher read only while draining cannot establish provenance")
 }

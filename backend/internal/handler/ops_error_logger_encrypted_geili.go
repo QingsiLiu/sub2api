@@ -8,6 +8,9 @@ func encryptedOpsRequestScopedBusinessLimitedGeili(err service.OpsStreamError) b
 	if !err.CountTowardsSLA {
 		return true
 	}
-	return !((err.Code == "encrypted_session_route_unavailable" && err.IntendedStatus == 503) ||
-		(err.Code == "invalid_encrypted_content" && err.IntendedStatus == 400))
+	if (err.Code == "encrypted_session_route_unavailable" && err.IntendedStatus == 503) ||
+		(err.Code == "invalid_encrypted_content" && err.IntendedStatus == 400) {
+		return false
+	}
+	return true
 }

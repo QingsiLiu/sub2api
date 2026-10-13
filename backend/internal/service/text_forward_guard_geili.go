@@ -669,6 +669,13 @@ func (w *geiliTextForwardWriter) writeActualOutputGeili(p []byte) (int, error) {
 	}
 	if err != nil {
 		w.writeErr = err
+		// SSE semantic output already owns this response. The lower stream
+		// handler drains upstream usage after a downstream disconnect; preserve
+		// that established success/metering contract while delivery observers
+		// still see writeErr and clientDisconnected and reject unseen ciphers.
+		if w.stream && w.semantic {
+			w.clientDisconnected = true
+		}
 	}
 	return n, err
 }

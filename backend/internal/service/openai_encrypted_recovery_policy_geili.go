@@ -117,7 +117,7 @@ func PrepareOpenAIEncryptedReasoningRecoveryGeili(body []byte) ([]byte, bool, st
 				value.ForEach(func(key, child gjson.Result) bool {
 					name := strings.ToLower(key.String())
 					if strings.Contains(name, "encrypted") && child.Type != gjson.Null && child.Raw != `""` {
-						if !(root && kind == "reasoning" && name == "encrypted_content" && child.Type == gjson.String) {
+						if !root || kind != "reasoning" || name != "encrypted_content" || child.Type != gjson.String {
 							unsafe = "opaque_encrypted_state"
 							return false
 						}
