@@ -6,7 +6,7 @@
 - 同步结构化输入回退、Gemini 图片工具结果与缓存不存在错误、模型限流隔离、Kimi 国际端点配额、支付倒计时及前端异步状态修复；同步 GPT-6.1 Sol 上游订阅凭据长上下文计价与默认上下文更新。
 - Gemini 固定缓存费用按 Key 的明确 billing_source 和 subscription_id 检查与结算；独立套餐 / 共享额度池与待结算费用共同参与校验，缓存续期接入订阅准入。零余额订阅 Key 不要求余额，零倍率仍有效。套餐名称与额度不被分组译文覆盖。
 - 新增上游原名迁移 `242_group_i18n.sql`、`243_gemini_cached_contents.sql`、`244_gemini_cached_contents_channel_usage.sql`、`245_gemini_cached_contents_mutation_lease.sql`；原 341 份 SQL 的内容及校验和全部保持。
-- revision：待最终候选提交；镜像 digest：待候选 CI 产出；部署状态：仅源码合并与本地模拟验证，Stage 冒烟 / 业务验收待执行，生产保持 `.8`。本次请求仅同步源码，尚无本候选生产授权。
+- revision：`3e349871f70ff90f104afca42411cd3e389750f8`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:0e38015fa8ca5974a74ef78601d485ae8a735c9d5362899c1bda8577b10f4df3`；[主干候选 CI 38396063756](https://github.com/QingsiLiu/sub2api/actions/runs/38396063756)全部 9 个任务及制品 13 项门禁通过；部署状态：仅源码合并与本地模拟验证，Stage 冒烟 / 业务验收待执行，生产保持 `.8`。本次请求仅同步源码，尚无本候选生产授权。
 - 验证与冲突处理详见[同步报告](.github/geili/upstream-v0.2.16-20261013.md)。
 
 ## 0.2.15-geili.8（已发布生产，Stage同镜像）

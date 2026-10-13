@@ -27,6 +27,15 @@
 
 - 前端 405 文件 / 3294 测试、类型检查与生产构建通过，变更文件 ESLint 通过。
 - 本机独立 PostgreSQL 18 / Redis 8、模拟上游的订阅 V2 HTTP 验收 104 项通过；没有真实支付、供应商或媒体调用。临时测试服务与容器任务结束后清理，凭据及原始报告保留于忽略的 `deploy/.secrets/`。
-- Go 全量 default / unit / integration、race 与 `.github/geili/verify.sh`：正在完成最终验证，结果以候选记录为准。
+- 同一份最终代码的 `go test ./...`、`CI=true go test -tags=unit ./...`、`CI=true go test -tags=integration ./...` 全量通过；default / unit / integration 的 service 包分别 160.279 / 242.209 / 163.850 秒。仓储集成测试实际执行迁移并发锁及重复执行检查。
+- `.github/geili/verify.sh`、相关 service / routes / middleware race、修正后 handler race、真实 PostgreSQL 的订阅 V2 / 旧订阅管理 / 退款 race，以及 Stage 恢复保护脚本全部通过。新增固定缓存费用回归覆盖独立套餐零余额、共享额度、待结算费用、错误归属和显式订阅 / 余额 / 零倍率。
+- golangci-lint 2.14.0 default / unit / integration 修改行增量均 0 issues。全仓混用 unit,integration tags 会遇到已有 tlsfingerprint 重复测试函数，按官方各独立 suite 验证，不将混用失败计为通过。
 - 前端首轮两项原生 select 操作不适配、Vertex 遗留未使用变量，后端测试接口参数、结构化回退夹具与旧 Git 空锁问题均保留失败记录；修正后结果单列，不把失败或中止运行计作通过。
-- 候选 revision 与不可变镜像 digest 待最终 CI 产出；Stage / 生产均未部署新版本。
+- 源码 revision：`3e349871f70ff90f104afca42411cd3e389750f8`，已快进并推送 `origin/geili/main`；上游主干及生产 `.8` revision 均通过祖先核验。
+- 主干[候选 CI 38396063756](https://github.com/QingsiLiu/sub2api/actions/runs/38396063756)全部 9 个任务通过，候选镜像为 `ghcr.io/qingsiliu/sub2api@sha256:0e38015fa8ca5974a74ef78601d485ae8a735c9d5362899c1bda8577b10f4df3`；制品 revision / image 一致、13 项门禁 passed，345 份迁移 SHA256 与最终源码完全匹配，`production_ready=false`；临时分支的重复候选 CI 主动取消，避免两次构建同一候选标签。临时分支已删除，Stage / 生产均未部署新版本。
+
+- 普通 CI 的全量 lint 仍报告既有 52 项（errcheck 29 / ineffassign 2 / staticcheck 14 / unused 7）；主干[普通 CI 38396064267](https://github.com/QingsiLiu/sub2api/actions/runs/38396064267)的 lint job `115291462449` 日志已核对。与前次同步记录一致，本次三种独立配置修改行增量为 0，不宣称普通 CI 全绿。
+
+- 主干 [Geili CI 38396063663](https://github.com/QingsiLiu/sub2api/actions/runs/38396063663)与[安全扫描 38396063962](https://github.com/QingsiLiu/sub2api/actions/runs/38396063962)均已通过。
+
+发布记录的后续提交仅更新文档，使用 `[skip ci]` 避免为同一份已验证代码重建候选镜像；部署时始终绑定上述源码 revision 与不可变 digest。Stage 冒烟和业务验收仍待执行，生产版本未改变。
