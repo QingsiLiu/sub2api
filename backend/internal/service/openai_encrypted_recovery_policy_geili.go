@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -281,4 +283,47 @@ func OpenAIEncryptedReasoningRecoveredGeili(ctx context.Context) bool {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return state.protected && state.recovery && state.claimed
+}
+
+// encryptedPersistenceFailureClassGeili emits bounded diagnostic categories,
+// never driver messages containing query text, credentials, or connection DSNs.
+func encryptedPersistenceFailureClassGeili(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) {
+		code := state.SQLState()
+		valid := len(code) == 5
+		for _, r := range code {
+			valid = valid && ((r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z'))
+		}
+		if valid {
+			return "sql_" + code
+		}
+	}
+	var transport net.Error
+	if errors.As(err, &transport) && transport.Timeout() {
+		return "transport_timeout"
+	}
+	return "backend_error"
+}
+
+// Storage adapters provide a bounded phase identifier. Reject unknown values
+// even when an error implements the interface: diagnostics must never expose
+// provider-controlled strings or a driver's query/connection details.
+func encryptedPersistenceStoragePhaseGeili(err error) string {
+	var phase interface{ EncryptedRouteStoragePhaseGeili() string }
+	if !errors.As(err, &phase) {
+		return "unknown"
+	}
+	switch value := phase.EncryptedRouteStoragePhaseGeili(); value {
+	case "validate_user", "validate_batch", "validate_digest", "validate_group", "validate_account", "validate_fingerprint", "validate_model", "store_unavailable", "begin", "insert", "commit":
+		return value
+	default:
+		return "unknown"
+	}
 }

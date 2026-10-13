@@ -239,7 +239,7 @@ func (w *geiliTextForwardWriter) Write(p []byte) (int, error) {
 	}
 	if w.semantic {
 		w.observeTerminalChunks(p)
-		return w.ResponseWriter.Write(p)
+		return w.writeActualOutputGeili(p)
 	}
 	if !w.stream || w.status >= http.StatusBadRequest || !strings.Contains(w.headers.Get("Content-Type"), "text/event-stream") {
 		// Gin emits JSON in one write. Inspect error envelopes before committing
@@ -256,7 +256,7 @@ func (w *geiliTextForwardWriter) Write(p []byte) (int, error) {
 			w.writeErr = err
 			return 0, err
 		}
-		return w.ResponseWriter.Write(p)
+		return w.writeActualOutputGeili(p)
 	}
 	if w.pending.Len()+len(p)+int(w.stage.Buffered()) > openAIFirstOutputStageMaxBytes {
 		w.writeErr = errOpenAIFirstOutputStageLimit
@@ -657,4 +657,18 @@ func GeiliWriteStreamFailure(c *gin.Context, err error) {
 	c.Writer.Flush()
 	MarkResponseCommitted(c)
 	MarkOpsStreamFailure(c, "upstream_error", "upstream_stream_incomplete", message, http.StatusBadGateway)
+}
+
+// Record failures from direct JSON/semantic writes as well as staged commits;
+// Gin's Data renderer discards the returned error, but delivery observers must
+// never register encrypted output that did not fully reach the downstream.
+func (w *geiliTextForwardWriter) writeActualOutputGeili(p []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(p)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		w.writeErr = err
+	}
+	return n, err
 }

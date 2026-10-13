@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -163,4 +164,23 @@ func TestEncryptedSourceGeiliCacheMissDoesNotRefreshUnrelatedHitTTL(t *testing.T
 	require.Len(t, got, 1)
 	require.Equal(t, time.Hour, mr.TTL(key))
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEncryptedSourceGeiliControlledFailurePhaseWithoutSensitiveMessage(t *testing.T) {
+	r := encryptedSourceFixtureGeili()
+	c := NewGatewayCache(nil).(service.OpenAIEncryptedRouteCacheGeili)
+	err := c.SetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []service.OpenAIEncryptedRouteGeili{r})
+	var diagnostic interface{ EncryptedRouteStoragePhaseGeili() string }
+	require.ErrorAs(t, err, &diagnostic)
+	require.Equal(t, "store_unavailable", diagnostic.EncryptedRouteStoragePhaseGeili())
+	invalid := r
+	invalid.Model = ""
+	err = c.SetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []service.OpenAIEncryptedRouteGeili{invalid})
+	require.ErrorAs(t, err, &diagnostic)
+	require.Equal(t, "validate_model", diagnostic.EncryptedRouteStoragePhaseGeili())
+	wrapped := encryptedRouteStorageFailureGeili("insert", fmt.Errorf("sensitive fixture text: %w", context.DeadlineExceeded))
+	require.True(t, errors.Is(wrapped, context.DeadlineExceeded))
+	require.NotContains(t, wrapped.Error(), "sensitive fixture text")
+	require.ErrorAs(t, wrapped, &diagnostic)
+	require.Equal(t, "insert", diagnostic.EncryptedRouteStoragePhaseGeili())
 }

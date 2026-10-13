@@ -113,29 +113,58 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	return result, nil
 }
 
+// Controlled diagnostics never expose SQL text, credentials or ciphertext.
+type encryptedRouteStorageErrorGeili struct {
+	phase string
+	cause error
+}
+
+func (e *encryptedRouteStorageErrorGeili) Error() string {
+	return "encrypted source storage failed at " + e.phase
+}
+func (e *encryptedRouteStorageErrorGeili) Unwrap() error                           { return e.cause }
+func (e *encryptedRouteStorageErrorGeili) EncryptedRouteStoragePhaseGeili() string { return e.phase }
+func encryptedRouteStorageFailureGeili(phase string, cause error) error {
+	return &encryptedRouteStorageErrorGeili{phase: phase, cause: cause}
+}
+
 func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, records []service.OpenAIEncryptedRouteGeili) error {
 	if userID <= 0 {
-		return fmt.Errorf("invalid encrypted source user")
+		return encryptedRouteStorageFailureGeili("validate_user", fmt.Errorf("invalid encrypted source user"))
 	}
 	if len(records) > 256 {
-		return fmt.Errorf("too many encrypted sources")
+		return encryptedRouteStorageFailureGeili("validate_batch", fmt.Errorf("too many encrypted sources"))
 	}
 	for _, r := range records {
-		if !validEncryptedDigestGeili(r.Digest) || r.AccountID <= 0 || r.GroupID <= 0 || !validEncryptedDigestGeili(r.BackendFingerprint) || r.Model == "" {
-			return fmt.Errorf("invalid encrypted source metadata")
+		phase := ""
+		switch {
+		case !validEncryptedDigestGeili(r.Digest):
+			phase = "validate_digest"
+		case r.GroupID <= 0:
+			phase = "validate_group"
+		case r.AccountID <= 0:
+			phase = "validate_account"
+		case !validEncryptedDigestGeili(r.BackendFingerprint):
+			phase = "validate_fingerprint"
+		case r.Model == "":
+			phase = "validate_model"
+		}
+		if phase != "" {
+			return encryptedRouteStorageFailureGeili(phase, fmt.Errorf("invalid encrypted source metadata"))
 		}
 	}
+
 	if len(records) == 0 {
 		return nil
 	}
 	if c.encryptedRouteDB == nil {
-		return fmt.Errorf("encrypted provenance persistence unavailable")
+		return encryptedRouteStorageFailureGeili("store_unavailable", fmt.Errorf("encrypted provenance persistence unavailable"))
 	}
 	records = append([]service.OpenAIEncryptedRouteGeili(nil), records...)
 	sort.Slice(records, func(i, j int) bool { return records[i].Digest < records[j].Digest })
 	tx, err := c.encryptedRouteDB.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return encryptedRouteStorageFailureGeili("begin", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	stored := make([]service.OpenAIEncryptedRouteGeili, 0, len(records))
@@ -147,12 +176,12 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 		var actual service.OpenAIEncryptedRouteGeili
 		err = tx.QueryRowContext(ctx, q, userID, r.Digest, r.GroupID, r.AccountID, r.Model, r.BackendFingerprint, r.Conflict, r.GeneratedAt).Scan(&actual.Digest, &actual.GroupID, &actual.AccountID, &actual.Model, &actual.BackendFingerprint, &actual.Conflict, &actual.GeneratedAt)
 		if err != nil {
-			return err
+			return encryptedRouteStorageFailureGeili("insert", err)
 		}
 		stored = append(stored, actual)
 	}
 	if err = tx.Commit(); err != nil {
-		return err
+		return encryptedRouteStorageFailureGeili("commit", err)
 	}
 	if c.rdb != nil {
 		pipe := c.rdb.Pipeline()

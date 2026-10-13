@@ -336,7 +336,7 @@ func persistEncryptedRoutesGeili(w encryptedRouteWriteGeili) {
 	defer cancel()
 	if err := w.cache.SetOpenAIEncryptedRoutesGeili(ctx, w.userID, w.records); err != nil {
 		encryptedRouteRecordFailuresGeili.Add(1)
-		slog.Warn("encrypted_route.record_failed", "user_id", w.userID)
+		slog.Warn("encrypted_route.record_failed", "user_id", w.userID, "error_class", encryptedPersistenceFailureClassGeili(err), "storage_phase", encryptedPersistenceStoragePhaseGeili(err))
 	}
 }
 func ObserveOpenAIEncryptedOutputGeili(ctx context.Context, payload []byte) {

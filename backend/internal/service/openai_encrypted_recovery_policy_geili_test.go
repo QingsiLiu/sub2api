@@ -644,3 +644,46 @@ func TestEncryptedWSHTTPBridgeRecoveredSummaryReachesWireGeili(t *testing.T) {
 	require.Equal(t, "bridge progress", gjson.GetBytes(upstream.bodies[0], "input.0.summary.0.text").String())
 	require.Equal(t, "9007199254740993", gjson.GetBytes(upstream.bodies[0], "nonce").Raw)
 }
+
+type encryptedSQLStateFailureFixtureGeili struct{ code string }
+
+func (e encryptedSQLStateFailureFixtureGeili) Error() string {
+	return "postgres://sensitive-credentials@private-host?cipher=secret"
+}
+func (e encryptedSQLStateFailureFixtureGeili) SQLState() string { return e.code }
+func TestEncryptedPersistenceFailureClassesNeverExposeDriverTextGeili(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{context.DeadlineExceeded, "deadline"},
+		{fmt.Errorf("wrapped: %w", context.Canceled), "canceled"},
+		{encryptedSQLStateFailureFixtureGeili{code: "42P01"}, "sql_42P01"},
+		{encryptedSQLStateFailureFixtureGeili{code: "secret-dsn"}, "backend_error"},
+		{errors.New("sensitive ciphertext and password"), "backend_error"},
+	} {
+		require.Equal(t, tc.want, encryptedPersistenceFailureClassGeili(tc.err))
+	}
+}
+
+type encryptedStoragePhaseFixtureGeili struct {
+	phase string
+	cause error
+}
+
+func (e encryptedStoragePhaseFixtureGeili) Error() string {
+	return "sensitive database connection and cipher"
+}
+func (e encryptedStoragePhaseFixtureGeili) EncryptedRouteStoragePhaseGeili() string { return e.phase }
+func (e encryptedStoragePhaseFixtureGeili) Unwrap() error                           { return e.cause }
+func TestEncryptedPersistenceStoragePhaseIsBoundedGeili(t *testing.T) {
+	for _, phase := range []string{"validate_user", "validate_batch", "validate_digest", "validate_group", "validate_account", "validate_fingerprint", "validate_model", "store_unavailable", "begin", "insert", "commit"} {
+		wrapped := fmt.Errorf("outer sensitive driver text: %w", encryptedStoragePhaseFixtureGeili{phase: phase, cause: context.DeadlineExceeded})
+		require.Equal(t, phase, encryptedPersistenceStoragePhaseGeili(wrapped))
+		require.Equal(t, "deadline", encryptedPersistenceFailureClassGeili(wrapped))
+	}
+	for _, phase := range []string{"", "postgres://private:secret@server", "insert\nsecret", "unknown", "validate_password"} {
+		require.Equal(t, "unknown", encryptedPersistenceStoragePhaseGeili(encryptedStoragePhaseFixtureGeili{phase: phase}))
+	}
+	require.Equal(t, "unknown", encryptedPersistenceStoragePhaseGeili(errors.New("secret failure")))
+}
