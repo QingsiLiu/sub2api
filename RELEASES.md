@@ -3,8 +3,9 @@
 相对 `.7`，新增 OpenAI 加密会话来源保护与有限推理恢复，以及外部官方 Key 批量录入和逐条/总用量。保护默认 off；按已批准方案上线后先 observe24小时，protect 初始名单仅用户3885，推理恢复开关单独控制。已知密文优先原账号的当前授权分组；安全纯推理状态最多恢复一次，保留摘要/工具历史/大整数，工具密文和压缩历史不自动删除。HTTP/SSE/compact/WebSocket保留真实终态、已交付项来源与实际分组结算。
 
 - 来源只存用户ID＋密文SHA256和路由元数据；PG按访问180天有效、Redis固定24小时。缓存命中仍在50ms总预算内复核PG，冲突/删除/过期优先；Redis专用视图读写各10ms且父配置不变，protect输出共享累计500ms写入预算。策略读取最多一个后台任务、1秒期限，冷请求最多等待50ms，旧结果不能覆盖新策略。
+- 本轮补充：已追踪密文的PG核验失败返回 `encrypted_session_verification_unavailable`（503），保留完整会话且停止转发；缓存存在性只作临时保护依据，不作路由或授权。未知历史、observe/off保持兼容；缓存全命中使用只读SELECT。已补HTTP/WS零上游调用测试、Stage有限锁故障与恢复计费门禁，并兼容Stage无密码Redis精确清理。新候选尚待CI和完整Stage，前一候选失败记录保留。
 - 外部批量录入最多100条官方 Key，事务性保存且默认停用；保持凭据保护、逐成员连接权限、逐条及合计用量。新增迁移280/281，原339份迁移保持字节与校验和；价格、余额/订阅权限按实际选择分组处理。
-- revision：`f2b547b9a11c59276846904175521cd032dfc1f1`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:fff3b81080d2e6a9e4d3108e431813390154b37c08ef00fc2b5759360ddc6f83`；[候选 CI 38349871294](https://github.com/QingsiLiu/sub2api/actions/runs/38349871294)全部9任务与13项制品门禁通过。部署状态：准备经正式入口部署Stage，生产仍`.7`；当次条件授权明确两项一起发布、补齐批量录入验收，通过后才发布同一digest。
+- revision：`f2b547b9a11c59276846904175521cd032dfc1f1`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:fff3b81080d2e6a9e4d3108e431813390154b37c08ef00fc2b5759360ddc6f83`；[候选 CI 38349871294](https://github.com/QingsiLiu/sub2api/actions/runs/38349871294)全部9任务与13项制品门禁通过。部署状态：已经正式入口部署Stage，来源持久化/跨实例固定账号/单笔原分组计费通过，撤权与夹具清理门禁未通过，生产仍`.7`；当次条件授权明确两项一起发布、补齐批量录入验收；当前候选不发布生产，补充来源核验失败保护及无密码Redis清理后重新验收。
 - 本地验证：取消同类/单linter输出上限后完整default/integration候选增量诊断均0；source unit race2.458秒、真实PostgreSQL18/Redis8来源与batch race6.482秒通过。实际TCP无响应时写13.832ms/查询23.361ms；PG已提交冲突但Redis滞留false、删除/过期、混合命中访问时间和父Redis生命周期/配置保持均实测。Stage runner21项、批量runner9项通过；不得代替最终镜像Stage与普通请求性能验收。
 - 所有主动模型调用仅合成上游，未请求付费供应商、真实支付或媒体。先前来源INSERT50ms失败、配置冷读失败、CI断连用量回归、旧缓存一致性审查与静态工具输出截断记录均保留在运维仓 `docs/reports/encrypted-route-batch-20261013/`，不计作当前候选通过。方案和灰度边界见[加密会话来源保护](.github/geili/encrypted-route-protection-20261013.md)；尚不能宣称自然流量错误已下降。
 

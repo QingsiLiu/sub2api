@@ -1,5 +1,6 @@
 """Local stdlib-only Stage runner tests. No Docker, SSH, database or paid calls."""
 import importlib.util
+from contextlib import nullcontext
 import json
 import re
 from pathlib import Path
@@ -39,6 +40,92 @@ class StageRunnerTests(unittest.TestCase):
         fixture.owner = {'id': 12345}
         fixture.sql = Mock(return_value=[{'n': 0}])
         return fixture, cache
+
+    def fake_lock_process(self):
+        return types.SimpleNamespace(stdin=Mock(), stdout=Mock(readline=Mock(return_value='GEILI_SOURCE_LOCK_READY\n')),
+            poll=Mock(return_value=None), communicate=Mock(return_value=('', '')), kill=Mock(), returncode=0)
+
+    def test_source_lock_is_bounded_and_committed_even_when_request_fails(self):
+        for fail in (False, True):
+            proc = self.fake_lock_process()
+            stdin = proc.stdin
+            with patch.object(runner.subprocess, 'Popen', return_value=proc), patch.object(runner.select, 'select', return_value=([proc.stdout], [], [])), patch.object(runner.os, 'read', return_value=b'GEILI_SOURCE_LOCK_READY\n'):
+                if fail:
+                    with self.assertRaisesRegex(ValueError, 'request failed'):
+                        with runner.bounded_source_lock(['synthetic-psql']):
+                            raise ValueError('request failed')
+                else:
+                    with runner.bounded_source_lock(['synthetic-psql']):
+                        pass
+            commands = ''.join(c.args[0] for c in stdin.write.call_args_list)
+            for text in ("lock_timeout='1s'", "statement_timeout='1s'", "idle_in_transaction_session_timeout='3s'",
+                         'LOCK TABLE ONLY openai_encrypted_sources_geili IN ACCESS EXCLUSIVE MODE', 'COMMIT;'):
+                self.assertIn(text, commands)
+            self.assertNotIn('ALTER', commands)
+            proc.communicate.assert_called_once_with(timeout=2)
+            proc.kill.assert_not_called()
+            stdin.close.assert_called_once()
+
+    def test_source_lock_readiness_and_release_deadlines_fail_closed(self):
+        proc = self.fake_lock_process()
+        stdin = proc.stdin
+        with patch.object(runner.subprocess, 'Popen', return_value=proc), patch.object(runner.select, 'select', return_value=([], [], [])):
+            with self.assertRaisesRegex(RuntimeError, 'readiness deadline'):
+                with runner.bounded_source_lock(['synthetic-psql']):
+                    self.fail('must not issue fault request without lock readiness')
+        self.assertIn('COMMIT;', stdin.write.call_args.args[0])
+        proc = self.fake_lock_process()
+        proc.communicate.side_effect = [runner.subprocess.TimeoutExpired('synthetic', 2), ('', '')]
+        with patch.object(runner.subprocess, 'Popen', return_value=proc), patch.object(runner.select, 'select', return_value=([proc.stdout], [], [])), patch.object(runner.os, 'read', return_value=b'GEILI_SOURCE_LOCK_READY\n'):
+            with self.assertRaisesRegex(RuntimeError, 'release deadline'):
+                with runner.bounded_source_lock(['synthetic-psql']):
+                    pass
+        proc.kill.assert_called_once()
+        self.assertEqual([2, 1], [c.kwargs['timeout'] for c in proc.communicate.call_args_list])
+
+    def configure_fault_fixture(self):
+        f, cache = self.make_fixture()
+        self.configure_redis_fixture(f)
+        cache.b.stage.PG = 'synthetic-owned-pg'
+        cache.b.stage.DATABASE = 'synthetic-owned-db'
+        f.suffix = 'fault-fixture'
+        f.groups = {'A': {'id': 42}}
+        f.cross_key = {'id': 345, 'key': 'private-token'}
+        f.sql.side_effect = [[{'n': 2, 'owned': 2}], [{'user_id': 12345, 'cipher_digest': 'a' * 64}]]
+        f.inference_count = Mock(side_effect=[5, 5, 6])
+        f.encrypted_attempts = [{'label': 'A'}]
+        f.call_encrypted = Mock(side_effect=[(503, {'error': {'code': 'encrypted_session_verification_unavailable', 'private': 'must-not-record'}}), (200, {})])
+        f.audit_usage = Mock(side_effect=[{'n': 1, 'wrong_group': 0, 'multiplier': 1}, {'n': 2, 'wrong_group': 0, 'multiplier': 1}])
+        return f, cache
+
+    def test_fault_matrix_requires_actual_hint_then_zero_calls_and_exact_resume_billing(self):
+        f, _ = self.configure_fault_fixture()
+        with patch.object(runner.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stdout='1\n')) as redis, patch.object(runner, 'bounded_source_lock', return_value=nullcontext()) as holder:
+            f.verification_fault_check([{'type': 'encrypted_content', 'encrypted_content': 'synthetic'}])
+        self.assertIn('EXISTS', redis.call_args.args[0])
+        self.assertNotIn('SET', redis.call_args.args[0])
+        self.assertEqual(1, redis.call_count)
+        self.assertIn('-XqAt', holder.call_args.args[0])
+        self.assertEqual([1, 2], [c.args[1] for c in f.audit_usage.call_args_list])
+        self.assertEqual(['verification-fault', 'verification-resumed'], [c.args[2] for c in f.call_encrypted.call_args_list])
+        failure = f.check.call_args_list[1]
+        self.assertEqual({'status': 503, 'error_code': 'encrypted_session_verification_unavailable', 'inference_delta': 0}, failure.args[2])
+        self.assertNotIn('must-not-record', str(f.check.call_args_list))
+        self.assertEqual(3, f.guard.call_count)
+
+    def test_fault_refuses_unrelated_rows_or_missing_hint_without_retry(self):
+        f, _ = self.configure_fault_fixture()
+        f.sql.side_effect = [[{'n': 3, 'owned': 2}]]
+        with patch.object(runner.subprocess, 'run') as redis, patch.object(runner, 'bounded_source_lock') as holder, self.assertRaisesRegex(RuntimeError, 'unrelated'):
+            f.verification_fault_check([])
+        redis.assert_not_called()
+        holder.assert_not_called()
+        f, _ = self.configure_fault_fixture()
+        with patch.object(runner.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stdout='0')) as redis, patch.object(runner, 'bounded_source_lock') as holder, self.assertRaisesRegex(RuntimeError, 'not ready'):
+            f.verification_fault_check([])
+        self.assertEqual(1, redis.call_count)
+        holder.assert_not_called()
+        f.call_encrypted.assert_not_called()
 
     def test_cold_policy_warmup_uses_both_processes_without_cipher_or_policy_mutation(self):
         f, _ = self.make_fixture()
@@ -295,6 +382,36 @@ class StageRunnerTests(unittest.TestCase):
             f.cleanup_source_cache()
         self.assertEqual(2, calls.call_count)
         self.assertTrue(f.snapshot['encrypted_redis_restored'])
+
+    def test_source_cache_absent_or_empty_auth_removes_inherited_secret(self):
+        for env in (['REDIS_DB=0'], ['REDIS_PASSWORD=', 'REDIS_DB=0']):
+            with self.subTest(env=env):
+                f, _ = self.make_fixture()
+                f.inspect = Mock(return_value=[{'Config': {'Env': env}}])
+                f.snapshot = {}
+                f.sql.return_value = [{'user_id': 12345, 'cipher_digest': 'a' * 64}]
+                def command(args, **kwargs):
+                    self.assertNotIn('-e', args)
+                    self.assertNotIn('REDISCLI_AUTH', args)
+                    self.assertNotIn('REDISCLI_AUTH', kwargs['env'])
+                    self.assertEqual('0', args[args.index('-n') + 1])
+                    return types.SimpleNamespace(returncode=0, stdout='0')
+                with patch.dict(runner.os.environ, {'REDISCLI_AUTH': 'inherited-secret'}), patch.object(runner.subprocess, 'run', side_effect=command) as calls:
+                    f.cleanup_source_cache()
+                self.assertEqual(2, calls.call_count)
+                self.assertTrue(f.snapshot['encrypted_redis_restored'])
+
+    def test_source_cache_invalid_auth_fails_before_redis_command(self):
+        for password in ('bad\nsecret', 'bad\rsecret', 'bad\0secret'):
+            with self.subTest(password=password):
+                f, _ = self.make_fixture()
+                f.inspect = Mock(return_value=[{'Config': {'Env': ['REDIS_PASSWORD=' + password]}}])
+                f.snapshot = {}
+                f.sql.return_value = [{'user_id': 12345, 'cipher_digest': 'a' * 64}]
+                with patch.object(runner.subprocess, 'run') as calls, self.assertRaises(RuntimeError) as failure:
+                    f.cleanup_source_cache()
+                calls.assert_not_called()
+                self.assertNotIn(password, str(failure.exception))
 
     def test_source_cache_resume_manifest_after_sql_rows_deleted(self):
         f, _ = self.make_fixture()

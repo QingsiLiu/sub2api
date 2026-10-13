@@ -41,20 +41,20 @@ func TestEncryptedSourceGeiliDurableCacheMissAndUserIsolation(t *testing.T) {
 	a := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db))
 	b := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db))
 	r := encryptedSourceFixtureGeili()
-	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(3885), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
+	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(3885), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
 	got, err := a.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest, r.Digest})
 	require.NoError(t, err)
 	require.Equal(t, r.AccountID, got[r.Digest].AccountID)
-	mock.ExpectQuery("WITH touched").WillReturnRows(encryptedSourceRowsGeili(r))
+	mock.ExpectQuery("SELECT cipher_digest").WillReturnRows(encryptedSourceRowsGeili(r))
 	got, err = b.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
 	require.NoError(t, err)
 	require.Equal(t, r.AccountID, got[r.Digest].AccountID)
-	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(99), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"cipher_digest", "group_id", "account_id", "model", "backend_fingerprint", "conflict", "generated_at"}))
+	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(99), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"cipher_digest", "group_id", "account_id", "model", "backend_fingerprint", "conflict", "generated_at"}))
 	got, err = b.GetOpenAIEncryptedRoutesGeili(context.Background(), 99, []string{r.Digest})
 	require.NoError(t, err)
 	require.Empty(t, got)
 	mr.FastForward(25 * time.Hour)
-	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(3885), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
+	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(3885), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
 	_, err = a.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -104,7 +104,7 @@ func TestEncryptedSourceGeiliImmutableOriginAndMonotonicConflict(t *testing.T) {
 	mock.ExpectQuery(q).WillReturnRows(encryptedSourceRowsGeili(late))
 	mock.ExpectCommit()
 	require.NoError(t, c.SetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []service.OpenAIEncryptedRouteGeili{late}))
-	mock.ExpectQuery("WITH touched").WillReturnRows(encryptedSourceRowsGeili(old))
+	mock.ExpectQuery("SELECT cipher_digest").WillReturnRows(encryptedSourceRowsGeili(old))
 	got, err := c.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{old.Digest})
 	require.NoError(t, err)
 	require.True(t, got[old.Digest].Conflict)
@@ -123,7 +123,8 @@ func TestEncryptedSourceGeiliValidationAndDBError(t *testing.T) {
 	require.Error(t, err)
 	mock.ExpectQuery(regexp.QuoteMeta("UPDATE openai_encrypted_sources_geili")).WillReturnError(fmt.Errorf("db unavailable"))
 	_, err = c.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
-	require.ErrorContains(t, err, "db unavailable")
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "db unavailable")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -137,6 +138,9 @@ func TestEncryptedSourceGeiliCacheOnlyCannotSupplyAuthority(t *testing.T) {
 	got, err := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb)).GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
 	require.Error(t, err)
 	require.Nil(t, got)
+	var hint interface{ KnownOpenAIEncryptedSourceHintGeili() bool }
+	require.ErrorAs(t, err, &hint)
+	require.True(t, hint.KnownOpenAIEncryptedSourceHintGeili())
 }
 
 func TestEncryptedSourceGeiliCacheMissDoesNotRefreshUnrelatedHitTTL(t *testing.T) {
@@ -153,7 +157,7 @@ func TestEncryptedSourceGeiliCacheMissDoesNotRefreshUnrelatedHitTTL(t *testing.T
 	mr.SetTTL(key, time.Hour)
 	c := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db))
 	missing := strings.Repeat("c", 64)
-	mock.ExpectQuery("UPDATE openai_encrypted_sources_geili").WithArgs(int64(3885), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
+	mock.ExpectQuery("WITH touched").WithArgs(int64(3885), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnRows(encryptedSourceRowsGeili(r))
 	got, err := c.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest, missing})
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -191,13 +195,81 @@ func TestEncryptedSourceGeiliCachedAuthorityRequiresSuccessfulDurableRead(t *tes
 	raw, _ := json.Marshal(r)
 	require.NoError(t, mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)))
 	cache := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db))
-	mock.ExpectQuery("WITH touched").WillReturnError(context.DeadlineExceeded)
+	mock.ExpectQuery("SELECT cipher_digest").WillReturnError(context.DeadlineExceeded)
 	got, err := cache.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Nil(t, got)
-	mock.ExpectQuery("WITH touched").WillReturnRows(sqlmock.NewRows([]string{"cipher_digest", "group_id", "account_id", "model", "backend_fingerprint", "conflict", "generated_at"}))
+	mock.ExpectQuery("SELECT cipher_digest").WillReturnRows(sqlmock.NewRows([]string{"cipher_digest", "group_id", "account_id", "model", "backend_fingerprint", "conflict", "generated_at"}))
 	got, err = cache.GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
 	require.NoError(t, err)
 	require.Empty(t, got)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEncryptedSourceGeiliLookupHintIsPresenceOnlyAndDiagnosticsAreControlled(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		cached  bool
+		invalid bool
+		want    bool
+	}{{"known", true, false, true}, {"unknown", false, false, false}, {"invalid cache", true, true, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			mr := miniredis.RunT(t)
+			rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+			defer func() { _ = rdb.Close() }()
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			r := encryptedSourceFixtureGeili()
+			if tc.invalid {
+				r.BackendFingerprint = "invalid"
+			}
+			if tc.cached {
+				raw, _ := json.Marshal(r)
+				require.NoError(t, mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)))
+			}
+			pattern := "UPDATE openai_encrypted_sources_geili"
+			if tc.want {
+				pattern = "SELECT cipher_digest"
+			}
+			cause := fmt.Errorf("secret database diagnostic: %w", context.DeadlineExceeded)
+			mock.ExpectQuery(pattern).WillReturnError(cause)
+			got, err := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db)).GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
+			require.Nil(t, got)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			require.NotContains(t, err.Error(), "secret")
+			var hint interface {
+				KnownOpenAIEncryptedSourceHintGeili() bool
+				EncryptedRouteLookupPhaseGeili() string
+			}
+			require.ErrorAs(t, err, &hint)
+			require.Equal(t, tc.want, hint.KnownOpenAIEncryptedSourceHintGeili())
+			require.Equal(t, "query", hint.EncryptedRouteLookupPhaseGeili())
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+func TestEncryptedSourceGeiliCachedRowsFailureReturnsNoAuthority(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer func() { _ = rdb.Close() }()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	r := encryptedSourceFixtureGeili()
+	raw, _ := json.Marshal(r)
+	require.NoError(t, mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)))
+	mock.ExpectQuery("SELECT cipher_digest").WillReturnRows(encryptedSourceRowsGeili(r).RowError(0, fmt.Errorf("private row failure")))
+	got, err := requireEncryptedSourceCacheGeili(t, NewGatewayCache(rdb, db)).GetOpenAIEncryptedRoutesGeili(context.Background(), 3885, []string{r.Digest})
+	require.Nil(t, got)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "private")
+	var hint interface {
+		KnownOpenAIEncryptedSourceHintGeili() bool
+		EncryptedRouteLookupPhaseGeili() string
+	}
+	require.ErrorAs(t, err, &hint)
+	require.True(t, hint.KnownOpenAIEncryptedSourceHintGeili())
+	require.Equal(t, "rows", hint.EncryptedRouteLookupPhaseGeili())
 	require.NoError(t, mock.ExpectationsWereMet())
 }

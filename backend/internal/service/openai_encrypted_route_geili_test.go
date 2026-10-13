@@ -3,9 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 	"time"
+
+	coderws "github.com/coder/websocket"
+	"github.com/gin-gonic/gin"
 )
 
 type encryptedRouteCacheFixtureGeili struct {
@@ -152,4 +157,112 @@ func TestOpenAIEncryptedRouteGeiliNonstreamCipherAndIncompleteItem(t *testing.T)
 	require.Equal(t, 1, cache.writes)
 	r := cache.routes[3885][openAIEncryptedContentDigest("complete")]
 	require.WithinDuration(t, time.Now(), r.GeneratedAt, time.Second)
+}
+
+type trackedEncryptedLookupFailureGeili struct {
+	tracked bool
+	phase   string
+}
+
+func (e trackedEncryptedLookupFailureGeili) Error() string {
+	return "private database error must not be exposed"
+}
+func (e trackedEncryptedLookupFailureGeili) Unwrap() error { return context.DeadlineExceeded }
+func (e trackedEncryptedLookupFailureGeili) KnownOpenAIEncryptedSourceHintGeili() bool {
+	return e.tracked
+}
+func (e trackedEncryptedLookupFailureGeili) EncryptedRouteLookupPhaseGeili() string { return e.phase }
+func TestEncryptedTrackedSourceVerificationFailureGeiliStopsOnlyEligibleProtect(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode                 string
+		eligible, tracked, blocked bool
+	}{
+		{"protected tracked", "protect", true, true, true},
+		{"protected unknown", "protect", true, false, false},
+		{"other user", "protect", false, true, false},
+		{"observe", "observe", true, true, false},
+		{"off", "off", true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+			cache := &encryptedRouteCacheFixtureGeili{readErr: fmt.Errorf("wrapped: %w", trackedEncryptedLookupFailureGeili{tracked: tc.tracked, phase: "query"})}
+			svc.cache = cache
+			user := int64(3885)
+			if !tc.eligible {
+				user++
+			}
+			ctx := WithOpenAIEncryptedRoutePolicyGeili(context.Background(), OpenAIEncryptedRouteSettingsGeili{Mode: tc.mode, ProtectedUserIDs: []int64{3885}, ReasoningRecoveryEnabled: true})
+			body := []byte(encryptedToolHistoryFixtureGeili)
+			original := append([]byte(nil), body...)
+			ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(ctx, &APIKey{UserID: user}, body)
+			if tc.blocked {
+				var failure *OpenAIEncryptedRouteErrorGeili
+				require.ErrorAs(t, err, &failure)
+				require.Equal(t, 503, failure.Status)
+				require.Equal(t, "encrypted_session_verification_unavailable", failure.Code)
+				require.NotContains(t, failure.Message, "private")
+			} else {
+				require.NoError(t, err)
+			}
+			require.Nil(t, owner)
+			require.False(t, OpenAIEncryptedRoutePinnedGeili(ctx))
+			require.False(t, OpenAIEncryptedRouteRecoveryEnabledGeili(ctx))
+			require.False(t, ClaimOpenAIEncryptedRecoveryGeili(ctx))
+			recovered, ok := ReleaseOpenAIEncryptedReasoningRouteGeili(ctx, body)
+			require.False(t, ok)
+			require.Equal(t, original, recovered)
+			require.Equal(t, original, body)
+			require.Zero(t, cache.writes)
+		})
+	}
+}
+func TestEncryptedLookupPhaseGeiliWhitelist(t *testing.T) {
+	for _, phase := range []string{"query", "rows", "close"} {
+		require.Equal(t, phase, encryptedRouteLookupPhaseGeili(fmt.Errorf("wrapped: %w", trackedEncryptedLookupFailureGeili{phase: phase})))
+	}
+	require.Equal(t, "unknown", encryptedRouteLookupPhaseGeili(trackedEncryptedLookupFailureGeili{phase: "privateDSN"}))
+	require.Equal(t, "unknown", encryptedRouteLookupPhaseGeili(errors.New("private")))
+}
+
+func TestEncryptedTrackedVerificationWSFirstFrameGeiliRejectsBeforeDial(t *testing.T) {
+	upstream := newStagedPassthroughConn()
+	svc := newPassthroughLifecycleService(passthroughLifecycleConfig(), upstream)
+	dialer := &encryptedWSSequenceDialerGeili{conns: []*stagedPassthroughConn{upstream}}
+	svc.openaiWSPassthroughDialer = dialer
+	svc.cache = &encryptedRouteCacheFixtureGeili{readErr: trackedEncryptedLookupFailureGeili{tracked: true, phase: "query"}}
+	group := int64(131)
+	var serverContext *gin.Context
+	server, serverErr := startPassthroughLifecycleServerWithHooks(t, encryptedPolicyCtxGeili(3885), svc, passthroughLifecycleAccount(), func(c *gin.Context) *OpenAIWSIngressHooks {
+		serverContext = c
+		c.Set("api_key", &APIKey{ID: 4987, UserID: 3885, GroupID: &group})
+		return nil
+	})
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	client, _, err := coderws.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	require.NoError(t, err)
+	defer func() { _ = client.CloseNow() }()
+	require.NoError(t, client.Write(ctx, coderws.MessageText, []byte(`{"type":"response.create","model":"gpt-6-astra","input":[{"type":"reasoning","encrypted_content":"tracked-synthetic","summary":[]}]}`)))
+	_, body, err := client.Read(ctx)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "encrypted_session_verification_unavailable")
+	require.NotContains(t, string(body), "private")
+	require.NotContains(t, string(body), "tracked-synthetic")
+	require.Zero(t, dialer.calls.Load())
+	select {
+	case <-serverErr:
+		streamErr, ok := GetOpsStreamError(serverContext)
+		require.True(t, ok)
+		require.Equal(t, 503, streamErr.IntendedStatus)
+		require.Equal(t, "encrypted_session_verification_unavailable", streamErr.Code)
+		require.True(t, streamErr.CountTowardsSLA)
+	case <-ctx.Done():
+		t.Fatal("verification failure did not finish WS turn")
+	}
+	select {
+	case <-upstream.writes:
+		t.Fatal("unverified source dispatched upstream")
+	default:
+	}
 }

@@ -7,6 +7,8 @@ Uses canonical ops guards/lease/network-namespace mock and cleanup; never deploy
 never requests real suppliers, and never prints bearer tokens/settings values.
 """
 import argparse
+from contextlib import contextmanager
+import select
 import fcntl
 import hashlib
 import importlib.util
@@ -120,6 +122,49 @@ def source_cache_keys(rows, users):
     return sorted(keys)
 
 
+@contextmanager
+def bounded_source_lock(command):
+    """Own only this finite psql process; server idle timeout bounds orphan locks."""
+    proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    try:
+        proc.stdin.write("BEGIN; SET LOCAL lock_timeout='1s'; SET LOCAL statement_timeout='1s'; "
+                         "SET LOCAL idle_in_transaction_session_timeout='3s'; "
+                         "LOCK TABLE ONLY openai_encrypted_sources_geili IN ACCESS EXCLUSIVE MODE;\n"
+                         "\\echo GEILI_SOURCE_LOCK_READY\n")
+        proc.stdin.flush()
+        deadline = time.monotonic() + 2
+        ready_bytes = b''
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([proc.stdout], [], [], remaining)[0]:
+                raise RuntimeError('owned source lock readiness deadline exceeded')
+            chunk = os.read(proc.stdout.fileno(), 1024)
+            if not chunk or len(ready_bytes) + len(chunk) > 4096:
+                raise RuntimeError('owned source lock failed before readiness')
+            ready_bytes += chunk
+            if b'GEILI_SOURCE_LOCK_READY' in ready_bytes.splitlines():
+                break
+        yield
+    finally:
+        try:
+            if proc.poll() is None:
+                try:
+                    proc.stdin.write('COMMIT;\n')
+                    proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    pass
+            proc.stdin.close()
+            proc.stdin = None
+            proc.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate(timeout=1)
+            raise RuntimeError('owned source lock release deadline exceeded') from None
+        if proc.returncode != 0:
+            raise RuntimeError('owned source lock process failed')
+
+
 def fixture_type(cache, source):
     class EncryptedFixture(cache.fixture_type(source)):
         def prepare(self):
@@ -223,6 +268,60 @@ def fixture_type(cache, source):
                     return rows
                 time.sleep(.1)
 
+        def verification_fault_check(self, opaque):
+            self.guard()
+            counts = self.sql("SELECT json_build_object('n',COUNT(*),'owned',COUNT(*) FILTER(WHERE user_id=" +
+                str(int(self.owner['id'])) + ')) FROM openai_encrypted_sources_geili;')[0]
+            if counts != {'n': 2, 'owned': 2}:
+                raise RuntimeError('refuse source table lock with unrelated Stage rows')
+            records = self.sql("SELECT json_build_object('user_id',user_id,'cipher_digest',cipher_digest) "
+                "FROM openai_encrypted_sources_geili WHERE user_id=" + str(int(self.owner['id'])) +
+                " AND cipher_digest=encode(sha256(convert_to(" + cache.b.stage.literal('synthetic-encrypted-' + self.suffix + '-tools') +
+                ",'UTF8')),'hex');")
+            keys = source_cache_keys(records, self.fixture_ids['users'])
+            if len(keys) != 1:
+                raise RuntimeError('expected exact owned tool source digest before fault')
+            app = self.inspect()[0]
+            env = dict(v.split('=', 1) for v in app['Config'].get('Env', []) if '=' in v)
+            cache.b.stage.validate_redis_environment(env)
+            if cache.b.stage.REDIS == 'sub2api-redis':
+                raise RuntimeError('refuse production Redis source fault check')
+            password = env.get('REDIS_PASSWORD')
+            if password is not None and (not isinstance(password, str) or any(c in password for c in '\n\r\0')):
+                raise RuntimeError('invalid Stage Redis authentication environment')
+            private_env = dict(os.environ)
+            private_env.pop('REDISCLI_AUTH', None)
+            auth_args = []
+            if password:
+                private_env['REDISCLI_AUTH'] = password
+                auth_args = ['-e', 'REDISCLI_AUTH']
+            hint = subprocess.run(['docker', 'exec', *auth_args, cache.b.stage.REDIS, 'redis-cli', '-n', '0', '--raw', 'EXISTS', *keys],
+                                  env=private_env, text=True, capture_output=True, timeout=2)
+            ready = hint.returncode == 0 and hint.stdout.strip() == '1'
+            self.check('actual owned tool source Redis hint exists before verification fault', ready)
+            if not ready:
+                raise RuntimeError('owned source hint not ready; refuse masking fault setup')
+            self.guard()
+            before = self.inference_count()
+            with bounded_source_lock(['docker', 'exec', '-i', cache.b.stage.PG, 'psql', '-XqAt',
+                    '-v', 'ON_ERROR_STOP=1', '-U', cache.b.stage.DATABASE, '-d', cache.b.stage.DATABASE]):
+                failed = self.call_encrypted(self.cross_key, opaque, 'verification-fault', True)
+                delta = self.inference_count() - before
+                self.check('cached source verification failure returns503 with zero upstream calls',
+                    failed[0] == 503 and error_code(failed) == 'encrypted_session_verification_unavailable' and delta == 0,
+                    {'status': failed[0], 'error_code': error_code(failed), 'inference_delta': delta})
+                usage = self.audit_usage(self.cross_key, 1, self.groups['A']['id'])
+                self.check('verification fault creates no additional usage', usage['n'] == 1, usage)
+            self.guard()
+            resumed = self.call_encrypted(self.cross_key, opaque, 'verification-resumed', True)
+            delta = self.inference_count() - before
+            self.check('released source verification lock resumes original account once',
+                resumed[0] == 200 and delta == 1 and self.encrypted_attempts[-1]['label'] == 'A',
+                {'status': resumed[0], 'inference_delta': delta})
+            usage = self.audit_usage(self.cross_key, 2, self.groups['A']['id'])
+            self.check('resumed request adds exactly one actual original group charge',
+                usage['n'] == 2 and usage['wrong_group'] == 0 and float(usage['multiplier']) == 1, usage)
+
         def warm_policy_processes(self):
             # A cold settings cache may safely use off for its first caller.
             # Warm both processes with isolated plaintext, then allow the one
@@ -261,11 +360,13 @@ def fixture_type(cache, source):
             usage = self.audit_usage(self.cross_key, 1, self.groups['A']['id'])
             self.check('pinned request bills actual original group once', usage['n'] == 1 and usage['wrong_group'] == 0
                 and float(usage['multiplier']) == 1, usage)
+            self.verification_fault_check(opaque)
             self.api('/keys/' + str(self.cross_key['id']), {'group_ids': [self.groups['B']['id']]}, self.owner['token'], 'PUT')
             before = self.inference_count()
             denied = self.call_encrypted(self.cross_key, opaque, 'revoked', True)
             self.check('revoked source group produces409 without upstream call', denied[0] == 409
-                and error_code(denied) == 'encrypted_session_route_conflict' and self.inference_count() == before)
+                and error_code(denied) == 'encrypted_session_route_conflict' and self.inference_count() == before,
+                {'status': denied[0], 'error_code': error_code(denied), 'inference_delta': self.inference_count() - before})
             self.api('/keys/' + str(self.cross_key['id']), {'group_ids': [self.groups['B']['id'], self.groups['A']['id']]}, self.owner['token'], 'PUT')
             before = self.inference_count()
             unknown = self.call_encrypted(self.cross_key, [{'type': 'reasoning', 'id': 'rs_unknown',
@@ -372,16 +473,21 @@ def fixture_type(cache, source):
                 if redis_name == 'sub2api-redis':
                     raise RuntimeError('refuse production Redis source cleanup')
                 password = env.get('REDIS_PASSWORD')
-                if not isinstance(password, str) or not password or any(c in password for c in '\n\r\0'):
+                if password is not None and (not isinstance(password, str) or any(c in password for c in '\n\r\0')):
                     raise RuntimeError('invalid Stage Redis authentication environment')
                 # Docker inherits this environment variable by NAME. Credentials
                 # never appear in argv, snapshots, command errors or reports.
-                private_env = dict(os.environ, REDISCLI_AUTH=password)
+                private_env = dict(os.environ)
+                private_env.pop('REDISCLI_AUTH', None)
+                auth_args = []
+                if password:
+                    private_env['REDISCLI_AUTH'] = password
+                    auth_args = ['-e', 'REDISCLI_AUTH']
                 for offset in range(0, len(keys), 128):
                     batch = keys[offset:offset + 128]
                     for operation in ('DEL', 'EXISTS'):
                         try:
-                            result = subprocess.run(['docker', 'exec', '-e', 'REDISCLI_AUTH', redis_name,
+                            result = subprocess.run(['docker', 'exec', *auth_args, redis_name,
                                 'redis-cli', '-n', '0', '--raw', operation, *batch], env=private_env,
                                 text=True, capture_output=True, timeout=30)
                             if result.returncode != 0 or not re.fullmatch(r'\d+\s*', result.stdout):

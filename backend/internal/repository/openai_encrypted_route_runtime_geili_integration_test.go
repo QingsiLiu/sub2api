@@ -263,3 +263,44 @@ func encryptedBlackholeRedisGeili(t *testing.T) *redis.Client {
 	t.Cleanup(func() { _ = parent.Close() })
 	return parent
 }
+
+func TestEncryptedSourceGeiliRealPGBlockedVerificationReturnsHintWithoutCachedAuthority(t *testing.T) {
+	ctx := context.Background()
+	var userID int64
+	require.NoError(t, integrationDB.QueryRow(`INSERT INTO users(email,password_hash,role,status,balance,concurrency) VALUES($1,'test','user','active',10,10) RETURNING id`, uuid.NewString()+"@lookup-hint.invalid").Scan(&userID))
+	r := encryptedSourceFixtureGeili()
+	key := encryptedRouteKeyGeili(userID, r.Digest)
+	t.Cleanup(func() {
+		_, _ = integrationDB.Exec("DELETE FROM users WHERE id=$1", userID)
+		_ = integrationRedis.Del(context.Background(), key).Err()
+	})
+	cache := requireEncryptedSourceCacheGeili(t, NewGatewayCache(integrationRedis, integrationDB))
+	require.NoError(t, cache.SetOpenAIEncryptedRoutesGeili(ctx, userID, []service.OpenAIEncryptedRouteGeili{r}))
+	require.NoError(t, integrationRedis.Exists(ctx, key).Err())
+	require.Equal(t, int64(1), integrationRedis.Exists(ctx, key).Val())
+	lock, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = lock.Rollback() }()
+	_, err = lock.ExecContext(ctx, "LOCK TABLE openai_encrypted_sources_geili IN ACCESS EXCLUSIVE MODE")
+	require.NoError(t, err)
+	lookup, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	got, err := cache.GetOpenAIEncryptedRoutesGeili(lookup, userID, []string{r.Digest})
+	cancel()
+	require.Nil(t, got)
+	require.Error(t, err)
+	var hint interface {
+		KnownOpenAIEncryptedSourceHintGeili() bool
+		EncryptedRouteLookupPhaseGeili() string
+	}
+	require.ErrorAs(t, err, &hint)
+	require.True(t, hint.KnownOpenAIEncryptedSourceHintGeili())
+	require.Equal(t, "query", hint.EncryptedRouteLookupPhaseGeili())
+	lookup, cancel = context.WithTimeout(ctx, 50*time.Millisecond)
+	got, err = cache.GetOpenAIEncryptedRoutesGeili(lookup, userID, []string{strings.Repeat("e", 64)})
+	cancel()
+	require.Nil(t, got)
+	require.Error(t, err)
+	require.ErrorAs(t, err, &hint)
+	require.False(t, hint.KnownOpenAIEncryptedSourceHintGeili())
+	require.NoError(t, lock.Rollback())
+}

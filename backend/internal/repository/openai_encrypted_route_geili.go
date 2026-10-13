@@ -64,14 +64,14 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 					continue
 				}
 				var r service.OpenAIEncryptedRouteGeili
-				if json.Unmarshal([]byte(raw), &r) == nil && r.Digest == requested[i] && r.AccountID > 0 && r.GroupID > 0 {
+				if json.Unmarshal([]byte(raw), &r) == nil && r.Digest == requested[i] && r.AccountID > 0 && r.GroupID > 0 && validEncryptedDigestGeili(r.BackendFingerprint) && strings.TrimSpace(r.Model) != "" {
 					result[r.Digest] = r
 				}
 			}
 		}
 	}
 	if c.encryptedRouteDB == nil {
-		return nil, encryptedRouteStorageFailureGeili("store_unavailable", fmt.Errorf("encrypted provenance persistence unavailable"))
+		return nil, encryptedRouteLookupFailureGeili("query", len(result) > 0, fmt.Errorf("encrypted provenance persistence unavailable"))
 	}
 	// Redis is only an access-refresh hint. Every authority comes from current
 	// durable metadata, including conflicts committed before a failed cache write.
@@ -89,17 +89,24 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	}
 	args := []any{userID, pq.Array(misses), pq.Array(hits)}
 	q := `WITH touched AS (UPDATE openai_encrypted_sources_geili SET last_accessed_at=NOW() WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($2::CHAR(64)[]) RETURNING cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at) SELECT cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at FROM touched UNION ALL SELECT cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at FROM openai_encrypted_sources_geili WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($3::CHAR(64)[])`
+	if len(hits) == 0 {
+		q = `UPDATE openai_encrypted_sources_geili SET last_accessed_at=NOW() WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($2::CHAR(64)[]) RETURNING cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at`
+		args = []any{userID, pq.Array(misses)}
+	} else if len(misses) == 0 {
+		q = `SELECT cipher_digest,group_id,account_id,model,backend_fingerprint,conflict,generated_at FROM openai_encrypted_sources_geili WHERE user_id=$1 AND last_accessed_at>NOW()-INTERVAL '180 days' AND cipher_digest=ANY($2::CHAR(64)[])`
+		args = []any{userID, pq.Array(hits)}
+	}
 	rows, err := c.encryptedRouteDB.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, encryptedRouteLookupFailureGeili("query", len(cached) > 0, err)
 	}
 	defer func() { _ = rows.Close() }()
-	// Only missed digests query durable metadata; cache writes monotonically retain conflicts.
+	// Every result uses durable metadata; only misses refill the fixed-TTL cache.
 	sqlRecords := make([]service.OpenAIEncryptedRouteGeili, 0)
 	for rows.Next() {
 		var r service.OpenAIEncryptedRouteGeili
 		if err := rows.Scan(&r.Digest, &r.GroupID, &r.AccountID, &r.Model, &r.BackendFingerprint, &r.Conflict, &r.GeneratedAt); err != nil {
-			return nil, err
+			return nil, encryptedRouteLookupFailureGeili("rows", len(cached) > 0, err)
 		}
 		result[r.Digest] = r
 		if _, hit := cached[r.Digest]; !hit {
@@ -107,10 +114,10 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, encryptedRouteLookupFailureGeili("rows", len(cached) > 0, err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return nil, encryptedRouteLookupFailureGeili("close", len(cached) > 0, err)
 	}
 	if c.encryptedRouteRDB != nil && len(sqlRecords) > 0 {
 		redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
@@ -123,6 +130,26 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 		cancel()
 	}
 	return result, nil
+}
+
+// A cached presence hint can require safe verification failure handling, but
+// carries no route or authorization. All successful authorities still use SQL.
+type encryptedRouteLookupErrorGeili struct {
+	phase     string
+	knownHint bool
+	cause     error
+}
+
+func (e *encryptedRouteLookupErrorGeili) Error() string {
+	return "encrypted source verification failed at " + e.phase
+}
+func (e *encryptedRouteLookupErrorGeili) Unwrap() error { return e.cause }
+func (e *encryptedRouteLookupErrorGeili) KnownOpenAIEncryptedSourceHintGeili() bool {
+	return e.knownHint
+}
+func (e *encryptedRouteLookupErrorGeili) EncryptedRouteLookupPhaseGeili() string { return e.phase }
+func encryptedRouteLookupFailureGeili(phase string, known bool, cause error) error {
+	return &encryptedRouteLookupErrorGeili{phase: phase, knownHint: known, cause: cause}
 }
 
 // Controlled diagnostics never expose SQL text, credentials or ciphertext.

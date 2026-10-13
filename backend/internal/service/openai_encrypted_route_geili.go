@@ -199,7 +199,14 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 	sources, err := cache.GetOpenAIEncryptedRoutesGeili(lookup, key.UserID, digests)
 	if err != nil {
 		encryptedRouteLookupFailuresGeili.Add(1)
-		slog.Warn("encrypted_route.lookup_failed", "user_id", key.UserID)
+		var hint interface{ KnownOpenAIEncryptedSourceHintGeili() bool }
+		tracked := errors.As(err, &hint) && hint.KnownOpenAIEncryptedSourceHintGeili()
+		slog.Warn("encrypted_route.lookup_failed", "user_id", key.UserID, "error_class", encryptedPersistenceFailureClassGeili(err), "lookup_phase", encryptedRouteLookupPhaseGeili(err), "tracked_source_hint", tracked)
+		// A cache-presence hint establishes prior tracking, never route authority.
+		// Keep its encrypted history intact until PostgreSQL can verify the source.
+		if eligible && tracked {
+			return next, nil, encryptedRouteErrorGeili(503, "encrypted_session_verification_unavailable", "暂时无法核验已追踪的会话加密状态，请稍后重试，勿切换线路")
+		}
 		return next, nil, nil
 	}
 	slog.Info("encrypted_route.lookup", "user_id", key.UserID, "mode", policy.Mode, "model", gjson.GetBytes(body, "model").String(), "cipher_count", len(digests), "known_count", len(sources))
@@ -233,6 +240,17 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 	// Unknown historical ciphertext is never eligible for destructive recovery.
 	state.recovery = policy.ReasoningRecoveryEnabled && state.owner != nil && len(sources) == len(digests) && len(digests) < 256
 	return next, state.owner, nil
+}
+
+func encryptedRouteLookupPhaseGeili(err error) string {
+	var failure interface{ EncryptedRouteLookupPhaseGeili() string }
+	if errors.As(err, &failure) {
+		switch phase := failure.EncryptedRouteLookupPhaseGeili(); phase {
+		case "query", "rows", "close":
+			return phase
+		}
+	}
+	return "unknown"
 }
 func FilterOpenAIEncryptedRoutesGeili(candidates []CompositeRouteDecision, owner *OpenAIEncryptedRouteGeili) []CompositeRouteDecision {
 	if owner == nil {
