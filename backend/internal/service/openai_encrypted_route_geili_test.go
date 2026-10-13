@@ -383,3 +383,155 @@ func TestEncryptedMetadataTimeoutRetryGeiliEligibilityAndParentBudget(t *testing
 		})
 	}
 }
+
+type prehintEncryptedCacheGeili struct {
+	stubGatewayCache
+	present                 bool
+	hintErr                 error
+	hintDelay, queryDelay   time.Duration
+	hintCalls, getCalls     int
+	hintBudget, queryBudget time.Duration
+	sources                 map[string]OpenAIEncryptedRouteGeili
+}
+
+func (c *prehintEncryptedCacheGeili) HasOpenAIEncryptedSourceHintGeili(ctx context.Context, _ int64, _ []string) (bool, error) {
+	c.hintCalls++
+	deadline, _ := ctx.Deadline()
+	c.hintBudget = time.Until(deadline)
+	timer := time.NewTimer(c.hintDelay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return c.present, c.hintErr
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+}
+func (c *prehintEncryptedCacheGeili) GetOpenAIEncryptedRoutesGeili(ctx context.Context, _ int64, _ []string) (map[string]OpenAIEncryptedRouteGeili, error) {
+	c.getCalls++
+	deadline, _ := ctx.Deadline()
+	c.queryBudget = time.Until(deadline)
+	timer := time.NewTimer(c.queryDelay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return c.sources, nil
+	case <-ctx.Done():
+		return nil, trackedEncryptedLookupFailureGeili{tracked: c.present, phase: "rows"}
+	}
+}
+func (*prehintEncryptedCacheGeili) SetOpenAIEncryptedRoutesGeili(context.Context, int64, []OpenAIEncryptedRouteGeili) error {
+	return nil
+}
+func TestEncryptedPrehintGeiliKnownReadUsesSingleFullWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		delay             time.Duration
+		missing, conflict bool
+		parent            time.Duration
+	}{
+		{name: "120ms fresh source", delay: 120 * time.Millisecond},
+		{name: "persistent timeout", delay: time.Second},
+		{name: "empty authority", delay: 120 * time.Millisecond, missing: true},
+		{name: "fresh conflict", delay: 120 * time.Millisecond, conflict: true},
+		{name: "parent clamp", delay: time.Second, parent: 100 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, account := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+			body := []byte(encryptedToolHistoryFixtureGeili)
+			original := append([]byte(nil), body...)
+			digest := encryptedDigestsGeili(body)[0]
+			cache := &prehintEncryptedCacheGeili{present: true, queryDelay: tc.delay, sources: map[string]OpenAIEncryptedRouteGeili{digest: {Digest: digest, GroupID: 131, AccountID: account.ID, Model: "gpt-6-astra", BackendFingerprint: encryptedBackendFingerprintGeili(account), Conflict: tc.conflict}}}
+			if tc.missing {
+				cache.sources = map[string]OpenAIEncryptedRouteGeili{}
+			}
+			svc.cache = cache
+			base := encryptedPolicyCtxGeili(3885)
+			if tc.parent > 0 {
+				var cancel context.CancelFunc
+				base, cancel = context.WithTimeout(base, tc.parent)
+				defer cancel()
+			}
+			start := time.Now()
+			ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(base, &APIKey{UserID: 3885}, body)
+			require.Equal(t, 1, cache.hintCalls)
+			require.Equal(t, 1, cache.getCalls)
+			require.LessOrEqual(t, cache.hintBudget, 10*time.Millisecond)
+			require.LessOrEqual(t, cache.queryBudget, 250*time.Millisecond)
+			require.Less(t, time.Since(start), 350*time.Millisecond)
+			if tc.parent > 0 {
+				require.LessOrEqual(t, cache.queryBudget, tc.parent)
+				require.Less(t, time.Since(start), 200*time.Millisecond)
+			}
+			if tc.delay >= time.Second || tc.missing || tc.conflict {
+				var failure *OpenAIEncryptedRouteErrorGeili
+				require.ErrorAs(t, err, &failure)
+				if tc.conflict {
+					require.Equal(t, 409, failure.Status)
+				} else {
+					require.Equal(t, 503, failure.Status)
+					require.Nil(t, owner)
+					require.False(t, OpenAIEncryptedRouteRecoveryEnabledGeili(ctx))
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, owner)
+				require.Equal(t, account.ID, owner.AccountID)
+				require.True(t, OpenAIEncryptedRoutePinnedGeili(ctx))
+			}
+			require.Equal(t, original, body)
+		})
+	}
+}
+func TestEncryptedPrehintGeiliUnknownAndOtherModesKeepFirst50(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode             string
+		otherUser, hintFailure bool
+		hintCalls, getCalls    int
+	}{
+		{name: "unknown", mode: "protect", hintCalls: 1, getCalls: 1},
+		{name: "hint read failure", mode: "protect", hintFailure: true, hintCalls: 1, getCalls: 1},
+		{name: "observe", mode: "observe", getCalls: 1},
+		{name: "noneligible", mode: "protect", otherUser: true, getCalls: 1},
+		{name: "off", mode: "off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+			cache := &prehintEncryptedCacheGeili{queryDelay: 120 * time.Millisecond}
+			if tc.hintFailure {
+				cache.hintDelay = time.Second
+			}
+			svc.cache = cache
+			base := WithOpenAIEncryptedRoutePolicyGeili(context.Background(), OpenAIEncryptedRouteSettingsGeili{Mode: tc.mode, ProtectedUserIDs: []int64{3885}})
+			user := int64(3885)
+			if tc.otherUser {
+				user++
+			}
+			start := time.Now()
+			_, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(base, &APIKey{UserID: user}, []byte(encryptedToolHistoryFixtureGeili))
+			require.NoError(t, err)
+			require.Nil(t, owner)
+			require.Equal(t, tc.hintCalls, cache.hintCalls)
+			require.Equal(t, tc.getCalls, cache.getCalls)
+			require.Less(t, time.Since(start), 100*time.Millisecond)
+			if tc.getCalls > 0 {
+				require.LessOrEqual(t, cache.queryBudget, 50*time.Millisecond)
+			}
+		})
+	}
+}
+
+func TestEncryptedPrehintGeiliFailureRetainsKnownMetadataFallback(t *testing.T) {
+	svc, account := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+	body := []byte(encryptedToolHistoryFixtureGeili)
+	digest := encryptedDigestsGeili(body)[0]
+	cache := &prehintEncryptedCacheGeili{present: true, hintErr: errors.New("controlled hint unavailable"), queryDelay: 120 * time.Millisecond, sources: map[string]OpenAIEncryptedRouteGeili{digest: {Digest: digest, GroupID: 131, AccountID: account.ID, Model: "gpt-6-astra", BackendFingerprint: encryptedBackendFingerprintGeili(account)}}}
+	svc.cache = cache
+	ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), &APIKey{UserID: 3885}, body)
+	require.NoError(t, err)
+	require.Equal(t, 1, cache.hintCalls)
+	require.Equal(t, 2, cache.getCalls, "fallback applies only after first Get confirms prior tracking and actually times out")
+	require.NotNil(t, owner)
+	require.Equal(t, account.ID, owner.AccountID)
+	require.True(t, OpenAIEncryptedRoutePinnedGeili(ctx))
+}

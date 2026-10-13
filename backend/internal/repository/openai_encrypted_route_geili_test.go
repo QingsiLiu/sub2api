@@ -273,3 +273,33 @@ func TestEncryptedSourceGeiliCachedRowsFailureReturnsNoAuthority(t *testing.T) {
 	require.Equal(t, "rows", hint.EncryptedRouteLookupPhaseGeili())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestEncryptedSourceGeiliPreHintOnlyValidatesOwnedPresenceWithoutSQL(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer func() { _ = rdb.Close() }()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	gateway, ok := NewGatewayCache(rdb, db).(*gatewayCache)
+	require.True(t, ok)
+	r := encryptedSourceFixtureGeili()
+	raw, _ := json.Marshal(r)
+	require.NoError(t, mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)))
+	hint, err := gateway.HasOpenAIEncryptedSourceHintGeili(context.Background(), 3885, []string{r.Digest, r.Digest})
+	require.NoError(t, err)
+	require.True(t, hint)
+	hint, err = gateway.HasOpenAIEncryptedSourceHintGeili(context.Background(), 3886, []string{r.Digest})
+	require.NoError(t, err)
+	require.False(t, hint)
+	invalid := r
+	invalid.BackendFingerprint = "invalid"
+	raw, _ = json.Marshal(invalid)
+	require.NoError(t, mr.Set(encryptedRouteKeyGeili(3885, r.Digest), string(raw)))
+	hint, err = gateway.HasOpenAIEncryptedSourceHintGeili(context.Background(), 3885, []string{r.Digest})
+	require.NoError(t, err)
+	require.False(t, hint)
+	_, err = gateway.HasOpenAIEncryptedSourceHintGeili(context.Background(), 3885, []string{"plaintext"})
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet(), "pre-hint must never call SQL or grant a cached route")
+}

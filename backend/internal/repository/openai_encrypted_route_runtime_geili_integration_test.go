@@ -406,3 +406,17 @@ func TestEncryptedSourceGeiliIsolatedPoolCanceledLookupResumesAuthoritativeVerif
 		})
 	}
 }
+
+func TestEncryptedSourceGeiliBlackholeRedisPreHintIsBounded(t *testing.T) {
+	parent := encryptedBlackholeRedisGeili(t)
+	cache, ok := NewGatewayCache(parent).(*gatewayCache)
+	require.True(t, ok)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	hint, err := cache.HasOpenAIEncryptedSourceHintGeili(ctx, 3885, []string{encryptedSourceFixtureGeili().Digest})
+	require.Error(t, err)
+	require.False(t, hint)
+	require.Less(t, time.Since(start), 50*time.Millisecond)
+	require.False(t, parent.Options().ContextTimeoutEnabled)
+}

@@ -29,6 +29,49 @@ func validEncryptedDigestGeili(v string) bool {
 	return err == nil && v == strings.ToLower(v)
 }
 
+func validEncryptedSourceHintGeili(raw string, digest string) bool {
+	var r service.OpenAIEncryptedRouteGeili
+	return json.Unmarshal([]byte(raw), &r) == nil && r.Digest == digest && r.AccountID > 0 && r.GroupID > 0 && validEncryptedDigestGeili(r.BackendFingerprint) && strings.TrimSpace(r.Model) != ""
+}
+
+// Presence only: this bounded Redis read can select a verification budget but
+// never returns an origin, checks authorization, or replaces authoritative SQL.
+func (c *gatewayCache) HasOpenAIEncryptedSourceHintGeili(ctx context.Context, userID int64, digests []string) (bool, error) {
+	if userID <= 0 {
+		return false, fmt.Errorf("invalid encrypted source user")
+	}
+	requested, keys := []string{}, []string{}
+	seen := map[string]bool{}
+	for _, digest := range digests {
+		if !validEncryptedDigestGeili(digest) {
+			return false, fmt.Errorf("invalid encrypted digest")
+		}
+		if !seen[digest] {
+			seen[digest] = true
+			requested = append(requested, digest)
+			keys = append(keys, encryptedRouteKeyGeili(userID, digest))
+		}
+	}
+	if len(keys) > 256 {
+		return false, fmt.Errorf("too many encrypted sources")
+	}
+	if len(keys) == 0 || c.encryptedRouteRDB == nil {
+		return false, nil
+	}
+	redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
+	defer cancel()
+	values, err := c.encryptedRouteRDB.MGet(redisCtx, keys...).Result()
+	if err != nil {
+		return false, encryptedRouteLookupFailureGeili("hint", false, err)
+	}
+	for i, value := range values {
+		if raw, ok := value.(string); ok && validEncryptedSourceHintGeili(raw, requested[i]) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, digests []string) (map[string]service.OpenAIEncryptedRouteGeili, error) {
 	result := map[string]service.OpenAIEncryptedRouteGeili{}
 	if userID <= 0 {
@@ -63,9 +106,8 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 				if !ok {
 					continue
 				}
-				var r service.OpenAIEncryptedRouteGeili
-				if json.Unmarshal([]byte(raw), &r) == nil && r.Digest == requested[i] && r.AccountID > 0 && r.GroupID > 0 && validEncryptedDigestGeili(r.BackendFingerprint) && strings.TrimSpace(r.Model) != "" {
-					result[r.Digest] = r
+				if validEncryptedSourceHintGeili(raw, requested[i]) {
+					result[requested[i]] = service.OpenAIEncryptedRouteGeili{Digest: requested[i]}
 				}
 			}
 		}

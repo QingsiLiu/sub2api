@@ -195,15 +195,32 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 		return next, nil, nil
 	}
 	lookupStarted := time.Now()
-	lookup, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	prefHint := false
+	if eligible {
+		if hints, ok := cache.(interface {
+			HasOpenAIEncryptedSourceHintGeili(context.Context, int64, []string) (bool, error)
+		}); ok {
+			hintCtx, hintCancel := context.WithTimeout(ctx, 10*time.Millisecond)
+			present, hintErr := hints.HasOpenAIEncryptedSourceHintGeili(hintCtx, key.UserID, digests)
+			hintCancel()
+			prefHint = present && hintErr == nil
+		}
+	}
+	lookupBudget := 50 * time.Millisecond
+	if prefHint {
+		// Verified presence avoids canceling a tracked session's first SQL read
+		// after 50 ms. The hint supplies no authority; SQL must still verify it.
+		lookupBudget = 250 * time.Millisecond
+	}
+	lookup, cancel := context.WithDeadline(ctx, lookupStarted.Add(lookupBudget))
 	defer cancel()
 	sources, err := cache.GetOpenAIEncryptedRoutesGeili(lookup, key.UserID, digests)
 	if err != nil {
 		encryptedRouteLookupFailuresGeili.Add(1)
 		var hint interface{ KnownOpenAIEncryptedSourceHintGeili() bool }
-		tracked := errors.As(err, &hint) && hint.KnownOpenAIEncryptedSourceHintGeili()
+		tracked := prefHint || (errors.As(err, &hint) && hint.KnownOpenAIEncryptedSourceHintGeili())
 		slog.Warn("encrypted_route.lookup_failed", "user_id", key.UserID, "error_class", encryptedPersistenceFailureClassGeili(err), "lookup_phase", encryptedRouteLookupPhaseGeili(err), "tracked_source_hint", tracked)
-		if eligible && tracked && errors.Is(lookup.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		if !prefHint && eligible && tracked && errors.Is(lookup.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
 			// Retry metadata only, once. The hint cannot authorize an origin;
 			// PostgreSQL must supply a fresh result within the total 250 ms window.
 			cancel()
@@ -228,6 +245,9 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 		if err != nil {
 			return next, nil, nil
 		}
+	}
+	if prefHint && len(sources) == 0 {
+		return next, nil, encryptedRouteErrorGeili(503, "encrypted_session_verification_unavailable", "暂时无法核验已追踪的会话加密状态，请稍后重试，勿切换线路")
 	}
 	slog.Info("encrypted_route.lookup", "user_id", key.UserID, "mode", policy.Mode, "model", gjson.GetBytes(body, "model").String(), "cipher_count", len(digests), "known_count", len(sources))
 	if !eligible {

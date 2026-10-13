@@ -181,13 +181,19 @@ func (c *retryRuntimeSourceCacheGeili) GetOpenAIEncryptedRoutesGeili(ctx context
 func TestEncryptedMetadataRetryHTTPRuntimeGeiliNeverReplaysModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, passthrough := range []bool{false, true} {
-		for _, kind := range []string{"fresh", "persistent", "missing"} {
+		for _, kind := range []string{"fresh", "persistent", "missing", "pref_fresh", "pref_persistent", "pref_missing"} {
 			t.Run(fmt.Sprintf("passthrough_%t_%s", passthrough, kind), func(t *testing.T) {
-				cache := &retryRuntimeSourceCacheGeili{runtimeEncryptedCaptureCacheGeili: &runtimeEncryptedCaptureCacheGeili{earlyEncryptedCacheGeili: &earlyEncryptedCacheGeili{records: map[string]service.OpenAIEncryptedRouteGeili{}}}, persistent: kind == "persistent", missing: kind == "missing"}
+				effectiveKind := strings.TrimPrefix(kind, "pref_")
+				prefetched := strings.HasPrefix(kind, "pref_")
+				cache := &retryRuntimeSourceCacheGeili{runtimeEncryptedCaptureCacheGeili: &runtimeEncryptedCaptureCacheGeili{earlyEncryptedCacheGeili: &earlyEncryptedCacheGeili{records: map[string]service.OpenAIEncryptedRouteGeili{}}}, persistent: effectiveKind == "persistent", missing: effectiveKind == "missing"}
 				cfg := &config.Config{}
 				settings := service.NewSettingService(&runtimeEncryptedSettingsGeili{}, cfg)
 				upstream := &runtimeVerificationHTTPGeili{}
-				gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, cache, cfg, nil, nil, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, settings, nil)
+				var activeCache service.GatewayCache = cache
+				if prefetched {
+					activeCache = &prehintRuntimeSourceCacheGeili{cache}
+				}
+				gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, activeCache, cfg, nil, nil, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, settings, nil)
 				group := int64(131)
 				key := &service.APIKey{ID: 2001, UserID: 9001, GroupID: &group, Group: &service.Group{ID: group, Platform: service.PlatformOpenAI}}
 				account := &service.Account{ID: 3001, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"api_key": "synthetic-key", "base_url": "https://synthetic.example/fixture"}, Extra: map[string]any{"openai_responses_mode": "force_responses", "openai_passthrough": passthrough}}
@@ -224,9 +230,13 @@ func TestEncryptedMetadataRetryHTTPRuntimeGeiliNeverReplaysModel(t *testing.T) {
 				start := time.Now()
 				rec := run(body)
 				require.Less(t, time.Since(start), 350*time.Millisecond)
-				require.Equal(t, 2, cache.calls)
+				expectedQueries := 2
+				if prefetched {
+					expectedQueries = 1
+				}
+				require.Equal(t, expectedQueries, cache.calls)
 				require.Equal(t, original, body)
-				if kind == "fresh" {
+				if effectiveKind == "fresh" {
 					require.Equal(t, 200, rec.Code)
 					require.EqualValues(t, 2, upstream.calls.Load(), "seed plus exactly one replay generation")
 				} else {
@@ -237,4 +247,29 @@ func TestEncryptedMetadataRetryHTTPRuntimeGeiliNeverReplaysModel(t *testing.T) {
 			})
 		}
 	}
+}
+
+// The optional presence API exposes no route. SQL still supplies the captured seed origin.
+type prehintRuntimeSourceCacheGeili struct{ *retryRuntimeSourceCacheGeili }
+
+func (*prehintRuntimeSourceCacheGeili) HasOpenAIEncryptedSourceHintGeili(context.Context, int64, []string) (bool, error) {
+	return true, nil
+}
+func (c *prehintRuntimeSourceCacheGeili) GetOpenAIEncryptedRoutesGeili(ctx context.Context, u int64, d []string) (map[string]service.OpenAIEncryptedRouteGeili, error) {
+	c.calls++
+	delay := 120 * time.Millisecond
+	if c.persistent {
+		delay = time.Second
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return nil, runtimeTrackedLookupFailureGeili{}
+	}
+	if c.missing {
+		return map[string]service.OpenAIEncryptedRouteGeili{}, nil
+	}
+	return c.runtimeEncryptedCaptureCacheGeili.GetOpenAIEncryptedRoutesGeili(ctx, u, d)
 }
