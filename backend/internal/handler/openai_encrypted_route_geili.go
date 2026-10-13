@@ -76,6 +76,9 @@ func (h *OpenAIGatewayHandler) authorizeEncryptedWSTurnGeili(ctx context.Context
 }
 
 func (h *OpenAIGatewayHandler) WriteOpenAIEncryptedRouteErrorGeili(c *gin.Context, err error) {
+	// An early routing rejection must stop Gin's remaining handlers; returning
+	// from middleware alone would append a second response to this error.
+	c.Abort()
 	status, code, message := 503, "encrypted_session_route_unavailable", "原会话线路暂时不可用，请稍后重试或联系技术支持"
 	var typed *service.OpenAIEncryptedRouteErrorGeili
 	if errors.As(err, &typed) {

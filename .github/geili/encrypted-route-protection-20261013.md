@@ -51,3 +51,5 @@ HTTP、SSE、compact、WS原生/HTTP bridge/passthrough均覆盖。protect 下 c
 Stage须验证同镜像双实例、缓存故障、完整done后failed、HTTP/WS参数保存与计费；普通请求p95增量≤10ms、吞吐下降≤2%。本地热缓存微基准不是Stage性能验收。生产自然流量改善不能在上线前宣称，不能通过真实付费请求人为凑样本。
 
 Stage保护矩阵另验证真实核验故障：只有来源表恰好包含本run两条来源时才允许对该表建立短暂排他锁，禁止存在其他Stage来源行。锁持有进程使用1秒lock/statement timeout、3秒idle transaction timeout，2秒就绪和释放期限；finally提交或只终止本run进程。先读取应用实际写入的精确owned Redis key（一次EXISTS，不写缓存、不补造、不重试），锁内第二实例携opaque密文请求必须503 encrypted_session_verification_unavailable、零上游调用、无新增用量；释放后独立请求必须恢复原账号并只增加一次实际原分组计费，再继续原撤权409检查。该测试只在新候选镜像执行，恢复旧fixture的外置runner不作功能证明。
+
+故障锁窗口开始前完成完整replica/Stage/production守卫，并冻结实际primary PID；锁内只向已验证PID发送一次HTTP请求，释放后再次校验完整身份且PID必须相同。失败诊断只存响应形状（body类型、顶层/嵌套error类型和code、HTTP耗时、锁就绪到响应耗时），不存响应正文或message；保留精确503 code门禁，混合JSON/SSE等格式错误不能降格为成功。

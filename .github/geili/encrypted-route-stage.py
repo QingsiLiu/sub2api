@@ -66,7 +66,28 @@ def synthetic_response(payload, label, suffix):
 
 def error_code(response):
     body = response[1] if len(response) > 1 else None
-    return body.get('error', {}).get('code') if isinstance(body, dict) else None
+    error = body.get('error') if isinstance(body, dict) else None
+    return error.get('code') if isinstance(error, dict) else None
+
+
+def response_diagnostic(response):
+    """Shape-only diagnostics; never retain bodies, messages or arbitrary values."""
+    body = response[1] if len(response) > 1 else None
+    def code(value):
+        return value if isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', value) else None
+    top = body if isinstance(body, dict) else {}
+    error = top.get('error')
+    nested = error if isinstance(error, dict) else {}
+    embedded = top.get('response')
+    embedded = embedded if isinstance(embedded, dict) else {}
+    embedded_error = embedded.get('error')
+    embedded_error = embedded_error if isinstance(embedded_error, dict) else {}
+    duration = response[2] if len(response) > 2 else None
+    return {'status': response[0], 'body_type': type(body).__name__,
+            'top_level_type': code(top.get('type')), 'top_level_code': code(top.get('code')),
+            'error_value_type': type(error).__name__, 'error_type': code(nested.get('type')),
+            'error_code': code(nested.get('code')), 'response_error_code': code(embedded_error.get('code')),
+            'http_elapsed_seconds': duration if isinstance(duration, (int, float)) and math.isfinite(duration) and duration >= 0 else None}
 
 
 def restored_setting_sql(rows, literal):
@@ -268,6 +289,18 @@ def fixture_type(cache, source):
                     return rows
                 time.sleep(.1)
 
+        def verified_replica_request(self, opaque, label, primary_pid):
+            # The immediately preceding guard_replica verified this exact PID,
+            # container ownership/image/network; no repeat Docker/PG guards consume
+            # the finite source lock window. Revalidate after releasing the lock.
+            payload = {'url': 'http://127.0.0.1:' + str(self.args.replica_port) + '/v1/responses',
+                       'data': {'model': MODEL, 'input': opaque, 'stream': False,
+                                'prompt_cache_key': 'encrypted-' + self.suffix + '-' + label},
+                       'token': self.cross_key['key'], 'method': None}
+            value = cache.b.stage.command(['nsenter', '-t', str(primary_pid), '-n', 'python3', '-c', cache.NETNS_REQUEST],
+                                          input=json.dumps(payload))
+            return json.loads(value)
+
         def verification_fault_check(self, opaque):
             self.guard()
             counts = self.sql("SELECT json_build_object('n',COUNT(*),'owned',COUNT(*) FILTER(WHERE user_id=" +
@@ -301,18 +334,23 @@ def fixture_type(cache, source):
             self.check('actual owned tool source Redis hint exists before verification fault', ready)
             if not ready:
                 raise RuntimeError('owned source hint not ready; refuse masking fault setup')
-            self.guard()
+            self.guard_replica()
+            verified_pid = self.replica_primary_pid
             before = self.inference_count()
             with bounded_source_lock(['docker', 'exec', '-i', cache.b.stage.PG, 'psql', '-XqAt',
                     '-v', 'ON_ERROR_STOP=1', '-U', cache.b.stage.DATABASE, '-d', cache.b.stage.DATABASE]):
-                failed = self.call_encrypted(self.cross_key, opaque, 'verification-fault', True)
+                ready_at = time.monotonic()
+                failed = self.verified_replica_request(opaque, 'verification-fault', verified_pid)
+                ready_to_response = time.monotonic() - ready_at
                 delta = self.inference_count() - before
                 self.check('cached source verification failure returns503 with zero upstream calls',
                     failed[0] == 503 and error_code(failed) == 'encrypted_session_verification_unavailable' and delta == 0,
-                    {'status': failed[0], 'error_code': error_code(failed), 'inference_delta': delta})
+                    dict(response_diagnostic(failed), inference_delta=delta, lock_ready_to_response_seconds=ready_to_response))
                 usage = self.audit_usage(self.cross_key, 1, self.groups['A']['id'])
                 self.check('verification fault creates no additional usage', usage['n'] == 1, usage)
-            self.guard()
+            self.guard_replica()
+            if self.replica_primary_pid != verified_pid:
+                raise RuntimeError('verified primary namespace PID changed during source lock')
             resumed = self.call_encrypted(self.cross_key, opaque, 'verification-resumed', True)
             delta = self.inference_count() - before
             self.check('released source verification lock resumes original account once',

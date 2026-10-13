@@ -94,7 +94,10 @@ class StageRunnerTests(unittest.TestCase):
         f.sql.side_effect = [[{'n': 2, 'owned': 2}], [{'user_id': 12345, 'cipher_digest': 'a' * 64}]]
         f.inference_count = Mock(side_effect=[5, 5, 6])
         f.encrypted_attempts = [{'label': 'A'}]
-        f.call_encrypted = Mock(side_effect=[(503, {'error': {'code': 'encrypted_session_verification_unavailable', 'private': 'must-not-record'}}), (200, {})])
+        f.guard_replica = Mock(side_effect=f.guard)
+        f.replica_primary_pid = 123
+        f.verified_replica_request = Mock(return_value=(503, {'error': {'code': 'encrypted_session_verification_unavailable', 'private': 'must-not-record'}}, .051))
+        f.call_encrypted = Mock(return_value=(200, {}))
         f.audit_usage = Mock(side_effect=[{'n': 1, 'wrong_group': 0, 'multiplier': 1}, {'n': 2, 'wrong_group': 0, 'multiplier': 1}])
         return f, cache
 
@@ -107,11 +110,62 @@ class StageRunnerTests(unittest.TestCase):
         self.assertEqual(1, redis.call_count)
         self.assertIn('-XqAt', holder.call_args.args[0])
         self.assertEqual([1, 2], [c.args[1] for c in f.audit_usage.call_args_list])
-        self.assertEqual(['verification-fault', 'verification-resumed'], [c.args[2] for c in f.call_encrypted.call_args_list])
+        f.verified_replica_request.assert_called_once_with([{'type': 'encrypted_content', 'encrypted_content': 'synthetic'}], 'verification-fault', 123)
+        self.assertEqual(['verification-resumed'], [c.args[2] for c in f.call_encrypted.call_args_list])
         failure = f.check.call_args_list[1]
-        self.assertEqual({'status': 503, 'error_code': 'encrypted_session_verification_unavailable', 'inference_delta': 0}, failure.args[2])
+        self.assertEqual(503, failure.args[2]['status'])
+        self.assertEqual('encrypted_session_verification_unavailable', failure.args[2]['error_code'])
+        self.assertEqual('dict', failure.args[2]['body_type'])
+        self.assertEqual(.051, failure.args[2]['http_elapsed_seconds'])
+        self.assertEqual(0, failure.args[2]['inference_delta'])
         self.assertNotIn('must-not-record', str(f.check.call_args_list))
         self.assertEqual(3, f.guard.call_count)
+
+    def test_verified_replica_transport_uses_frozen_pid_without_in_lock_guard(self):
+        f, cache = self.make_fixture()
+        f.suffix = 'diagnostic'
+        f.args = types.SimpleNamespace(replica_port=18517)
+        f.cross_key = {'key': 'private-test-token'}
+        f.guard_replica = Mock(side_effect=AssertionError('guard must run before the lock'))
+        cache.NETNS_REQUEST = 'synthetic-netns-transport'
+        cache.b.stage.command = Mock(return_value=json.dumps([503, 'JSON plus SSE body', .052]))
+        response = f.verified_replica_request([], 'verification-fault', 123)
+        self.assertEqual(503, response[0])
+        self.assertEqual('str', runner.response_diagnostic(response)['body_type'])
+        command = cache.b.stage.command.call_args.args[0]
+        self.assertEqual(['nsenter', '-t', '123', '-n', 'python3', '-c', 'synthetic-netns-transport'], command)
+        payload = json.loads(cache.b.stage.command.call_args.kwargs['input'])
+        self.assertEqual('http://127.0.0.1:18517/v1/responses', payload['url'])
+        self.assertFalse(payload['data']['stream'])
+        self.assertEqual('private-test-token', payload['token'])
+        f.guard_replica.assert_not_called()
+
+    def test_response_diagnostics_are_bounded_shape_only(self):
+        self.assertIsNone(runner.error_code((503, {'error': 'unstructured private message'})))
+        self.assertIsNone(runner.error_code((503, {'error': None})))
+        body = {'type': 'error', 'code': 'safe-code', 'message': 'never-output-message',
+                'error': {'type': 'api_error', 'code': 'contains secret', 'message': 'never-output-nested'}}
+        detail = runner.response_diagnostic((503, body, .052))
+        self.assertEqual('error', detail['top_level_type'])
+        self.assertEqual('safe-code', detail['top_level_code'])
+        self.assertEqual('api_error', detail['error_type'])
+        self.assertIsNone(detail['error_code'])
+        self.assertNotIn('never-output', json.dumps(detail))
+        self.assertNotIn('contains secret', json.dumps(detail))
+        detail = runner.response_diagnostic((503, 'raw-json-and-SSE-secret', float('nan')))
+        self.assertEqual('str', detail['body_type'])
+        self.assertIsNone(detail['error_code'])
+        self.assertIsNone(detail['http_elapsed_seconds'])
+        self.assertNotIn('raw-json', json.dumps(detail))
+
+    def test_fault_rejects_changed_verified_pid_after_lock_release(self):
+        f, _ = self.configure_fault_fixture()
+        def guard():
+            f.replica_primary_pid += 1
+        f.guard_replica.side_effect = guard
+        with patch.object(runner.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stdout='1')), patch.object(runner, 'bounded_source_lock', return_value=nullcontext()), self.assertRaisesRegex(RuntimeError, 'PID changed'):
+            f.verification_fault_check([])
+        f.call_encrypted.assert_not_called()
 
     def test_fault_refuses_unrelated_rows_or_missing_hint_without_retry(self):
         f, _ = self.configure_fault_fixture()
