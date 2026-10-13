@@ -167,7 +167,8 @@ func TestForwardAsChatCompletions_StructuredInputRetrySafetyBoundaries(t *testin
 				case "response committed":
 					MarkResponseCommitted(c)
 				case "writer committed":
-					c.Writer.WriteHeaderNow()
+					// geili hook: headers are staged until semantic output; commit real body bytes.
+					_, _ = c.Writer.WriteString("partial output")
 				}
 			}}
 			upstream := &httpUpstreamRecorder{resp: &http.Response{
