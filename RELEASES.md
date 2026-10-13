@@ -1,17 +1,19 @@
-## 0.2.15-geili.8（Stage联合验收完成，待正式生产发布）
+## 0.2.15-geili.8（已发布生产，Stage同镜像）
 
-相对 `.7`，新增 OpenAI 加密会话来源保护与有限推理恢复，以及外部官方 Key 批量录入和逐条/总用量。按当次授权两项一起发布；生产仍 `.7`，本候选已通过完整同镜像 Stage 验收。
+相对 `.7`，新增 OpenAI 加密会话来源保护与有限推理恢复，以及外部官方 Key 批量录入和逐条/总用量。按当次授权两项一起发布；2026-10-13经正式prod入口发布，与已通过完整Stage验收的镜像相同。初始处于observe阶段，尚未强制固定路由。
 
 - 加密状态只存用户ID、密文SHA256和账号/分组/模型/后端指纹；PG按访问180天有效，Redis固定24小时。选路始终以当前PG记录和当前授权为准，缓存不能授权。已知密文优先原账号的当前授权分组；需要使用该账号的其他授权分组时，按实际分组权限和价格结算。
 - 已追踪状态先作10ms来源存在性预检，命中后一次250ms查询context，避开先50ms取消再建连循环；无提示首轮50ms保留，特定超时最多补一次，总预算仍250ms并服从更短父期限。驱动取消/回收可能超过context，不能将其称为端到端硬上限。protect输出写入共享累计500ms；observe有界队列，策略单后台读取1秒、冷调用最多等待50ms。
 - 原来源暂不可用或核验失败时保留完整会话并明确返回503；撤权/来源冲突返回409且不调用模型。早期错误写出后终止Gin处理链，避免JSON后追加SSE；已提交流使用合法response.failed，真实已观察用量只结算一次。覆盖HTTP/SSE/compact及服务端原生WS、HTTP桥和透传WS，不变更生产入口的传输方法策略。
 - 有限恢复仅适用于全部已知的安全纯reasoning状态，最多一次，只移除密文和对应ID，保留摘要、工具历史、大整数、模型及effort；未知历史、工具密文、压缩历史、previous_response_id、内置工具/副作用、已交付输出或已有usage不自动重放。该恢复开关独立，初始为false。
 - 外部批量录入最多100条官方 Key，事务保存且默认停用；保持凭据保护、逐成员连接权限和逐条/合计用量。新增迁移280/281，原339份迁移字节与校验和全部保留，实际选择分组仍决定余额/订阅计价。
-- revision：`dd724c5732aaa7320f0f348d5da68da89695cd56`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:c0dc2db3dfdccf72d8f950188de8e20eb1171217a1592f37412ffbefe68f8eaa`；[候选CI38368267991](https://github.com/QingsiLiu/sub2api/actions/runs/38368267991)全部9任务及13制品门禁通过。Stage正式备份 `/opt/sub2api-subscription-lab/backups/20261013T083120Z-candidate`，生产待正式入口发布同一digest。
+- revision：`dd724c5732aaa7320f0f348d5da68da89695cd56`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:c0dc2db3dfdccf72d8f950188de8e20eb1171217a1592f37412ffbefe68f8eaa`；[候选CI38368267991](https://github.com/QingsiLiu/sub2api/actions/runs/38368267991)全部9任务及13制品门禁通过。Stage正式备份 `/opt/sub2api-subscription-lab/backups/20261013T083120Z-candidate`，2026-10-13正式prod入口已发布同一digest。
 - 最终Stage302项：加密29、批量录入177、原计费业务51、双实例缓存17、341份迁移/结构19、生产保全9。所有设置、自有来源/邀请/代理、副本及卷恢复；独立v18与正式dispatcher校验通过，绑定本任务的条件生产授权。
 - 普通明文性能4批×1000，共4000个计时请求全部HTTP200、未丢弃样本；off/protect各2000，p95差-0.896ms，吞吐比1.00288155，原10ms/0.98门槛通过。首次300样本失败、SSH断线及前序候选根因/恢复证据全部保留，不计作当前通过。Stage任务脱离SSH生命周期，6条幂等/断线/失败保全单测通过。
 - 本地完整default/integration增量lint取消输出截断后均0issues；真实PG18/Redis8/协议延迟来源race8.613秒、HTTP120ms单核验不重放4.058秒等回归通过。所有主动模型调用仅模拟上游，未执行付费供应商、真实支付或媒体生成；详细原始证据在运维仓 `docs/reports/encrypted-route-batch-20261013/`。
 - 灰度按已批准方案：发布后先observe24小时，记录所有用户来源但不强制选路；之后人工protect仅用户3885，恢复开关单独控制，观察48小时且至少200次已追踪请求。先观察不等于已启用保护或已证明自然流量错误下降。边界见[来源保护方案](.github/geili/encrypted-route-protection-20261013.md)。
+
+- 生产复核68项通过：运行/配置保全15、公网/同Stage资源/实际直连认证42、新结构10、observe设置1。六核心容器healthy/restart0，341迁移匹配，PG/Redis、Stage应用、三个相邻应用及env/config/Nginx保持；Compose仅换应用镜像，健康恢复9.777秒。备份 `/root/backups/subscription-prod-image-bump-20261013T113038Z`、`/root/backups/geili-encrypted-batch-preflight-20261013T112916Z`（含受281影响邀请数据）；回退`.7`保留新表/字段/业务数据，不整库回灌。生产observe、名单3885、恢复false，设置原值root-only备份；未核实自然错误下降。两仓代码、证据和部署配置当次提交推送。
 
 ## 0.2.15-geili.7（已发布生产，Stage同镜像）
 
