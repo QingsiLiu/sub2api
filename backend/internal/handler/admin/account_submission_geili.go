@@ -21,9 +21,12 @@ func (h *BackupHandler) SetAccountSubmissionService(s *service.AccountSubmission
 
 // Never expose a decoder error: it may include attacker-controlled credential material.
 func decodeSubmissionJSON(c *gin.Context, out any) bool {
+	return decodeSubmissionJSONLimit(c, out, 8192)
+}
+func decodeSubmissionJSONLimit(c *gin.Context, out any, limit int64) bool {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Referrer-Policy", "no-referrer")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8192)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 	decoder := json.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(out) != nil || decoder.Decode(&struct{}{}) != io.EOF {
@@ -124,4 +127,20 @@ func (h *AccountHandler) protectedSubmissionAccounts(c *gin.Context, ids []int64
 		return map[int64]bool{}, nil
 	}
 	return h.accountSubmission.ProtectedAccountIDs(c.Request.Context(), ids)
+}
+
+func (h *AccountHandler) SubmitAccountKeyBatch(c *gin.Context) {
+	var req struct {
+		Token   string   `json:"token"`
+		APIKeys []string `json:"api_keys"`
+		service.SubmissionOptions
+	}
+	if !decodeSubmissionJSONLimit(c, &req, 256*1024) {
+		return
+	}
+	if err := h.accountSubmission.SubmitBatch(c.Request.Context(), req.Token, req.APIKeys, req.SubmissionOptions); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"status": "submitted"})
 }

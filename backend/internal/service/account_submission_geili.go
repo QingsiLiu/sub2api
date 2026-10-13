@@ -58,6 +58,7 @@ type AccountSubmissionInvite struct {
 	RevokedAt     *time.Time              `json:"revoked_at"`
 	ViewRevokedAt *time.Time              `json:"view_revoked_at"`
 	SubmittedAt   *time.Time              `json:"submitted_at"`
+	AccountCount  int                     `json:"account_count,omitempty"`
 	AccountID     *int64                  `json:"account_id"`
 	Status        string                  `json:"status"`
 }

@@ -25,10 +25,7 @@ func TestAccountSubmissionPublicRateLimitSharedByRoutesAndInstances(t *testing.T
 		RegisterAccountSubmissionPublicRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: &admin.AccountHandler{}}}, rdb)
 	}
 	request := func(index int, ip string) *httptest.ResponseRecorder {
-		action := "inspect"
-		if index%2 == 1 {
-			action = "submit"
-		}
+		action := []string{"inspect", "submit", "submit/batch"}[index%3]
 		// Malformed JSON reaches the real decoder without touching a service or consuming an invite.
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/account-submissions/"+action, strings.NewReader(`{"api_key":`))
 		req.RemoteAddr = ip + ":1234"
@@ -53,7 +50,7 @@ func TestAccountSubmissionPublicRateLimitFailClosed(t *testing.T) {
 	defer func() { _ = rdb.Close() }()
 	router := gin.New()
 	RegisterAccountSubmissionPublicRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: &admin.AccountHandler{}}}, rdb)
-	for _, action := range []string{"inspect", "submit", "connection", "connection/update"} {
+	for _, action := range []string{"inspect", "submit", "submit/batch", "form", "connection", "connection/update"} {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/account-submissions/"+action, strings.NewReader(`{"token":"synthetic-token","api_key":"synthetic-key"}`))
 		req.RemoteAddr = "203.0.113.20:1234"
 		rec := httptest.NewRecorder()

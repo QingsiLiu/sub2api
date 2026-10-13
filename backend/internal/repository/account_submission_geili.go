@@ -23,9 +23,16 @@ const submissionColumns = `id, created_by, config, created_at, expires_at, revok
 type submissionScanner interface{ Scan(...any) error }
 
 func scanSubmission(row submissionScanner) (*service.AccountSubmissionInvite, error) {
+	return scanSubmissionCount(row, false)
+}
+func scanSubmissionCount(row submissionScanner, withCount bool) (*service.AccountSubmissionInvite, error) {
 	i := &service.AccountSubmissionInvite{}
 	var config []byte
-	if err := row.Scan(&i.ID, &i.CreatedBy, &config, &i.CreatedAt, &i.ExpiresAt, &i.RevokedAt, &i.SubmittedAt, &i.AccountID, &i.ViewRevokedAt); err != nil {
+	dest := []any{&i.ID, &i.CreatedBy, &config, &i.CreatedAt, &i.ExpiresAt, &i.RevokedAt, &i.SubmittedAt, &i.AccountID, &i.ViewRevokedAt}
+	if withCount {
+		dest = append(dest, &i.AccountCount)
+	}
+	if err := row.Scan(dest...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrSubmissionInvalid
 		}
@@ -100,17 +107,17 @@ func (r *accountSubmissionRepository) InspectInvite(ctx context.Context, hash st
 
 func (r *accountSubmissionRepository) ListInvites(ctx context.Context, page, size int) ([]service.AccountSubmissionInvite, int64, error) {
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM account_submission_invites_geili`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM account_submission_invites_geili WHERE parent_invite_id IS NULL`).Scan(&total); err != nil {
 		return nil, 0, service.ErrSubmissionUnavailable
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT `+submissionColumns+` FROM account_submission_invites_geili ORDER BY id DESC LIMIT $1 OFFSET $2`, size, (page-1)*size)
+	rows, err := r.db.QueryContext(ctx, `SELECT `+submissionColumns+`,(SELECT count(*) FROM account_submission_invites_geili m WHERE (m.id=i.id OR m.parent_invite_id=i.id) AND m.account_id IS NOT NULL) FROM account_submission_invites_geili i WHERE parent_invite_id IS NULL ORDER BY id DESC LIMIT $1 OFFSET $2`, size, (page-1)*size)
 	if err != nil {
 		return nil, 0, service.ErrSubmissionUnavailable
 	}
 	defer func() { _ = rows.Close() }()
 	items := make([]service.AccountSubmissionInvite, 0)
 	for rows.Next() {
-		i, err := scanSubmission(rows)
+		i, err := scanSubmissionCount(rows, true)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -161,6 +168,21 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 	if !usable {
 		return service.ErrSubmissionInactive
 	}
+	if err := createSubmittedAccount(ctx, tx, invite, key, options); err != nil {
+		return err
+	}
+	if tx.Commit() != nil {
+		return service.ErrSubmissionUnavailable
+	}
+	return nil
+}
+
+// Shared transaction body: batching must keep accounts, provenance, proxies and outbox atomic.
+func createSubmittedAccount(ctx context.Context, tx *sql.Tx, invite *service.AccountSubmissionInvite, key string, options service.SubmissionOptions) error {
+	return createSubmittedAccountInBatch(ctx, tx, invite, key, options, false)
+}
+func createSubmittedAccountInBatch(ctx context.Context, tx *sql.Tx, invite *service.AccountSubmissionInvite, key string, options service.SubmissionOptions, referencesLocked bool) error {
+	var err error
 	c := invite.Config
 	prepared := options.PreparedAccount
 	if prepared != nil {
@@ -187,8 +209,10 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 	if err := service.ValidateAccountSubmissionConfig(&c); err != nil {
 		return err
 	}
-	if err := validateSubmissionReferences(ctx, tx, c); err != nil {
-		return err
+	if !referencesLocked {
+		if err := validateSubmissionReferences(ctx, tx, c); err != nil {
+			return err
+		}
 	}
 	if options.Connection != nil {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO account_submission_connections_geili(invite_id) VALUES($1) ON CONFLICT DO NOTHING`, invite.ID); err != nil {
@@ -244,18 +268,21 @@ func (r *accountSubmissionRepository) SubmitInviteWithOptions(ctx context.Contex
 	if err != nil {
 		return service.ErrSubmissionUnavailable
 	}
-	for index, id := range c.GroupIDs {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO account_groups (account_id,group_id,priority) VALUES ($1,$2,$3)`, accountID, id, index+1); err != nil {
+	if referencesLocked && len(c.GroupIDs) > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO account_groups(account_id,group_id,priority) SELECT $1,id,ordinal FROM unnest($2::bigint[]) WITH ORDINALITY AS g(id,ordinal)`, accountID, pq.Array(c.GroupIDs)); err != nil {
 			return service.ErrSubmissionUnavailable
+		}
+	} else {
+		for index, id := range c.GroupIDs {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO account_groups (account_id,group_id,priority) VALUES ($1,$2,$3)`, accountID, id, index+1); err != nil {
+				return service.ErrSubmissionUnavailable
+			}
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE account_submission_invites_geili SET account_id=$1,submitted_at=clock_timestamp() WHERE id=$2`, accountID, invite.ID); err != nil {
 		return service.ErrSubmissionUnavailable
 	}
 	if err := enqueueSchedulerOutbox(ctx, tx, service.SchedulerOutboxEventAccountChanged, &accountID, nil, buildSchedulerGroupPayload(c.GroupIDs)); err != nil {
-		return service.ErrSubmissionUnavailable
-	}
-	if tx.Commit() != nil {
 		return service.ErrSubmissionUnavailable
 	}
 	return nil

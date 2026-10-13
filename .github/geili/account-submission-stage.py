@@ -58,7 +58,15 @@ def fixture_type(cache, source, checks):
                     raise RuntimeError('invalid exact invitation fixture IDs')
                 if ids:
                     selected = ','.join(str(ident) for ident in ids)
-                    rows = self.sql("SELECT json_build_object('id',id,'name',config->>'name','account_id',account_id) FROM account_submission_invites_geili WHERE id IN (" + selected + ');')
+                    rows = self.sql("SELECT json_build_object('id',id,'name',config->>'name','account_id',account_id) FROM account_submission_invites_geili WHERE id IN (" + selected + ') OR parent_invite_id IN ('+selected+');')
+                    # Expand only direct members of exact, tracked roots. Keep all ownership
+                    # checks ahead of UPDATE/DELETE, including after a failed batch response.
+                    for row in rows:
+                        if type(row['id']) is not int or row['id'] <= 0:
+                            raise RuntimeError('invalid exact batch member ID')
+                        if not row['name'].endswith(' ' + self.snapshot['fixture_suffix']):
+                            raise RuntimeError('refuse cleanup of non-owned invitation')
+                    selected = ','.join(str(ident) for ident in sorted(set(ids + [row['id'] for row in rows])))
                     for row in rows:
                         if not row['name'].endswith(' ' + self.snapshot['fixture_suffix']):
                             raise RuntimeError('refuse cleanup of non-owned invitation')
@@ -122,6 +130,7 @@ def main():
             'proxies_removed': fixture.snapshot.get('intake_proxies_removed',False),
             'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'checks_sha256': hashlib.sha256(Path(__file__).with_name('account-submission-acceptance.py').read_bytes()).hexdigest(),
+            'batch_checks_sha256': hashlib.sha256(Path(__file__).with_name('account-submission-batch-acceptance.py').read_bytes()).hexdigest(),
             'connection_checks_sha256': hashlib.sha256(Path(__file__).with_name('account-submission-connection-acceptance.py').read_bytes()).hexdigest(),
             'synthetic_only': True, 'production_ready': False}
         cache.b.stage.private_json(fixture.private / 'intake-result.json', result)

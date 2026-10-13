@@ -79,7 +79,7 @@ func readSubmissionConnection(ctx context.Context, tx *sql.Tx, i *service.Accoun
 	return result, nil
 }
 func connectionInvite(ctx context.Context, tx *sql.Tx, hash string, lock bool) (*service.AccountSubmissionInvite, error) {
-	query := `SELECT ` + submissionColumns + ` FROM account_submission_invites_geili WHERE token_hash=$1 AND submitted_at IS NOT NULL AND view_revoked_at IS NULL`
+	query := `SELECT ` + submissionColumns + ` FROM account_submission_invites_geili WHERE token_hash=$1 AND parent_invite_id IS NULL AND submitted_at IS NOT NULL AND view_revoked_at IS NULL`
 	if lock {
 		query += ` FOR UPDATE`
 	}
@@ -90,6 +90,9 @@ func connectionInvite(ctx context.Context, tx *sql.Tx, hash string, lock bool) (
 	return i, err
 }
 func (r *accountSubmissionRepository) ReadSubmissionConnection(ctx context.Context, hash string) (*service.SubmissionConnection, error) {
+	return r.ReadSubmissionMemberConnection(ctx, hash, "")
+}
+func (r *accountSubmissionRepository) ReadSubmissionMemberConnection(ctx context.Context, hash, ref string) (*service.SubmissionConnection, error) {
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, service.ErrSubmissionUnavailable
@@ -98,7 +101,7 @@ func (r *accountSubmissionRepository) ReadSubmissionConnection(ctx context.Conte
 	if _, err = tx.ExecContext(ctx, `SET LOCAL statement_timeout='4s'`); err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
-	i, err := connectionInvite(ctx, tx, hash, false)
+	i, err := submissionMemberInvite(ctx, tx, hash, ref, false)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +115,9 @@ func (r *accountSubmissionRepository) ReadSubmissionConnection(ctx context.Conte
 	return result, nil
 }
 func (r *accountSubmissionRepository) UpdateSubmissionConnection(ctx context.Context, hash string, version int64, requestID string, c service.SubmissionConnectionInput) (*service.SubmissionConnection, error) {
+	return r.UpdateSubmissionMemberConnection(ctx, hash, "", version, requestID, c)
+}
+func (r *accountSubmissionRepository) UpdateSubmissionMemberConnection(ctx context.Context, hash, ref string, version int64, requestID string, c service.SubmissionConnectionInput) (*service.SubmissionConnection, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, service.ErrSubmissionUnavailable
@@ -120,7 +126,7 @@ func (r *accountSubmissionRepository) UpdateSubmissionConnection(ctx context.Con
 	if _, err = tx.ExecContext(ctx, `SET LOCAL statement_timeout='4s'`); err != nil {
 		return nil, service.ErrSubmissionUnavailable
 	}
-	i, err := connectionInvite(ctx, tx, hash, true)
+	i, err := submissionMemberInvite(ctx, tx, hash, ref, true)
 	if err != nil {
 		return nil, err
 	}
@@ -190,4 +196,22 @@ func submissionConnectionGroups(ctx context.Context, tx *sql.Tx, id int64) ([]in
 		ids = append(ids, groupID)
 	}
 	return ids, rows.Err()
+}
+
+// Lock the root first: a view revocation/token reset serializes with writes to every member.
+// References are opaque selectors scoped to the authenticated root, never administrator IDs.
+func submissionMemberInvite(ctx context.Context, tx *sql.Tx, hash, ref string, lock bool) (*service.AccountSubmissionInvite, error) {
+	root, err := connectionInvite(ctx, tx, hash, lock)
+	if err != nil || ref == "" {
+		return root, err
+	}
+	query := `SELECT ` + submissionColumns + ` FROM account_submission_invites_geili WHERE (id=$1 OR parent_invite_id=$1) AND account_ref=$2::uuid AND submitted_at IS NOT NULL`
+	if lock {
+		query += ` FOR UPDATE`
+	}
+	member, err := scanSubmission(tx.QueryRowContext(ctx, query, root.ID, ref))
+	if errors.Is(err, service.ErrSubmissionInvalid) {
+		return nil, service.ErrSubmissionInactive
+	}
+	return member, err
 }

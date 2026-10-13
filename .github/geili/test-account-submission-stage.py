@@ -42,6 +42,21 @@ class StageRestorationTests(unittest.TestCase):
         self.assertTrue(self.fixture.super_restored)
         self.assertEqual(self.fixture.queries[-1], 'DELETE FROM account_submission_invites_geili WHERE id IN (7);')
 
+    def test_expands_exact_batch_members_before_connection_and_provenance_cleanup(self):
+        self.fixture.rows.append({'id': 8, 'name': 'Intake openai owned', 'account_id': 12})
+        self.fixture.restore()
+        self.assertEqual(self.fixture.fixture_ids['accounts'], [11, 12])
+        self.assertIn('parent_invite_id IN (7)', self.fixture.queries[0])
+        self.assertIn('WHERE invite_id IN (7,8)', self.fixture.queries[-2])
+        self.assertEqual(self.fixture.queries[-1], 'DELETE FROM account_submission_invites_geili WHERE id IN (7,8);')
+
+    def test_foreign_or_invalid_batch_member_refuses_all_database_mutation(self):
+        for row in ({'id':8, 'name':'Foreign owner', 'account_id':12}, {'id':True, 'name':'Intake owned', 'account_id':12}):
+            with self.subTest(row=row):
+                self.fixture.rows = [row]
+                with self.assertRaises(RuntimeError): self.fixture.restore()
+                self.assertFalse(any(q.startswith(('UPDATE', 'DELETE')) for q in self.fixture.queries))
+
     def test_detaches_owned_account_before_proxy_and_provenance_cleanup(self):
         original=self.fixture.sql
         def sql(query):

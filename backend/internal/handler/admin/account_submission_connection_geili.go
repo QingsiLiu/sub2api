@@ -8,12 +8,13 @@ import (
 
 func (h *AccountHandler) SubmissionConnection(c *gin.Context) {
 	var req struct {
-		Token string `json:"token"`
+		Token      string `json:"token"`
+		AccountRef string `json:"account_ref,omitempty"`
 	}
 	if !decodeSubmissionJSON(c, &req) {
 		return
 	}
-	result, err := h.accountSubmission.Connection(c.Request.Context(), req.Token)
+	result, err := h.accountSubmission.MemberConnection(c.Request.Context(), req.Token, req.AccountRef)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -23,6 +24,7 @@ func (h *AccountHandler) SubmissionConnection(c *gin.Context) {
 func (h *AccountHandler) UpdateSubmissionConnection(c *gin.Context) {
 	var req struct {
 		Token      string                            `json:"token"`
+		AccountRef string                            `json:"account_ref,omitempty"`
 		Version    int64                             `json:"version"`
 		RequestID  string                            `json:"request_id"`
 		Connection service.SubmissionConnectionInput `json:"connection"`
@@ -30,7 +32,7 @@ func (h *AccountHandler) UpdateSubmissionConnection(c *gin.Context) {
 	if !decodeSubmissionJSON(c, &req) {
 		return
 	}
-	result, err := h.accountSubmission.UpdateConnection(c.Request.Context(), req.Token, req.Version, req.RequestID, req.Connection)
+	result, err := h.accountSubmission.UpdateMemberConnection(c.Request.Context(), req.Token, req.AccountRef, req.Version, req.RequestID, req.Connection)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

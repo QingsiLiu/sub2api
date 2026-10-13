@@ -11,11 +11,11 @@
   </section>
 </template>
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SubmissionProxyEditorGeili from './SubmissionProxyEditorGeili.vue'
 import { getSubmissionConnection, updateSubmissionConnection, SubmissionRequestError, type SubmissionConnection, type SubmissionConnectionInput } from '@/api/accountSubmission'
-const props = defineProps<{ token: string }>()
+const props = defineProps<{ token: string; accountRef?: string }>()
 const { t } = useI18n()
 const state = ref<SubmissionConnection | null>(null), input = ref<SubmissionConnectionInput>({ mode: 'direct' }), busy = ref(false), message = ref('')
 let epoch = 0
@@ -24,17 +24,17 @@ function accept(value: SubmissionConnection) { state.value = value; input.value 
 async function load() {
   if (busy.value) return
   busy.value = true; const e = epoch
-  try { const value = await getSubmissionConnection(props.token); if (e === epoch) { accept(value); message.value = '' } }
+  try { const value = await getSubmissionConnection(props.token, props.accountRef); if (e === epoch) { accept(value); message.value = '' } }
   catch { if (e === epoch) message.value = t('admin.accounts.keyIntake.failed') }
   finally { if (e === epoch) busy.value = false }
 }
 async function save() {
   if (busy.value || !state.value) return
   busy.value = true; const e = epoch
-  try { const value = await updateSubmissionConnection(props.token, state.value.version, crypto.randomUUID(), input.value); if (e === epoch) { accept(value); message.value = t('admin.accounts.keyIntake.connectionSaved') } }
+  try { const value = await updateSubmissionConnection(props.token, state.value.version, crypto.randomUUID(), input.value, props.accountRef); if (e === epoch) { accept(value); message.value = t('admin.accounts.keyIntake.connectionSaved') } }
   catch (error) { if (e === epoch) { input.value = { mode: 'direct' }; state.value = null; message.value = t(error instanceof SubmissionRequestError && error.status === 409 ? 'admin.accounts.keyIntake.connectionConflict' : 'admin.accounts.keyIntake.connectionUncertain') } }
   finally { if (e === epoch) busy.value = false }
 }
-onMounted(load)
+watch(() => [props.token, props.accountRef], () => { epoch++; input.value = { mode: 'direct' }; state.value = null; busy.value = false; message.value = ''; void load() }, { immediate: true })
 onBeforeUnmount(() => { epoch++; input.value = { mode: 'direct' }; state.value = null })
 </script>

@@ -20,6 +20,7 @@ export interface SubmissionInvite {
   status: 'pending' | 'submitted' | 'revoked' | 'expired'
   view_revoked_at?: string | null
   account_id: number | null
+  account_count?: number
 }
 export interface PublicSubmissionInvite {
   priority?: number
@@ -52,9 +53,9 @@ export async function revokeSubmissionInvite(id: number) {
 export class SubmissionRequestError extends Error {
   constructor(public readonly status: number) { super('Submission request failed') }
 }
-async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'usage' | 'connection' | 'connection/update' | 'form', payload: { token: string } & Record<string, unknown>): Promise<T> {
+async function publicSubmissionRequest<T>(action: 'inspect' | 'submit' | 'submit/batch' | 'usage' | 'connection' | 'connection/update' | 'form', payload: { token: string } & Record<string, unknown>): Promise<T> {
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), action === 'form' ? 120000 : 15000)
+  const timer = window.setTimeout(() => controller.abort(), action === 'form' ? 120000 : action === 'submit/batch' ? 45000 : 15000)
   try {
     const response = await fetch(`/api/v1/account-submissions/${action}`, {
       method: 'POST',
@@ -84,13 +85,17 @@ export function submitAccountKey(token: string, api_key: string, options?: Submi
   return publicSubmissionRequest<{ status: 'submitted' }>('submit', { token, api_key, ...options })
 }
 
+export function submitAccountKeyBatch(token: string, api_keys: string[], options: SubmissionOptions) {
+  return publicSubmissionRequest<{ status: 'submitted' }>('submit/batch', { token, api_keys, ...options })
+}
+
 export interface SubmissionProxyDraft { name: string; protocol: string; host: string; port: number; username: string; password?: string; clear_password?: boolean }
 export interface SubmissionConnectionInput { mode: 'preset' | 'direct' | 'custom'; proxy?: SubmissionProxyDraft }
 export interface SubmissionOptions { name: string; concurrency: number; connection: SubmissionConnectionInput }
 export interface SubmissionConnection extends SubmissionConnectionInput { version: number; has_preset: boolean; has_password: boolean }
-export function getSubmissionConnection(token: string) { return publicSubmissionRequest<SubmissionConnection>('connection', { token }) }
-export function updateSubmissionConnection(token: string, version: number, request_id: string, connection: SubmissionConnectionInput) {
-  return publicSubmissionRequest<SubmissionConnection>('connection/update', { token, version, request_id, connection })
+export function getSubmissionConnection(token: string, account_ref?: string) { return publicSubmissionRequest<SubmissionConnection>('connection', { token, ...(account_ref ? { account_ref } : {}) }) }
+export function updateSubmissionConnection(token: string, version: number, request_id: string, connection: SubmissionConnectionInput, account_ref?: string) {
+  return publicSubmissionRequest<SubmissionConnection>('connection/update', { token, version, request_id, connection, ...(account_ref ? { account_ref } : {}) })
 }
 
 export interface SubmissionUsageBucket {
@@ -103,7 +108,15 @@ export interface SubmissionUsageBucket {
   cache_read_tokens: number
   reference_cost: number
 }
+export interface SubmissionAccountUsage {
+  account_ref: string
+  name: string
+  platform: SubmissionPlatform
+  enabled: boolean
+  summary: SubmissionUsageBucket
+}
 export interface SubmissionUsage {
+  accounts: SubmissionAccountUsage[]
   name: string
   platform: SubmissionPlatform
   enabled: boolean

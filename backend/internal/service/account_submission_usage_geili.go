@@ -21,18 +21,26 @@ type SubmissionUsageBucket struct {
 	CacheReadTokens     int64   `json:"cache_read_tokens"`
 	ReferenceCost       float64 `json:"reference_cost"`
 }
+type SubmissionAccountUsage struct {
+	AccountRef string                `json:"account_ref"`
+	Name       string                `json:"name"`
+	Platform   string                `json:"platform"`
+	Enabled    bool                  `json:"enabled"`
+	Summary    SubmissionUsageBucket `json:"summary"`
+}
 type SubmissionUsage struct {
-	Name      string                  `json:"name"`
-	Platform  string                  `json:"platform"`
-	Enabled   bool                    `json:"enabled"`
-	StartDate string                  `json:"start_date"`
-	EndDate   string                  `json:"end_date"`
-	Timezone  string                  `json:"timezone"`
-	Currency  string                  `json:"currency"`
-	UpdatedAt time.Time               `json:"updated_at"`
-	Summary   SubmissionUsageBucket   `json:"summary"`
-	Daily     []SubmissionUsageBucket `json:"daily"`
-	Models    []SubmissionUsageBucket `json:"models"`
+	Accounts  []SubmissionAccountUsage `json:"accounts"`
+	Name      string                   `json:"name"`
+	Platform  string                   `json:"platform"`
+	Enabled   bool                     `json:"enabled"`
+	StartDate string                   `json:"start_date"`
+	EndDate   string                   `json:"end_date"`
+	Timezone  string                   `json:"timezone"`
+	Currency  string                   `json:"currency"`
+	UpdatedAt time.Time                `json:"updated_at"`
+	Summary   SubmissionUsageBucket    `json:"summary"`
+	Daily     []SubmissionUsageBucket  `json:"daily"`
+	Models    []SubmissionUsageBucket  `json:"models"`
 }
 type AccountSubmissionUsageRepository interface {
 	SubmissionUsage(context.Context, string, time.Time, time.Time) (*SubmissionUsage, error)

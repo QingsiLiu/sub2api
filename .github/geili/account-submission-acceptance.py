@@ -191,6 +191,9 @@ def verify(f):
     spec=importlib.util.spec_from_file_location('intake_connections',Path(__file__).with_name('account-submission-connection-acceptance.py'))
     connections=importlib.util.module_from_spec(spec);spec.loader.exec_module(connections)
     connections.verify(f,public,make,account)
+    spec=importlib.util.spec_from_file_location('intake_batch',Path(__file__).with_name('account-submission-batch-acceptance.py'))
+    batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
+    batch.verify(f,public,make)
     return len(f.checks)
 
 

@@ -21,7 +21,29 @@
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
     <p v-if="loading" role="status" class="text-sm text-gray-500">{{ t('admin.accounts.keyIntake.loadingUsage') }}</p>
     <template v-if="usage && !error">
-      <p class="break-words text-sm font-medium">{{ usage.name }} · {{ usage.platform === 'openai' ? 'OpenAI' : 'Claude' }} · {{ t(usage.enabled ? 'admin.accounts.keyIntake.enabled' : 'admin.accounts.keyIntake.inactive') }}</p>
+      <div v-if="usage.accounts?.length" class="hidden overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700 sm:block">
+        <table class="min-w-[850px] w-full text-left text-sm">
+          <caption class="p-3 text-left font-semibold">{{ t('admin.accounts.keyIntake.batchAccounts', { count: usage.accounts.length }) }}</caption>
+          <thead class="bg-gray-50 text-xs text-gray-500 dark:bg-dark-800"><tr><th class="p-3">{{ t('admin.accounts.keyIntake.batchName') }}</th><th class="p-3">{{ t('common.status') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.requests') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.inputTokens') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.outputTokens') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.cacheCreation') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.cacheRead') }}</th><th class="p-3 text-right">{{ t('admin.accounts.keyIntake.referenceCost') }}</th></tr></thead>
+          <tbody><tr v-for="account in usage.accounts" :key="account.account_ref" class="border-t border-gray-100 dark:border-dark-700"><td class="max-w-64 break-words p-3">{{ account.name }}</td><td class="whitespace-nowrap p-3">{{ t(account.enabled ? 'admin.accounts.keyIntake.enabled' : 'admin.accounts.keyIntake.inactive') }}</td><td class="p-3 text-right">{{ account.summary.requests.toLocaleString() }}</td><td class="p-3 text-right">{{ account.summary.input_tokens.toLocaleString() }}</td><td class="p-3 text-right">{{ account.summary.output_tokens.toLocaleString() }}</td><td class="p-3 text-right">{{ account.summary.cache_creation_tokens.toLocaleString() }}</td><td class="p-3 text-right">{{ account.summary.cache_read_tokens.toLocaleString() }}</td><td class="p-3 text-right">${{ account.summary.reference_cost.toFixed(6) }}</td></tr></tbody>
+        </table>
+      </div>
+      <ul v-if="usage.accounts?.length" class="space-y-3 sm:hidden">
+        <li v-for="account in usage.accounts" :key="account.account_ref" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+          <p class="break-words text-sm font-semibold">{{ account.name }}</p>
+          <p class="mt-1 text-xs text-gray-500">{{ t(account.enabled ? 'admin.accounts.keyIntake.enabled' : 'admin.accounts.keyIntake.inactive') }}</p>
+          <dl class="mt-3 grid grid-cols-2 gap-3 text-xs">
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.requests') }}</dt><dd>{{ account.summary.requests.toLocaleString() }}</dd></div>
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.referenceCost') }}</dt><dd>${{ account.summary.reference_cost.toFixed(6) }}</dd></div>
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.inputTokens') }}</dt><dd>{{ account.summary.input_tokens.toLocaleString() }}</dd></div>
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.outputTokens') }}</dt><dd>{{ account.summary.output_tokens.toLocaleString() }}</dd></div>
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.cacheCreation') }}</dt><dd>{{ account.summary.cache_creation_tokens.toLocaleString() }}</dd></div>
+            <div><dt class="text-gray-500">{{ t('admin.accounts.keyIntake.cacheRead') }}</dt><dd>{{ account.summary.cache_read_tokens.toLocaleString() }}</dd></div>
+          </dl>
+        </li>
+      </ul>
+      <h4 v-if="(usage.accounts?.length || 0) > 1" class="text-sm font-semibold">{{ t('admin.accounts.keyIntake.batchTotal') }}</h4>
+      <p v-if="(usage.accounts?.length || 0) <= 1" class="break-words text-sm font-medium">{{ usage.name }} · {{ usage.platform === 'openai' ? 'OpenAI' : 'Claude' }} · {{ t(usage.enabled ? 'admin.accounts.keyIntake.enabled' : 'admin.accounts.keyIntake.inactive') }}</p>
       <p class="text-xs text-gray-500">{{ usage.start_date }} — {{ usage.end_date }} · {{ usage.timezone }}</p>
       <dl class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700 sm:grid-cols-3 xl:grid-cols-6">
         <div v-for="metric in metrics" :key="metric.label"><dt class="text-xs text-gray-500">{{ t(metric.label) }}</dt><dd class="break-all text-sm font-semibold">{{ metric.value }}</dd></div>
@@ -44,8 +66,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
-import { getSubmissionUsage, SubmissionRequestError, type SubmissionUsage } from '@/api/accountSubmission'
+import { getSubmissionUsage, SubmissionRequestError, type SubmissionUsage, type SubmissionAccountUsage } from '@/api/accountSubmission'
 const props = defineProps<{ token: string }>()
+const emit = defineEmits<{ accounts: [accounts: SubmissionAccountUsage[]] }>()
 const { t } = useI18n()
 const usage = ref<SubmissionUsage | null>(null)
 const error = ref('')
@@ -75,10 +98,11 @@ async function load() {
   loading.value = true; error.value = ''
   try {
     const result = await getSubmissionUsage(props.token, start.value, end.value)
-    if (version === epoch) usage.value = result
+    if (version === epoch) { usage.value = result; emit('accounts', result.accounts || []) }
   } catch (cause) {
     if (version !== epoch) return
     usage.value = null
+    emit('accounts', [])
     const status = cause instanceof SubmissionRequestError ? cause.status : 0
     unavailable.value = status === 410
     error.value = t(status === 410 ? 'admin.accounts.keyIntake.viewUnavailable' : status === 429 ? 'admin.accounts.keyIntake.rateLimited' : 'admin.accounts.keyIntake.usageFailed')

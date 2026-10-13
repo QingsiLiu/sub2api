@@ -28,6 +28,18 @@ describe('external owner usage', () => {
     expect(w.text()).toContain('claude-sonnet')
     w.unmount()
   })
+  it('shows each account and a shared total, emitting only scoped account selectors', async () => {
+    const accounts = [
+      { account_ref: '11111111-1111-1111-1111-111111111111', name: 'Holder #1', platform: 'anthropic', enabled: false, summary },
+      { account_ref: '22222222-2222-2222-2222-222222222222', name: 'Holder #2', platform: 'anthropic', enabled: true, summary: { ...summary, requests: 0, reference_cost: 0 } }
+    ]
+    getUsage.mockResolvedValueOnce({ ...fixture, accounts })
+    const w = mount(AccountSubmissionUsage, { props: { token: 'private-link' } }); await flushPromises()
+    expect(w.findAll('tbody tr')).toHaveLength(2)
+    expect(w.text()).toContain('Holder #1'); expect(w.text()).toContain('Holder #2'); expect(w.text()).toContain('batchTotal')
+    expect(w.emitted('accounts')).toEqual([[accounts]])
+    expect(w.html()).not.toContain('private-link'); w.unmount()
+  })
   it('rejects a custom range beyond 90 days without issuing a request', async () => {
     const w = mount(AccountSubmissionUsage, { props: { token: 'private-link' } }); await flushPromises()
     await w.get('select').setValue('custom')
