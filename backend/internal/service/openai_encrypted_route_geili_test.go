@@ -266,3 +266,120 @@ func TestEncryptedTrackedVerificationWSFirstFrameGeiliRejectsBeforeDial(t *testi
 	default:
 	}
 }
+
+type retryEncryptedLookupCacheGeili struct {
+	stubGatewayCache
+	calls                          int
+	tracked, persistent, immediate bool
+	sources                        map[string]OpenAIEncryptedRouteGeili
+	budgets                        []time.Duration
+}
+
+func (c *retryEncryptedLookupCacheGeili) GetOpenAIEncryptedRoutesGeili(ctx context.Context, _ int64, _ []string) (map[string]OpenAIEncryptedRouteGeili, error) {
+	c.calls++
+	deadline, _ := ctx.Deadline()
+	c.budgets = append(c.budgets, time.Until(deadline))
+	if c.calls == 1 || c.persistent {
+		if !c.immediate {
+			<-ctx.Done()
+		}
+		return nil, trackedEncryptedLookupFailureGeili{tracked: c.tracked, phase: "rows"}
+	}
+	return c.sources, nil
+}
+func (*retryEncryptedLookupCacheGeili) SetOpenAIEncryptedRoutesGeili(context.Context, int64, []OpenAIEncryptedRouteGeili) error {
+	return nil
+}
+func TestEncryptedKnownMetadataTimeoutRetryGeiliUsesFreshAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name                          string
+		conflict, missing, persistent bool
+	}{{"fresh source", false, false, false}, {"fresh conflict", true, false, false}, {"fresh missing", false, true, false}, {"persistent timeout", false, false, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, account := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+			body := []byte(encryptedToolHistoryFixtureGeili)
+			original := append([]byte(nil), body...)
+			digest := encryptedDigestsGeili(body)[0]
+			source := OpenAIEncryptedRouteGeili{Digest: digest, AccountID: account.ID, GroupID: 131, Model: "gpt-6-astra", BackendFingerprint: encryptedBackendFingerprintGeili(account), Conflict: tc.conflict}
+			cache := &retryEncryptedLookupCacheGeili{tracked: true, persistent: tc.persistent, sources: map[string]OpenAIEncryptedRouteGeili{digest: source}}
+			if tc.missing {
+				cache.sources = map[string]OpenAIEncryptedRouteGeili{}
+			}
+			svc.cache = cache
+			start := time.Now()
+			ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(encryptedPolicyCtxGeili(3885), &APIKey{UserID: 3885}, body)
+			require.Equal(t, 2, cache.calls)
+			require.Less(t, time.Since(start), 350*time.Millisecond)
+			require.InDelta(t, 50*time.Millisecond, cache.budgets[0], float64(10*time.Millisecond))
+			require.LessOrEqual(t, cache.budgets[1], 210*time.Millisecond)
+			if tc.persistent || tc.conflict || tc.missing {
+				var failure *OpenAIEncryptedRouteErrorGeili
+				require.ErrorAs(t, err, &failure)
+				if tc.persistent || tc.missing {
+					require.Equal(t, 503, failure.Status)
+					require.Nil(t, owner)
+					require.False(t, OpenAIEncryptedRouteRecoveryEnabledGeili(ctx))
+					require.False(t, ClaimOpenAIEncryptedRecoveryGeili(ctx))
+				} else {
+					require.Equal(t, 409, failure.Status)
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, owner)
+				require.Equal(t, account.ID, owner.AccountID)
+				require.True(t, OpenAIEncryptedRoutePinnedGeili(ctx))
+			}
+			require.Equal(t, original, body)
+		})
+	}
+}
+func TestEncryptedMetadataTimeoutRetryGeiliEligibilityAndParentBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode                    string
+		tracked, otherUser, immediate bool
+		parent                        time.Duration
+		cancel                        bool
+		calls                         int
+	}{
+		{name: "unknown", mode: "protect", calls: 1},
+		{name: "observe", mode: "observe", tracked: true, calls: 1},
+		{name: "off", mode: "off", tracked: true, calls: 0},
+		{name: "noneligible", mode: "protect", tracked: true, otherUser: true, calls: 1},
+		{name: "nonexpired failure", mode: "protect", tracked: true, immediate: true, calls: 1},
+		{name: "parent deadline", mode: "protect", tracked: true, parent: 20 * time.Millisecond, calls: 1},
+		{name: "parent canceled", mode: "protect", tracked: true, cancel: true, calls: 1},
+		{name: "short parent bounds retry", mode: "protect", tracked: true, parent: 100 * time.Millisecond, calls: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := encryptedRecoveryFixtureGeili(&httpUpstreamRecorder{})
+			cache := &retryEncryptedLookupCacheGeili{tracked: tc.tracked, persistent: true, immediate: tc.immediate}
+			svc.cache = cache
+			base := context.Background()
+			var cancel context.CancelFunc
+			if tc.parent > 0 {
+				base, cancel = context.WithTimeout(base, tc.parent)
+				defer cancel()
+			}
+			if tc.cancel {
+				base, cancel = context.WithCancel(base)
+				cancel()
+			}
+			base = WithOpenAIEncryptedRoutePolicyGeili(base, OpenAIEncryptedRouteSettingsGeili{Mode: tc.mode, ProtectedUserIDs: []int64{3885}, ReasoningRecoveryEnabled: true})
+			user := int64(3885)
+			if tc.otherUser {
+				user++
+			}
+			start := time.Now()
+			ctx, owner, err := svc.PrepareOpenAIEncryptedTurnGeili(base, &APIKey{UserID: user}, []byte(encryptedToolHistoryFixtureGeili))
+			require.Equal(t, tc.calls, cache.calls)
+			require.Nil(t, owner)
+			require.False(t, OpenAIEncryptedRouteRecoveryEnabledGeili(ctx))
+			if tc.mode == "protect" && tc.tracked && !tc.otherUser {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Less(t, time.Since(start), 200*time.Millisecond)
+		})
+	}
+}

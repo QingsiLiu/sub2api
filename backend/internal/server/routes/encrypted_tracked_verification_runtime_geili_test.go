@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -157,5 +158,83 @@ func TestEncryptedRouteRegisteredMiddlewareAbortsVerificationAndRevocationGeili(
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 			require.Equal(t, tc.code, payload.Error.Code)
 		})
+	}
+}
+
+type retryRuntimeSourceCacheGeili struct {
+	*runtimeEncryptedCaptureCacheGeili
+	calls               int
+	persistent, missing bool
+}
+
+func (c *retryRuntimeSourceCacheGeili) GetOpenAIEncryptedRoutesGeili(ctx context.Context, u int64, d []string) (map[string]service.OpenAIEncryptedRouteGeili, error) {
+	c.calls++
+	if c.calls == 1 || c.persistent {
+		<-ctx.Done()
+		return nil, runtimeTrackedLookupFailureGeili{}
+	}
+	if c.missing {
+		return map[string]service.OpenAIEncryptedRouteGeili{}, nil
+	}
+	return c.runtimeEncryptedCaptureCacheGeili.GetOpenAIEncryptedRoutesGeili(ctx, u, d)
+}
+func TestEncryptedMetadataRetryHTTPRuntimeGeiliNeverReplaysModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, passthrough := range []bool{false, true} {
+		for _, kind := range []string{"fresh", "persistent", "missing"} {
+			t.Run(fmt.Sprintf("passthrough_%t_%s", passthrough, kind), func(t *testing.T) {
+				cache := &retryRuntimeSourceCacheGeili{runtimeEncryptedCaptureCacheGeili: &runtimeEncryptedCaptureCacheGeili{earlyEncryptedCacheGeili: &earlyEncryptedCacheGeili{records: map[string]service.OpenAIEncryptedRouteGeili{}}}, persistent: kind == "persistent", missing: kind == "missing"}
+				cfg := &config.Config{}
+				settings := service.NewSettingService(&runtimeEncryptedSettingsGeili{}, cfg)
+				upstream := &runtimeVerificationHTTPGeili{}
+				gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, cache, cfg, nil, nil, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, settings, nil)
+				group := int64(131)
+				key := &service.APIKey{ID: 2001, UserID: 9001, GroupID: &group, Group: &service.Group{ID: group, Platform: service.PlatformOpenAI}}
+				account := &service.Account{ID: 3001, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"api_key": "synthetic-key", "base_url": "https://synthetic.example/fixture"}, Extra: map[string]any{"openai_responses_mode": "force_responses", "openai_passthrough": passthrough}}
+				run := func(body []byte) *httptest.ResponseRecorder {
+					rec := httptest.NewRecorder()
+					c, _ := gin.CreateTestContext(rec)
+					c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
+					c.Set("api_key", key)
+					owner, err := gateway.PrepareOpenAIEncryptedRouteGeili(c, key, body)
+					if err != nil {
+						require.Nil(t, owner)
+						require.False(t, service.OpenAIEncryptedRouteRecoveryEnabledGeili(c.Request.Context()))
+						(&handler.OpenAIGatewayHandler{}).WriteOpenAIEncryptedRouteErrorGeili(c, err)
+						return rec
+					}
+					if cache.calls > 0 {
+						require.NotNil(t, owner)
+						require.Equal(t, account.ID, owner.AccountID)
+					}
+					writer := newKeyRouteWriter(c.Writer)
+					writer.ctx = c
+					c.Writer = writer
+					c.Request = c.Request.WithContext(service.WithOpenAIEncryptedOutputOriginGeili(c.Request.Context(), &group, account, "gpt-6-astra"))
+					result, err := gateway.Forward(c.Request.Context(), c, account, body)
+					require.NoError(t, err)
+					require.NotNil(t, result)
+					writer.commit()
+					return rec
+				}
+				require.Equal(t, 200, run([]byte(`{"model":"gpt-6-astra","input":"seed","stream":false}`)).Code)
+				require.Len(t, cache.records, 2, "first actual output establishes provenance")
+				body := []byte(`{"model":"gpt-6-astra","input":[{"type":"reasoning","encrypted_content":"seed-reasoning-cipher","summary":[{"type":"summary_text","text":"keep progress"}]}],"stream":false}`)
+				original := append([]byte(nil), body...)
+				start := time.Now()
+				rec := run(body)
+				require.Less(t, time.Since(start), 350*time.Millisecond)
+				require.Equal(t, 2, cache.calls)
+				require.Equal(t, original, body)
+				if kind == "fresh" {
+					require.Equal(t, 200, rec.Code)
+					require.EqualValues(t, 2, upstream.calls.Load(), "seed plus exactly one replay generation")
+				} else {
+					require.Equal(t, 503, rec.Code)
+					require.EqualValues(t, 1, upstream.calls.Load(), "only the successful seed reached the model")
+					require.Contains(t, rec.Body.String(), "encrypted_session_verification_unavailable")
+				}
+			})
+		}
 	}
 }

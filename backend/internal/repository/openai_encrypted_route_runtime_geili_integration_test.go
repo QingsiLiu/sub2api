@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net"
 	"strings"
@@ -303,4 +304,105 @@ func TestEncryptedSourceGeiliRealPGBlockedVerificationReturnsHintWithoutCachedAu
 	require.ErrorAs(t, err, &hint)
 	require.False(t, hint.KnownOpenAIEncryptedSourceHintGeili())
 	require.NoError(t, lock.Rollback())
+}
+
+func TestEncryptedSourceGeiliIsolatedPoolCanceledLookupResumesAuthoritativeVerification(t *testing.T) {
+	for _, pool := range []struct {
+		name       string
+		open, idle int
+	}{{"one connection", 1, 1}, {"Stage limits", 8, 2}} {
+		t.Run(pool.name, func(t *testing.T) {
+			for _, mutation := range []string{"original", "conflict", "deleted", "persistent lock"} {
+				t.Run(mutation, func(t *testing.T) {
+					ctx := context.Background()
+					db, err := sql.Open("postgres", integrationEncryptedDSNGeili)
+					require.NoError(t, err)
+					db.SetMaxOpenConns(pool.open)
+					db.SetMaxIdleConns(pool.idle)
+					t.Cleanup(func() { _ = db.Close() })
+					require.NoError(t, db.PingContext(ctx))
+					var userID int64
+					require.NoError(t, integrationDB.QueryRow(`INSERT INTO users(email,password_hash,role,status,balance,concurrency) VALUES($1,'test','user','active',10,10) RETURNING id`, uuid.NewString()+"@resume-verification.invalid").Scan(&userID))
+					r := encryptedSourceFixtureGeili()
+					key := encryptedRouteKeyGeili(userID, r.Digest)
+					t.Cleanup(func() {
+						_, _ = integrationDB.Exec("DELETE FROM users WHERE id=$1", userID)
+						_ = integrationRedis.Del(context.Background(), key).Err()
+					})
+					cache := requireEncryptedSourceCacheGeili(t, NewGatewayCache(integrationRedis, db))
+					require.NoError(t, cache.SetOpenAIEncryptedRoutesGeili(ctx, userID, []service.OpenAIEncryptedRouteGeili{r}))
+					require.Equal(t, int64(1), integrationRedis.Exists(ctx, key).Val())
+					var pidBefore int
+					require.NoError(t, db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&pidBefore))
+					// The lock uses the harness pool, leaving this test's sole lookup socket
+					// free to execute and cancel a real statement rather than wait for a slot.
+					lock, err := integrationDB.BeginTx(ctx, nil)
+					require.NoError(t, err)
+					defer func() { _ = lock.Rollback() }()
+					_, err = lock.ExecContext(ctx, "LOCK TABLE ONLY openai_encrypted_sources_geili IN ACCESS EXCLUSIVE MODE")
+					require.NoError(t, err)
+					statsBefore := db.Stats()
+					started := time.Now()
+					initial, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+					got, err := cache.GetOpenAIEncryptedRoutesGeili(initial, userID, []string{r.Digest})
+					initialExpired := initial.Err()
+					cancel()
+					require.Nil(t, got)
+					require.Error(t, err)
+					require.ErrorIs(t, initialExpired, context.DeadlineExceeded)
+					var hint interface{ KnownOpenAIEncryptedSourceHintGeili() bool }
+					require.ErrorAs(t, err, &hint)
+					require.True(t, hint.KnownOpenAIEncryptedSourceHintGeili())
+					initialElapsed := time.Since(started)
+					if mutation != "persistent lock" {
+						require.NoError(t, lock.Rollback())
+						err = nil
+						switch mutation {
+						case "conflict":
+							_, err = integrationDB.Exec("UPDATE openai_encrypted_sources_geili SET conflict=TRUE WHERE user_id=$1 AND cipher_digest=$2", userID, r.Digest)
+						case "deleted":
+							_, err = integrationDB.Exec("DELETE FROM openai_encrypted_sources_geili WHERE user_id=$1 AND cipher_digest=$2", userID, r.Digest)
+						}
+						require.NoError(t, err)
+					}
+					// The service's single retry receives only the remainder of the original
+					// cumulative cap, not another 250ms or a refreshed generation deadline.
+					remaining, cancel := context.WithDeadline(ctx, started.Add(250*time.Millisecond))
+					got, err = cache.GetOpenAIEncryptedRoutesGeili(remaining, userID, []string{r.Digest})
+					cancel()
+					totalElapsed := time.Since(started)
+					require.Less(t, totalElapsed, 350*time.Millisecond, "cumulative deadline plus cancellation overhead must remain bounded")
+					statsAfter := db.Stats()
+					if mutation == "persistent lock" {
+						require.Nil(t, got)
+						require.Error(t, err)
+						require.ErrorAs(t, err, &hint)
+						require.True(t, hint.KnownOpenAIEncryptedSourceHintGeili())
+						require.GreaterOrEqual(t, totalElapsed, 240*time.Millisecond)
+						require.NoError(t, lock.Rollback())
+					} else {
+						require.NoError(t, err)
+						require.Less(t, totalElapsed, 250*time.Millisecond)
+						if mutation == "deleted" {
+							require.Empty(t, got)
+						} else {
+							expected := r
+							expected.Conflict = mutation == "conflict"
+							require.Equal(t, expected.AccountID, got[r.Digest].AccountID)
+							require.Equal(t, expected.GroupID, got[r.Digest].GroupID)
+							require.Equal(t, expected.Model, got[r.Digest].Model)
+							require.Equal(t, expected.BackendFingerprint, got[r.Digest].BackendFingerprint)
+							require.Equal(t, expected.Conflict, got[r.Digest].Conflict, "fresh PG truth overrides the unchanged Redis hint")
+						}
+						var pidAfter int
+						require.NoError(t, db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&pidAfter))
+						if pool.open == 1 {
+							require.NotEqual(t, pidBefore, pidAfter, "lib/pq cancellation retires the isolated socket before verification resumes")
+						}
+					}
+					t.Logf("pool=%d/%d mutation=%s initial=%s cumulative=%s wait_count_delta=%d wait_duration_delta=%s", pool.open, pool.idle, mutation, initialElapsed, totalElapsed, statsAfter.WaitCount-statsBefore.WaitCount, statsAfter.WaitDuration-statsBefore.WaitDuration)
+				})
+			}
+		})
+	}
 }

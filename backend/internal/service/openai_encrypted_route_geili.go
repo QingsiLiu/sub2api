@@ -194,6 +194,7 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 	if !ok || len(digests) == 0 {
 		return next, nil, nil
 	}
+	lookupStarted := time.Now()
 	lookup, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer cancel()
 	sources, err := cache.GetOpenAIEncryptedRoutesGeili(lookup, key.UserID, digests)
@@ -202,12 +203,31 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 		var hint interface{ KnownOpenAIEncryptedSourceHintGeili() bool }
 		tracked := errors.As(err, &hint) && hint.KnownOpenAIEncryptedSourceHintGeili()
 		slog.Warn("encrypted_route.lookup_failed", "user_id", key.UserID, "error_class", encryptedPersistenceFailureClassGeili(err), "lookup_phase", encryptedRouteLookupPhaseGeili(err), "tracked_source_hint", tracked)
+		if eligible && tracked && errors.Is(lookup.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			// Retry metadata only, once. The hint cannot authorize an origin;
+			// PostgreSQL must supply a fresh result within the total 250 ms window.
+			cancel()
+			var retryCancel context.CancelFunc
+			lookup, retryCancel = context.WithDeadline(ctx, lookupStarted.Add(250*time.Millisecond))
+			defer retryCancel()
+			sources, err = cache.GetOpenAIEncryptedRoutesGeili(lookup, key.UserID, digests)
+			resultClass := "none"
+			if err != nil {
+				resultClass = encryptedPersistenceFailureClassGeili(err)
+			}
+			slog.Info("encrypted_route.lookup_retry", "user_id", key.UserID, "error_class", resultClass, "lookup_phase", encryptedRouteLookupPhaseGeili(err), "elapsed_ms", time.Since(lookupStarted).Milliseconds())
+			if err == nil && len(sources) == 0 {
+				return next, nil, encryptedRouteErrorGeili(503, "encrypted_session_verification_unavailable", "暂时无法核验已追踪的会话加密状态，请稍后重试，勿切换线路")
+			}
+		}
 		// A cache-presence hint establishes prior tracking, never route authority.
 		// Keep its encrypted history intact until PostgreSQL can verify the source.
-		if eligible && tracked {
+		if err != nil && eligible && tracked {
 			return next, nil, encryptedRouteErrorGeili(503, "encrypted_session_verification_unavailable", "暂时无法核验已追踪的会话加密状态，请稍后重试，勿切换线路")
 		}
-		return next, nil, nil
+		if err != nil {
+			return next, nil, nil
+		}
 	}
 	slog.Info("encrypted_route.lookup", "user_id", key.UserID, "mode", policy.Mode, "model", gjson.GetBytes(body, "model").String(), "cipher_count", len(digests), "known_count", len(sources))
 	if !eligible {

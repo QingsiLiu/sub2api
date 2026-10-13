@@ -355,7 +355,7 @@ def fixture_type(cache, source):
             delta = self.inference_count() - before
             self.check('released source verification lock resumes original account once',
                 resumed[0] == 200 and delta == 1 and self.encrypted_attempts[-1]['label'] == 'A',
-                {'status': resumed[0], 'inference_delta': delta})
+                dict(response_diagnostic(resumed), inference_delta=delta))
             usage = self.audit_usage(self.cross_key, 2, self.groups['A']['id'])
             self.check('resumed request adds exactly one actual original group charge',
                 usage['n'] == 2 and usage['wrong_group'] == 0 and float(usage['multiplier']) == 1, usage)
