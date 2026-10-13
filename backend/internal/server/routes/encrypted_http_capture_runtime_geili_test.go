@@ -166,3 +166,47 @@ func TestEncryptedHTTPRuntimeStreamDisconnectDrainsWithoutUndeliveredSourceGeili
 	require.NotContains(t, rec.Body.String(), "undelivered-cipher")
 	require.Empty(t, cache.records, "a cipher read only while draining cannot establish provenance")
 }
+
+type timeoutRuntimeEncryptedSettingsGeili struct{ runtimeEncryptedSettingsGeili }
+
+func (s *timeoutRuntimeEncryptedSettingsGeili) GetValue(ctx context.Context, key string) (string, error) {
+	if key == service.SettingKeyOpenAIEncryptedRouteGeili {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	return s.runtimeEncryptedSettingsGeili.GetValue(ctx, key)
+}
+func TestEncryptedHTTPRuntimeColdPolicyTimeoutDeliversButDoesNotRecordGeili(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, passthrough := range []bool{false, true} {
+		t.Run(map[bool]string{false: "native", true: "passthrough"}[passthrough], func(t *testing.T) {
+			cache := &runtimeEncryptedCaptureCacheGeili{earlyEncryptedCacheGeili: &earlyEncryptedCacheGeili{records: map[string]service.OpenAIEncryptedRouteGeili{}}}
+			cfg := &config.Config{}
+			settings := service.NewSettingService(&timeoutRuntimeEncryptedSettingsGeili{}, cfg)
+			gateway := service.NewOpenAIGatewayService(nil, nil, nil, nil, nil, nil, cache, cfg, nil, nil, nil, nil, nil, &runtimeEncryptedHTTPGeili{}, nil, nil, nil, nil, nil, nil, settings, nil)
+			group := int64(131)
+			key := &service.APIKey{ID: 2001, UserID: 9001, GroupID: &group, Group: &service.Group{ID: group, Platform: service.PlatformOpenAI}}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			c.Set("api_key", key)
+			body := []byte(`{"model":"gpt-6-astra","input":"seed","stream":false}`)
+			before := service.OpenAIEncryptedRouteSettingsRefreshFailuresGeili()
+			_, err := gateway.PrepareOpenAIEncryptedRouteGeili(c, key, body)
+			require.NoError(t, err)
+			require.Equal(t, before+1, service.OpenAIEncryptedRouteSettingsRefreshFailuresGeili())
+			require.Equal(t, "off", settings.GetOpenAIEncryptedRouteSettingsGeili(context.Background()).Mode)
+			writer := newKeyRouteWriter(c.Writer)
+			writer.ctx = c
+			c.Writer = writer
+			account := &service.Account{ID: 3001, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Concurrency: 10, Credentials: map[string]any{"api_key": "synthetic-key", "base_url": "https://synthetic.example/fixture"}, Extra: map[string]any{"openai_responses_mode": "force_responses", "openai_passthrough": passthrough}}
+			c.Request = c.Request.WithContext(service.WithOpenAIEncryptedOutputOriginGeili(c.Request.Context(), &group, account, "gpt-6-astra"))
+			_, err = gateway.Forward(c.Request.Context(), c, account, body)
+			require.NoError(t, err)
+			writer.commit()
+			require.Contains(t, rec.Body.String(), "seed-tool-cipher")
+			require.Empty(t, cache.records, "cold timeout falls back to off before source observation, despite successful delivery")
+			require.Equal(t, before+1, service.OpenAIEncryptedRouteSettingsRefreshFailuresGeili(), "Forward does not refresh cached off policy")
+		})
+	}
+}

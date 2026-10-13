@@ -228,6 +228,9 @@ def fixture_type(cache, source):
             tools = self.call_encrypted(self.seed_key, [{'role': 'user', 'content': 'seed-tools'}], 'seed-tools')
             reasoning = self.call_encrypted(self.seed_key, [{'role': 'user', 'content': 'seed-reasoning'}], 'seed-reasoning')
             self.check('primary seed output records synthetic encrypted items', tools[0] == reasoning[0] == 200)
+            self.check('primary seed delivers both exact synthetic encrypted items before provenance checks',
+                'synthetic-encrypted-' + self.suffix + '-tools' in json.dumps(tools[1])
+                and 'synthetic-encrypted-' + self.suffix + '-reasoning' in json.dumps(reasoning[1]))
             metadata = self.sql("SELECT json_build_object('n',COUNT(*),'account',MIN(account_id),'group',MIN(group_id),"
                 "'invalid',COUNT(*) FILTER(WHERE conflict OR LENGTH(cipher_digest)<>64 OR LENGTH(backend_fingerprint)<>64)) "
                 "FROM openai_encrypted_sources_geili WHERE user_id=" + str(int(self.owner['id'])) + ';')[0]

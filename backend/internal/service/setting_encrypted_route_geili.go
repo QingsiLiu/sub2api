@@ -3,11 +3,23 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
+	"sync/atomic"
 	"time"
 )
 
 const SettingKeyOpenAIEncryptedRouteGeili = "openai_encrypted_route"
+
+var encryptedRouteSettingsRefreshFailuresGeili atomic.Uint64
+
+// OpenAIEncryptedRouteSettingsRefreshFailuresGeili counts failed repository reads,
+// excluding an absent setting and peers that use the cached policy or exhaust
+// their own wait budget.
+func OpenAIEncryptedRouteSettingsRefreshFailuresGeili() uint64 {
+	return encryptedRouteSettingsRefreshFailuresGeili.Load()
+}
 
 type OpenAIEncryptedRouteSettingsGeili struct {
 	Mode                     string  `json:"mode"`
@@ -126,8 +138,14 @@ func (s *SettingService) GetOpenAIEncryptedRouteSettingsGeili(ctx context.Contex
 		value := pending.settings
 		if err == nil {
 			value = ParseOpenAIEncryptedRouteSettingsGeili(raw)
-		} else if value.Mode == "" {
-			value = DefaultOpenAIEncryptedRouteSettingsGeili()
+		} else {
+			if !errors.Is(err, ErrSettingNotFound) {
+				encryptedRouteSettingsRefreshFailuresGeili.Add(1)
+				slog.Warn("encrypted_route.settings_refresh_failed", "error_class", encryptedPersistenceFailureClassGeili(err))
+			}
+			if value.Mode == "" {
+				value = DefaultOpenAIEncryptedRouteSettingsGeili()
+			}
 		}
 		ready := &cachedOpenAIEncryptedRouteSettingsGeili{settings: value, expires: time.Now().Add(5 * time.Second)}
 		s.encryptedRouteSettingsCache.CompareAndSwap(pending, ready)
