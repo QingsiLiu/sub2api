@@ -1,6 +1,6 @@
 """Local stdlib-only Stage runner tests. No Docker, SSH, database or paid calls."""
 import importlib.util
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import json
 import re
 from pathlib import Path
@@ -120,6 +120,26 @@ class StageRunnerTests(unittest.TestCase):
         self.assertEqual(0, failure.args[2]['inference_delta'])
         self.assertNotIn('must-not-record', str(f.check.call_args_list))
         self.assertEqual(3, f.guard.call_count)
+
+    def test_fault_releases_lock_before_usage_audit_and_distinct_resume(self):
+        f, _ = self.configure_fault_fixture()
+        events = []
+        @contextmanager
+        def holder(_):
+            events.append('lock')
+            try:
+                yield
+            finally:
+                events.append('release')
+        f.verified_replica_request.side_effect = lambda *args: (events.append('fault') or (503, {'error': {'code': 'encrypted_session_verification_unavailable'}}, .05))
+        def audit(*args):
+            events.append('audit-' + str(args[1]))
+            return {'n': args[1], 'wrong_group': 0, 'multiplier': 1}
+        f.audit_usage.side_effect = audit
+        f.call_encrypted.side_effect = lambda *args: (events.append('resume') or (200, {}))
+        with patch.object(runner.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0, stdout='1')), patch.object(runner, 'bounded_source_lock', side_effect=holder):
+            f.verification_fault_check([])
+        self.assertEqual(['lock', 'fault', 'release', 'audit-1', 'resume', 'audit-2'], events)
 
     def test_verified_replica_transport_uses_frozen_pid_without_in_lock_guard(self):
         f, cache = self.make_fixture()

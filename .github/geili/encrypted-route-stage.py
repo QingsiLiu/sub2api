@@ -346,8 +346,8 @@ def fixture_type(cache, source):
                 self.check('cached source verification failure returns503 with zero upstream calls',
                     failed[0] == 503 and error_code(failed) == 'encrypted_session_verification_unavailable' and delta == 0,
                     dict(response_diagnostic(failed), inference_delta=delta, lock_ready_to_response_seconds=ready_to_response))
-                usage = self.audit_usage(self.cross_key, 1, self.groups['A']['id'])
-                self.check('verification fault creates no additional usage', usage['n'] == 1, usage)
+            usage = self.audit_usage(self.cross_key, 1, self.groups['A']['id'])
+            self.check('verification fault creates no additional usage', usage['n'] == 1, usage)
             self.guard_replica()
             if self.replica_primary_pid != verified_pid:
                 raise RuntimeError('verified primary namespace PID changed during source lock')

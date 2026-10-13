@@ -6,8 +6,9 @@
 - 本轮补充：已追踪密文的PG核验失败返回 `encrypted_session_verification_unavailable`（503），保留完整会话且停止转发；缓存存在性只作临时保护依据，不作路由或授权。未知历史、observe/off保持兼容；缓存全命中使用只读SELECT。已补HTTP/WS零上游调用测试、Stage有限锁故障与恢复计费门禁，并兼容Stage无密码Redis精确清理。新候选尚待CI和完整Stage，前一候选失败记录保留。
 - 实际注册路由回归已证实：早期错误写出后未Abort，后续handler会追加SSE而形成无效JSON；统一错误writer现在终止剩余Gin处理链，503核验与409撤权只写一份错误，已提交流仍保持response.failed终态。新候选将重做全部Stage与批量验收。
 - 外部批量录入最多100条官方 Key，事务性保存且默认停用；保持凭据保护、逐成员连接权限、逐条及合计用量。新增迁移280/281，原339份迁移保持字节与校验和；价格、余额/订阅权限按实际选择分组处理。
-- revision：`dbc4690340f2a0ac46720fbe85bced07eee0b9ca`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:a060e1a838142821078720c0ac67f902b3df094bbe091815445b744765063cf6`；[候选 CI 38353142135](https://github.com/QingsiLiu/sub2api/actions/runs/38353142135)全部9任务与13项制品门禁通过。部署状态：本轮候选已正式部署Stage，数据库故障门禁未通过（实际503且零上游调用，但错误code未能解析），全部夹具已恢复，生产仍`.7`；原f2b来源持久化/跨实例固定账号/单笔原分组计费通过，但撤权失败，原始记录保留；其无密码Redis清理已正式restore，不能冒充功能通过。当次条件授权明确两项一起发布、补齐批量录入验收。
-- 本地验证：取消同类/单linter输出上限后完整default/integration候选增量诊断均0；source unit race2.458秒、真实PostgreSQL18/Redis8来源与batch race6.482秒通过。实际TCP无响应时写13.832ms/查询23.361ms；PG已提交冲突但Redis滞留false、删除/过期、混合命中访问时间和父Redis生命周期/配置保持均实测。Stage runner30项、批量runner9项通过；不得代替最终镜像Stage与普通请求性能验收。
+- revision：`4a12ff83bd0bbc8f134345c653fd6b67e196b44a`；镜像 digest：`ghcr.io/qingsiliu/sub2api@sha256:56df849f69b57fd05e6a4af08cf5d4674af71013cf8f558dda84db749209898d`；[候选 CI 38358407096](https://github.com/QingsiLiu/sub2api/actions/runs/38358407096)全部9任务与13项制品门禁通过。部署状态：本轮候选已部署Stage，真实故障503/零转发/无新增费用通过；锁内用量审计触发测试锁进程退出，恢复门禁未执行，整体仍失败。夹具全部恢复，生产仍`.7`；f2b撤权失败、dbc503响应格式失败原始记录及修复前后注册路由测试均保留，全部夹具已恢复，不作当前通过。当次条件授权明确两项一起发布、补齐批量录入验收。
+- 本地验证：取消同类/单linter输出上限后完整default/integration候选增量诊断均0；source unit race2.458秒、真实PostgreSQL18/Redis8来源与batch race6.482秒通过。实际TCP无响应时写13.832ms/查询23.361ms；PG已提交冲突但Redis滞留false、删除/过期、混合命中访问时间和父Redis生命周期/配置保持均实测。Stage runner31项、批量runner9项通过；不得代替最终镜像Stage与普通请求性能验收。
+- 测试锁现在只覆盖故障请求，释放后先查无新增用量、再发独立恢复请求；真实fixture顺序测试严格覆盖加锁→故障→释放→审计→恢复→审计。锁期限不放宽，失败原始报告保留，新候选重新执行全部验收。
 - 所有主动模型调用仅合成上游，未请求付费供应商、真实支付或媒体。先前来源INSERT50ms失败、配置冷读失败、CI断连用量回归、旧缓存一致性审查与静态工具输出截断记录均保留在运维仓 `docs/reports/encrypted-route-batch-20261013/`，不计作当前候选通过。方案和灰度边界见[加密会话来源保护](.github/geili/encrypted-route-protection-20261013.md)；尚不能宣称自然流量错误已下降。
 
 ## 0.2.15-geili.7（已发布生产，Stage同镜像）
