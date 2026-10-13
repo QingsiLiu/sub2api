@@ -45,3 +45,5 @@
 用户进一步授权“验证后发送到线上”，并限定“仅模拟与非支付，验证通过后发布生产（推荐）”。`.1`经正式Stage入口部署后，标准Gemini缓存资源名`models/模型名`在Geili显式路由误报MODEL_NOT_AVAILABLE；原始失败及夹具恢复保留，未发布生产。修复只在缓存创建授权时规范model ID，保持原请求、计费归属和权限；未知/冲突model仍拒绝，12场景回归与routes/middleware race通过。
 
 新候选`.2` / `ad9713282c471debbbce28c20c3659521465bdb4` / `sha256:7be6851fffc3718d26184746c506980b465814dd4601ce4f2deb3afcef3f23b5`已通过候选CI38405572599全部9任务/13门禁。2026-10-13正式Stage入口已部署，健康200，生产仍`.8`；当前镜像完整验收正在执行，不把`.1`的结果重标使用。
+
+`.2`最终828项Stage、4000性能样本及69项生产复核通过，已按本次模拟/非支付条件授权经正式prod入口发布同Stage digest。备份`/root/backups/subscription-prod-image-bump-20261013T151811Z`和`/root/backups/geili-upstream-v0216-preflight-20261013T142018Z`；加密设置保持observe及恢复false。两仓当次回收配置、证据和发布记录。

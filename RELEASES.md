@@ -1,10 +1,13 @@
-## 0.2.16-geili.2（已部署 Stage，业务验收中）
+## 0.2.16-geili.2（已发布生产，Stage同镜像）
 
 相对生产 `0.2.15-geili.8`，包含下方 `.1` 的上游 v0.2.16 同步和 Geili 计费适配；修复 Stage 发现的 Gemini 缓存创建兼容问题：标准 `models/模型名` 仅在缓存创建的路由授权时归一化为公开模型ID，原请求内容、账号映射、余额/订阅归属不改变。未知模型和冲突的重复 model 字段仍拒绝；普通文本请求不套用此归一化。
 
 - 路由回归12场景通过；原实现下标准资源名4场景失败，修复后通过；routes / middleware 竞态检查通过（20.176 / 4.290秒）。
 - 原341份迁移及新增官方242～245保持；新候选必须重建不可变镜像并重新执行当前镜像Stage矩阵，不把 `.1` 的结果重标为 `.2`。
-- revision：`ad9713282c471debbbce28c20c3659521465bdb4`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:7be6851fffc3718d26184746c506980b465814dd4601ce4f2deb3afcef3f23b5`；[候选CI38405572599](https://github.com/QingsiLiu/sub2api/actions/runs/38405572599)全部9任务及13制品门禁通过，345份迁移SHA匹配。2026-10-13正式Stage入口已部署，健康200，生产指纹不变；备份 `/opt/sub2api-subscription-lab/backups/20261013T134805Z-candidate`，业务验收中，生产仍 `.8`。用户已当次授权“验证后发送到线上”，验收限定模拟与非支付，全部门禁通过后发布同Stage digest。
+- revision：`ad9713282c471debbbce28c20c3659521465bdb4`；镜像：`ghcr.io/qingsiliu/sub2api@sha256:7be6851fffc3718d26184746c506980b465814dd4601ce4f2deb3afcef3f23b5`；[候选CI38405572599](https://github.com/QingsiLiu/sub2api/actions/runs/38405572599)全部9任务及13制品门禁通过，345份迁移SHA匹配。2026-10-13正式Stage入口已部署，健康200，生产指纹不变；备份 `/opt/sub2api-subscription-lab/backups/20261013T134805Z-candidate`，当前镜像828项Stage通过，已由正式prod入口发布生产同一digest，69项生产复核通过。用户已当次授权“验证后发送到线上”，验收限定模拟与非支付，全部门禁通过后发布同Stage digest。
+
+- 最终验收：上游增量36、计费51、双实例17、批量177、迁移/新结构24、Astra55、组合Key36、审计25、平台52、媒体模拟108、Claude153、传输38、加密29、手机/桌面18、生产保全9，共828项通过。4000性能样本全200，p95差-15.18ms、吞吐比1.01913，原10ms/.98阈值通过；设置/自有来源/缓存/邀请/代理、副本及卷恢复。v19及25种证明篡改拒绝测试通过。
+- 生产69项复核通过，健康恢复9.711秒；六核心容器healthy/restart0，345迁移及新结构匹配；PG/Redis、Stage应用、三个相邻服务、env/config/Nginx保持，Compose仅换镜像。加密observe/保护名单/恢复false原值、行身份和时间戳保持，未启用protect，未核实自然流量错误下降。备份 `/root/backups/subscription-prod-image-bump-20261013T151811Z`、`/root/backups/geili-upstream-v0216-preflight-20261013T142018Z`；回退`.8`保留新增表列及业务记录，不整库回灌。仅模拟供应商/存储与非支付，不创建生产夹具或主动付费调用；详细原始证据在运维仓 `docs/reports/upstream-v0216-20261013/`。
 
 ## 0.2.16-geili.1（已部署 Stage，验收未通过，未发布生产）
 
