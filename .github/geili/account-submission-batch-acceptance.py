@@ -1,5 +1,6 @@
 """Synthetic batch intake and per-member usage, exclusively loopback model calls."""
 import json
+import math
 import time
 import uuid
 
@@ -71,7 +72,7 @@ def verify(f, public, make):
         current = public('usage', {'token': token}, secondary=bool(getattr(f, 'has_replica', False)))
         measured = current[1]['data']
         def same(actual, wanted):
-            return all(abs(actual[k] - value) < 1e-8 if k == 'reference_cost' else actual[k] == value for k, value in wanted.items())
+            return all(math.isclose(actual[k], value, rel_tol=1e-9, abs_tol=1e-15) if k == 'reference_cost' else actual[k] == value for k, value in wanted.items())
         f.check(platform + ' batch keeps independently attributed 1/2/3 request member summaries', current[0] == 200 and len(measured['accounts']) == 3 and all(same(member['summary'], row) for member, row in zip(measured['accounts'], expected)))
         total = {k: sum(row[k] for row in expected) for k in expected[0]}
         f.check(platform + ' batch total equals all member reference costs and token dimensions', same(measured['summary'], total) and sum(row['requests'] for row in measured['daily']) == 6 and sum(row['requests'] for row in measured['models']) == 6)

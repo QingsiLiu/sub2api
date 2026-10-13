@@ -254,7 +254,9 @@ def fixture_type(cache, source):
             self.check('unknown historical cipher is never stripped on retries', unknown[0] >= 400 and bool(seen)
                 and all('synthetic-unknown-cipher' in json.dumps(r['payload']) for r in seen), {'attempts': len(seen), 'status': unknown[0]})
             recovery_key = self.new_key('recovery', [self.groups['A']['id'], self.groups['B']['id']])
-            self.api('/admin/accounts/' + str(self.accounts['A']['id']), {'schedulable': False}, self.admin, 'PUT')
+            self.api('/admin/accounts/' + str(self.accounts['A']['id']) + '/schedulable', {'schedulable': False}, self.admin)
+            disabled = self.sql("SELECT json_build_object('schedulable',schedulable) FROM accounts WHERE id=" + str(self.accounts['A']['id']) + ';')[0]
+            self.check('original source actually disabled by scheduling API in PostgreSQL', disabled['schedulable'] is False)
             before = self.inference_count()
             recovered = self.call_encrypted(recovery_key, reasoning[1]['output'] + [{'role': 'user', 'content': 'continue reasoning'}],
                                             'recover-disabled', True, True)
@@ -268,7 +270,9 @@ def fixture_type(cache, source):
             self.check('recovery settles exactly once under actual fallback group and multiplier', usage['n'] == 1
                 and usage['wrong_group'] == 0 and float(usage['multiplier']) == 2 and float(usage['charged']) > 0, usage)
             self.set_policy('off')
-            self.api('/admin/accounts/' + str(self.accounts['A']['id']), {'schedulable': True}, self.admin, 'PUT')
+            self.api('/admin/accounts/' + str(self.accounts['A']['id']) + '/schedulable', {'schedulable': True}, self.admin)
+            enabled = self.sql("SELECT json_build_object('schedulable',schedulable) FROM accounts WHERE id=" + str(self.accounts['A']['id']) + ';')[0]
+            self.check('original source scheduling state restored before ordinary and performance checks', enabled['schedulable'] is True)
             before = self.inference_count()
             normal = self.call_encrypted(self.cross_key, [{'role': 'user', 'content': 'ordinary off request'}], 'off', True)
             self.check('mode off leaves existing ordered-group scheduling behavior', normal[0] == 200
