@@ -6,7 +6,7 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 - GitHub 默认主干是 `geili/main`。现网跑的就是这条 0.2.5 线；以后只维护这一条主干。
 - 一个人开发时默认直接在 `geili/main` 上改。需要隔离开的大改再拉 `codex/<主题>`，验收后合回并删除。不要留第二主干。
-- 官方基线为 `v0.2.5`，当前源码已同步到上游`v0.2.16`。对外版本以`backend/cmd/server/VERSION`为准；当前生产为`0.2.16-geili.2` / `ad9713282c471debbbce28c20c3659521465bdb4` / `sha256:7be6851fffc3718d26184746c506980b465814dd4601ce4f2deb3afcef3f23b5`，原版Stage828项、生产69项通过。源码当前候选`0.2.16-geili.6`修复流式工具参数与账号容灾，并补齐自动探测的文本入口范围，验收状态见 RELEASES.md，旧版结果不得重标为当前候选。加密保护保持现有observe、保护名单与恢复关闭设置，不启用protect。候选构建注入该文件，不写`*.acceptance`。
+- 官方基线为 `v0.2.5`，当前源码已同步到上游`v0.2.16`。对外版本以`backend/cmd/server/VERSION`为准；当前生产为`0.2.16-geili.5` / `4c305d96cd40bbfcbbe75c64e44920e822fe3825` / `sha256:633ecf0ed938660f3b657acdc4b6bdce6f1cac7c2851a3d3b442d7ffc98ec199`，从`.2`隔离仅发布逐Key代理，Stage313项、生产58项通过，345份生产SQL保持。源码当前候选`0.2.16-geili.6`修复流式工具参数与账号容灾，并补齐自动探测的文本入口范围，验收状态见 RELEASES.md，旧版结果不得重标为当前候选。加密保护保持现有observe、保护名单与恢复关闭设置，不启用protect。候选构建注入该文件，不写`*.acceptance`。
 - 每次改版本号准备发布，把该版本做了什么追加到 [RELEASES.md](RELEASES.md) 顶部。缺这条说明不算完成发版。
 - 2026-09-15 用户决定恢复官方视觉；`frontend/src/geili/`、覆盖插件、Geist 字体及主题 token 已删除。
 - 前端功能扩展使用现有官方组件与样式；以后统一设计须另行提出。

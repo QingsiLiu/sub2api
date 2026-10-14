@@ -4,13 +4,13 @@
 
 - revision：`8aee8e11a415e2db3115ff02ce418a5d6dd173d0`；不可变镜像：`ghcr.io/qingsiliu/sub2api@sha256:2750be15c546a943d82eb16a8412adac5dba066b4bf738a0aa23f3827c4d73d9`；[候选CI38518692112](https://github.com/QingsiLiu/sub2api/actions/runs/38518692112)完整测试及构建通过、13项制品门禁通过，346迁移校验和与源码一致。部署状态：尚未部署Stage/生产，等待独立Key代理发布交还Stage。本次没有生产授权。`.4`非支付51项、缓存36项及容灾功能通过，但范围审计发现共用函数漏入口区分；性能部分样本已保留，停止该轮后由新候选重新完整验证，不重标旧结果。`.5`由独立Key代理任务隔离发布，本候选使用`.6`避免混同。
 
-## 0.2.16-geili.5（已部署Stage，逐条代理验收中，未发布生产）
+## 0.2.16-geili.5（已发布生产，与验收Stage同一镜像）
 
 基于现网 `0.2.16-geili.2`，仅加入批量 Key 逐条配置代理的修复；每条可分别选择自己的公网代理、预设代理或直连，粘贴、删行和忽略空行保持 Key/代理配对，整批原子保存。保留旧批量接口和已有逐条统计/代理管理。不包含待发布的账号容灾自动恢复、欠费停调、流式解析及订阅页面改动。
 
 - 现网基线 revision：`ad9713282c471debbbce28c20c3659521465bdb4`，现网 digest：`sha256:7be6851fffc3718d26184746c506980b465814dd4601ce4f2deb3afcef3f23b5`。
-- 功能 revision：`d43e1c785`（原主干修复 `599618e5e` 的相同补丁）；候选 revision：`4c305d96cd40bbfcbbe75c64e44920e822fe3825`；不可变镜像 digest：`sha256:633ecf0ed938660f3b657acdc4b6bdce6f1cac7c2851a3d3b442d7ffc98ec199`；CI38516517058全部9任务/13项制品门禁通过。部署状态：已正式部署 Stage，health200，生产指纹保持；正在当前镜像验收，生产仍`.2`。345份原迁移保持，无新增生产迁移。
-- 本次用户明确要求“部署到线上去”；范围限本次 Key 逐条代理，所有当前候选门禁通过后由正式入口先 Stage、再同digest生产。其他任务占用Stage时等待独占锁释放，保留旧候选的证据和新增历史结构，不修改其正在运行的验收。
+- 功能 revision：`d43e1c785`（原主干修复 `599618e5e` 的相同补丁）；候选 revision：`4c305d96cd40bbfcbbe75c64e44920e822fe3825`；不可变镜像 digest：`sha256:633ecf0ed938660f3b657acdc4b6bdce6f1cac7c2851a3d3b442d7ffc98ec199`；CI38516517058全部9任务/13项制品门禁通过。部署状态：2026-10-14经正式Stage→prod发布同一digest；9任务/13门禁、313项Stage（录入201/非支付51/双实例17/迁移19/真实UI16/保全9）及58项生产复核通过；受控代理转发18包含在录入201内，不重复计数。22项门禁篡改拒绝测试通过；所有自有邀请/代理/网卡/进程清理、账号按规范恢复暂停、副本移除。345份生产迁移完全保持，Stage历史275/282不引入生产。
+- 本次用户明确要求“部署到线上去”；范围限本次 Key 逐条代理，当日所有当前镜像门禁通过后由正式入口先Stage、再同digest生产，恢复健康9.912秒。四PG/Redis、Stage应用和三个相邻应用指纹以及env/config/Nginx保持，Compose仅换app镜像；保留observe与恢复关闭，无真实支付/付费供应商/媒体及生产夹具。备份`/root/backups/geili-key-per-proxy-preflight-20261014T061011Z`和`/root/backups/subscription-prod-image-bump-20261014T061034Z`；回退`.2`镜像保留业务数据，不整库回灌。运维原始证据见`~/code/geili/subscription-lab-ops/docs/reports/key-per-proxy-20261014/`。独占Stage租约已释放，`.6`仍未获生产授权。
 
 ## 0.2.16-geili.4（Stage功能通过，范围审计未通过，未发布生产）
 
