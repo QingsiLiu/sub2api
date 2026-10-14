@@ -75,6 +75,14 @@ class GuardTests(unittest.TestCase):
         self.assertNotIn('*', group_payload['model_allowlist']['models'])
         self.assertNotIn('undeclared-model', group_payload['model_allowlist']['models'])
         self.assertEqual(group_payload['model_pricing'][0]['models'], group_payload['model_allowlist']['models'])
+        writes.clear()
+        fixture.new_case('catalog', declare_allowlist=False)
+        group_payload = next(payload for path, payload in writes if path == '/admin/groups')
+        self.assertNotIn('model_allowlist', group_payload)
+        self.assertEqual(group_payload['model_pricing'][0]['models'], [s.MODEL, s.OTHER_MODEL])
+        account_payload = next(payload for path, payload in writes if path == '/admin/accounts')
+        self.assertEqual(account_payload['credentials']['model_mapping'], {s.MODEL: s.MODEL, s.OTHER_MODEL: s.OTHER_MODEL})
+        with self.assertRaises(RuntimeError): fixture.new_case('accidental-optout', declare_allowlist=None)
 
     def test_balance_latch_cleanup_uses_only_exact_ids_never_prefix_scan(self):
         self.assertEqual(s.balance_latch_keys([29, 13]), ['geili:account:balance_latch:13', 'geili:account:balance_latch:29'])
@@ -134,6 +142,34 @@ class PerformanceTests(unittest.TestCase):
 
 
 class OracleTests(unittest.TestCase):
+    def test_catalog_matrix_exercises_inactive_messages_and_error_responses(self):
+        fixture = s.fixture_type(SimpleNamespace(fixture_type=lambda _: object), None)()
+        cases, calls, checks = [], [], []
+        def new_case(label, **options):
+            self.assertEqual(options, {'declare_allowlist': False})
+            case = {'label': label, 'account': {'id': len(cases) + 1}}
+            cases.append(case)
+            return case
+        fixture.new_case, fixture.admin = new_case, 'synthetic-admin'
+        fixture.request = Mock(return_value=[200, {}])
+        fixture.counts = lambda label: {'inference': int(label in calls), 'probes': int(label in calls)}
+        fixture.account_state = lambda case: {'status': 'active' if case['label'] in calls else case['label'][8:],
+                                               'runtime_state': {'state': 'enabled'}}
+        def call(case, protocol):
+            calls.append(case['label'])
+            if protocol == 'messages': return [200, s.anthropic_sse(s.MODEL, 'healthy').decode()]
+            self.assertEqual(protocol, 'responses')
+            return [200, 'event: response.completed\ndata: {"type":"response.completed"}\n\n']
+        fixture.call = call
+        fixture.wait_usage = lambda case, n: {'n': n, 'wrong_group': 0, 'cost': .01}
+        fixture.check = lambda name, passed, detail: checks.append((name, passed, detail))
+        fixture.recoverable_catalog_checks()
+        self.assertEqual(calls, ['catalog-inactive', 'catalog-error'])
+        self.assertEqual([c.args[1] for c in fixture.request.call_args_list], [{'status': 'inactive'}, {'status': 'error'}])
+        self.assertTrue(all(c.args[3] == 'PUT' for c in fixture.request.call_args_list))
+        self.assertEqual(len(checks), 6)
+        self.assertTrue(all(passed for _, passed, _ in checks))
+
     def test_response_detail_reports_status_and_terminals_without_payload(self):
         response = [403, {'error': {'message': 'private-message', 'code': 'MODEL_NOT_ALLOWED'}}]
         self.assertEqual(s.response_detail(response), {'status': 403, 'event_types': []})

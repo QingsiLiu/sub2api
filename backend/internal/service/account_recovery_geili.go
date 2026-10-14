@@ -31,6 +31,7 @@ type accountRecoveryJobGeili struct {
 	requestContext context.Context
 	eligible       func(context.Context, *Account) bool
 	wake           chan struct{}
+	candidatePage  int
 }
 type AccountRecoveryServiceGeili struct {
 	accounts                 AccountRepository
@@ -282,6 +283,9 @@ func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, gro
 		return false
 	}
 	key := fmt.Sprintf("%d:%s", groupID, model)
+	if accountRecoveryForegroundRemainingGeili(ctx, true) <= 0 {
+		return false
+	}
 	if !BeginRequestRecovery(ctx) {
 		return false
 	}
@@ -290,13 +294,13 @@ func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, gro
 		if state.accountRecoverySelections == nil {
 			state.accountRecoverySelections = map[string]bool{}
 		}
-		if state.accountRecoverySelections[key] || (!state.accountRecoveryDeadline.IsZero() && !time.Now().Before(state.accountRecoveryDeadline)) {
+		if state.accountRecoverySelections[key] || (!state.accountRecoveryDeadline.IsZero() && !state.now().Before(state.accountRecoveryDeadline)) {
 			state.mu.Unlock()
 			return false
 		}
 		state.accountRecoverySelections[key] = true
 		if state.accountRecoveryDeadline.IsZero() {
-			state.accountRecoveryDeadline = time.Now().Add(30 * time.Second)
+			state.accountRecoveryDeadline = state.now().Add(30 * time.Second)
 		}
 		state.mu.Unlock()
 	}
@@ -326,14 +330,7 @@ func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, gro
 		}
 	}
 	s.mu.Unlock()
-	wait := 30 * time.Second
-	if state := requestRecoveryFromContext(ctx); state != nil {
-		state.mu.Lock()
-		if left := time.Until(state.accountRecoveryDeadline); left < wait {
-			wait = left
-		}
-		state.mu.Unlock()
-	}
+	wait := accountRecoveryForegroundRemainingGeili(ctx, false)
 	if r := RequestRecoveryRemaining(ctx); r < wait {
 		wait = r
 	}
@@ -380,13 +377,22 @@ func (s *AccountRecoveryServiceGeili) runGroup(key string, groupID int64, model 
 		s.mu.Lock()
 		expired := time.Since(job.lastRequest) > 15*time.Minute
 		requestContext, eligible := job.requestContext, job.eligible
+		page := job.candidatePage
 		s.mu.Unlock()
 		if expired || ctx.Err() != nil {
 			return
 		}
 		attemptCtx, attemptCancel := context.WithCancel(requestContext)
 		stopAttempt := context.AfterFunc(ctx, attemptCancel)
-		accounts, err := s.accounts.ListByGroup(attemptCtx, groupID)
+		accounts, nextPage, err := listAccountRecoveryCandidatePageGeili(attemptCtx, s.accounts, groupID, "", page)
+		if err == nil {
+			s.mu.Lock()
+			job.candidatePage = nextPage
+			if nextPage == 0 {
+				job.candidatePage = 1
+			}
+			s.mu.Unlock()
+		}
 		if err == nil {
 			sort.SliceStable(accounts, func(i, j int) bool {
 				if accounts[i].Priority != accounts[j].Priority {
@@ -453,6 +459,13 @@ func (s *AccountRecoveryServiceGeili) runGroup(key string, groupID int64, model 
 				}
 			}
 			batch.Wait()
+			// Empty/healthy pages do not consume the three-probe batch. Continue
+			// discovery promptly so later manual stops can enter the same wait.
+			if n == 0 && nextPage > 0 {
+				stopAttempt()
+				attemptCancel()
+				continue
+			}
 			if found {
 				stopAttempt()
 				attemptCancel()

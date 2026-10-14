@@ -340,12 +340,16 @@ def fixture_type(cache, source):
             self.api('/admin/users/' + str(self.owner['id']) + '/balance',
                      {'balance': 100, 'operation': 'set', 'notes': 'Synthetic mock-only recovery acceptance'}, self.admin)
 
-        def new_case(self, label, mode='healthy', manual=False, pool=False, group=None):
-            group = group or self.api('/admin/groups', {'name': 'Recovery ' + label + ' ' + self.suffix,
+        def new_case(self, label, mode='healthy', manual=False, pool=False, group=None, declare_allowlist=True):
+            if type(declare_allowlist) is not bool:
+                raise RuntimeError('fixture model declaration opt-out must be explicit boolean')
+            group_payload = {'name': 'Recovery ' + label + ' ' + self.suffix,
                 'platform': 'anthropic', 'rate_multiplier': 1, 'subscription_rate_multiplier': 1,
-                'subscription_enabled': False, 'model_allowlist': {'enabled': True, 'models': [MODEL, OTHER_MODEL]},
-                'model_pricing': [{'models': [MODEL, OTHER_MODEL], 'billing_mode': 'token',
-                    'input_price': .000001, 'output_price': .000002}]}, self.admin)
+                'subscription_enabled': False, 'model_pricing': [{'models': [MODEL, OTHER_MODEL], 'billing_mode': 'token',
+                    'input_price': .000001, 'output_price': .000002}]}
+            if declare_allowlist:
+                group_payload['model_allowlist'] = {'enabled': True, 'models': [MODEL, OTHER_MODEL]}
+            group = group or self.api('/admin/groups', group_payload, self.admin)
             with self.lock: self.recovery_modes[label] = mode
             account = self.api('/admin/accounts', {'name': 'Recovery ' + label + ' ' + self.suffix,
                 'platform': 'anthropic', 'type': 'apikey', 'credentials': {'api_key': 'synthetic-recovery-test-key',
@@ -418,6 +422,7 @@ def fixture_type(cache, source):
                     and (bad[0] >= 400 or any(e.get('error') or e.get('type') in ('error', 'response.failed') for e in events)),
                     {'status': bad[0], 'event_types': [e.get('type') for e in events]})
 
+            self.recoverable_catalog_checks()
             manual = self.new_case('manual', manual=True)
             unrelated = self.new_case('other-group', manual=True)
             resumed = self.call(manual)
@@ -466,6 +471,27 @@ def fixture_type(cache, source):
             self.bounded_recovery_checks()
             self.timing_and_model_checks()
             self.performance_checks()
+
+        def recoverable_catalog_checks(self):
+            # Exercise the real HTTP admission fix independently of an explicit
+            # group allowlist. Only this stopped account declares model mappings.
+            for status, protocol in (('inactive', 'messages'), ('error', 'responses')):
+                case = self.new_case('catalog-' + status, declare_allowlist=False)
+                response = self.request('/api/v1/admin/accounts/' + str(case['account']['id']),
+                                        {'status': status}, self.admin, 'PUT')
+                before = self.account_state(case)
+                self.check('catalog ' + status + ' fixture is stopped without supplier calls', response[0] == 200
+                    and before['status'] == status and self.counts(case['label']) == {'inference': 0, 'probes': 0},
+                    {'status': response[0], 'account_status': before['status'], 'calls': self.counts(case['label'])})
+                resumed = self.call(case, protocol)
+                state = self.account_state(case)
+                self.check(protocol + ' admits mapped model from ' + status + ' account and resumes after probe',
+                    completed(protocol, resumed) and state['runtime_state']['state'] == 'enabled'
+                    and state['status'] == 'active' and self.counts(case['label']) == {'inference': 1, 'probes': 1},
+                    {**response_detail(resumed), 'account_status': state['status'], 'calls': self.counts(case['label'])})
+                row = self.wait_usage(case, 1)
+                self.check('catalog ' + status + ' recovery settles one customer row in actual group',
+                    row['n'] == 1 and row['wrong_group'] == 0 and float(row['cost']) > 0, row)
 
         def bounded_recovery_checks(self):
             # Isolated group, five stopped candidates. Only three may be probed

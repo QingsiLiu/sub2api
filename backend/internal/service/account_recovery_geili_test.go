@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -72,6 +75,9 @@ func (r *recoveryRuntimeRepoGeili) ListByGroup(ctx context.Context, id int64) ([
 	r.groups = append(r.groups, id)
 	var out []Account
 	for _, a := range r.accounts {
+		if a.Status != StatusActive {
+			continue
+		}
 		for _, g := range a.GroupIDs {
 			if g == id {
 				out = append(out, *copyRecoveryAccountGeili(a))
@@ -524,4 +530,38 @@ func TestAccountRecoveryGeiliAdminCancellationCannotEnableAccount(t *testing.T) 
 	defer r.mu.Unlock()
 	require.Empty(t, r.activations)
 	require.Empty(t, r.busy)
+}
+
+// Match the production paginated list: unlike ListByGroup it accepts an empty
+// status filter, including inactive/error accounts while respecting membership.
+func (r *recoveryRuntimeRepoGeili) ListWithFilters(ctx context.Context, p pagination.PaginationParams, platform, accountType, status, search string, gid int64, privacy string) ([]Account, *pagination.PaginationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.groups = append(r.groups, gid)
+	var all []Account
+	for _, a := range r.accounts {
+		if !accountRecoveryGroupMemberGeili(&a, gid) || platform != "" && a.Platform != platform || status != "" && a.Status != status {
+			continue
+		}
+		all = append(all, *copyRecoveryAccountGeili(a))
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].Priority != all[j].Priority {
+			return all[i].Priority < all[j].Priority
+		}
+		return all[i].ID < all[j].ID
+	})
+	result := &pagination.PaginationResult{Total: int64(len(all)), Page: p.Page, PageSize: p.Limit(), Pages: (len(all) + p.Limit() - 1) / p.Limit()}
+	start := p.Offset()
+	if start >= len(all) {
+		return nil, result, nil
+	}
+	end := start + p.Limit()
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], result, nil
 }
