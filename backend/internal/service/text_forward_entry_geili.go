@@ -21,7 +21,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if parsed != nil {
 		model = parsed.Model
 	}
-	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, model); e != nil {
+	if e := s.checkPlainAnthropicAdmissionGeili(ctx, account, parsed); e != nil {
 		return nil, e
 	}
 	ctx = WithAccountModelFailureObservationGeili(ctx)
