@@ -44,6 +44,8 @@ import (
 type accountRepository struct {
 	client *dbent.Client // Ent ORM 客户端
 	sql    sqlExecutor   // 原生 SQL 执行接口
+	// geili hook: two fixed prepared reads, shared by repository transaction views.
+	runtimeReadsGeili *accountRuntimePreparedReadsGeili
 	// schedulerCache 用于在账号状态变更时主动同步快照到缓存，
 	// 确保粘性会话能及时感知账号不可用状态。
 	// Used to proactively sync account snapshot to cache when status changes,
@@ -109,13 +111,17 @@ func stripCodexFingerprintSeedFromExtraUpdate(extra map[string]any) map[string]a
 // NewAccountRepository 创建账户仓储实例。
 // 这是对外暴露的构造函数，返回接口类型以便于依赖注入。
 func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) service.AccountRepository {
-	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
+	r := newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
+	r.runtimeReadsGeili = newAccountRuntimePreparedReadsGeili(sqlDB) // geili hook
+	return r
 }
 
 // NewAdminAccountRepository exposes the account repository's atomic duplication capability
 // as an explicit dependency of the admin service.
 func NewAdminAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) service.AdminAccountRepository {
-	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
+	r := newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
+	r.runtimeReadsGeili = newAccountRuntimePreparedReadsGeili(sqlDB) // geili hook
+	return r
 }
 
 // newAccountRepositoryWithSQL 是内部构造函数，支持依赖注入 SQL 执行器。

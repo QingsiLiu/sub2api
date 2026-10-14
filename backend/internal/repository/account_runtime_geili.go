@@ -59,20 +59,32 @@ func applyAccountRuntimeAvailabilityFilterGeili(ctx context.Context, q *dbent.Ac
 }
 
 const accountRuntimeColumnsGeili = `account_id,version,balance_blocked,balance_reason,balance_blocked_at,stop_reason,protection_enabled,model_states,last_probe,next_check_at,updated_at`
+const accountRuntimeGetSQLGeili = `SELECT ` + accountRuntimeColumnsGeili + ` FROM account_runtime_geili WHERE account_id=$1`
 
 type accountRuntimeRowGeili struct {
 	ctx   context.Context
 	exec  sqlExecutor
 	query string
 	args  []any
+	stmt  *sql.Stmt
+	err   error
 }
 
 func accountRuntimeQueryRowGeili(ctx context.Context, exec sqlExecutor, query string, args ...any) accountRuntimeRowGeili {
-	return accountRuntimeRowGeili{ctx, exec, query, args}
+	return accountRuntimeRowGeili{ctx: ctx, exec: exec, query: query, args: args}
 }
 
 func (r accountRuntimeRowGeili) Scan(dest ...any) error {
-	rows, err := r.exec.QueryContext(r.ctx, r.query, r.args...)
+	if r.err != nil {
+		return r.err
+	}
+	var rows *sql.Rows
+	var err error
+	if r.stmt != nil {
+		rows, err = r.stmt.QueryContext(r.ctx, r.args...)
+	} else {
+		rows, err = r.exec.QueryContext(r.ctx, r.query, r.args...)
+	}
 	if err != nil {
 		return err
 	}
@@ -107,7 +119,7 @@ func scanAccountRuntimeGeili(scan func(...any) error) (*service.AccountRuntimeSt
 }
 
 func (r *accountRepository) GetAccountRuntimeGeili(ctx context.Context, id int64) (*service.AccountRuntimeStateGeili, error) {
-	state, err := scanAccountRuntimeGeili(accountRuntimeQueryRowGeili(ctx, r.sql, `SELECT `+accountRuntimeColumnsGeili+` FROM account_runtime_geili WHERE account_id=$1`, id).Scan)
+	state, err := scanAccountRuntimeGeili(r.accountRuntimeReadRowGeili(ctx, accountRuntimeGetSQLGeili, id).Scan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &service.AccountRuntimeStateGeili{AccountID: id, Models: map[string]service.AccountModelHealthGeili{}}, nil
 	}
@@ -396,9 +408,7 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 	return activated, err
 }
 
-func (r *accountRepository) CheckAccountRuntimeAdmissionGeili(ctx context.Context, id int64, model string) (*service.AccountRuntimeAdmissionGeili, error) {
-	out := &service.AccountRuntimeAdmissionGeili{}
-	err := accountRuntimeQueryRowGeili(ctx, r.sql, `
+const accountRuntimeAdmissionSQLGeili = `
 SELECT a.deleted_at IS NULL AND a.status='active' AND a.schedulable
  AND NOT COALESCE(r.balance_blocked,FALSE) AND NOT COALESCE(pr.balance_blocked,FALSE)
  AND NOT COALESCE((r.model_states->''->>'blocked')::boolean,FALSE)
@@ -417,7 +427,11 @@ SELECT a.deleted_at IS NULL AND a.status='active' AND a.schedulable
 FROM accounts a LEFT JOIN account_runtime_geili r ON r.account_id=a.id
 LEFT JOIN accounts p ON p.id=a.parent_account_id
 LEFT JOIN account_runtime_geili pr ON pr.account_id=p.id
-WHERE a.id=$1`, id, model).Scan(&out.Allowed, &out.BalanceBlocked, &out.Reason, &out.CredentialAccountID)
+WHERE a.id=$1`
+
+func (r *accountRepository) CheckAccountRuntimeAdmissionGeili(ctx context.Context, id int64, model string) (*service.AccountRuntimeAdmissionGeili, error) {
+	out := &service.AccountRuntimeAdmissionGeili{}
+	err := r.accountRuntimeReadRowGeili(ctx, accountRuntimeAdmissionSQLGeili, id, model).Scan(&out.Allowed, &out.BalanceBlocked, &out.Reason, &out.CredentialAccountID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrAccountNotFound
 	}
