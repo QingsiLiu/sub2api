@@ -762,7 +762,7 @@ export default {
         source_legacy: '历史',
         mode: '计费模式',
         mode_v2: '正常合同',
-        mode_legacy_daily: '每日额度订阅',
+        mode_legacy_daily: '每日额度',
         todayLimit: '今日日额度',
         poolExpires: '订阅池到期',
         reload: '重新加载',

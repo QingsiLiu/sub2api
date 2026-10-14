@@ -762,7 +762,7 @@ export default {
         source_legacy: 'Legacy',
         mode: 'Billing mode',
         mode_v2: 'Regular contract',
-        mode_legacy_daily: 'Daily quota subscription',
+        mode_legacy_daily: 'Daily quota',
         todayLimit: 'Daily quota today',
         poolExpires: 'Pool expires',
         reload: 'Reload',

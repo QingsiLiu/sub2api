@@ -93,9 +93,9 @@ describe('campaign gift labels', () => {
   const t = (key: string) => key
   const gift = { source_type: 'campaign' } as NonNullable<UserSubscription['entitlements']>[number]
   it('labels standalone gift without requiring a paid plan', () => {
-    const value = { ...sub, contract: undefined, entitlements: [gift] }
+    const value = { ...sub, contract: undefined, entitlements: [gift], quota_summary: { daily_limit_usd: 45 } } as UserSubscription
     expect(campaignOnly(value)).toBe(true)
-    expect(subscriptionLabel(value, t)).toBe('subscriptionRights.campaignGift')
+    expect(subscriptionLabel(value, t)).toBe('subscriptionRights.giftQuotaLabel')
   })
   it('retains purchased contract identity for mixed rights', () => {
     const value = { ...sub, entitlements: [gift, { ...gift, source_type: 'payment' }] }
