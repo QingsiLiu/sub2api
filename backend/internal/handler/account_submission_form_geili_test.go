@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,8 @@ import (
 type submissionFormRepoFixture struct {
 	service.AccountSubmissionRepository
 	prepareCalls int
+	batchKeys    []string
+	batchOptions service.SubmissionOptions
 }
 
 func (r *submissionFormRepoFixture) InspectInvite(context.Context, string) (*service.AccountSubmissionInvite, error) {
@@ -55,4 +58,52 @@ func (unavailableSubmissionSessions) Save(context.Context, string, string, []byt
 }
 func (unavailableSubmissionSessions) Take(context.Context, string, string) ([]byte, error) {
 	return nil, service.ErrSubmissionInvalid
+}
+
+func (r *submissionFormRepoFixture) SubmitInviteBatch(_ context.Context, _ string, keys []string, opts service.SubmissionOptions) error {
+	r.batchKeys = append([]string(nil), keys...)
+	r.batchOptions = opts
+	return nil
+}
+func TestSubmissionFormGeiliBatchUsesOfficialValidationAndNoSharedProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &submissionFormRepoFixture{}
+	adminService := service.NewAdminService(&config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	account := admin.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	account.SetAccountSubmissionService(service.NewAccountSubmissionService(repo, adminService))
+	bridge := NewSubmissionFormHandlerGeili(&AdminHandlers{Account: account}, unavailableSubmissionSessions{})
+	body := map[string]any{"token": strings.Repeat("B", 42) + "A", "action": "create-batch", "payload": map[string]any{"name": "Advanced", "notes": "shared notes", "platform": "anthropic", "type": "apikey", "concurrency": 9, "priority": 7, "rate_multiplier": 0, "proxy_id": 12345, "group_ids": []int64{12345}, "credentials": map[string]any{"api_key": "synthetic-ignored-template", "base_url": "https://8.8.8.8", "model_mapping": map[string]any{"from": "to"}}}, "items": []service.SubmissionBatchItem{{APIKey: "synthetic-first", Connection: service.SubmissionConnectionInput{Mode: "direct"}}, {APIKey: "synthetic-second", Connection: service.SubmissionConnectionInput{Mode: "custom", Proxy: &service.SubmissionProxyDraft{Name: "B", Protocol: "http", Host: "8.8.8.8", Port: 8080}}}}}
+	invoke := func() *httptest.ResponseRecorder {
+		raw, _ := json.Marshal(body)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/form", strings.NewReader(string(raw)))
+		bridge.Handle(c)
+		return w
+	}
+	w := invoke()
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.NotContains(t, w.Body.String(), "synthetic-first")
+	require.Equal(t, []string{"synthetic-first", "synthetic-second"}, repo.batchKeys)
+	require.Zero(t, repo.prepareCalls)
+	prepared := repo.batchOptions.PreparedAccount
+	require.NotNil(t, prepared)
+	require.Equal(t, "shared notes", *prepared.Notes)
+	require.Equal(t, 9, prepared.Concurrency)
+	require.Equal(t, 7, prepared.Priority)
+	require.Zero(t, *prepared.RateMultiplier)
+	require.Nil(t, prepared.ProxyID)
+	require.Equal(t, "synthetic-first", prepared.Credentials["api_key"])
+	require.Equal(t, "8.8.8.8", repo.batchOptions.PerKeyConnections[1].Proxy.Host)
+	payload := body["payload"].(map[string]any)
+	payload["rate_multiplier"] = -1
+	repo.batchKeys = nil
+	require.Equal(t, http.StatusBadRequest, invoke().Code)
+	require.Empty(t, repo.batchKeys)
+	payload["rate_multiplier"] = 0
+	body["connection"] = map[string]any{"mode": "direct"}
+	require.Equal(t, http.StatusBadRequest, invoke().Code)
+	delete(body, "connection")
+	payload["type"] = "oauth"
+	require.Equal(t, http.StatusBadRequest, invoke().Code)
 }

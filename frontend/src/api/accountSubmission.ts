@@ -147,13 +147,13 @@ export async function resetSubmissionView(id: number) {
 
 // Reuse the entire official modal/OAuth API surface without an administrator
 // session or interceptors. Every request carries only this invitation capability.
-export function createSubmissionFormAPI(token: string, connection: () => SubmissionConnectionInput): typeof adminAPI {
+export function createSubmissionFormAPI(token: string, connection: () => SubmissionConnectionInput, batchItems?: () => SubmissionBatchItem[]): typeof adminAPI {
   const request = async <T>(action: string, payload: Record<string, unknown> = {}): Promise<T> => {
-    try { return await publicSubmissionRequest<T>('form', { token, action, payload, connection: connection() }) }
+    try { return await publicSubmissionRequest<T>('form', { token, action, payload, ...(action === 'create-batch' ? { items: batchItems!() } : { connection: connection() }) }) }
     catch (cause) {
       // An uncertain create only inspects the committed state; never retries a
       // credential-bearing operation or another invitation's request.
-      if (['create','codex-import','codex-pat'].includes(action)) {
+      if (['create','create-batch','codex-import','codex-pat'].includes(action)) {
         try {
           const state = await inspectSubmissionInvite(token)
           if (state.status === 'submitted' && state.view_available !== false) {
@@ -165,7 +165,7 @@ export function createSubmissionFormAPI(token: string, connection: () => Submiss
     }
   }
   const accounts = {
-    create: (payload: Record<string, unknown>) => request('create', payload),
+    create: (payload: Record<string, unknown>) => request(batchItems && payload.type === 'apikey' ? 'create-batch' : 'create', payload),
     checkMixedChannelRisk: (payload: Record<string, unknown>) => request('mixed-risk', payload),
     generateAuthUrl: (endpoint: string, payload: Record<string, unknown>) => request(endpoint, payload),
     exchangeCode: (endpoint: string, payload: Record<string, unknown>) => request(endpoint, payload),

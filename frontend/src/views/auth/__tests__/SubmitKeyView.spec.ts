@@ -8,13 +8,13 @@ vi.mock('vue-i18n', async () => ({...(await vi.importActual<object>('vue-i18n'))
 import SubmitKeyView from '../SubmitKeyView.vue'
 import { SubmissionRequestError } from '@/api/accountSubmission'
 const Form = defineComponent({name:'SubmissionAccountFormGeili',props:['token','invite'],emits:['created'],template:'<button @click="$emit(\'created\', token)">Complete official form</button>'})
-const render = () => mount(SubmitKeyView,{global:{stubs:{AuthLayout:{template:'<main><slot /></main>'},SubmissionAccountFormGeili:Form,SubmissionBatchFormGeili:Form,AccountSubmissionUsage:true,SubmissionConnectionGeili:true}}})
+const render = () => mount(SubmitKeyView,{global:{stubs:{AuthLayout:{template:'<main><slot /></main>'},SubmissionAccountFormGeili:Form,AccountSubmissionUsage:true,SubmissionConnectionGeili:true}}})
 const switchLink = () => {window.history.replaceState({},'', '/submit-key#token=second-token');window.dispatchEvent(new HashChangeEvent('hashchange'))}
 beforeEach(() => {vi.clearAllMocks();window.history.replaceState({},'', '/submit-key#token=synthetic-token');inspect.mockResolvedValue({platform:'anthropic',status:'pending',name:'Holder',concurrency:1})})
 afterEach(() => window.history.replaceState({},'', '/'))
 describe('invitation page delegates to the full official form', () => {
  it('passes the capability and defaults, then opens usage and proxy management', async () => {
-  const w=render();await flushPromises();expect(w.getComponent(Form).props('token')).toBe('synthetic-token');expect(w.getComponent(Form).props('invite').name).toBe('Holder')
+  const w=render();await flushPromises();expect(w.getComponent(Form).props('token')).toBe('synthetic-token');expect(w.getComponent(Form).props('invite').name).toBe('Holder');expect(w.text()).not.toContain('keyIntake.batchMode');expect(w.text()).not.toContain('keyIntake.singleMode')
   await w.getComponent(Form).get('button').trigger('click');await flushPromises();expect(w.text()).toContain('keyIntake.success');expect(w.findComponent(Form).exists()).toBe(false);expect(window.location.hash).toContain('synthetic-token');w.unmount()
  })
  it('a revoked invitation cannot mount the credential form', async () => {

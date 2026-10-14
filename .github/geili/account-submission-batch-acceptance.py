@@ -98,3 +98,26 @@ def verify(f, public, make):
         f.check(platform + ' another invitation cannot address this member', public('connection', {'token': other['token'], 'account_ref': ref})[0] == 410)
         f.api('/admin/accounts/submission-invites/' + str(ident) + '/revoke-view', {}, f.admin)
         f.check(platform + ' revocation removes total and all member access', public('usage', {'token': token})[0] == 410 and public('connection', {'token': token, 'account_ref': ref})[0] == 410)
+
+
+        # One complete advanced template, with different credentials and public
+        # connection drafts per member; no supplier inference is needed here.
+        advanced, _ = make(platform, name='advanced-batch')
+        advanced_token = advanced['token']
+        advanced_keys = ['synthetic-advanced-' + str(n) + '-' + f.suffix for n in range(2)]
+        f.intake_canaries.extend(advanced_keys)
+        payload = {'name': 'Advanced batch ' + platform + ' ' + f.suffix, 'notes': 'Shared advanced notes',
+            'platform': platform, 'type': 'apikey', 'concurrency': 17, 'priority': 7, 'rate_multiplier': 0,
+            'load_factor': 19, 'auto_pause_on_expired': False, 'extra': {'quota_daily_limit': 7},
+            'credentials': {'base_url': official, 'api_key': advanced_keys[0], 'model_mapping': {'public': 'upstream'}}}
+        form = {'token': advanced_token, 'action': 'create-batch', 'payload': payload,
+            'items': [{'api_key': key, 'connection': {'mode': 'custom', 'proxy': proxies[n]}} for n, key in enumerate(advanced_keys)]}
+        f.check(platform + ' advanced form saves multiple keys in one call', public('form', form)[0] == 200)
+        advanced_id = advanced['invite']['id']
+        saved = f.sql("SELECT json_build_object('account_id',a.id,'key',a.credentials->>'api_key','base_url',a.credentials->>'base_url', 'mapping',a.credentials->'model_mapping','notes',a.notes,'concurrency',a.concurrency,'priority',a.priority,'multiplier',a.rate_multiplier,'load_factor',a.load_factor,'auto_pause',a.auto_pause_on_expired,'daily_quota',a.extra->'quota_daily_limit','status',a.status,'enabled',a.schedulable,'host',p.host) FROM account_submission_invites_geili i JOIN accounts a ON a.id=i.account_id JOIN proxies p ON p.id=a.proxy_id WHERE i.id=" + str(advanced_id) + ' OR i.parent_invite_id=' + str(advanced_id) + ' ORDER BY i.id;')
+        for row in saved:
+            f.remember_account(row['account_id'])
+        f.check(platform + ' advanced batch retains every shared setting and its own key proxy', len(saved) == 2 and all(row['key'] == advanced_keys[n] and row['host'] == proxies[n]['host'] and row['base_url'] == official and row['mapping'] == {'public': 'upstream'} and row['notes'] == 'Shared advanced notes' and row['concurrency'] == 17 and row['priority'] == 7 and row['multiplier'] == 0 and row['load_factor'] == 19 and row['auto_pause'] is False and row['daily_quota'] == 7 and row['status'] == 'inactive' and row['enabled'] is False for n, row in enumerate(saved)))
+        f.check(platform + ' advanced form replay across instances does not replace any key', public('form', form, secondary=bool(getattr(f, 'has_replica', False)))[0] == 200)
+        aggregate = public('usage', {'token': advanced_token})
+        f.check(platform + ' advanced batch exposes both usage rows without secrets', aggregate[0] == 200 and len(aggregate[1]['data']['accounts']) == 2 and all(secret not in json.dumps(aggregate[1]) for secret in advanced_keys + [advanced_token]))

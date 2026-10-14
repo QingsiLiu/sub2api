@@ -6,6 +6,8 @@ vi.mock('vue-i18n', async () => ({ ...(await vi.importActual<object>('vue-i18n')
 import SubmissionAccountFormGeili from '../SubmissionAccountFormGeili.vue'
 import CreateAccountModal from '../CreateAccountModal.vue'
 import OAuthAuthorizationFlow from '../OAuthAuthorizationFlow.vue'
+import SubmissionBatchKeysGeili from '../SubmissionBatchKeysGeili.vue'
+import ProxyEditor from '../SubmissionProxyEditorGeili.vue'
 
 let fetchMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
@@ -23,6 +25,24 @@ const render = (platform: 'anthropic' | 'openai') => mount(SubmissionAccountForm
 })
 
 describe('complete official invitation account form', () => {
+  it.each(['anthropic', 'openai'] as const)('submits multiple %s keys with the complete shared advanced payload and individual proxies', async platform => {
+    const wrapper=render(platform);await flushPromises()
+    const keys=wrapper.getComponent(SubmissionBatchKeysGeili)
+    await keys.get('input[type=password]').trigger('paste',{clipboardData:{getData:()=> 'synthetic-first\nsynthetic-second'}})
+    const proxy={name:'A',protocol:'http',host:'8.8.8.8',port:8080,username:'holder',password:'synthetic-password-a'}
+    keys.findAllComponents(ProxyEditor)[0].vm.$emit('update:modelValue',{mode:'custom',proxy})
+    keys.findAllComponents(ProxyEditor)[1].vm.$emit('update:modelValue',{mode:'custom',proxy:{...proxy,name:'B',host:'1.1.1.1',password:'synthetic-password-b'}})
+    await wrapper.get('textarea').setValue('Shared advanced notes')
+    await wrapper.getComponent(CreateAccountModal).get('form').trigger('submit');await flushPromises()
+    const creates=fetchMock.mock.calls.map(([,options])=>JSON.parse(String(options.body))).filter(body=>body.action==='create-batch')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].payload).toMatchObject({name:'Holder',notes:'Shared advanced notes',platform,type:'apikey',concurrency:17})
+    expect(creates[0].payload.credentials.api_key).toBe('synthetic-first')
+    expect(creates[0].items.map((i: {api_key:string;connection:{proxy:{host:string}}})=>[i.api_key,i.connection.proxy.host])).toEqual([['synthetic-first','8.8.8.8'],['synthetic-second','1.1.1.1']])
+    expect(creates[0]).not.toHaveProperty('connection')
+    expect(wrapper.emitted('created')).toEqual([['synthetic-invite']]);wrapper.unmount()
+  })
+
   it.each(['anthropic', 'openai'] as const)('uses the actual %s account modal with all form sections and no groups', async platform => {
     const wrapper = render(platform)
     await flushPromises()
@@ -35,6 +55,8 @@ describe('complete official invitation account form', () => {
     expect(wrapper.text()).toMatch(/OAuth|admin.accounts.oauthSetupToken/)
     expect(wrapper.text()).toMatch(/API Key|admin.accounts.apiKey/)
     expect(wrapper.text()).toContain('admin.proxies.createProxy')
+    const oauth = wrapper.findAll('button').find(button => button.text().includes('admin.accounts.oauthSetupToken') || button.text().startsWith('OAuth'))
+    expect(oauth).toBeDefined(); await oauth!.trigger('click'); await flushPromises()
     const next = wrapper.findAll('button').find(button => button.text().includes('common.next'))
     expect(next).toBeDefined()
     await wrapper.get('form').trigger('submit')

@@ -1521,7 +1521,9 @@
           :platform="form.platform"
           :plan="currentOpenCodeOrCNMode()"
         />
-        <AccountInputFieldGeili v-model="apiKeyValue" kind="key" :placeholder="apiKeyValuePlaceholder" :hint="apiKeyHint || undefined" />
+        <!-- geili hook: invitation batch credentials reuse all shared advanced fields. -->
+        <slot v-if="invitationForm && $slots['invitation-api-keys']" name="invitation-api-keys" :set-key="setInvitationApiKey" :disabled="submitting" />
+        <AccountInputFieldGeili v-else v-model="apiKeyValue" kind="key" :placeholder="apiKeyValuePlaceholder" :hint="apiKeyHint || undefined" />
 
         <!-- 上游倍率自动探测：全部 API-key 平台可用（所在区块已限定 apikey 类型） -->
         <div
@@ -3159,7 +3161,7 @@
         </div>
       </div>
 
-      <div>
+      <div v-if="!invitationForm || !$slots['invitation-api-keys'] || accountCategory !== 'apikey'">
         <div class="mb-1 flex items-center gap-2">
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
@@ -4338,6 +4340,8 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_acco
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+// geili hook: the official validator sees the first nonempty invitation batch key.
+function setInvitationApiKey(value: string) { apiKeyValue.value = value }
 const upstreamBillingAutoProbeEnabled = ref(true)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）账号类型、API 协议与端点 ──
@@ -5071,6 +5075,7 @@ watch(
         form.concurrency = invitationForm.concurrency
         form.priority = invitationForm.priority ?? form.priority
         form.rate_multiplier = invitationForm.rate_multiplier ?? form.rate_multiplier
+        if (invitationForm.batch_api_keys) accountCategory.value = 'apikey'
       }
       // Modal opened - fill related models
       allowedModels.value = [...getModelsByPlatform(form.platform)]

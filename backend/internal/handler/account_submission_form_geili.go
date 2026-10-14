@@ -28,12 +28,13 @@ type submissionFormRequestGeili struct {
 	Action     string                            `json:"action"`
 	Payload    map[string]any                    `json:"payload"`
 	Connection service.SubmissionConnectionInput `json:"connection"`
+	Items      []service.SubmissionBatchItem     `json:"items,omitempty"`
 }
 
 func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Referrer-Policy", "no-referrer")
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128*1024)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 384*1024)
 	var req submissionFormRequestGeili
 	dec := json.NewDecoder(c.Request.Body)
 	dec.DisallowUnknownFields()
@@ -41,13 +42,26 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 		response.ErrorFrom(c, service.ErrSubmissionInvalid)
 		return
 	}
+	batch := req.Action == "create-batch"
+	if (batch && (len(req.Items) < 1 || len(req.Items) > service.MaxSubmissionBatchKeys || req.Connection.Mode != "" || req.Connection.Proxy != nil || req.Payload["type"] != "apikey")) || (!batch && len(req.Items) > 0) {
+		response.ErrorFrom(c, service.ErrSubmissionInvalid)
+		return
+	}
+	if batch {
+		credentials, ok := req.Payload["credentials"].(map[string]any)
+		if !ok {
+			response.ErrorFrom(c, service.ErrSubmissionInvalid)
+			return
+		}
+		credentials["api_key"] = req.Items[0].APIKey
+	}
 	invite, err := h.handlers.Account.SubmissionFormService().Inspect(c.Request.Context(), req.Token)
 	var proxyID *int64
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if invite.Status == "submitted" && invite.ViewRevokedAt == nil && (req.Action == "create" || req.Action == "codex-pat" || req.Action == "codex-import") {
+	if invite.Status == "submitted" && invite.ViewRevokedAt == nil && (req.Action == "create" || batch || req.Action == "codex-pat" || req.Action == "codex-import") {
 		if req.Action == "codex-import" {
 			response.Success(c, gin.H{"created": 1, "updated": 0, "skipped": 0, "failed": 0})
 		} else {
@@ -67,7 +81,7 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 	var action gin.HandlerFunc
 	create := false
 	switch req.Action {
-	case "create":
+	case "create", "create-batch":
 		action = h.handlers.Account.CreateSubmissionFormAccount
 		create = true
 	case "profiles":
@@ -134,7 +148,7 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 		return
 	}
 	readonly := req.Action == "profiles" || req.Action == "settings" || req.Action == "web-search" || req.Action == "openai-models" || req.Action == "mixed-risk"
-	if !readonly {
+	if !readonly && !batch {
 		_, proxyID, err = h.handlers.Account.SubmissionFormService().PrepareForm(c.Request.Context(), req.Token, req.Connection)
 		if err != nil {
 			response.ErrorFrom(c, err)
@@ -189,6 +203,9 @@ func (h *SubmissionFormHandlerGeili) Handle(c *gin.Context) {
 	recorder := httptest.NewRecorder()
 	child, _ := gin.CreateTestContext(recorder)
 	child.Request = c.Request.Clone(service.WithSubmissionAccountCreate(service.WithSubmissionPublicEgressGeili(c.Request.Context()), func(ctx context.Context, a *service.Account, groups []int64) (*service.Account, error) {
+		if batch {
+			return h.handlers.Account.SubmissionFormService().SubmitFormBatch(ctx, req.Token, a, req.Items)
+		}
 		return h.handlers.Account.SubmissionFormService().SubmitForm(ctx, req.Token, a, groups)
 	}))
 	child.Set("geili_submission_proxy_id", proxyID)

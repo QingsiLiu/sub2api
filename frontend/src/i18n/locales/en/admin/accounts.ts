@@ -10,6 +10,7 @@ export default {
         batchKey: "API Key {n}",
         batchRemove: "Remove Key {n}",
         batchAdd: "Add a key",
+        advancedBatchHint: "Paste multiple lines or add up to {max} API keys. Each key has its own proxy/IP; all other advanced settings apply to the entire batch.",
         batchSubmit: "Submit {count} keys",
         batchInvalid: "Enter 1–100 valid, distinct keys, one per line.",
         batchFailed: "The batch was not saved. Check the link, name, concurrency and proxy settings, then enter the keys again.",
