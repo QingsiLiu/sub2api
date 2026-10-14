@@ -56,3 +56,26 @@ func TestAccountRecoveryGeiliDoesNotAppendLegacySelectionBackoff(t *testing.T) {
 	require.False(t, ClaimRequestRecoverySelectionWait(ctx), "standby recovery is already the bounded selection wait")
 	require.Greater(t, RequestRecoveryRemaining(ctx), 30*time.Second, "recovered customer generation retains the original request budget")
 }
+
+func TestAccountRecoveryGeiliMappedStandbyUsesNormalChannelPricingBasis(t *testing.T) {
+	for _, platform := range []string{PlatformAnthropic, PlatformOpenAI} {
+		for _, basis := range []string{BillingModelSourceRequested, BillingModelSourceUpstream} {
+			t.Run(platform+"/"+basis, func(t *testing.T) {
+				groupID := int64(10)
+				channel := Channel{ID: 1, Status: StatusActive, GroupIDs: []int64{groupID}, RestrictModels: true, BillingModelSource: basis, ModelPricing: []ChannelModelPricing{{Platform: platform, Models: []string{"public-alias"}}}}
+				channels := newTestChannelService(makeStandardRepo(channel, map[int64]string{groupID: platform}))
+				account := &Account{Platform: platform, Type: AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{"public-alias": "supplier-model"}}}
+				gateway := &GatewayService{channelService: channels}
+				openai := &OpenAIGatewayService{channelService: channels}
+				ctx := context.Background()
+				require.False(t, gateway.checkChannelPricingRestriction(ctx, &groupID, "public-alias"))
+				require.False(t, openai.checkChannelPricingRestriction(ctx, &groupID, "public-alias"))
+				require.Equal(t, basis == BillingModelSourceUpstream, gateway.recoveryUpstreamChannelRestrictedGeili(ctx, &groupID, account, "public-alias"))
+				require.Equal(t, basis == BillingModelSourceUpstream, openai.recoveryUpstreamChannelRestrictedGeili(ctx, &groupID, account, "public-alias"))
+				if basis == BillingModelSourceRequested {
+					require.True(t, gateway.checkChannelPricingRestriction(ctx, &groupID, "forbidden-model"), "public pricing restriction is still enforced before recovery")
+				}
+			})
+		}
+	}
+}

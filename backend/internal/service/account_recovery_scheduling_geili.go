@@ -47,7 +47,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		copy := *a
 		copy.Status, copy.Schedulable, copy.TempUnschedulableUntil, copy.RuntimeState = StatusActive, true, nil, nil
 		copy.OverloadUntil = nil
-		return s.isModelSupportedByAccountWithContext(ctx, &copy, model) && s.isAccountSchedulableForModelSelection(ctx, &copy, model) && s.isGatewayAccountProfitEligible(ctx, &copy) && (s.channelService == nil || !s.channelService.IsModelRestricted(ctx, *resolved, copy.GetMappedModel(model)))
+		return s.isModelSupportedByAccountWithContext(ctx, &copy, model) && s.isAccountSchedulableForModelSelection(ctx, &copy, model) && s.isGatewayAccountProfitEligible(ctx, &copy) && !s.recoveryUpstreamChannelRestrictedGeili(ctx, resolved, &copy, model)
 	}
 	if !r.RecoverGroupGeili(ctx, *resolved, model, eligible) {
 		return selection, err
@@ -83,10 +83,19 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapability(ctx conte
 			return false
 		}
 		veto, _ := openAIProfitControlVetoReason(ctx, &copy)
-		return !veto && !s.isUpstreamModelRestrictedByChannel(ctx, *groupID, &copy, model, false)
+		return !veto && !s.recoveryUpstreamChannelRestrictedGeili(ctx, groupID, &copy, model)
 	}
 	if !r.RecoverGroupGeili(ctx, *groupID, model, eligible) {
 		return selection, decision, err
 	}
 	return s.selectAccountWithSchedulerForCapabilityGeiliBase(context.WithValue(ctx, accountRecoverySelectionContextGeili{}, true), groupID, previous, session, model, recoveredAccountExclusionsGeili(ctx, excluded), transport, capability, compact, movable, useCost, override...)
+}
+
+// Match the normal scheduler's billing-model gate: requested/channel pricing
+// was checked before the search; only upstream billing needs an account mapping.
+func (s *GatewayService) recoveryUpstreamChannelRestrictedGeili(ctx context.Context, group *int64, account *Account, model string) bool {
+	return s.needsUpstreamChannelRestrictionCheck(ctx, group) && s.isUpstreamModelRestrictedByChannel(ctx, *group, account, model)
+}
+func (s *OpenAIGatewayService) recoveryUpstreamChannelRestrictedGeili(ctx context.Context, group *int64, account *Account, model string) bool {
+	return s.needsUpstreamChannelRestrictionCheck(ctx, group) && s.isUpstreamModelRestrictedByChannel(ctx, *group, account, model, false)
 }
