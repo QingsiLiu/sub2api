@@ -115,6 +115,10 @@ func isClientCanceledTransportError(ctx context.Context, err error) bool {
 //
 // passthrough tags the Ops error event for the OpenAI passthrough forward path.
 func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Context, c *gin.Context, account *Account, err error, passthrough bool) error {
+	// geili hook: readiness/credential decisions are not network failures.
+	if isUpstreamFailoverErrorGeili(err) {
+		return err
+	}
 	if isClientCanceledTransportError(ctx, err) {
 		return err
 	}

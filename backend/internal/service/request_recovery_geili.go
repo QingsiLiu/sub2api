@@ -13,13 +13,16 @@ type requestRecoveryContextKey struct{}
 // requestRecoveryState belongs to the client request, not an account/group
 // attempt. Its clock starts only after the first recoverable upstream failure.
 type requestRecoveryState struct {
-	mu              sync.Mutex
-	budget          time.Duration
-	deadline        time.Time
-	now             func() time.Time
-	signatureUsed   bool
-	selectionWaits  int
-	replayForbidden bool
+	mu                        sync.Mutex
+	budget                    time.Duration
+	deadline                  time.Time
+	now                       func() time.Time
+	signatureUsed             bool
+	selectionWaits            int
+	replayForbidden           bool
+	accountRecoveryDeadline   time.Time
+	accountRecoverySelections map[string]bool
+	accountRecoveryRestored   map[int64]struct{}
 }
 
 func WithRequestRecovery(ctx context.Context, budget time.Duration) context.Context {

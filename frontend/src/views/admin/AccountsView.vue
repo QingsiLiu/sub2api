@@ -457,6 +457,7 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
+    <p class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.runtime.autoEnableHint') }}</p>
     <AccountSubmissionInviteModal :show="showSubmissionInvite" :groups="groups" :proxies="proxies" @close="showSubmissionInvite = false" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
@@ -464,7 +465,8 @@
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountRecheckDialogGeili :show="showRecheck" :account="recheckingAcc" @close="showRecheck = false" @checked="handleRechecked" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @recheck="handleRecheck" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -523,6 +525,8 @@ import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
+import AccountRecheckDialogGeili from '@/components/account/AccountRecheckDialogGeili.vue'
+import { accountRuntimeStateGeili } from '@/utils/accountRuntimeGeili'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
@@ -624,6 +628,8 @@ const statsAcc = ref<Account | null>(null)
 const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
+const showRecheck = ref(false)
+const recheckingAcc = ref<Account | null>(null)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, anchorRect:DOMRect|null}>({ show: false, acc: null, anchorRect: null })
 const exportingData = ref(false)
@@ -1396,6 +1402,7 @@ const inAutoRefreshSilentWindow = () => {
 
 const shouldReplaceAutoRefreshRow = (current: Account, next: Account) => {
   return (
+    JSON.stringify(current.runtime_state) !== JSON.stringify(next.runtime_state) ||
     current.updated_at !== next.updated_at ||
     current.current_concurrency !== next.current_concurrency ||
     current.current_window_cost !== next.current_window_cost ||
@@ -2117,6 +2124,14 @@ const openBulkEditFiltered = async () => {
   const filters = buildBulkEditFilterSnapshot()
   const preview = await adminAPI.accounts.list(1, 100, filters)
   const { selectedPlatforms, selectedTypes } = collectSelectionMetadata(preview.items)
+  if (filters.status.startsWith('geili_')) {
+    // A runtime filter is not a persisted account-status filter. Freeze the
+    // matching IDs so legacy filtered bulk updates cannot widen this selection.
+    const ids = await fetchAllAccountIds((page, pageSize, query) => adminAPI.accounts.list(page, pageSize, query), filters)
+    bulkEditTarget.value = { mode: 'selected', accountIds: ids, selectedPlatforms, selectedTypes }
+    showBulkEdit.value = true
+    return
+  }
   bulkEditTarget.value = {
     mode: 'filtered',
     filters,
@@ -2157,7 +2172,11 @@ const accountMatchesCurrentFilters = (account: Account) => {
     const tempUnschedUntil = account.temp_unschedulable_until ? new Date(account.temp_unschedulable_until).getTime() : Number.NaN
     const isTempUnschedulable = Number.isFinite(tempUnschedUntil) && tempUnschedUntil > now
 
-    if (filters.status === 'active') {
+    if (filters.status === 'geili_balance_stopped') {
+      if (accountRuntimeStateGeili(account) !== 'balance_stopped') return false
+    } else if (filters.status === 'geili_temporary_stopped') {
+      if (accountRuntimeStateGeili(account) !== 'temporarily_stopped') return false
+    } else if (filters.status === 'active') {
       if (account.status !== 'active' || isRateLimited || isTempUnschedulable || !account.schedulable) return false
     } else if (filters.status === 'rate_limited') {
       if (account.status !== 'active' || !isRateLimited || isTempUnschedulable) return false
@@ -2277,12 +2296,21 @@ const handleExportData = async () => {
   if (exportingData.value) return
   exportingData.value = true
   try {
+    const query = buildAccountQueryFilters()
+    const exportIDs = selIds.value.length > 0 ? [...selIds.value]
+      : query.status.startsWith('geili_')
+        ? await fetchAllAccountIds((page, pageSize, filters) => adminAPI.accounts.list(page, pageSize, filters), query)
+        : null
+    if (exportIDs && exportIDs.length === 0) {
+      appStore.showError(t('admin.accounts.bulkActions.selectAllFailed'))
+      return
+    }
     const dataPayload = await accountExportStepUp.run(() => adminAPI.accounts.exportData(
-      selIds.value.length > 0
-        ? { ids: selIds.value, includeProxies: includeProxyOnExport.value }
+      exportIDs
+        ? { ids: exportIDs, includeProxies: includeProxyOnExport.value }
         : {
             includeProxies: includeProxyOnExport.value,
-            filters: buildAccountQueryFilters()
+            filters: query
           }
     ))
     const timestamp = formatExportTimestamp()
@@ -2376,7 +2404,17 @@ const handleRefresh = async (a: Account) => {
     console.error('Failed to refresh credentials:', error)
   }
 }
+const handleRecheck = (a: Account) => {
+  recheckingAcc.value = a
+  showRecheck.value = true
+}
+const handleRechecked = (a: Account) => {
+  patchAccountInList(a)
+  enterAutoRefreshSilentWindow()
+  appStore.showSuccess(t('admin.accounts.runtime.success'))
+}
 const handleRecoverState = async (a: Account) => {
+  if (a.runtime_state?.balance_blocked) { handleRecheck(a); return }
   try {
     const updated = await adminAPI.accounts.recoverState(a.id)
     patchAccountInList(updated)
@@ -2467,10 +2505,12 @@ const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.v
 const confirmDelete = async () => { if(!deletingAcc.value) return; try { await adminAPI.accounts.delete(deletingAcc.value.id); showDeleteDialog.value = false; deletingAcc.value = null; reload() } catch (error) { console.error('Failed to delete account:', error) } }
 const handleToggleSchedulable = async (a: Account) => {
   const nextSchedulable = !a.schedulable
+  if (nextSchedulable && a.runtime_state?.balance_blocked) { handleRecheck(a); return }
   togglingSchedulable.value = a.id
   try {
     const updated = await adminAPI.accounts.setSchedulable(a.id, nextSchedulable)
-    updateSchedulableInList([a.id], updated?.schedulable ?? nextSchedulable)
+    if (updated) patchAccountInList(updated)
+    else updateSchedulableInList([a.id], nextSchedulable)
     enterAutoRefreshSilentWindow()
   } catch (error) {
     console.error('Failed to toggle schedulable:', error)

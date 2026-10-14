@@ -2121,7 +2121,7 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 // SelectAccountWithSchedulerForCapability 按能力要求调度账号。
 // previousResponseCanMove 表示首包 input 可自行重建工具续链，previous_response_id 允许跨账号迁移
 // （粘性加权模式下改为加权偏好而非硬粘连）。
-func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapability(
+func (s *OpenAIGatewayService) selectAccountWithSchedulerForCapabilityGeiliBase(
 	ctx context.Context,
 	groupID *int64,
 	previousResponseID string,

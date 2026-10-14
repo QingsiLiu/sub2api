@@ -111,6 +111,8 @@ func accountReadableSnapshotJSON(account *Account) []byte {
 	clone.Credentials = nil
 	clone.Groups = nil
 	clone.AccountGroups = nil
+	// geili hook: internal probe grants and runtime fingerprints are host state.
+	clone.RuntimeState = nil
 	data, err := json.Marshal(&clone)
 	if err != nil {
 		return nil

@@ -647,6 +647,17 @@ func (h *AccountHandler) List(c *gin.Context) {
 	platform := c.Query("platform")
 	accountType := c.Query("type")
 	status := c.Query("status")
+	// geili hook: availability is a readonly runtime filter, independent of legacy status.
+	availability := strings.TrimSpace(c.Query("availability_status"))
+	if availability != "" {
+		switch availability {
+		case "enabled", "stopped", "temporarily_stopped", "balance_stopped":
+			c.Request = c.Request.WithContext(service.WithAccountAvailabilityFilterGeili(c.Request.Context(), availability))
+		default:
+			response.ErrorWithDetails(c, http.StatusBadRequest, "Invalid availability filter", "INVALID_AVAILABILITY_FILTER", nil)
+			return
+		}
+	}
 	search := c.Query("search")
 	privacyMode := strings.TrimSpace(c.Query("privacy_mode"))
 	sortBy := c.DefaultQuery("sort_by", "name")
@@ -858,7 +869,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 				CurrentRPM:         item.CurrentRPM,
 			}
 		}
-		etag := buildAccountsListETag(compact, total, page, pageSize, platform, accountType, status, search, true)
+		etag := buildAccountsListETag(compact, total, page, pageSize, platform, accountType, status+"|availability:"+availability, search, true)
 		if etag != "" {
 			c.Header("ETag", etag)
 			c.Header("Vary", "If-None-Match")
@@ -871,7 +882,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		return
 	}
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, false)
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status+"|availability:"+availability, search, false)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")

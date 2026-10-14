@@ -359,6 +359,8 @@ func (r *accountRepository) GetByIDs(ctx context.Context, ids []int64) ([]*servi
 		}
 	}
 
+	// geili hook: hydrate independent runtime rows once for this entire batch.
+	r.hydrateAccountRuntimePointersGeili(ctx, out)
 	return out, nil
 }
 
@@ -1101,6 +1103,8 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
+	// geili hook: availability is independent of the legacy status filter.
+	applyAccountRuntimeAvailabilityFilterGeili(ctx, q)
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -1130,7 +1134,9 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 }
 
 func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, error) {
-	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode).All(ctx)
+	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
+	applyAccountRuntimeAvailabilityFilterGeili(ctx, q)
+	accounts, err := q.All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -3423,6 +3429,12 @@ func (r *accountRepository) accountsToService(ctx context.Context, accounts []*d
 		outAccounts = append(outAccounts, *out)
 	}
 
+	// geili hook: admin reads and scheduler snapshots share one batch hydration.
+	pointers := make([]*service.Account, len(outAccounts))
+	for i := range outAccounts {
+		pointers[i] = &outAccounts[i]
+	}
+	r.hydrateAccountRuntimePointersGeili(ctx, pointers)
 	return outAccounts, nil
 }
 

@@ -21,6 +21,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	if parsed != nil {
 		model = parsed.Model
 	}
+	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, model); e != nil {
+		return nil, e
+	}
+	ctx = WithAccountModelFailureObservationGeili(ctx)
+	ctx = context.WithValue(ctx, accountRuntimeForwardModelKeyGeili{}, model)
+	recordCtx = ctx
 	finish := BeginTextForwardGuard(c, stream)
 	defer func() {
 		if result != nil && result.ClientDisconnect {
@@ -28,6 +34,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 		err = finish(err)
 		s.recordTextSupplierFailureGeili(recordCtx, c, account, model, err)
+		s.rateLimitService.observeAccountResultGeili(recordCtx, c, account, model, err)
 		var f *UpstreamFailoverError
 		if errors.As(err, &f) && f.SafeToFailoverAfterWrite {
 			result = nil
@@ -39,6 +46,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 }
 
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, err error) {
+	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, gjson.GetBytes(body, "model").String()); e != nil {
+		return nil, e
+	}
+	ctx = WithAccountModelFailureObservationGeili(ctx)
+	ctx = context.WithValue(ctx, accountRuntimeForwardModelKeyGeili{}, gjson.GetBytes(body, "model").String())
 	finish := BeginTextForwardGuard(c, gjson.GetBytes(body, "stream").Bool())
 	defer func() {
 		if result != nil {
@@ -51,6 +63,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		err = finish(err)
 		s.recordTextSupplierFailureGeili(c, account, gjson.GetBytes(body, "model").String(), err)
+		if err != nil || result == nil || result.UpstreamTerminalEvent != "response.failed" {
+			s.rateLimitService.observeAccountResultGeili(ctx, c, account, gjson.GetBytes(body, "model").String(), err)
+		}
 		var f *UpstreamFailoverError
 		if errors.As(err, &f) && f.SafeToFailoverAfterWrite {
 			result = nil
@@ -62,6 +77,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 }
 
 func (s *OpenAIGatewayService) ForwardAsAnthropic(ctx context.Context, c *gin.Context, account *Account, body []byte, promptCacheKey, defaultMappedModel string) (result *OpenAIForwardResult, err error) {
+	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, gjson.GetBytes(body, "model").String()); e != nil {
+		return nil, e
+	}
+	ctx = WithAccountModelFailureObservationGeili(ctx)
+	ctx = context.WithValue(ctx, accountRuntimeForwardModelKeyGeili{}, gjson.GetBytes(body, "model").String())
 	finish := BeginTextForwardGuard(c, gjson.GetBytes(body, "stream").Bool())
 	defer func() {
 		if result != nil {
@@ -74,6 +94,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(ctx context.Context, c *gin.Co
 		}
 		err = finish(err)
 		s.recordTextSupplierFailureGeili(c, account, gjson.GetBytes(body, "model").String(), err)
+		if err != nil || result == nil || result.UpstreamTerminalEvent != "response.failed" {
+			s.rateLimitService.observeAccountResultGeili(ctx, c, account, gjson.GetBytes(body, "model").String(), err)
+		}
 		var f *UpstreamFailoverError
 		if errors.As(err, &f) && f.SafeToFailoverAfterWrite {
 			result = nil
@@ -85,6 +108,11 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(ctx context.Context, c *gin.Co
 }
 
 func (s *OpenAIGatewayService) forwardChatWithGeiliGuard(ctx context.Context, c *gin.Context, account *Account, body []byte, promptCacheKey, defaultMappedModel string) (result *OpenAIForwardResult, err error) {
+	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, gjson.GetBytes(body, "model").String()); e != nil {
+		return nil, e
+	}
+	ctx = WithAccountModelFailureObservationGeili(ctx)
+	ctx = context.WithValue(ctx, accountRuntimeForwardModelKeyGeili{}, gjson.GetBytes(body, "model").String())
 	finish := BeginTextForwardGuard(c, gjson.GetBytes(body, "stream").Bool())
 	defer func() {
 		if result != nil {
@@ -97,6 +125,9 @@ func (s *OpenAIGatewayService) forwardChatWithGeiliGuard(ctx context.Context, c 
 		}
 		err = finish(err)
 		s.recordTextSupplierFailureGeili(c, account, gjson.GetBytes(body, "model").String(), err)
+		if err != nil || result == nil || result.UpstreamTerminalEvent != "response.failed" {
+			s.rateLimitService.observeAccountResultGeili(ctx, c, account, gjson.GetBytes(body, "model").String(), err)
+		}
 		var f *UpstreamFailoverError
 		if errors.As(err, &f) && f.SafeToFailoverAfterWrite {
 			result = nil
@@ -118,6 +149,7 @@ func takeTextSupplierFailureGeili(c *gin.Context, err error) *geiliUpstreamPaylo
 }
 
 func (s *GatewayService) recordTextSupplierFailureGeili(ctx context.Context, c *gin.Context, account *Account, model string, err error) {
+	recordAnthropicStreamDiagnosticGeili(c, account, err)
 	failure := takeTextSupplierFailureGeili(c, err)
 	if failure == nil || account == nil {
 		return
@@ -132,6 +164,7 @@ func (s *GatewayService) recordTextSupplierFailureGeili(ctx context.Context, c *
 }
 
 func (s *OpenAIGatewayService) recordTextSupplierFailureGeili(c *gin.Context, account *Account, model string, err error) {
+	recordAnthropicStreamDiagnosticGeili(c, account, err)
 	failure := takeTextSupplierFailureGeili(c, err)
 	if failure == nil || account == nil {
 		return

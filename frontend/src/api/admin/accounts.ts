@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import { accountAvailabilityFiltersGeili } from '@/utils/accountRuntimeGeili'
 import type { OpenAIReferralRefreshResult, OpenAIReferralSendResult } from '@/types/openaiReferrals'
 import type {
   Account,
@@ -64,7 +65,7 @@ export async function list(
     params: {
       page,
       page_size: pageSize,
-      ...filters
+      ...accountAvailabilityFiltersGeili(filters)
     },
     signal: options?.signal
   })
@@ -145,7 +146,7 @@ export async function listWithEtag(
     params: {
       page,
       page_size: pageSize,
-      ...filters
+      ...accountAvailabilityFiltersGeili(filters)
     },
     headers,
     signal: options?.signal,
@@ -415,6 +416,12 @@ export async function clearRateLimit(id: number): Promise<Account> {
  * @param id - Account ID
  * @returns Updated account
  */
+/** Recheck the explicitly selected model; runtime state is returned by the server. */
+export async function recheck(id: number, body: { model: string; confirm_recharged?: boolean }): Promise<Account> {
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/recheck`, body)
+  return data
+}
+
 export async function recoverState(id: number): Promise<Account> {
   const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/recover-state`)
   return data
@@ -1155,6 +1162,7 @@ export const accountsAPI = {
   getBatchTodayStats,
   clearRateLimit,
   recoverState,
+  recheck,
   resetAccountQuota,
   getTempUnschedulableStatus,
   resetTempUnschedulable,

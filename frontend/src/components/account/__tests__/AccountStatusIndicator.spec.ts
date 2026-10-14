@@ -51,6 +51,26 @@ function makeAccount(overrides: Partial<Account>): Account {
 }
 
 describe('AccountStatusIndicator', () => {
+  it('欠费优先于限流，并显示充值后重新检查提示', () => {
+    const wrapper = mount(AccountStatusIndicator, { props: { account: makeAccount({
+      runtime_state: { state: 'balance_stopped', balance_blocked: true, stop_reason: 'balance' },
+      rate_limit_reset_at: '2099-07-11T13:00:00Z'
+    }) }, global: { stubs: { Icon: true } } })
+    expect(wrapper.find('.badge-danger').text()).toBe('admin.accounts.runtime.balance_stopped')
+    expect(wrapper.text()).toContain('admin.accounts.runtime.rechargeHint')
+    expect(wrapper.text()).not.toContain('admin.accounts.runtime.enabled')
+  })
+
+  it('手动停止优先显示已停止，模型冷却保留详情', () => {
+    const wrapper = mount(AccountStatusIndicator, { props: { account: makeAccount({
+      schedulable: false,
+      rate_limit_reset_at: '2099-07-11T13:00:00Z',
+      runtime_state: { state: 'stopped', balance_blocked: false, stop_reason: 'manual' }
+    }) }, global: { stubs: { Icon: true } } })
+    expect(wrapper.find('.badge-gray').text()).toBe('admin.accounts.runtime.stopped')
+    expect(wrapper.text()).toContain('429')
+  })
+
   it('Claude 5 系列模型限流时显示 Opus 和 Sonnet 的短别名', () => {
     const wrapper = mount(AccountStatusIndicator, {
       props: {
@@ -106,7 +126,7 @@ describe('AccountStatusIndicator', () => {
       }
     })
 
-    expect(wrapper.find('.badge-warning').text()).toBe('admin.accounts.status.rateLimited')
+    expect(wrapper.find('.badge-warning').text()).toBe('admin.accounts.runtime.temporarily_stopped')
     expect(wrapper.text()).toContain('admin.accounts.status.rateLimitedAutoResume')
     expect(wrapper.text()).not.toContain('admin.accounts.status.tempUnschedulable')
   })

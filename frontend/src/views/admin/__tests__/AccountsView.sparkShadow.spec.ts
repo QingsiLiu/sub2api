@@ -5,6 +5,7 @@ import AccountsView from '../AccountsView.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 
 // 外审 F2:AccountActionMenu emit 'create-spark-shadow',但 AccountsView 此前未监听,
@@ -224,6 +225,7 @@ const mountViewWithRow = () =>
             <div v-for="(row, idx) in (data || [])" :key="idx">
               <slot name="cell-name" :row="row" :value="row.name" />
               <slot name="cell-platform_type" :row="row" />
+              <slot name="cell-status" :row="row" />
             </div>
           </div>`
         },
@@ -542,6 +544,25 @@ describe('admin AccountsView — 账号行展示', () => {
       'SuperGrok Heavy',
       undefined,
     ])
+    wrapper.unmount()
+  })
+
+  it('refreshes runtime probe state even when every legacy row field is unchanged', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
+    localStorage.setItem('account-auto-refresh', JSON.stringify({ enabled: true, interval_seconds: 5 }))
+    const initial = { id: 300, name: 'runtime', platform: 'anthropic', type: 'apikey', status: 'active', schedulable: true,
+      updated_at: '2026-10-14T00:00:00Z', runtime_state: { state: 'enabled', balance_blocked: false, stop_reason: '',
+        last_probe: { status: 'success', model: 'claude-opus-5', checked_at: '2026-10-14T00:00:00Z' } } }
+    const next = { ...initial, runtime_state: { ...initial.runtime_state, last_probe: { ...initial.runtime_state.last_probe, checked_at: '2026-10-14T00:01:00Z' } } }
+    listAccounts.mockResolvedValue({ items: [initial], total: 1, page: 1, page_size: 20, pages: 1 })
+    listWithEtag.mockResolvedValueOnce({ notModified: false, etag: 'runtime-2', data: { items: [next], total: 1, page: 1, page_size: 20, pages: 1 } })
+    const wrapper = mountViewWithRow()
+    await flushPromises()
+    expect(wrapper.findComponent(AccountStatusIndicator).props('account').runtime_state.last_probe.checked_at).toBe('2026-10-14T00:00:00Z')
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+    expect(wrapper.findComponent(AccountStatusIndicator).props('account').runtime_state.last_probe.checked_at).toBe('2026-10-14T00:01:00Z')
     wrapper.unmount()
   })
 

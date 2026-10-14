@@ -22,6 +22,8 @@ import (
 )
 
 type Account struct {
+	// geili hook: runtime gates are persisted separately from editable extra.
+	RuntimeState            *AccountRuntimeStateGeili
 	ID                      int64
 	Name                    string
 	Notes                   *string
@@ -189,6 +191,10 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
+	// geili hook: confirmed account-wide blocks never expire with a retry timer.
+	if a.RuntimeState != nil && (a.RuntimeState.BalanceBlocked || a.RuntimeState.StopReason == "temporary_failure") {
+		return false
+	}
 	if !a.IsActive() || !a.Schedulable {
 		return false
 	}

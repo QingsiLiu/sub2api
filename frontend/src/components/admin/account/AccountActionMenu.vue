@@ -11,6 +11,10 @@
       >
         <div class="py-1">
           <template v-if="account">
+            <button @click="$emit('recheck', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
+              <Icon name="refresh" size="sm" />
+              {{ t('admin.accounts.runtime.recheck') }}
+            </button>
             <button @click="$emit('test', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
               <Icon name="play" size="sm" class="text-green-500" :stroke-width="2" />
               {{ t('admin.accounts.testConnection') }}
@@ -70,7 +74,7 @@ import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
 const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
-const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
+const emit = defineEmits(['close', 'recheck', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const menuRef = ref<HTMLElement | null>(null)
 const { width: viewportWidth, height: viewportHeight } = useWindowSize()
@@ -125,6 +129,7 @@ const isRateLimited = computed(() => {
 const isOverloaded = computed(() => props.account?.overload_until && new Date(props.account.overload_until) > new Date())
 const isTempUnschedulable = computed(() => props.account?.temp_unschedulable_until && new Date(props.account.temp_unschedulable_until) > new Date())
 const hasRecoverableState = computed(() => {
+  if (props.account?.runtime_state?.balance_blocked) return false
   return props.account?.status === 'error' || Boolean(isRateLimited.value) || Boolean(isOverloaded.value) || Boolean(isTempUnschedulable.value)
 })
 const isAntigravityOAuth = computed(() => props.account?.platform === 'antigravity' && props.account?.type === 'oauth')

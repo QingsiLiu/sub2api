@@ -70,7 +70,7 @@ jobs:
               ;;
             postgres_race)
               CI=true go test -race -tags=unit,integration ./internal/service -run 'TestSubscriptionV2Postgres|TestLegacyManagementPostgres|TestRefundJournalPostgres' -count=1
-              CI=true go test -race -tags=integration ./internal/repository -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestGroupUsage|TestUsageRecoveryIntegration|TestAUAPI|TestDurableVideo' -count=1 -timeout=10m
+              CI=true go test -race -tags=integration ./internal/repository -run 'TestAccountRuntimeGeili|TestHTTPUpstreamRuntimeGeili|TestAccountSubmission|TestResponseAudit|TestSettlement|TestGroupUsage|TestUsageRecoveryIntegration|TestAUAPI|TestDurableVideo' -count=1 -timeout=10m
               ;;
             billing_race)
               go test -race -tags=unit ./internal/service ./internal/handler/... ./internal/server/routes ./internal/server/middleware -run 'TestAccountSubmission|TestResponseAudit|TestSettlement|TestDurableVideo|TestCredentialBilling|TestAUAPIRepeatedAccepted|TestSubscriptionVideoLookup|TestRefundJournal' -count=1

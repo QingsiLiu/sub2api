@@ -78,6 +78,10 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 	prewarmPayload["generate"] = false
 	prewarmPayloadJSON := payloadAsJSONBytes(prewarmPayload)
 
+	// geili hook: prewarm is still an upstream dispatch and cannot bypass debt.
+	if err := s.checkOpenAIWSRuntimeGeili(ctx, account, prewarmPayloadJSON, ""); err != nil {
+		return err
+	}
 	if err := lease.WriteJSONWithContextTimeout(ctx, prewarmPayload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -110,6 +114,11 @@ func (s *OpenAIGatewayService) performOpenAIWSGeneratePrewarm(
 			return wrapOpenAIWSFallback("prewarm_"+classifyOpenAIWSReadFallbackReason(readErr), readErr)
 		}
 
+		// geili hook: preserve supplier debt returned by generate=false as well.
+		if s.observeOpenAIWSBalanceGeili(ctx, account, message) {
+			lease.MarkBroken()
+			return NewAccountRuntimeAdmissionErrorGeili("balance")
+		}
 		eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(message)
 		if eventType == "" {
 			continue

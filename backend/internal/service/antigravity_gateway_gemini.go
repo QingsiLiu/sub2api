@@ -171,6 +171,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		sessionHash:     forwardOpts.sessionHash,
 	})
 	if err != nil {
+		if isUpstreamFailoverErrorGeili(err) {
+			return nil, err
+		}
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
 		if switchErr, ok := IsAntigravityAccountSwitchError(err); ok {
 			return nil, &UpstreamFailoverError{
@@ -210,6 +213,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 					fallbackReq, err := antigravity.NewAPIRequest(ctx, upstreamAction, accessToken, fallbackWrapped)
 					if err == nil {
 						fallbackResp, err := s.httpUpstream.Do(fallbackReq, proxyURL, account.ID, account.Concurrency)
+						if isUpstreamFailoverErrorGeili(err) {
+							return nil, err
+						}
 						if err == nil && fallbackResp.StatusCode < 400 {
 							_ = resp.Body.Close()
 							resp = fallbackResp
@@ -271,6 +277,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 					groupID:         forwardOpts.groupID,
 					sessionHash:     forwardOpts.sessionHash,
 				})
+				if isUpstreamFailoverErrorGeili(retryErr) {
+					return nil, retryErr
+				}
 				if retryErr == nil {
 					retryResp := retryResult.resp
 					if retryResp.StatusCode < 400 {
