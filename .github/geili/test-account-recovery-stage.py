@@ -4,6 +4,7 @@ import importlib.util
 import json
 import io
 import threading
+import tempfile
 from unittest.mock import patch, Mock
 from pathlib import Path
 from types import SimpleNamespace
@@ -99,6 +100,14 @@ class GuardTests(unittest.TestCase):
 
 
 class PerformanceTests(unittest.TestCase):
+    def test_batch_client_uses1200seconds_and_does_not_retry_failed_batch(self):
+        with patch.object(s, 'private_client', return_value='{"failed_responses":0}') as client:
+            self.assertEqual(s.benchmark_client(['synthetic-client'], {'model': s.MODEL}), {'failed_responses': 0})
+        client.assert_called_once_with(['synthetic-client'], {'model': s.MODEL}, 1200)
+        with patch.object(s, 'private_client', side_effect=RuntimeError('timeout')) as client:
+            with self.assertRaises(RuntimeError): s.benchmark_client(['synthetic-client'], {})
+        self.assertEqual(client.call_count, 1)
+
     def batches(self):
         return [{'mode': mode, 'elapsed_seconds': 10, 'latencies_seconds': [.01] * 1000,
                  'response_statuses': [200] * 1000, 'failed_responses': 0, 'warmup_failed': 0}
@@ -115,8 +124,18 @@ class PerformanceTests(unittest.TestCase):
         opener = SimpleNamespace(open=Mock(return_value=Response()))
         output = io.StringIO()
         payload = {'url': 'http://127.0.0.1:18520/v1/messages', 'token': 'synthetic-unit-token', 'model': s.MODEL}
-        with patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', output), patch('urllib.request.build_opener', return_value=opener):
-            exec(compile(s.BENCH_REQUEST, '<benchmark-client>', 'exec'), {})
+        with tempfile.TemporaryDirectory() as directory:
+            payload['journal'] = str(Path(directory) / 'batch.jsonl')
+            with patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', output), patch('urllib.request.build_opener', return_value=opener):
+                exec(compile(s.BENCH_REQUEST, '<benchmark-client>', 'exec'), {})
+            journal = Path(payload['journal'])
+            rows = [json.loads(line) for line in journal.read_text().splitlines()]
+            self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(len(rows), 1020)
+            self.assertEqual({r['index'] for r in rows if r['phase'] == 'measured'}, set(range(1000)))
+            self.assertEqual(sum(r['phase'] == 'warmup' for r in rows), 20)
+            self.assertTrue(all(r['status'] == 200 and r['ok'] for r in rows))
+            self.assertNotIn('synthetic-unit-token', journal.read_text())
         result = json.loads(output.getvalue())
         self.assertEqual(opener.open.call_count, 1020)
         self.assertEqual(len(result['latencies_seconds']), 1000)

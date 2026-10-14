@@ -28,6 +28,9 @@ PROTOCOLS = ('messages', 'responses', 'chat/completions')
 TABLES = ('account_probe_leases_geili', 'account_probe_logs_geili', 'account_runtime_geili')
 EXTERNAL_UNVERIFIED = ['actual Cloudflare edge timeout', 'real suppliers', 'payments', 'production deployment']
 REMAINING = []
+# The old-image discovery completed only225 mock calls in180s including20
+# warmups. Allow the unchanged1000-sample gate to finish on this shared host.
+BENCH_BATCH_DEADLINE_SECONDS = 1200
 # Recovery selection is capped at30s, below the existing45s first edge heartbeat.
 # Test that deadline separately from a55s mock supplier with synthetic Cf-Ray.
 STREAM_REQUEST = r'''
@@ -54,9 +57,11 @@ with q:
 
 
 BENCH_REQUEST = r'''
-import json,sys,time,urllib.request,urllib.error
-from concurrent.futures import ThreadPoolExecutor
+import json,sys,time,os,urllib.request,urllib.error
+from concurrent.futures import ThreadPoolExecutor,as_completed
 p=json.load(sys.stdin)
+journal=open(p['journal'],'x') if p.get('journal') else None
+if journal:os.chmod(p['journal'],0o600)
 def call(index):
  payload={'model':p['model'],'stream':True,'max_tokens':16,'messages':[{'role':'user','content':'fixture_performance_'+str(index)}]}
  h={'Content-Type':'application/json','Authorization':'Bearer '+p['token']}
@@ -72,10 +77,18 @@ def call(index):
     if data:events.append(json.loads(data))
    ok=status==200 and len(raw)<=1048576 and any(e.get('type')=='message_stop' for e in events) and not any(e.get('error') or e.get('type')=='error' for e in events)
  except Exception:pass
- return {'latency':time.monotonic()-t,'status':status,'ok':ok}
+ return {'index':index,'latency':time.monotonic()-t,'status':status,'ok':ok}
+def collect(pool,indices,phase):
+ futures=[pool.submit(call,index) for index in indices];rows=[]
+ for future in as_completed(futures):
+  row=future.result();rows.append(row)
+  if journal:
+   journal.write(json.dumps(dict(row,phase=phase))+'\n');journal.flush()
+ return rows
 with ThreadPoolExecutor(max_workers=4) as pool:
- warm=list(pool.map(call,range(-20,0)))
- t=time.monotonic();rows=list(pool.map(call,range(1000)));elapsed=time.monotonic()-t
+ warm=collect(pool,range(-20,0),'warmup')
+ t=time.monotonic();rows=collect(pool,range(1000),'measured');elapsed=time.monotonic()-t
+if journal:journal.close()
 print(json.dumps({'warmup_failed':sum(not r['ok'] for r in warm),'elapsed_seconds':elapsed,'latencies_seconds':[r['latency'] for r in rows],'response_statuses':[r['status'] for r in rows],'failed_responses':sum(not r['ok'] for r in rows)}))
 '''
 
@@ -113,6 +126,10 @@ def private_client(command, payload, timeout):
     if result.returncode:
         raise RuntimeError('owned Stage mock client failed; inspect root-only runner evidence')
     return result.stdout
+
+
+def benchmark_client(command, payload):
+    return json.loads(private_client(command, payload, BENCH_BATCH_DEADLINE_SECONDS))
 
 
 def load_ops(directory):
@@ -642,14 +659,26 @@ def fixture_type(cache, source):
             batches = []
             self.performance = {'baseline_image': self.args.baseline_image, 'baseline_revision': self.args.baseline_revision,
                 'candidate_image': self.args.expected_image, 'candidate_revision': self.args.expected_revision,
-                'batch_order': ['baseline', 'candidate', 'candidate', 'baseline'], 'batches': batches}
-            for mode in self.performance['batch_order']:
+                'batch_order': ['baseline', 'candidate', 'candidate', 'baseline'], 'batches': batches,
+                'batch_deadline_seconds': BENCH_BATCH_DEADLINE_SECONDS, 'batch_progress': []}
+            for index, mode in enumerate(self.performance['batch_order']):
                 pid = self.guard_baseline()
                 port = self.args.baseline_port if mode == 'baseline' else 8080
-                payload = {'url': 'http://127.0.0.1:' + str(port) + '/v1/messages', 'token': case['key']['key'], 'model': MODEL}
-                batch = json.loads(private_client(['nsenter', '-t', str(pid), '-n', 'python3', '-c', BENCH_REQUEST], payload, 180))
+                journal = 'account-recovery-performance-batch-' + str(index) + '-' + mode + '.jsonl'
+                progress = {'mode': mode, 'journal': journal, 'state': 'running'}
+                self.performance['batch_progress'].append(progress)
+                cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)
+                payload = {'url': 'http://127.0.0.1:' + str(port) + '/v1/messages', 'token': case['key']['key'],
+                           'model': MODEL, 'journal': str(self.private / journal)}
+                try:
+                    batch = benchmark_client(['nsenter', '-t', str(pid), '-n', 'python3', '-c', BENCH_REQUEST], payload)
+                except (RuntimeError, ValueError):
+                    progress['state'] = 'failed; partial samples retained in journal, not accepted'
+                    cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)
+                    raise
                 batch['mode'] = mode
                 batches.append(batch)
+                progress['state'] = 'complete'
                 cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)
             self.performance['summary'] = performance_summary(batches)
             cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)

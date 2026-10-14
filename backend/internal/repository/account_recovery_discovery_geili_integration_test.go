@@ -24,6 +24,13 @@ func TestAccountRecoveryGeiliIntegrationDiscoversInactiveAndErrorInRealGroup(t *
 				require.NoError(t, err)
 			})
 			account := runtimeIntegrationAccountGeili(t, repo)
+			// Registered after the account helper so LIFO cleanup removes only
+			// this fixture's scheduling events before deleting its account/group.
+			// The outbox intentionally has no cascading foreign keys.
+			t.Cleanup(func() {
+				_, err := integrationDB.Exec(`DELETE FROM scheduler_outbox WHERE account_id=$1 OR group_id=$2`, account.ID, group.ID)
+				require.NoError(t, err)
+			})
 			require.NoError(t, repo.AddToGroup(ctx, account.ID, group.ID, 1))
 			_, err := integrationDB.Exec(`UPDATE accounts SET status=$2,schedulable=FALSE,updated_at=NOW() WHERE id=$1`, account.ID, status)
 			require.NoError(t, err)
