@@ -1,8 +1,8 @@
-## 0.2.16-geili.8（合并候选CI通过，等待Stage，未发布生产）
+## 0.2.16-geili.8（已部署Stage，完整验收中，未发布生产）
 
 保留 `.7` 新版高级批量 Key 表单及独立代理，并加入本任务的流式工具空增量修复、欠费停止调度、按模型故障隔离与非欠费停止账号有界恢复。自动探测仅由 Messages、Responses、Chat 三个文本 POST 入口触发，保持当前主干的订阅入口等已提交改动。
 
-- revision：`3ada06de0a7a8c3f882fc65a03dbe2dda5c82cf9`；不可变镜像：`ghcr.io/qingsiliu/sub2api@sha256:55f5f5a273a3f3bedd3ce93b02e3278686bcae427bf7ef147131cb5ed6bc056f`；[CI38530960192](https://github.com/QingsiLiu/sub2api/actions/runs/38530960192)全部9任务、13制品门禁通过，346迁移校验和匹配，原345份SQL保持。部署状态：尚未部署Stage/生产，等待独立`.7`表单任务完成优先发布并释放Stage。本任务`.8`没有生产授权。
+- revision：`3ada06de0a7a8c3f882fc65a03dbe2dda5c82cf9`；不可变镜像：`ghcr.io/qingsiliu/sub2api@sha256:55f5f5a273a3f3bedd3ce93b02e3278686bcae427bf7ef147131cb5ed6bc056f`；[CI38530960192](https://github.com/QingsiLiu/sub2api/actions/runs/38530960192)全部9任务、13制品门禁通过，346迁移校验和匹配，原345份SQL保持。部署状态：2026-10-14通过正式Stage入口部署，健康200、版本正确，生产`.7`指纹保持；备份 `/opt/sub2api-subscription-lab/backups/20261014T084438Z-candidate`。当前镜像独占Stage重跑业务、缓存、容灾和4×1000性能，基线为实际生产`.7`。本任务`.8`没有生产授权。
 - `.6` 当前镜像的非支付51、缓存36、容灾49项功能检查通过；性能首批尚未完成。按用户在独立表单任务中“允许协调、让该功能先上线”的选择，安全中止并保留原始/部分样本，不记性能通过。`.8`将使用合并后的源码和实际生产基线重新完整验收，避免未来发布时覆盖新版表单，不将`.6`结果重标为`.8`。
 - 旧345份SQL保持，仅容灾新增282；`.7`候选revision是本主干祖先。生产/Stage行为与镜像身份分别记录，未执行真实供应商、支付或媒体生成。
 
