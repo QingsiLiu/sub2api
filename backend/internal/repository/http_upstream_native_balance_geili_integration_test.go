@@ -36,6 +36,12 @@ func TestNativePaidBalanceGeiliIntegrationPreparedInstancesReadCurrentDebt(t *te
 	first := NewAccountRepository(integrationEntClient, integrationDB, nil).(*accountRepository)
 	second := NewAccountRepository(integrationEntClient, integrationDB, nil).(*accountRepository)
 	a := runtimeIntegrationAccountGeili(t, first)
+	t.Cleanup(func() {
+		// Runtime mutations emit scheduler events outside the account FK;
+		// remove only this fixture before the shared account cleanup runs.
+		_, err := integrationDB.ExecContext(context.Background(), `DELETE FROM scheduler_outbox WHERE account_id=$1`, a.ID)
+		require.NoError(t, err)
+	})
 	cache := &nativeBalanceIntegrationCacheGeili{}
 	upstreams := []*httpUpstreamService{
 		ProvideHTTPUpstreamGeili(nil, first, cache).(*httpUpstreamService),
