@@ -1,8 +1,8 @@
-## 0.2.16-geili.10（CI通过，待部署Stage，未发布生产）
+## 0.2.16-geili.10（已部署Stage，完整复验中，未发布生产）
 
 继承`.9`流式空工具参数修复和文本账号容灾。欠费停止进一步覆盖原生图片、视频、embedding、缓存创建、供应商任务提交以及实际插件出网分支：确认欠费后，出网前实时查询共享状态，零供应商请求；其他停止状态保留管理员显式检查。自动恢复仍只由三个文本入口触发，不扩大到媒体。供应商明确欠费在客户端取消或完整错误JSON后断连时仍持久记录；本地未派发任务释放预留，真实上游结果不明仍保留预留且不重放。
 
-- 功能revision `0d6e6d5b9`、健康路径优化revision `6bc7eb4d7`、`bac3a409c`；候选revision `5ef2da0befe2f37096476dddc9c83ea08cef1793`；不可变镜像 `ghcr.io/qingsiliu/sub2api@sha256:f6ca296f18640bdf74a5dc57564657ef426c27028265184395f1324defc034ce`；[CI38563680296](https://github.com/QingsiLiu/sub2api/actions/runs/38563680296)全部9任务、13制品门禁通过，346迁移SHA匹配，旧345份SQL保持。部署状态：尚未部署Stage或生产，生产保持`.7`，没有本任务生产授权。
+- 功能revision `0d6e6d5b9`、健康路径优化revision `6bc7eb4d7`、`bac3a409c`；候选revision `5ef2da0befe2f37096476dddc9c83ea08cef1793`；不可变镜像 `ghcr.io/qingsiliu/sub2api@sha256:f6ca296f18640bdf74a5dc57564657ef426c27028265184395f1324defc034ce`；[CI38563680296](https://github.com/QingsiLiu/sub2api/actions/runs/38563680296)全部9任务、13制品门禁通过，346迁移SHA匹配，旧345份SQL保持。部署状态：2026-10-14经正式Stage入口部署当前不可变镜像，健康200、版本正确、生产指纹未变；备份`/opt/sub2api-subscription-lab/backups/20261014T124114Z-candidate`。当前镜像重新执行51业务/36缓存/49容灾功能/4×1000性能、结算与清理，尚未记验收通过；生产保持`.7`，没有本任务生产授权。
 - 普通Anthropic API Key、原模型且无工具请求避免冗余前置数据库读取，保留出网前强制实时PG/Redis检查；OAuth、工具、模型映射、Bedrock及其他路径保持原有检查。模型目录使用私有薄投影，省去目录不消费的一次状态展示查询；管理、调度、恢复状态加载不变。无状态结果缓存。
 - 完整本地单测通过（service232.575秒），新增欠费/插件/媒体任务定向竞态通过；真实PostgreSQL集成竞态5.829秒通过，两套已预热SQL计划均即时看到第三实例欠费写入，十种原生付费入口在读取请求体、分配连接池和供应商调用前拒绝。`.9`Stage结果独立保留，不冒称本版本已通过Stage。旧345份SQL与新增282未变。
 
