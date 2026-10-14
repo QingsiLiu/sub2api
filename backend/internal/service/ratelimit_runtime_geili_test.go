@@ -36,9 +36,9 @@ func TestRateLimitRuntimeGeili5xxBypassesPoolCustomPermanentPolicy(t *testing.T)
 				a.Credentials["custom_error_codes"] = []any{float64(status)}
 				r := &modelRuntimePolicyRepoGeili{recoveryRuntimeRepoGeili: newRecoveryRuntimeRepoGeili(a)}
 				limits := &RateLimitService{accountRepo: r}
-				require.Equal(t, ErrorPolicyNone, limits.CheckErrorPolicy(context.Background(), &a, status, []byte(`{"error":{"type":"overloaded_error"}}`), "claude-opus-5"))
+				require.Equal(t, ErrorPolicyNone, limits.CheckErrorPolicy(WithAccountModelFailureObservationGeili(context.Background()), &a, status, []byte(`{"error":{"type":"overloaded_error"}}`), "claude-opus-5"))
 				for i := 0; i < 3; i++ {
-					require.False(t, limits.HandleUpstreamError(context.Background(), &a, status, http.Header{}, []byte(`{"error":{"type":"api_error"}}`), "claude-opus-5"))
+					require.False(t, limits.HandleUpstreamError(WithAccountModelFailureObservationGeili(context.Background()), &a, status, http.Header{}, []byte(`{"error":{"type":"api_error"}}`), "claude-opus-5"))
 				}
 				state, err := r.GetAccountRuntimeGeili(context.Background(), 1)
 				require.NoError(t, err)
@@ -93,4 +93,20 @@ func TestAccountGenericTemporaryStopGeiliPreservesProviderAndModelWindows(t *tes
 		a := &Account{TempUnschedulableUntil: &until, TempUnschedulableReason: test.reason}
 		require.Equal(t, test.generic, AccountGenericTemporaryStopGeili(a, now), test.reason)
 	}
+}
+
+func TestRateLimitRuntimeGeiliLeavesNonTextWorkerPolicyUnchanged(t *testing.T) {
+	a := stoppedRecoveryAccountGeili(1, 7)
+	a.Status, a.Schedulable = StatusActive, true
+	a.Credentials["custom_error_codes_enabled"] = true
+	a.Credentials["custom_error_codes"] = []any{float64(500)}
+	repo := &modelRuntimePolicyRepoGeili{recoveryRuntimeRepoGeili: newRecoveryRuntimeRepoGeili(a)}
+	limits := &RateLimitService{accountRepo: repo}
+	ctx := context.Background()
+	require.False(t, limits.usesModelRuntimeHTTPFailureGeili(ctx, &a, 500))
+	require.True(t, limits.HandleUpstreamError(ctx, &a, 500, http.Header{}, []byte(`{"error":{"message":"synthetic native media fault"}}`), "native-image-model"))
+	require.EqualValues(t, 1, repo.permanentWrites.Load(), "native media keeps its existing recovery policy")
+	state, err := repo.GetAccountRuntimeGeili(ctx, a.ID)
+	require.NoError(t, err)
+	require.Empty(t, state.Models, "no text-only counter may accumulate without a matching success callback")
 }

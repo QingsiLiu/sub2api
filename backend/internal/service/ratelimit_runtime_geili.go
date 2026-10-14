@@ -44,6 +44,12 @@ func (s *RateLimitService) usesModelRuntimeHTTPFailureGeili(ctx context.Context,
 	if s == nil || account == nil || isAccountRecoveryProbeGeili(ctx) || status < 500 || status > 599 {
 		return false
 	}
+	// Only text forwarders install this private receipt. Native media,
+	// embeddings and legacy workers have different success callbacks; counting
+	// their failures here would never reset on success and strand those models.
+	if receipt, _ := ctx.Value(accountModelFailureObservationKeyGeili{}).(*accountModelFailureObservationGeili); receipt == nil {
+		return false
+	}
 	_, ok := s.accountRepo.(AccountRuntimeRepositoryGeili)
 	return ok
 }
