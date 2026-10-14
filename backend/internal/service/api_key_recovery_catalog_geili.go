@@ -16,8 +16,16 @@ import (
 // Tools and tool history remain ordinary text; retained response IDs and
 // protected encrypted continuity keep their existing fail-closed route rules.
 func ExplicitKeyStoppedTextRecoveryAllowedGeili(ctx context.Context, body []byte) bool {
-	if !RequestRecoveryAllowed(ctx) || OpenAIEncryptedRouteProtectedGeili(ctx) || strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String()) != "" {
+	if !AccountRecoveryScopeAllowedGeili(ctx) || !RequestRecoveryAllowed(ctx) || OpenAIEncryptedRouteProtectedGeili(ctx) || strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String()) != "" {
 		return false
+	}
+	if model := gjson.GetBytes(body, "model").String(); model != "" && !accountRecoveryProbeTextModelGeili(model) {
+		return false
+	}
+	for _, modality := range gjson.GetBytes(body, "modalities").Array() {
+		if modality.String() == "audio" || modality.String() == "image" || modality.String() == "video" {
+			return false
+		}
 	}
 	for _, tool := range gjson.GetBytes(body, "tools").Array() {
 		switch tool.Get("type").String() {
@@ -29,7 +37,7 @@ func ExplicitKeyStoppedTextRecoveryAllowedGeili(ctx context.Context, body []byte
 }
 
 func (r *CompositeRouteResolver) explicitRecoverableTextModelGeili(ctx context.Context, group *Group, model, endpoint string) (bool, error) {
-	if group == nil || !group.ModelAllowlist.Allows(model) || !accountRecoveryProbeTextModelGeili(model) || !RequestRecoveryAllowed(ctx) || OpenAIEncryptedRouteProtectedGeili(ctx) {
+	if !AccountRecoveryScopeAllowedGeili(ctx) || group == nil || !group.ModelAllowlist.Allows(model) || !accountRecoveryProbeTextModelGeili(model) || !RequestRecoveryAllowed(ctx) || OpenAIEncryptedRouteProtectedGeili(ctx) {
 		return false, nil
 	}
 	switch endpoint {

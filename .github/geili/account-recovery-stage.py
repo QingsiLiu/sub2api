@@ -439,6 +439,7 @@ def fixture_type(cache, source):
                     and (bad[0] >= 400 or any(e.get('error') or e.get('type') in ('error', 'response.failed') for e in events)),
                     {'status': bad[0], 'event_types': [e.get('type') for e in events]})
 
+            self.probe_scope_checks()
             self.recoverable_catalog_checks()
             manual = self.new_case('manual', manual=True)
             unrelated = self.new_case('other-group', manual=True)
@@ -488,6 +489,26 @@ def fixture_type(cache, source):
             self.bounded_recovery_checks()
             self.timing_and_model_checks()
             self.performance_checks()
+
+        def probe_scope_checks(self):
+            # Same valid stopped account/key: media-output requests must not
+            # create probes, then an ordinary text request must recover it.
+            for protocol in PROTOCOLS:
+                case = self.new_case('scope-' + protocol.replace('/', '-'), manual=True)
+                payload = {'model': MODEL, 'stream': True, 'max_tokens': 16}
+                if protocol == 'responses':
+                    payload.update(input='fixture_scope_media', tools=[{'type': 'image_generation'}])
+                else:
+                    payload.update(messages=[{'role': 'user', 'content': 'fixture_scope_media'}], modalities=['audio'])
+                denied = self.request('/v1/' + protocol, payload, case['key']['key'])
+                self.check(protocol + ' media output cannot probe a stopped text account',
+                    not completed(protocol, denied) and self.counts(case['label']) == {'inference': 0, 'probes': 0}
+                    and self.usage(case)['n'] == 0 and not self.account_state(case)['schedulable'],
+                    {**response_detail(denied), 'calls': self.counts(case['label'])})
+                resumed = self.call(case, protocol)
+                self.check(protocol + ' text scope still restores the same account and settles once',
+                    completed(protocol, resumed) and self.counts(case['label']) == {'inference': 1, 'probes': 1}
+                    and self.wait_usage(case, 1)['n'] == 1, response_detail(resumed))
 
         def recoverable_catalog_checks(self):
             # Exercise the real HTTP admission fix independently of an explicit

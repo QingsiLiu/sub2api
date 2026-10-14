@@ -8,7 +8,7 @@ import (
 
 func recoverySelectionAllowedGeili(ctx context.Context, err error) bool {
 	used, _ := ctx.Value(accountRecoverySelectionContextGeili{}).(bool)
-	return !used && !isAccountRecoveryProbeGeili(ctx) && errors.Is(err, ErrNoAvailableAccounts) && !strings.Contains(err.Error(), "pricing restriction") && RequestRecoveryAllowed(ctx)
+	return AccountRecoveryScopeAllowedGeili(ctx) && !used && !isAccountRecoveryProbeGeili(ctx) && errors.Is(err, ErrNoAvailableAccounts) && !strings.Contains(err.Error(), "pricing restriction") && RequestRecoveryAllowed(ctx)
 }
 
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash, model string, excluded map[int64]struct{}, metadata string, userID int64) (*AccountSelectionResult, error) {

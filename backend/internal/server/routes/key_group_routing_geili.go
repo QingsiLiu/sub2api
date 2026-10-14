@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -25,9 +26,27 @@ import (
 // immutable across attempts; each attempt receives its own group/key/context.
 func explicitKeyRouting(keys *service.APIKeyService, resolver *service.CompositeRouteResolver, h *handler.Handlers, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		requestStarted := time.Now()
+		// geili hook: mark every HTTP gateway request before legacy-key early
+		// returns. Only the three text POST routes can trigger account probes.
+		accountRecoveryText := isRecoveryTextRequest(c.Request) && !strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/responses/compact")
+		c.Request = c.Request.WithContext(service.WithHTTPAccountRecoveryScopeGeili(c.Request.Context(), accountRecoveryText))
+		if accountRecoveryText {
+			// Reuse the existing decoded PrereadBody fast path: legacy keys
+			// need the same media-output scope check before their early return.
+			body, readErr := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+			if readErr == nil {
+				requestmodel.ResetRequestBody(c.Request, body)
+				accountRecoveryText = service.ExplicitKeyStoppedTextRecoveryAllowedGeili(c.Request.Context(), body)
+			} else {
+				// Keep the original error available to the existing protocol handler.
+				c.Request.Body = &accountRecoveryBodyReadErrorGeili{original: c.Request.Body, err: readErr}
+				accountRecoveryText = false
+			}
+			c.Request = c.Request.WithContext(service.WithHTTPAccountRecoveryScopeGeili(c.Request.Context(), accountRecoveryText))
+		}
 		// geili: one recovery state survives account and selected-group attempts,
 		// including legacy keys. Media/task endpoints keep their replay contract.
-		requestStarted := time.Now()
 		recoveryTextRequest := isRecoveryTextRequest(c.Request)
 		if recoveryTextRequest {
 			budget := 600 * time.Second
@@ -629,4 +648,19 @@ func recoverUnavailableEncryptedRouteGeili(ctx context.Context, body []byte, can
 		}
 	}
 	return body, nil, &service.OpenAIEncryptedRouteErrorGeili{Status: http.StatusConflict, Code: "encrypted_session_route_conflict", Message: "原会话线路已不在此 Key 的可用渠道中，请恢复原线路或联系技术支持保留会话进度"}
+}
+
+// A failed preread disables probing while preserving the normal handler's
+// body-error path, including MaxBytesError and decompression failures.
+type accountRecoveryBodyReadErrorGeili struct {
+	original io.ReadCloser
+	err      error
+}
+
+func (r *accountRecoveryBodyReadErrorGeili) Read([]byte) (int, error) { return 0, r.err }
+func (r *accountRecoveryBodyReadErrorGeili) Close() error {
+	if r.original != nil {
+		return r.original.Close()
+	}
+	return nil
 }

@@ -394,3 +394,44 @@ func TestExplicitKeyRoutesDispatchNewProvidersToOpenAI(t *testing.T) {
 		}
 	}
 }
+
+func TestExplicitKeyRoutingGeiliHTTPAccountRecoveryScopeForLegacyEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path string
+		ws, allow          bool
+	}{
+		{"Messages", http.MethodPost, "/v1/messages", false, true},
+		{"Responses", http.MethodPost, "/v1/responses", false, true},
+		{"Chat", http.MethodPost, "/v1/chat/completions", false, true},
+		{"native Gemini", http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", false, false},
+		{"streaming Gemini", http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent", false, false},
+		{"Antigravity Gemini", http.MethodPost, "/antigravity/v1beta/models/gemini-2.5-flash:streamGenerateContent", false, false},
+		{"cachedContents", http.MethodPost, "/v1beta/cachedContents", false, false},
+		{"compact", http.MethodPost, "/v1/responses/compact", false, false},
+		{"embeddings", http.MethodPost, "/v1/embeddings", false, false},
+		{"images", http.MethodPost, "/v1/images/generations", false, false},
+		{"videos", http.MethodPost, "/v1/videos", false, false},
+		{"WS POST", http.MethodPost, "/v1/responses", true, false},
+		{"WS GET", http.MethodGet, "/v1/responses", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(explicitKeyRouting(nil, nil, nil, nil))
+			// No explicit billing key: this exercises the legacy early return that
+			// previously left Gemini/cache selection with an implicit probe exemption.
+			router.Any("/*path", func(c *gin.Context) {
+				require.Equal(t, tc.allow, service.AccountRecoveryScopeAllowedGeili(c.Request.Context()))
+				require.True(t, service.RequestRecoveryAllowed(c.Request.Context()))
+				require.True(t, service.BeginRequestRecovery(c.Request.Context()), "ordinary retry is independent of paid probe scope")
+				c.Status(http.StatusNoContent)
+			})
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{"model":"gemini-2.5-flash","account_recovery_scope":true}`))
+			if tc.ws {
+				req.Header.Set("Upgrade", "websocket")
+			}
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+			require.Equal(t, http.StatusNoContent, recorder.Code)
+		})
+	}
+}
