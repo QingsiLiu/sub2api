@@ -26,6 +26,7 @@ type anthropicCompletionGeili struct {
 	usage         ClaudeUsage
 	open          map[int]bool
 	blocks        map[int]int
+	toolArguments map[int]*anthropicToolArgumentsGeili
 	stopped       bool
 	semantic      bool
 	readErr       error
@@ -50,6 +51,7 @@ func (t *anthropicCompletionGeili) observe(event *apicompat.AnthropicStreamEvent
 	if t.open == nil {
 		t.open = make(map[int]bool)
 		t.blocks = make(map[int]int)
+		t.toolArguments = make(map[int]*anthropicToolArgumentsGeili)
 	}
 	switch event.Type {
 	case "message_start":
@@ -68,6 +70,11 @@ func (t *anthropicCompletionGeili) observe(event *apicompat.AnthropicStreamEvent
 		block := event.ContentBlock
 		t.semantic = t.semantic || block.Text != "" || block.Thinking != "" || block.Type == "tool_use" || block.Type == "server_tool_use" || block.Type == "redacted_thinking"
 		stored := *block
+		if block.Type == "tool_use" || block.Type == "server_tool_use" {
+			arguments := &anthropicToolArgumentsGeili{seed: append(json.RawMessage(nil), block.Input...)}
+			t.toolArguments[index] = arguments
+			stored.Input = arguments.input()
+		}
 		if !t.retainContent {
 			stored.Text, stored.Thinking, stored.Signature = "", "", ""
 		}
@@ -93,7 +100,12 @@ func (t *anthropicCompletionGeili) observe(event *apicompat.AnthropicStreamEvent
 				block.Signature += event.Delta.Signature
 			}
 		case "input_json_delta":
-			block.Input = appendRawJSON(block.Input, event.Delta.PartialJSON)
+			arguments := t.toolArguments[*event.Index]
+			if arguments == nil {
+				return errors.New("upstream stream read error: input_json_delta outside tool block")
+			}
+			arguments.append(event.Delta.PartialJSON)
+			block.Input = arguments.input()
 		}
 	case "content_block_stop":
 		if event.Index == nil || !t.open[*event.Index] {
@@ -123,9 +135,16 @@ func (t *anthropicCompletionGeili) complete() error {
 	if len(t.open) != 0 {
 		return errors.New("upstream stream read error: ended with an open content block")
 	}
-	for _, block := range t.response.Content {
+	for position, block := range t.response.Content {
 		if (block.Type == "tool_use" || block.Type == "server_tool_use") && !json.Valid(block.Input) {
-			return errors.New("upstream stream read error: ended with invalid tool arguments")
+			index := position
+			for candidate, storedPosition := range t.blocks {
+				if storedPosition == position {
+					index = candidate
+					break
+				}
+			}
+			return newAnthropicToolArgumentsDiagnosticGeili(index, block, t.toolArguments[index], t.readErr)
 		}
 	}
 	return nil
