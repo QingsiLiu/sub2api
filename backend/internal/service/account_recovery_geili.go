@@ -24,10 +24,13 @@ type AccountRecoveryProberGeili func(context.Context, *Account, string) (bool, e
 type AccountBalanceVerifierGeili func(context.Context, *Account) (known, sufficient bool, err error)
 
 type accountRecoveryJobGeili struct {
-	ready       chan struct{}
-	once        sync.Once
-	lastRequest time.Time
-	restored    map[int64]struct{}
+	ready          chan struct{}
+	once           sync.Once
+	lastRequest    time.Time
+	restored       map[int64]struct{}
+	requestContext context.Context
+	eligible       func(context.Context, *Account) bool
+	wake           chan struct{}
 }
 type AccountRecoveryServiceGeili struct {
 	accounts                 AccountRepository
@@ -308,12 +311,19 @@ func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, gro
 			s.mu.Unlock()
 			return false
 		}
-		job = &accountRecoveryJobGeili{ready: make(chan struct{}), lastRequest: time.Now(), restored: make(map[int64]struct{})}
+		job = &accountRecoveryJobGeili{ready: make(chan struct{}), lastRequest: time.Now(), restored: make(map[int64]struct{}), requestContext: context.WithoutCancel(ctx), eligible: eligible, wake: make(chan struct{}, 1)}
 		s.jobs[key] = job
 		s.wg.Add(1)
-		go s.runGroup(context.WithoutCancel(ctx), key, groupID, model, eligible, job)
+		go s.runGroup(key, groupID, model, job)
 	} else {
 		job.lastRequest = time.Now()
+		// New callers may have different profit/capability restrictions. Keep
+		// one serialized group job, but wake it with the current admission.
+		job.requestContext, job.eligible = context.WithoutCancel(ctx), eligible
+		select {
+		case job.wake <- struct{}{}:
+		default:
+		}
 	}
 	s.mu.Unlock()
 	wait := 30 * time.Second
@@ -360,20 +370,23 @@ func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, gro
 	}
 }
 
-func (s *AccountRecoveryServiceGeili) runGroup(parent context.Context, key string, groupID int64, model string, eligible func(context.Context, *Account) bool, job *accountRecoveryJobGeili) {
+func (s *AccountRecoveryServiceGeili) runGroup(key string, groupID int64, model string, job *accountRecoveryJobGeili) {
 	defer s.wg.Done()
 	defer func() { s.mu.Lock(); delete(s.jobs, key); s.mu.Unlock() }()
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(s.ctx)
 	stop := context.AfterFunc(s.ctx, cancel)
 	defer func() { stop(); cancel() }()
 	for {
 		s.mu.Lock()
 		expired := time.Since(job.lastRequest) > 15*time.Minute
+		requestContext, eligible := job.requestContext, job.eligible
 		s.mu.Unlock()
 		if expired || ctx.Err() != nil {
 			return
 		}
-		accounts, err := s.accounts.ListByGroup(ctx, groupID)
+		attemptCtx, attemptCancel := context.WithCancel(requestContext)
+		stopAttempt := context.AfterFunc(ctx, attemptCancel)
+		accounts, err := s.accounts.ListByGroup(attemptCtx, groupID)
 		if err == nil {
 			sort.SliceStable(accounts, func(i, j int) bool {
 				if accounts[i].Priority != accounts[j].Priority {
@@ -394,13 +407,13 @@ func (s *AccountRecoveryServiceGeili) runGroup(parent context.Context, key strin
 			n := 0
 			for i := range accounts {
 				a := accounts[i]
-				state, e := s.runtime.GetAccountRuntimeGeili(ctx, a.ID)
+				state, e := s.runtime.GetAccountRuntimeGeili(attemptCtx, a.ID)
 				if e != nil {
 					continue
 				}
 				a.RuntimeState = state
 				if s.balanceLatch != nil {
-					token, latchErr := s.balanceLatch.GetAccountBalanceLatchGeili(ctx, a.ID)
+					token, latchErr := s.balanceLatch.GetAccountBalanceLatchGeili(attemptCtx, a.ID)
 					if latchErr != nil || token != "" {
 						continue
 					}
@@ -409,14 +422,14 @@ func (s *AccountRecoveryServiceGeili) runGroup(parent context.Context, key strin
 				if a.IsActive() && a.Schedulable && !blocked && !(a.TempUnschedulableUntil != nil && time.Now().Before(*a.TempUnschedulableUntil)) && !(a.OverloadUntil != nil && time.Now().Before(*a.OverloadUntil)) {
 					continue
 				}
-				if !recoveryAccountEligibleGeili(&a, model, time.Now(), true) || eligible != nil && !eligible(ctx, &a) {
+				if !recoveryAccountEligibleGeili(&a, model, time.Now(), true) || eligible != nil && !eligible(attemptCtx, &a) {
 					continue
 				}
 				n++
 				batch.Add(1)
 				go func(a Account) {
 					defer batch.Done()
-					if s.check(ctx, &a, model, "automatic", false, func(ctx context.Context, fresh *Account) bool {
+					if s.check(attemptCtx, &a, model, "automatic", false, func(ctx context.Context, fresh *Account) bool {
 						member := false
 						for _, id := range fresh.GroupIDs {
 							if id == groupID {
@@ -441,14 +454,20 @@ func (s *AccountRecoveryServiceGeili) runGroup(parent context.Context, key strin
 			}
 			batch.Wait()
 			if found {
+				stopAttempt()
+				attemptCancel()
 				return
 			}
 		}
+		stopAttempt()
+		attemptCancel()
 		timer := time.NewTimer(time.Minute)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
+		case <-job.wake:
+			timer.Stop()
 		case <-timer.C:
 		}
 	}

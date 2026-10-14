@@ -79,3 +79,15 @@ func TestAccountRecoveryGeiliMappedStandbyUsesNormalChannelPricingBasis(t *testi
 		}
 	}
 }
+
+func TestAccountRecoveryGeiliNewCallerCanWakeJobWithDifferentAdmission(t *testing.T) {
+	repo := newRecoveryRuntimeRepoGeili(stoppedRecoveryAccountGeili(1, 7))
+	recovery := NewAccountRecoveryServiceGeili(repo, func(context.Context, *Account, string) (bool, error) { return true, nil }, nil)
+	defer recovery.Stop()
+	first, cancelFirst := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancelFirst()
+	require.False(t, recovery.RecoverGroupGeili(first, 7, "claude-sonnet", func(context.Context, *Account) bool { return false }))
+	second, cancelSecond := context.WithTimeout(context.Background(), time.Second)
+	defer cancelSecond()
+	require.True(t, recovery.RecoverGroupGeili(second, 7, "claude-sonnet", func(context.Context, *Account) bool { return true }), "a first caller's profit/capability veto must not freeze the shared group job for later authorized callers")
+}
