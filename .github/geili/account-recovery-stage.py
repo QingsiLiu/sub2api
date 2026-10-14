@@ -20,6 +20,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 MODEL = 'claude-opus-5'
 OTHER_MODEL = 'claude-sonnet-5-5'
@@ -159,6 +160,13 @@ def mock_account_url(base, label):
     return base + '/recovery/' + label
 
 
+def recovery_route(target):
+    # BaseHTTPRequestHandler.path includes the query. Anthropic appends
+    # ?beta=true to both inference and health probes; route only the URL path.
+    path = urlsplit(target).path
+    return path, re.fullmatch(r'/recovery/([a-z0-9_-]+)/(?:v1/)?messages', path)
+
+
 def exact_ids(ids):
     if not ids or any(type(i) is not int or i <= 0 for i in ids) or len(set(ids)) != len(ids):
         raise RuntimeError('cleanup requires positive unique exact synthetic account IDs')
@@ -236,6 +244,11 @@ def completed(protocol, response):
         c.get('finish_reason') for e in events for c in e.get('choices', []) if isinstance(c, dict))
 
 
+def response_detail(response):
+    # Preserve admission/terminal evidence without customer or error payloads.
+    return {'status': response[0], 'event_types': [e.get('type') for e in sse_events(response[1])]}
+
+
 def foreground_wait_ok(response):
     return (not completed('messages', response) and isinstance(response[2], dict)
             and 29 <= response[2].get('elapsed', -1) <= 36)
@@ -272,13 +285,20 @@ def fixture_type(cache, source):
         def start_mock(self):
             super().start_mock()
             fixture = self
-            self.recovery_modes, self.recovery_events = {}, []
+            self.recovery_modes, self.recovery_events, self.recovery_unmatched_paths = {}, [], {}
             self.probe_release = threading.Event()
             original = self.server.RequestHandlerClass
             class RecoveryMock(original):
                 def do_POST(self):
-                    match = re.fullmatch(r'/recovery/([a-z0-9_-]+)/(?:v1/)?messages', self.path)
+                    path, match = recovery_route(self.path)
                     if not match:
+                        # Preserve bounded route evidence without headers, bodies
+                        # or query values, which can contain private credentials.
+                        with fixture.lock:
+                            key = path[:256]
+                            if key not in fixture.recovery_unmatched_paths and len(fixture.recovery_unmatched_paths) >= 64:
+                                key = '<additional paths>'
+                            fixture.recovery_unmatched_paths[key] = fixture.recovery_unmatched_paths.get(key, 0) + 1
                         return super().do_POST()
                     payload = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))))
                     label = match.group(1)
@@ -323,7 +343,8 @@ def fixture_type(cache, source):
         def new_case(self, label, mode='healthy', manual=False, pool=False, group=None):
             group = group or self.api('/admin/groups', {'name': 'Recovery ' + label + ' ' + self.suffix,
                 'platform': 'anthropic', 'rate_multiplier': 1, 'subscription_rate_multiplier': 1,
-                'subscription_enabled': False, 'model_pricing': [{'models': [MODEL, OTHER_MODEL], 'billing_mode': 'token',
+                'subscription_enabled': False, 'model_allowlist': {'enabled': True, 'models': [MODEL, OTHER_MODEL]},
+                'model_pricing': [{'models': [MODEL, OTHER_MODEL], 'billing_mode': 'token',
                     'input_price': .000001, 'output_price': .000002}]}, self.admin)
             with self.lock: self.recovery_modes[label] = mode
             account = self.api('/admin/accounts', {'name': 'Recovery ' + label + ' ' + self.suffix,
@@ -401,7 +422,8 @@ def fixture_type(cache, source):
             unrelated = self.new_case('other-group', manual=True)
             resumed = self.call(manual)
             self.check('manually stopped same-group account is checked and resumes customer request', completed('messages', resumed)
-                and self.account_state(manual)['runtime_state']['state'] == 'enabled', self.counts('manual'))
+                and self.account_state(manual)['runtime_state']['state'] == 'enabled',
+                {**response_detail(resumed), 'calls': self.counts('manual')})
             self.check('recovery never probes another target group', self.counts('other-group') == {'inference': 0, 'probes': 0})
             row = self.wait_usage(manual, 1)
             self.check('automatic probe adds no customer usage row and actual group settles once', row['n'] == 1
@@ -727,6 +749,7 @@ def main(argv=None):
                   'balance_latches_restored': fixture.snapshot.get('recovery_balance_latches_restored', False),
                   'balance_latch_cleanup': fixture.snapshot.get('recovery_balance_latch_cleanup'),
                   'mock_calls_by_label': {label: fixture.counts(label) for label in getattr(fixture, 'recovery_modes', {})},
+                  'mock_unmatched_paths': getattr(fixture, 'recovery_unmatched_paths', {}),
                   'timing_design': '30s recovery ends before45s first edge heartbeat; separate55s mock verifies physical heartbeat arrival',
                   'model_isolation_evidence': 'owned model block seeded; natural threshold counting validated by separate Go/PostgreSQL tests'}
         result['passed'] = passed and result['restored'] and result['runtime_restored'] and result['replica_removed'] and result['balance_latches_restored']

@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import io
+import threading
 from unittest.mock import patch, Mock
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,6 +54,27 @@ class GuardTests(unittest.TestCase):
         for patch in ({'max_tokens': 16}, {'messages': [{'role': 'user', 'content': 'fixture_healthy'}]},
                       {'tools': []}, {'thinking': {'type': 'adaptive'}}):
             self.assertFalse(s.is_probe({**good, **patch}))
+
+    def test_new_fixture_declares_only_its_exact_models_independent_of_availability(self):
+        writes = []
+        cache = SimpleNamespace(fixture_type=lambda _: object,
+            b=SimpleNamespace(stage=SimpleNamespace(private_json=lambda *a: None)))
+        fixture = s.fixture_type(cache, None)()
+        fixture.lock = threading.Lock()
+        fixture.recovery_modes = {}
+        fixture.admin, fixture.owner = 'synthetic-admin', {'token': 'synthetic-user'}
+        fixture.suffix, fixture.mock_base, fixture.private = 'unit', 'http://127.0.0.1:19018', Path('/offline')
+        fixture.snapshot = {'recovery_account_names': {}}
+        def api(path, payload, token):
+            writes.append((path, payload))
+            return {'id': len(writes), 'name': payload['name'], 'key': 'synthetic-unit-key'}
+        fixture.api = api
+        fixture.new_case('manual')
+        group_payload = next(payload for path, payload in writes if path == '/admin/groups')
+        self.assertEqual(group_payload['model_allowlist'], {'enabled': True, 'models': [s.MODEL, s.OTHER_MODEL]})
+        self.assertNotIn('*', group_payload['model_allowlist']['models'])
+        self.assertNotIn('undeclared-model', group_payload['model_allowlist']['models'])
+        self.assertEqual(group_payload['model_pricing'][0]['models'], group_payload['model_allowlist']['models'])
 
     def test_balance_latch_cleanup_uses_only_exact_ids_never_prefix_scan(self):
         self.assertEqual(s.balance_latch_keys([29, 13]), ['geili:account:balance_latch:13', 'geili:account:balance_latch:29'])
@@ -112,6 +134,61 @@ class PerformanceTests(unittest.TestCase):
 
 
 class OracleTests(unittest.TestCase):
+    def test_response_detail_reports_status_and_terminals_without_payload(self):
+        response = [403, {'error': {'message': 'private-message', 'code': 'MODEL_NOT_ALLOWED'}}]
+        self.assertEqual(s.response_detail(response), {'status': 403, 'event_types': []})
+        stream = [200, 'event: error\ndata: {"type":"error","error":{"message":"private-message"}}\n\n']
+        self.assertEqual(s.response_detail(stream), {'status': 200, 'event_types': ['error']})
+        self.assertNotIn('private-message', json.dumps(s.response_detail(stream)))
+
+    def mock_fixture(self):
+        class BaseHandler:
+            def do_POST(self): self.fallback = True
+        class BaseFixture:
+            def start_mock(self): self.server = SimpleNamespace(RequestHandlerClass=BaseHandler)
+        fixture = s.fixture_type(SimpleNamespace(fixture_type=lambda _: BaseFixture), None)()
+        fixture.lock = threading.Lock()
+        fixture.start_mock()
+        return fixture
+
+    def post_mock(self, fixture, path, payload):
+        handler = fixture.server.RequestHandlerClass.__new__(fixture.server.RequestHandlerClass)
+        raw = json.dumps(payload).encode()
+        handler.path = path
+        handler.rfile, handler.wfile = io.BytesIO(raw), io.BytesIO()
+        handler.headers = {'Content-Length': str(len(raw))}
+        handler.send_response, handler.send_header, handler.end_headers, handler.reply = Mock(), Mock(), Mock(), Mock()
+        handler.do_POST()
+        return handler
+
+    def test_anthropic_beta_query_routes_inference_and_probe_to_owned_mock(self):
+        fixture = self.mock_fixture()
+        for target in ('/recovery/tool-messages/v1/messages?beta=true',
+                       '/recovery/tool-messages/messages?beta=true&unused=1'):
+            handler = self.post_mock(fixture, target, {'model': s.MODEL, 'stream': True,
+                'max_tokens': 16, 'messages': [{'role': 'user', 'content': 'fixture_empty_delta'}]})
+            self.assertFalse(getattr(handler, 'fallback', False))
+            handler.send_response.assert_called_once_with(200)
+            events = s.sse_events(handler.wfile.getvalue().decode())
+            self.assertEqual(next(e['delta']['partial_json'] for e in events if e['type'] == 'content_block_delta'), '')
+        handler = self.post_mock(fixture, '/recovery/tool-messages/v1/messages?beta=true',
+            {'model': s.MODEL, 'max_tokens': 64, 'messages': [{'role': 'user', 'content': 'Say OK.'}]})
+        self.assertFalse(getattr(handler, 'fallback', False))
+        self.assertEqual(handler.reply.call_args.args[1], 200)
+        self.assertEqual([e['probe'] for e in fixture.recovery_events], [False, False, True])
+        self.assertEqual(fixture.recovery_unmatched_paths, {})
+
+    def test_unmatched_routes_preserve_bounded_path_evidence_without_query_values(self):
+        fixture = self.mock_fixture()
+        for _ in range(2):
+            handler = self.post_mock(fixture, '/recovery/tool-messages/v1/wrong?api_key=synthetic-private-value', {})
+            self.assertTrue(handler.fallback)
+        self.assertEqual(fixture.recovery_unmatched_paths, {'/recovery/tool-messages/v1/wrong': 2})
+        for i in range(100): self.post_mock(fixture, '/wrong/' + str(i), {})
+        self.assertLessEqual(len(fixture.recovery_unmatched_paths), 65)
+        self.assertNotIn('synthetic-private-value', json.dumps(fixture.recovery_unmatched_paths))
+        self.assertEqual(fixture.recovery_events, [])
+
     def test_empty_delta_fixture_is_valid_and_bad_fixture_is_actually_bad(self):
         events = s.sse_events(s.anthropic_sse(s.MODEL, 'empty_delta').decode())
         block = next(e['content_block'] for e in events if e['type'] == 'content_block_start')
