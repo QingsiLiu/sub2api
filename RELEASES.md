@@ -1,8 +1,8 @@
-## 0.2.16-geili.6（候选准备中，未发布生产）
+## 0.2.16-geili.6（已部署Stage，验收中，未发布生产）
 
 继承 `.4` 流式修复、欠费停调与有界恢复；限定自动探测只由 Messages、Responses、Chat Completions 三个文本入口触发。Gemini原生、缓存、媒体、embedding、compact和WebSocket共用选号函数仍遵守原准入，不触发此新增付费探测。
 
-- revision：`8aee8e11a415e2db3115ff02ce418a5d6dd173d0`；不可变镜像：`ghcr.io/qingsiliu/sub2api@sha256:2750be15c546a943d82eb16a8412adac5dba066b4bf738a0aa23f3827c4d73d9`；[候选CI38518692112](https://github.com/QingsiLiu/sub2api/actions/runs/38518692112)完整测试及构建通过、13项制品门禁通过，346迁移校验和与源码一致。部署状态：尚未部署Stage/生产，等待独立Key代理发布交还Stage。本次没有生产授权。`.4`非支付51项、缓存36项及容灾功能通过，但范围审计发现共用函数漏入口区分；性能部分样本已保留，停止该轮后由新候选重新完整验证，不重标旧结果。`.5`由独立Key代理任务隔离发布，本候选使用`.6`避免混同。
+- revision：`8aee8e11a415e2db3115ff02ce418a5d6dd173d0`；不可变镜像：`ghcr.io/qingsiliu/sub2api@sha256:2750be15c546a943d82eb16a8412adac5dba066b4bf738a0aa23f3827c4d73d9`；[候选CI38518692112](https://github.com/QingsiLiu/sub2api/actions/runs/38518692112)完整测试及构建通过、13项制品门禁通过，346迁移校验和与源码一致。部署状态：2026-10-14正式Stage入口部署，健康200、版本正确、生产`.5`指纹未变；备份 `/opt/sub2api-subscription-lab/backups/20261014T072832Z-candidate`。当前镜像顺序执行非支付、缓存、容灾和性能验收；本次没有生产授权。`.4`非支付51项、缓存36项及容灾功能通过，但范围审计发现共用函数漏入口区分；性能部分样本已保留，停止该轮后由新候选重新完整验证，不重标旧结果。`.5`由独立Key代理任务隔离发布，本候选使用`.6`避免混同。
 
 ## 0.2.16-geili.5（已发布生产，与验收Stage同一镜像）
 
