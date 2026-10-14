@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -746,10 +745,14 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		proxyURL = account.Proxy.URL()
 	}
 	upstreamStart := time.Now()
-	ctxkey.MarkUpstreamDispatched(ctx)
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
+		// geili hook: admission failed before dispatch; it is not an ambiguous
+		// accepted video and must keep its account/request retry decision.
+		if isAccountRuntimeAdmissionFailureGeili(err) {
+			return nil, err
+		}
 		if endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions {
 			// Ambiguous accepted creates must not be reposted on another account.
 			return nil, fmt.Errorf("video creation outcome unknown; automatic retry disabled: %w", err)
@@ -762,9 +765,13 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	requestModel := requestInfo.Model
 	if resp.StatusCode >= 400 {
 		if resp.StatusCode >= 500 && (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions) {
+			// geili hook: preserve the existing no-replay response for ambiguous
+			// creates, but do not lose a confirmed debt error behind that return.
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, nativePaidSupplierDebtMaxBytesGeili))
+			observeNativePaidSupplierDebtGeili(ctx, s.rateLimitService, account, resp.StatusCode, body)
 			return nil, fmt.Errorf("video creation outcome unknown (HTTP %d); automatic retry disabled", resp.StatusCode)
 		}
-		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel)
+		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel, endpoint.IsGenerationRequest())
 	}
 
 	s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, requestModel), account, resp.Header, resp.StatusCode)
@@ -1299,11 +1306,17 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	account *Account,
 	requestIDHeader string,
 	requestedModel string,
+	nativeCreate ...bool,
 ) (*OpenAIForwardResult, error) {
 	body := s.readUpstreamErrorBody(resp)
 	// Reconcile readiness before configurable passthrough branches can return;
 	// otherwise a Grok 429 can remain schedulable.
-	s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+	// geili hook: only new paid media creates add debt observation; existing
+	// task status/content retain their previous account/error policy.
+	debt := len(nativeCreate) > 0 && nativeCreate[0] && observeNativePaidSupplierDebtGeili(ctx, s.rateLimitService, account, resp.StatusCode, body)
+	if !debt {
+		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+	}
 	upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(body)))
 	if upstreamMsg == "" {
 		upstreamMsg = fmt.Sprintf("xAI upstream returned status %d", resp.StatusCode)

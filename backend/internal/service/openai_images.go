@@ -675,6 +675,10 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
+		// geili hook: preserve local admission and its retry/billing decision.
+		if isAccountRuntimeAdmissionFailureGeili(err) {
+			return nil, err
+		}
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -710,6 +714,8 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 				Kind:               "failover",
 				Message:            OpenAIImagesInsufficientBalanceMessage,
 			})
+			// geili hook: persist account debt before the image-only cooldown returns.
+			s.observeOpenAIImagesSupplierBalanceGeili(upstreamCtx, account, resp.StatusCode, respBody)
 			s.coolOpenAIImagesInsufficientBalance(upstreamCtx, account)
 			return nil, newOpenAIImagesInsufficientBalanceFailoverError(resp.StatusCode, resp.Header, respBody)
 		}

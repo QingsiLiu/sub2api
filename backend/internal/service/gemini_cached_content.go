@@ -21,7 +21,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -1081,8 +1080,6 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	// geili hook: dispatched cache charges retain their durable subscription admission.
-	ctxkey.MarkUpstreamDispatched(ctx)
 	resp, err := s.compat.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, err
@@ -1090,6 +1087,11 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, geminiCachedContentResponseMaxBytes))
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300
+	// geili hook: preserve a received debt fact even if the body ends with a
+	// read error. Bound cache get/patch/delete keep their mutation contract.
+	if !success && method == http.MethodPost {
+		observeNativePaidSupplierDebtGeili(ctx, s.compat.rateLimitService, account, resp.StatusCode, respBody)
+	}
 	if err != nil {
 		if success {
 			return nil, &GeminiCachedContentMalformedResponseError{Err: err}

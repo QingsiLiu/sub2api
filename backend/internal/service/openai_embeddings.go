@@ -94,6 +94,10 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	}
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 	if err != nil {
+		// geili hook: local debt admission is not a dispatched upstream failure.
+		if isAccountRuntimeAdmissionFailureGeili(err) {
+			return nil, err
+		}
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{

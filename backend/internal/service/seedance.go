@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -126,14 +126,22 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxy = account.Proxy.URL()
 	}
-	ctxkey.MarkUpstreamDispatched(ctx)
 	resp, err := s.httpUpstream.Do(req, proxy, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(started).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	responseBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+	var nativeReader io.Reader = resp.Body
+	var debtCapture *nativePaidSupplierDebtCaptureGeili
+	if endpoint == SeedanceEndpointCreate && resp.StatusCode >= 400 {
+		debtCapture = &nativePaidSupplierDebtCaptureGeili{Reader: nativeReader}
+		nativeReader = debtCapture
+	}
+	responseBody, err := ReadUpstreamResponseBody(nativeReader, s.cfg, c, openAITooLargeError)
+	if debtCapture != nil {
+		observeNativePaidSupplierDebtGeili(ctx, s.rateLimitService, account, resp.StatusCode, debtCapture.body)
+	}
 	if err != nil {
 		return nil, err
 	}

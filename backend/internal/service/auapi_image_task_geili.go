@@ -292,6 +292,13 @@ func (s *AUAPIImageTaskService) Process(ctx context.Context, queueID string) (Ba
 				delay = httpErr.RetryAfter
 			}
 		}
+		// geili hook: the final runtime barrier rejects before any dispatch.
+		// No acceptance is possible, so terminate and release the existing hold.
+		if (task.Phase == "estimate" || task.Phase == "submit") && isAccountRuntimeAdmissionFailureGeili(err) {
+			task.Phase = "fail"
+			task.HTTPStatus = http.StatusServiceUnavailable
+			task.ErrorJSON = imageTaskErrorJSON("account_unavailable", "Supplier account unavailable; no task was submitted")
+		}
 		// Settlement and its usage record must never be discarded after a charge.
 		if task.Phase == "submit" && (!errors.As(err, &httpErr) || httpErr.Retryable()) {
 			task.Phase = "reconcile" // acceptance is unknown: retain the hold and never resubmit
@@ -335,6 +342,11 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 	}
 	if !account.IsAUAPIImageAccount() || account.GetCredential("api_key") == "" {
 		return errors.New("AUAPI task account credentials unavailable")
+	}
+	// geili hook: the fresh account read already proves debt. Avoid even a
+	// pricing request for unsubmitted work; accepted tasks still poll/store.
+	if (t.Phase == "estimate" || t.Phase == "submit") && account.RuntimeState != nil && account.RuntimeState.BalanceBlocked {
+		return NewAccountRuntimeAdmissionErrorGeili("balance")
 	}
 	// Task ownership stays on the accepted account and endpoint even if routing changes.
 	copy := *account

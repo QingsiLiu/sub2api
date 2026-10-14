@@ -16,7 +16,9 @@ type accountRuntimeAdmissionReaderGeili interface {
 }
 
 // The production provider retains invitation egress rules and adds the final
-// generation admission check. NewHTTPUpstream remains the original constructor
+// text generation admission and native paid-operation debt checks. This does
+// not make native operations eligible for automatic recovery/probes.
+// NewHTTPUpstream remains the original constructor
 // for transport tests and clients with no account runtime dependency.
 func ProvideHTTPUpstreamGeili(cfg *config.Config, accounts service.AccountRepository, cache service.TempUnschedCache) service.HTTPUpstream {
 	s := NewHTTPUpstream(cfg).(*httpUpstreamService)
@@ -29,6 +31,13 @@ func ProvideHTTPUpstreamGeili(cfg *config.Config, accounts service.AccountReposi
 		}
 	}
 	return s
+}
+
+// RequiresFinalAccountRuntimeAdmissionGeili describes the provider's mandatory
+// final barrier, not dependency health. Missing dependencies still fail closed
+// in Do/DoWithTLS; this capability never verifies or caches account state.
+func (s *httpUpstreamService) RequiresFinalAccountRuntimeAdmissionGeili() bool {
+	return s != nil && s.runtimeAdmissionRequiredGeili
 }
 
 // Inspect only the method and endpoint. Never consume or copy a potentially
@@ -51,11 +60,46 @@ func isGenerationRequestRuntimeGeili(req *http.Request) bool {
 	return strings.Contains(path, "/model/") && (strings.HasSuffix(path, "/invoke") || strings.HasSuffix(path, "/invoke-with-response-stream"))
 }
 
-func (s *httpUpstreamService) checkAccountRuntimeGenerationGeili(req *http.Request, accountID int64) error {
-	if s == nil || (!s.runtimeAdmissionRequiredGeili && s.runtimeAdmissionRepoGeili == nil) || !isGenerationRequestRuntimeGeili(req) {
+// Native paid operations only require the mandatory debt barrier. Other stopped
+// states still permit an administrator's explicit media/cache test. Polling,
+// content retrieval, cache PATCH/delete, billing and OAuth metadata remain
+// unaffected. The task suffixes are vendor paid submissions, not task polling.
+func isNativePaidBalanceRequestRuntimeGeili(req *http.Request) bool {
+	if req == nil || req.URL == nil {
+		return false
+	}
+	path := strings.TrimRight(req.URL.Path, "/")
+	if req.Method == http.MethodPost {
+		for _, suffix := range []string{"/images/generations", "/images/edits", "/videos/generations", "/videos/edits", "/videos/extensions", "/embeddings", "/cachedContents", "/images/tasks", "/videos/tasks", "/contents/generations/tasks"} {
+			if strings.HasSuffix(path, suffix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// CheckNativeBalanceBeforeDispatchGeili is also used by handled native plugin
+// branches that dispatch without central Do. It verifies only native paid
+// operations, so metadata and text plugin requests do not add database reads.
+func (s *httpUpstreamService) CheckNativeBalanceBeforeDispatchGeili(req *http.Request, accountID int64) error {
+	if !isNativePaidBalanceRequestRuntimeGeili(req) {
 		return nil
 	}
-	if service.IsAccountRecoveryProbeGeili(req.Context()) {
+	return s.checkAccountRuntimeGenerationGeili(req, accountID)
+}
+
+// The existing transport hook name is retained. Full generation eligibility
+// and native balance-only eligibility deliberately remain separate policies.
+func (s *httpUpstreamService) checkAccountRuntimeGenerationGeili(req *http.Request, accountID int64) error {
+	if s == nil || (!s.runtimeAdmissionRequiredGeili && s.runtimeAdmissionRepoGeili == nil) {
+		return nil
+	}
+	balanceOnly := isNativePaidBalanceRequestRuntimeGeili(req)
+	if !balanceOnly && !isGenerationRequestRuntimeGeili(req) {
+		return nil
+	}
+	if !balanceOnly && service.IsAccountRecoveryProbeGeili(req.Context()) {
 		return nil
 	}
 	if s.runtimeAdmissionRepoGeili == nil || accountID <= 0 {
@@ -87,7 +131,10 @@ func (s *httpUpstreamService) checkAccountRuntimeGenerationGeili(req *http.Reque
 			return service.NewAccountRuntimeAdmissionErrorGeili("balance")
 		}
 	}
-	if !verdict.Allowed {
+	if verdict.BalanceBlocked {
+		return service.NewAccountRuntimeAdmissionErrorGeili("balance")
+	}
+	if !balanceOnly && !verdict.Allowed {
 		return service.NewAccountRuntimeAdmissionErrorGeili(verdict.Reason)
 	}
 	return nil
