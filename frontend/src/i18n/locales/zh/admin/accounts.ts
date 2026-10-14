@@ -10,6 +10,7 @@ export default {
         batchKey: "第 {n} 条 API Key",
         batchRemove: "移除第 {n} 条 Key",
         batchAdd: "添加一条",
+        advancedBatchHint: "可粘贴多行或逐条添加，最多 {max} 条 API Key。每条独立配置代理/IP，其余高级设置共用，整批一次保存。",
         batchSubmit: "提交 {count} 条 Key",
         batchInvalid: "请填写 1–100 条有效且不重复的 Key，每条一行。",
         batchFailed: "整批未保存，请检查链接、名称、并发数和代理配置后重新录入。",

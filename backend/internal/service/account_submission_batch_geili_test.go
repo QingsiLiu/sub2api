@@ -101,3 +101,41 @@ func TestAccountSubmissionBatchItemsIndependentConnectionsAndValidation(t *testi
 	require.Equal(t, 1, repo.submits) // An invalid member cannot produce a partial batch.
 	require.ErrorIs(t, svc.SubmitBatch(ctx, token, []string{"a", "b"}, SubmissionOptions{PerKeyConnections: []SubmissionConnectionInput{{Mode: "direct"}}}), ErrSubmissionInvalid)
 }
+
+func TestAccountSubmissionFullFormBatchKeepsSharedSettingsAndRejectsPartialInput(t *testing.T) {
+	ctx := context.Background()
+	token := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	repo := &submissionBatchRepoStub{submissionRepoStub: submissionRepoStub{invite: &AccountSubmissionInvite{Config: AccountSubmissionConfig{Platform: PlatformOpenAI}, ExpiresAt: time.Now().Add(time.Hour)}}}
+	svc := NewAccountSubmissionService(repo, submissionAdminStub{})
+	notes := "shared notes"
+	zero := 0.0
+	load := 9
+	account := &Account{Name: "advanced", Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "synthetic-first", "base_url": "https://8.8.8.8", "model_mapping": map[string]any{"from": "to"}}, Extra: map[string]any{"quota_daily_limit": 7}, Notes: &notes, Concurrency: 17, Priority: 5, RateMultiplier: &zero, LoadFactor: &load}
+	items := []SubmissionBatchItem{{APIKey: " synthetic-first ", Connection: SubmissionConnectionInput{Mode: "direct"}}, {APIKey: "synthetic-second", Connection: SubmissionConnectionInput{Mode: "custom", Proxy: &SubmissionProxyDraft{Name: "B", Protocol: "http", Host: "8.8.8.8", Port: 8080}}}}
+	_, err := svc.SubmitFormBatch(ctx, token, account, items)
+	require.NoError(t, err)
+	require.Equal(t, []string{"synthetic-first", "synthetic-second"}, repo.keys)
+	require.Equal(t, account, repo.options.PreparedAccount)
+	require.Equal(t, "shared notes", *repo.options.PreparedAccount.Notes)
+	require.Equal(t, "8.8.8.8", repo.options.PerKeyConnections[1].Proxy.Host)
+	require.Equal(t, "inactive", account.Status)
+	require.False(t, account.Schedulable)
+	require.ErrorIs(t, svc.SubmitBatch(ctx, token, []string{"a", "b"}, SubmissionOptions{PreparedAccount: account}), ErrSubmissionInvalid)
+	bad := append([]SubmissionBatchItem(nil), items...)
+	bad[1].APIKey = bad[0].APIKey
+	_, err = svc.SubmitFormBatch(ctx, token, account, bad)
+	require.ErrorIs(t, err, ErrSubmissionInvalid)
+	bad[1].APIKey = "synthetic-second"
+	bad[1].Connection = SubmissionConnectionInput{Mode: "custom", Proxy: &SubmissionProxyDraft{Name: "private", Protocol: "http", Host: "127.0.0.1", Port: 8080}}
+	_, err = svc.SubmitFormBatch(ctx, token, account, bad)
+	require.ErrorIs(t, err, ErrSubmissionInvalid)
+	foreign := *account
+	foreign.Platform = PlatformAnthropic
+	_, err = svc.SubmitFormBatch(ctx, token, &foreign, items)
+	require.ErrorIs(t, err, ErrSubmissionInvalid)
+	oauth := *account
+	oauth.Type = AccountTypeOAuth
+	_, err = svc.SubmitFormBatch(ctx, token, &oauth, items)
+	require.ErrorIs(t, err, ErrSubmissionInvalid)
+	require.Equal(t, 1, repo.submits)
+}

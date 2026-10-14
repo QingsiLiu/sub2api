@@ -17,7 +17,7 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 	if err != nil {
 		return err
 	}
-	if options.PreparedAccount != nil || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
+	if (options.PreparedAccount != nil && (options.PreparedAccount.Type != service.AccountTypeAPIKey || len(options.PerKeyConnections) != len(keys))) || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
 		return service.ErrSubmissionInvalid
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -70,6 +70,15 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 			}
 		}
 		itemOptions := options
+		if options.PreparedAccount != nil {
+			prepared := *options.PreparedAccount
+			prepared.Credentials = make(map[string]any, len(options.PreparedAccount.Credentials))
+			for field, value := range options.PreparedAccount.Credentials {
+				prepared.Credentials[field] = value
+			}
+			prepared.Credentials["api_key"] = key
+			itemOptions.PreparedAccount = &prepared
+		}
 		itemOptions.PerKeyConnections = nil
 		if len(options.PerKeyConnections) > 0 {
 			itemOptions.Connection = &options.PerKeyConnections[index]

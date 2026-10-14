@@ -53,6 +53,44 @@ func NormalizeSubmissionBatchKeys(keys []string) ([]string, error) {
 }
 
 func (s *AccountSubmissionService) SubmitBatch(ctx context.Context, token string, keys []string, options SubmissionOptions) error {
+	return s.submitBatch(ctx, token, keys, options, false)
+}
+
+// The shared account has already passed the official full-form validation.
+// Only this internal hook may supply a prepared template to the atomic batch.
+func (s *AccountSubmissionService) SubmitFormBatch(ctx context.Context, token string, account *Account, items []SubmissionBatchItem) (*Account, error) {
+	if account == nil || account.Type != AccountTypeAPIKey || len(items) < 1 || len(items) > MaxSubmissionBatchKeys {
+		return nil, ErrSubmissionInvalid
+	}
+	if account.Name == "" || account.Concurrency < 1 || account.Concurrency > 1000 || account.Priority < 0 {
+		return nil, ErrSubmissionInvalid
+	}
+	if err := validateSubmissionFormCredentialsGeili(ctx, account); err != nil {
+		return nil, err
+	}
+	if account.Extra == nil {
+		account.Extra = map[string]any{}
+	}
+	account.Extra["external_submission_form_geili"] = true
+	account.ProxyID = nil // Every row owns its connection; never inherit an administrator proxy ID.
+	account.Status, account.Schedulable = "inactive", false
+	keys := make([]string, len(items))
+	options := SubmissionOptions{PreparedAccount: account, Name: &account.Name, Concurrency: &account.Concurrency, PerKeyConnections: make([]SubmissionConnectionInput, len(items))}
+	for n, item := range items {
+		keys[n] = item.APIKey
+		options.PerKeyConnections[n] = item.Connection
+		if item.Connection.Proxy != nil {
+			proxy := *item.Connection.Proxy
+			options.PerKeyConnections[n].Proxy = &proxy
+		}
+	}
+	if err := s.submitBatch(ctx, token, keys, options, true); err != nil {
+		return nil, err
+	}
+	return account, nil
+}
+
+func (s *AccountSubmissionService) submitBatch(ctx context.Context, token string, keys []string, options SubmissionOptions, fullForm bool) error {
 	hash, err := AccountSubmissionTokenHash(token)
 	if err != nil {
 		return err
@@ -70,7 +108,7 @@ func (s *AccountSubmissionService) SubmitBatch(ctx context.Context, token string
 	if invite.State(time.Now()) != "pending" {
 		return ErrSubmissionInactive
 	}
-	if options.PreparedAccount != nil || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
+	if (options.PreparedAccount != nil && !fullForm) || (fullForm && (options.PreparedAccount == nil || options.PreparedAccount.Platform != invite.Config.Platform)) || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
 		return ErrSubmissionInvalid
 	}
 	// Bound validation (including public proxy DNS), not just the database write.

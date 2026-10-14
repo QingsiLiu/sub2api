@@ -23,12 +23,7 @@
         <p v-if="error" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300" role="alert">{{ error }}</p>
         <section v-if="invite" class="space-y-5">
           <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('admin.accounts.keyIntake.privacy') }}</p>
-          <div class="flex gap-2">
-            <button type="button" class="btn" :class="mode === 'batch' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'batch'">{{ t('admin.accounts.keyIntake.batchMode') }}</button>
-            <button type="button" class="btn" :class="mode === 'single' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'single'">{{ t('admin.accounts.keyIntake.singleMode') }}</button>
-          </div>
-          <SubmissionBatchFormGeili v-if="mode === 'batch'" :key="token" :token="token" :invite="invite" @created="finish" />
-          <SubmissionAccountFormGeili v-else :key="token" :token="token" :invite="invite" @created="finish" />
+          <SubmissionAccountFormGeili :key="token" :token="token" :invite="invite" @created="finish" />
           <p class="text-xs text-gray-500">{{ t('admin.accounts.keyIntake.linkControl') }}</p>
         </section>
         <button v-else-if="retryable" class="btn btn-secondary w-full" :disabled="loading" @click="inspect">{{ t('admin.accounts.keyIntake.retry') }}</button>
@@ -41,7 +36,6 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AuthLayout from '@/components/layout/AuthLayout.vue'
-import SubmissionBatchFormGeili from '@/components/account/SubmissionBatchFormGeili.vue'
 import SubmissionAccountFormGeili from '@/components/account/SubmissionAccountFormGeili.vue'
 import SubmissionConnectionGeili from '@/components/account/SubmissionConnectionGeili.vue'
 import AccountSubmissionUsage from '@/components/account/AccountSubmissionUsage.vue'
@@ -55,7 +49,6 @@ const loading = ref(true)
 const submitted = ref(false)
 const error = ref('')
 const retryable = ref(false)
-const mode = ref<'batch' | 'single'>('batch')
 const accounts = ref<SubmissionAccountUsage[]>([])
 const accountRef = ref('')
 const usageReady = ref(false)
@@ -103,7 +96,7 @@ function switchInvitation() {
   token = next
   invite.value = null
   submitted.value = false
-  accounts.value = []; accountRef.value = ''; usageReady.value = false; mode.value = 'batch'
+  accounts.value = []; accountRef.value = ''; usageReady.value = false
   retryable.value = false
   void inspect()
 }
