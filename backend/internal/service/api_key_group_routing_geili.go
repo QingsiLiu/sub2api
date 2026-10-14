@@ -18,6 +18,10 @@ type KeyRouteAttempt struct {
 	Reason  string `json:"reason"`
 }
 
+type accountModelCatalogCandidatesGeili interface {
+	ListModelCatalogCandidatesGeili(context.Context, *int64, []string, bool) ([]Account, error)
+}
+
 // ExplicitGroupModels builds a catalog from declared models, not transport
 // platform inference. OpenAI-compatible API-key pools must declare their models.
 func (r *CompositeRouteResolver) ExplicitGroupModels(ctx context.Context, group *Group) ([]string, error) {
@@ -36,7 +40,13 @@ func (r *CompositeRouteResolver) ExplicitGroupModels(ctx context.Context, group 
 	if r.accountRepo == nil {
 		return nil, infraerrors.ServiceUnavailable("MODEL_CATALOG_UNAVAILABLE", "account model catalog is unavailable")
 	}
-	accounts, err := r.accountRepo.ListModelAvailabilityCandidates(ctx, &group.ID, []string{group.Platform}, false)
+	// geili hook: static declarations need no runtime display projection. The
+	// optional repository method leaves every mandatory admission read intact.
+	list := r.accountRepo.ListModelAvailabilityCandidates
+	if catalog, ok := r.accountRepo.(accountModelCatalogCandidatesGeili); ok {
+		list = catalog.ListModelCatalogCandidatesGeili
+	}
+	accounts, err := list(ctx, &group.ID, []string{group.Platform}, false)
 	if err != nil {
 		return nil, err
 	}

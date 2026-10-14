@@ -21,6 +21,9 @@ import (
 var _ service.AccountRuntimeRepositoryGeili = (*accountRepository)(nil)
 
 func (r *accountRepository) hydrateAccountRuntimePointersGeili(ctx context.Context, accounts []*service.Account) {
+	if isAccountModelCatalogContextGeili(ctx) {
+		return
+	}
 	if r.sql == nil {
 		return
 	} // Legacy read-only Ent projections have no raw executor.
