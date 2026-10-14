@@ -45,3 +45,14 @@ func TestAccountRecoveryGeiliFreshGroupMembershipRequired(t *testing.T) {
 	require.ErrorIs(t, err, ErrAccountRuntimeConflictGeili)
 	require.False(t, probed)
 }
+
+func TestAccountRecoveryGeiliDoesNotAppendLegacySelectionBackoff(t *testing.T) {
+	ctx := WithRequestRecovery(context.Background(), time.Minute)
+	require.True(t, BeginRequestRecovery(ctx))
+	state := requestRecoveryFromContext(ctx)
+	state.mu.Lock()
+	state.accountRecoveryDeadline = time.Now().Add(30 * time.Second)
+	state.mu.Unlock()
+	require.False(t, ClaimRequestRecoverySelectionWait(ctx), "standby recovery is already the bounded selection wait")
+	require.Greater(t, RequestRecoveryRemaining(ctx), 30*time.Second, "recovered customer generation retains the original request budget")
+}

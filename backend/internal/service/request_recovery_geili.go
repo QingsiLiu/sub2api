@@ -172,7 +172,10 @@ func ClaimRequestRecoverySelectionWait(ctx context.Context) bool {
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if state.selectionWaits >= 3 {
+	// The new standby recovery already owns the complete 30s selection wait.
+	// Do not append a legacy Retry-After backoff after that bounded search.
+	// Leave the ordinary generation/retry budget unchanged for a recovered account.
+	if !state.accountRecoveryDeadline.IsZero() || state.selectionWaits >= 3 {
 		return false
 	}
 	state.selectionWaits++
