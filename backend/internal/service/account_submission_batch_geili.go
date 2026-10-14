@@ -8,6 +8,30 @@ import (
 
 const MaxSubmissionBatchKeys = 100
 
+// Bind each credential to its connection in the same object; never zip separately
+// filtered client arrays. The legacy api_keys + shared options API remains compatible.
+type SubmissionBatchItem struct {
+	APIKey     string                    `json:"api_key"`
+	Connection SubmissionConnectionInput `json:"connection"`
+}
+
+func (s *AccountSubmissionService) SubmitBatchItems(ctx context.Context, token string, items []SubmissionBatchItem, options SubmissionOptions) error {
+	if len(items) < 1 || len(items) > MaxSubmissionBatchKeys || options.Connection != nil || len(options.PerKeyConnections) != 0 {
+		return ErrSubmissionInvalid
+	}
+	keys := make([]string, len(items))
+	options.PerKeyConnections = make([]SubmissionConnectionInput, len(items))
+	for n, item := range items {
+		keys[n] = item.APIKey
+		options.PerKeyConnections[n] = item.Connection
+		if item.Connection.Proxy != nil {
+			proxy := *item.Connection.Proxy
+			options.PerKeyConnections[n].Proxy = &proxy
+		}
+	}
+	return s.SubmitBatch(ctx, token, keys, options)
+}
+
 type AccountSubmissionBatchRepository interface {
 	SubmitInviteBatch(context.Context, string, []string, SubmissionOptions) error
 }
@@ -46,11 +70,19 @@ func (s *AccountSubmissionService) SubmitBatch(ctx context.Context, token string
 	if invite.State(time.Now()) != "pending" {
 		return ErrSubmissionInactive
 	}
-	if options.PreparedAccount != nil {
+	if options.PreparedAccount != nil || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
 		return ErrSubmissionInvalid
 	}
+	// Bound validation (including public proxy DNS), not just the database write.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	if err = ValidateSubmissionOptions(ctx, &options); err != nil {
 		return err
+	}
+	for n := range options.PerKeyConnections {
+		if err = ValidateSubmissionConnection(ctx, &options.PerKeyConnections[n]); err != nil {
+			return err
+		}
 	}
 	if err = s.validateGroups(ctx, invite.Config); err != nil {
 		return err
@@ -59,7 +91,5 @@ func (s *AccountSubmissionService) SubmitBatch(ctx context.Context, token string
 	if !ok {
 		return ErrSubmissionUnavailable
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	return repo.SubmitInviteBatch(ctx, hash, keys, options)
 }

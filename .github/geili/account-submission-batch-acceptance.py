@@ -11,8 +11,17 @@ def verify(f, public, make):
         token = invite['token']
         keys = ['synthetic-batch-' + str(n) + '-' + platform + '-' + f.suffix for n in range(3)]
         f.intake_canaries.extend(keys)
-        body = {'token': token, 'api_keys': keys}
-        rejected = public('submit/batch', {**body, 'api_keys': [keys[0], keys[0]]})
+        proxies = [
+            {'name': 'Batch proxy A ' + platform + ' ' + f.suffix, 'protocol': 'http', 'host': '8.8.8.8', 'port': 8080, 'username': 'holder-a', 'password': 'synthetic-proxy-a-' + f.suffix},
+            {'name': 'Batch proxy B ' + platform + ' ' + f.suffix, 'protocol': 'socks5', 'host': '1.1.1.1', 'port': 1080, 'username': 'holder-b', 'password': 'synthetic-proxy-b-' + f.suffix},
+        ]
+        f.intake_canaries.extend(proxy['password'] for proxy in proxies)
+        body = {'token': token, 'items': [
+            {'api_key': keys[0], 'connection': {'mode': 'custom', 'proxy': proxies[0]}},
+            {'api_key': keys[1], 'connection': {'mode': 'custom', 'proxy': proxies[1]}},
+            {'api_key': keys[2], 'connection': {'mode': 'direct'}},
+        ]}
+        rejected = public('submit/batch', {'token': token, 'api_keys': [keys[0], keys[0]]})
         f.check(platform + ' duplicate batch keys reject without consuming invite', rejected[0] == 400 and public('inspect', {'token': token})[1]['data']['status'] == 'pending')
         result = public('submit/batch', body)
         f.check(platform + ' batch saves atomically', result[0] == 200)
@@ -31,6 +40,8 @@ def verify(f, public, make):
         ids = ','.join(str(row['account_id']) for row in records)
         exported = f.api('/admin/accounts/data?ids=' + ids + '&include_proxies=false', token=f.admin)
         f.check(platform + ' all batch credentials retain export protection', exported.get('skipped_external') == 3 and not exported['accounts'])
+        states = [public('connection', {'token': token, 'account_ref': member['account_ref']})[1]['data'] for member in data['accounts']]
+        f.check(platform + ' each key binds its own proxy with passwords hidden', [state['mode'] for state in states] == ['custom', 'custom', 'direct'] and states[0]['proxy']['host'] == '8.8.8.8' and states[1]['proxy']['host'] == '1.1.1.1' and all(proxy['password'] not in json.dumps(states) for proxy in proxies))
         ref = data['accounts'][1]['account_ref']
         f.check(platform + ' opaque member selector reads its own connection', public('connection', {'token': token, 'account_ref': ref})[0] == 200)
         saved = public('connection/update', {'token': token, 'account_ref': ref, 'version': 0,
@@ -50,7 +61,7 @@ def verify(f, public, make):
                     'billing_mode': 'token', 'input_price': .000001, 'output_price': .000002}]}, f.admin)
             account = record['account_id']
             f.api('/admin/accounts/' + str(account), {'credentials': {'base_url': f.mock_base + '/upstream',
-                'model_mapping': {model: model}}, 'group_ids': [group['id']], 'extra': {}, 'status': 'active'}, f.admin, 'PUT')
+                'model_mapping': {model: model}}, 'group_ids': [group['id']], 'proxy_id': 0, 'extra': {}, 'status': 'active'}, f.admin, 'PUT')
             f.api('/admin/accounts/' + str(account) + '/schedulable', {'schedulable': True}, f.admin)
             key = f.api('/keys', {'name': 'Batch usage ' + str(index), 'billing_source': 'balance',
                 'routing_mode': 'single', 'group_id': group['id']}, user['token'])
@@ -77,7 +88,7 @@ def verify(f, public, make):
         total = {k: sum(row[k] for row in expected) for k in expected[0]}
         f.check(platform + ' batch total equals all member reference costs and token dimensions', same(measured['summary'], total) and sum(row['requests'] for row in measured['daily']) == 6 and sum(row['requests'] for row in measured['models']) == 6)
         f.check(platform + ' nonzero batch projection hides credentials and capability', all(secret not in json.dumps(measured) for secret in keys + [token]))
-        replay = public('submit/batch', {**body, 'api_keys': ['synthetic-replacement']}, secondary=bool(getattr(f, 'has_replica', False)))
+        replay = public('submit/batch', {'token': token, 'api_keys': ['synthetic-replacement']}, secondary=bool(getattr(f, 'has_replica', False)))
         count = f.sql("SELECT json_build_object('n',count(*)) FROM account_submission_invites_geili WHERE id=" + str(ident) + ' OR parent_invite_id=' + str(ident) + ';')[0]['n']
         f.check(platform + ' batch retry across instances never creates or replaces members', replay[0] == 200 and count == 3)
         other, _ = make(platform, name='batch-foreign')

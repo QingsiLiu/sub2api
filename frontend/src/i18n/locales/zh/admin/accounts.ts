@@ -4,7 +4,7 @@ export default {
         batchSavedCount: "已录入 {count} 条账号",
         batchMode: "批量官方 API Key",
         singleMode: "单条高级表单",
-        batchHint: "每行一条官方 API Key，可在任一输入框粘贴多行；一次最多 {max} 条。整批保存成功后才能使用，账号默认等待管理员启用。",
+        batchHint: "每行一条官方 API Key，可在任一输入框粘贴多行；一次最多 {max} 条。整批保存成功后才能使用，账号默认等待管理员启用。 每条 Key 单独选择代理，代理配置只绑定对应账号；新增行不会复制其他行的代理。",
         batchName: "账号名称前缀",
         batchConcurrency: "每条账号的并发数",
         batchKey: "第 {n} 条 API Key",

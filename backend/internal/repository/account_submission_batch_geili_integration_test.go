@@ -37,13 +37,120 @@ func batchInviteFixture(t *testing.T, platform string) (*accountSubmissionReposi
 			}
 		}
 		_ = rows.Close()
+		proxies, e := integrationDB.Query(`SELECT c.proxy_id FROM account_submission_connections_geili c JOIN account_submission_invites_geili i ON i.id=c.invite_id WHERE i.id=$1 OR i.parent_invite_id=$1`, i.ID)
+		if e != nil {
+			return
+		}
+		var proxyIDs []int64
+		for proxies.Next() {
+			var id *int64
+			_ = proxies.Scan(&id)
+			if id != nil {
+				proxyIDs = append(proxyIDs, *id)
+			}
+		}
+		_ = proxies.Close()
 		_, _ = integrationDB.Exec(`DELETE FROM account_submission_connections_geili WHERE invite_id IN (SELECT id FROM account_submission_invites_geili WHERE id=$1 OR parent_invite_id=$1)`, i.ID)
 		_, _ = integrationDB.Exec(`DELETE FROM account_submission_invites_geili WHERE id=$1`, i.ID)
 		_, _ = integrationDB.Exec(`DELETE FROM scheduler_outbox WHERE account_id=ANY($1)`, pq.Array(ids))
 		_, _ = integrationDB.Exec(`DELETE FROM usage_logs WHERE account_id=ANY($1)`, pq.Array(ids))
 		_, _ = integrationDB.Exec(`DELETE FROM accounts WHERE id=ANY($1)`, pq.Array(ids))
+		_, _ = integrationDB.Exec(`DELETE FROM proxies WHERE id=ANY($1) AND NOT EXISTS(SELECT 1 FROM accounts WHERE proxy_id=proxies.id)`, pq.Array(proxyIDs))
 	})
 	return repo, i, hash
+}
+
+func TestAccountSubmissionBatchPostgresIndependentProxies(t *testing.T) {
+	ctx := context.Background()
+	preset, err := testEntClient(t).Proxy.Create().SetName(fmt.Sprintf("batch-preset-%d", time.Now().UnixNano())).SetProtocol("http").SetHost("9.9.9.9").SetPort(8081).Save(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = integrationDB.Exec(`DELETE FROM proxies WHERE id=$1`, preset.ID) })
+	repo, invite, hash := batchInviteFixture(t, service.PlatformAnthropic)
+	_, err = integrationDB.Exec(`UPDATE account_submission_invites_geili SET config=jsonb_set(config,'{proxy_id}',to_jsonb($2::bigint)) WHERE id=$1`, invite.ID, preset.ID)
+	require.NoError(t, err)
+	connections := []service.SubmissionConnectionInput{
+		{Mode: "direct"},
+		{Mode: "custom", Proxy: &service.SubmissionProxyDraft{Name: "Proxy A", Protocol: "http", Host: "8.8.8.8", Port: 8080, Username: "holder-a", Password: "synthetic-password-a"}},
+		{Mode: "custom", Proxy: &service.SubmissionProxyDraft{Name: "Proxy B", Protocol: "socks5", Host: "1.1.1.1", Port: 1080, Username: "holder-b", Password: "synthetic-password-b"}},
+		{Mode: "preset"},
+	}
+	keys := []string{"synthetic-direct", "synthetic-proxy-a", "synthetic-proxy-b", "synthetic-preset"}
+	require.NoError(t, repo.SubmitInviteBatch(ctx, hash, keys, service.SubmissionOptions{PerKeyConnections: connections}))
+	rows, err := integrationDB.Query(`SELECT a.credentials->>'api_key',a.proxy_id,COALESCE(p.host,''),COALESCE(p.password,''),i.account_ref::text FROM account_submission_invites_geili i JOIN accounts a ON a.id=i.account_id LEFT JOIN proxies p ON p.id=a.proxy_id WHERE i.id=$1 OR i.parent_invite_id=$1 ORDER BY i.id`, invite.ID)
+	require.NoError(t, err)
+	var proxyIDs []*int64
+	var refs []string
+	hosts := []string{"", "8.8.8.8", "1.1.1.1", "9.9.9.9"}
+	passwords := []string{"", "synthetic-password-a", "synthetic-password-b", ""}
+	for rows.Next() {
+		var key, host, password, ref string
+		var proxyID *int64
+		n := len(refs)
+		require.NoError(t, rows.Scan(&key, &proxyID, &host, &password, &ref))
+		require.Equal(t, keys[n], key)
+		require.Equal(t, hosts[n], host)
+		require.Equal(t, passwords[n], password)
+		refs = append(refs, ref)
+		proxyIDs = append(proxyIDs, proxyID)
+	}
+	require.NoError(t, rows.Err())
+	_ = rows.Close()
+	require.Len(t, refs, 4)
+	require.Nil(t, proxyIDs[0])
+	require.NotEqual(t, *proxyIDs[1], *proxyIDs[2])
+	require.Equal(t, preset.ID, *proxyIDs[3])
+	for n, ref := range refs {
+		state, err := repo.ReadSubmissionMemberConnection(ctx, hash, ref)
+		require.NoError(t, err)
+		require.Equal(t, connections[n].Mode, state.Mode)
+		if n == 1 || n == 2 {
+			require.True(t, state.HasPassword)
+			require.Empty(t, state.Proxy.Password)
+			require.Equal(t, hosts[n], state.Proxy.Host)
+		}
+	}
+	// Replaying different connection drafts cannot alter the committed batch.
+	require.NoError(t, repo.SubmitInviteBatch(ctx, hash, keys, service.SubmissionOptions{PerKeyConnections: []service.SubmissionConnectionInput{{Mode: "direct"}, {Mode: "direct"}, {Mode: "direct"}, {Mode: "direct"}}}))
+	state, err := repo.ReadSubmissionMemberConnection(ctx, hash, refs[2])
+	require.NoError(t, err)
+	require.Equal(t, "1.1.1.1", state.Proxy.Host)
+	// Editing A afterwards only changes A; B's proxy and password remain independent.
+	_, err = repo.UpdateSubmissionMemberConnection(ctx, hash, refs[1], 0, "11111111-1111-1111-1111-111111111111", service.SubmissionConnectionInput{Mode: "direct"})
+	require.NoError(t, err)
+	state, err = repo.ReadSubmissionMemberConnection(ctx, hash, refs[2])
+	require.NoError(t, err)
+	require.Equal(t, "1.1.1.1", state.Proxy.Host)
+	require.True(t, state.HasPassword)
+	var presetHost string
+	require.NoError(t, integrationDB.QueryRow(`SELECT host FROM proxies WHERE id=$1`, preset.ID).Scan(&presetHost))
+	require.Equal(t, "9.9.9.9", presetHost)
+}
+
+func TestAccountSubmissionBatchPostgresPerKeyProxyRollback(t *testing.T) {
+	ctx := context.Background()
+	repo, invite, hash := batchInviteFixture(t, service.PlatformOpenAI)
+	_, err := integrationDB.Exec(`ALTER TABLE accounts ADD CONSTRAINT batch_per_key_rollback_fixture_geili CHECK(name <> ` + pq.QuoteLiteral(invite.Config.Name+" #2") + `) NOT VALID`)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = integrationDB.Exec(`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS batch_per_key_rollback_fixture_geili`)
+	})
+	prefix := fmt.Sprintf("per-key-rollback-%d", time.Now().UnixNano())
+	connections := []service.SubmissionConnectionInput{
+		{Mode: "custom", Proxy: &service.SubmissionProxyDraft{Name: prefix + "-A", Protocol: "http", Host: "8.8.8.8", Port: 8080}},
+		{Mode: "custom", Proxy: &service.SubmissionProxyDraft{Name: prefix + "-B", Protocol: "http", Host: "1.1.1.1", Port: 8080}},
+	}
+	err = repo.SubmitInviteBatch(ctx, hash, []string{"synthetic-a", "synthetic-b"}, service.SubmissionOptions{PerKeyConnections: connections})
+	require.ErrorIs(t, err, service.ErrSubmissionUnavailable)
+	current, err := repo.InspectInvite(ctx, hash)
+	require.NoError(t, err)
+	require.Nil(t, current.AccountID)
+	var n int
+	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM proxies WHERE name LIKE $1`, "[external] "+prefix+"%").Scan(&n))
+	require.Zero(t, n)
+	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM accounts WHERE name LIKE $1`, invite.Config.Name+" #%").Scan(&n))
+	require.Zero(t, n)
+	require.NoError(t, integrationDB.QueryRow(`SELECT count(*) FROM account_submission_invites_geili WHERE parent_invite_id=$1`, invite.ID).Scan(&n))
+	require.Zero(t, n)
 }
 
 func TestAccountSubmissionBatchPostgresConcurrentMaximumAndProtection(t *testing.T) {

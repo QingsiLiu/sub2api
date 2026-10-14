@@ -28,10 +28,11 @@ type SubmissionConnectionInput struct {
 	Proxy *SubmissionProxyDraft `json:"proxy,omitempty"`
 }
 type SubmissionOptions struct {
-	PreparedAccount *Account                   `json:"-"` // Internal, validated official account form.
-	Name            *string                    `json:"name,omitempty"`
-	Concurrency     *int                       `json:"concurrency,omitempty"`
-	Connection      *SubmissionConnectionInput `json:"connection,omitempty"`
+	PerKeyConnections []SubmissionConnectionInput `json:"-"` // Internal, one validated connection per batch item.
+	PreparedAccount   *Account                    `json:"-"` // Internal, validated official account form.
+	Name              *string                     `json:"name,omitempty"`
+	Concurrency       *int                        `json:"concurrency,omitempty"`
+	Connection        *SubmissionConnectionInput  `json:"connection,omitempty"`
 }
 type SubmissionConnection struct {
 	Mode        string                `json:"mode"`

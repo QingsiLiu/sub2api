@@ -2,9 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { submit, inspect } = vi.hoisted(() => ({ submit: vi.fn(), inspect: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: {} }))
-vi.mock('@/api/accountSubmission', async () => ({ ...await vi.importActual('@/api/accountSubmission'), submitAccountKeyBatch: submit, inspectSubmissionInvite: inspect }))
+vi.mock('@/api/accountSubmission', async () => ({ ...await vi.importActual('@/api/accountSubmission'), submitAccountKeyBatchItems: submit, inspectSubmissionInvite: inspect }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 import Component from '../SubmissionBatchFormGeili.vue'
+import ProxyEditor from '../SubmissionProxyEditorGeili.vue'
 import { SubmissionRequestError } from '@/api/accountSubmission'
 const render = () => mount(Component, { props: { token: 'synthetic-private-link', invite: { name: 'Holder', platform: 'anthropic', status: 'pending', expires_at: '', concurrency: 3 } }, global: { stubs: { SubmissionProxyEditorGeili: true } } })
 async function paste(w: ReturnType<typeof render>, text: string) {
@@ -17,9 +18,38 @@ describe('batch holder submission', () => {
     expect(w.findAll('input[type="password"]')).toHaveLength(3)
     expect(w.find('textarea').exists()).toBe(false)
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(submit).toHaveBeenCalledWith('synthetic-private-link', ['synthetic-first', 'synthetic-second', 'synthetic-third'], { name: 'Holder', concurrency: 3, connection: { mode: 'direct' } })
+    expect(submit).toHaveBeenCalledWith('synthetic-private-link', ['synthetic-first', 'synthetic-second', 'synthetic-third'].map(api_key => ({ api_key, connection: { mode: 'direct' } })), { name: 'Holder', concurrency: 3 })
     expect(w.emitted('created')).toEqual([['synthetic-private-link']])
     expect((w.get('input[type="password"]').element as HTMLInputElement).value).toBe('')
+    w.unmount()
+  })
+  it('pairs each nonempty key with its own proxy even after removing or skipping rows', async () => {
+    const w = render(); await paste(w, 'synthetic-first\nsynthetic-empty\nsynthetic-third')
+    const editors = w.findAllComponents(ProxyEditor)
+    const proxy = { name: 'proxy-A', protocol: 'http', host: '8.8.8.8', port: 8080, username: 'holder-a', password: 'synthetic-password-a' }
+    editors[0].vm.$emit('update:modelValue', { mode: 'custom', proxy })
+    editors[2].vm.$emit('update:modelValue', { mode: 'custom', proxy: { ...proxy, name: 'proxy-C', host: '1.1.1.1', password: 'synthetic-password-c' } })
+    await w.findAll('input[type="password"]')[1].setValue('')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(submit.mock.calls[0][1]).toEqual([
+      { api_key: 'synthetic-first', connection: { mode: 'custom', proxy } },
+      { api_key: 'synthetic-third', connection: { mode: 'custom', proxy: { ...proxy, name: 'proxy-C', host: '1.1.1.1', password: 'synthetic-password-c' } } }
+    ])
+    w.unmount()
+  })
+  it('keeps the existing row proxy on multiline paste and gives new rows independent defaults', async () => {
+    const w = render()
+    const proxy = { name: 'proxy-A', protocol: 'http', host: '8.8.8.8', port: 8080, username: '', password: 'synthetic-password' }
+    w.getComponent(ProxyEditor).vm.$emit('update:modelValue', { mode: 'custom', proxy })
+    await paste(w, 'synthetic-first\nsynthetic-second')
+    const editors = w.findAllComponents(ProxyEditor)
+    expect(editors[0].props('modelValue')).toEqual({ mode: 'custom', proxy })
+    expect(editors[1].props('modelValue')).toEqual({ mode: 'direct' })
+    editors[1].vm.$emit('update:modelValue', { mode: 'preset' })
+    expect(editors[0].props('modelValue')).toEqual({ mode: 'custom', proxy })
+    await w.findAll('button').find(button => button.attributes('aria-label')?.includes('batchRemove'))!.trigger('click')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(submit.mock.calls[0][1]).toEqual([{ api_key: 'synthetic-second', connection: { mode: 'preset' } }])
     w.unmount()
   })
   it('rejects duplicate keys and a paste exceeding the batch limit without sending credentials', async () => {

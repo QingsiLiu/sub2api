@@ -4,7 +4,7 @@ export default {
         batchSavedCount: "{count} accounts submitted",
         batchMode: "Batch official API Keys",
         singleMode: "Single advanced form",
-        batchHint: "One official API Key per line. Paste multiple lines into any field, up to {max} keys. The entire batch is saved together; accounts await administrator activation.",
+        batchHint: "One official API Key per line. Paste multiple lines into any field, up to {max} keys. The entire batch is saved together; accounts await administrator activation. Choose a proxy separately for each Key. Each connection is bound to its own account; new rows do not copy another row’s proxy.",
         batchName: "Account name prefix",
         batchConcurrency: "Concurrency per account",
         batchKey: "API Key {n}",

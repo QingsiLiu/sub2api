@@ -89,6 +89,11 @@ export function submitAccountKeyBatch(token: string, api_keys: string[], options
   return publicSubmissionRequest<{ status: 'submitted' }>('submit/batch', { token, api_keys, ...options })
 }
 
+export interface SubmissionBatchItem { api_key: string; connection: SubmissionConnectionInput }
+export function submitAccountKeyBatchItems(token: string, items: SubmissionBatchItem[], options: Pick<SubmissionOptions, 'name' | 'concurrency'>) {
+  return publicSubmissionRequest<{ status: 'submitted' }>('submit/batch', { token, items, ...options })
+}
+
 export interface SubmissionProxyDraft { name: string; protocol: string; host: string; port: number; username: string; password?: string; clear_password?: boolean }
 export interface SubmissionConnectionInput { mode: 'preset' | 'direct' | 'custom'; proxy?: SubmissionProxyDraft }
 export interface SubmissionOptions { name: string; concurrency: number; connection: SubmissionConnectionInput }

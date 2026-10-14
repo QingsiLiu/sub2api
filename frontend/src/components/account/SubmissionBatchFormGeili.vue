@@ -5,15 +5,17 @@
       <label class="input-label">{{ t('admin.accounts.keyIntake.batchName') }}<input v-model="name" class="input mt-1 w-full" maxlength="95" required :disabled="busy || uncertain" /></label>
       <label class="input-label">{{ t('admin.accounts.keyIntake.batchConcurrency') }}<input v-model.number="concurrency" class="input mt-1 w-full" type="number" min="1" max="1000" required :disabled="busy || uncertain" /></label>
     </div>
-    <div class="max-h-80 space-y-2 overflow-y-auto">
-      <div v-for="(row, index) in rows" :key="row.id" class="flex items-center gap-2">
-        <label :for="`batch-key-${row.id}`" class="w-8 shrink-0 text-sm text-gray-500">{{ index + 1 }}</label>
-        <input :id="`batch-key-${row.id}`" v-model="row.key" type="password" class="input min-w-0 flex-1" :aria-label="t('admin.accounts.keyIntake.batchKey', { n: index + 1 })" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" :disabled="busy || uncertain" @paste="paste($event, index)" />
-        <button type="button" class="btn btn-secondary shrink-0" :aria-label="t('admin.accounts.keyIntake.batchRemove', { n: index + 1 })" :disabled="busy || uncertain || rows.length === 1" @click="remove(index)">×</button>
-      </div>
+    <div class="space-y-3">
+      <section v-for="(row, index) in rows" :key="row.id" class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-700" :aria-label="t('admin.accounts.keyIntake.batchKey', { n: index + 1 })">
+        <div class="flex items-center gap-2">
+          <label :for="`batch-key-${row.id}`" class="shrink-0 text-sm font-medium">Key {{ index + 1 }}</label>
+          <input :id="`batch-key-${row.id}`" v-model="row.key" type="password" class="input min-w-0 flex-1" :aria-label="t('admin.accounts.keyIntake.batchKey', { n: index + 1 })" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" :disabled="busy || uncertain" @paste="paste($event, index)" />
+          <button type="button" class="btn btn-secondary shrink-0" :aria-label="t('admin.accounts.keyIntake.batchRemove', { n: index + 1 })" :disabled="busy || uncertain || rows.length === 1" @click="remove(index)">×</button>
+        </div>
+        <SubmissionProxyEditorGeili v-model="row.connection" :has-preset="!!invite.has_preset_proxy" :disabled="busy || uncertain" />
+      </section>
     </div>
     <button type="button" class="btn btn-secondary" :disabled="busy || uncertain || rows.length >= MAX_KEYS" @click="rows.push(newRow())">{{ t('admin.accounts.keyIntake.batchAdd') }}</button>
-    <SubmissionProxyEditorGeili v-model="connection" :has-preset="!!invite.has_preset_proxy" :disabled="busy || uncertain" />
     <p v-if="message" class="text-sm text-red-600 dark:text-red-400" role="alert">{{ message }}</p>
     <button v-if="uncertain" type="button" class="btn btn-secondary w-full" :disabled="busy" @click="confirm">{{ t('admin.accounts.keyIntake.batchConfirm') }}</button>
     <button v-else class="btn btn-primary w-full" :disabled="busy">{{ t('admin.accounts.keyIntake.batchSubmit', { count: keys.length }) }}</button>
@@ -23,21 +25,24 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SubmissionProxyEditorGeili from './SubmissionProxyEditorGeili.vue'
-import { inspectSubmissionInvite, submitAccountKeyBatch, SubmissionRequestError, type PublicSubmissionInvite, type SubmissionConnectionInput } from '@/api/accountSubmission'
+import { inspectSubmissionInvite, submitAccountKeyBatchItems, SubmissionRequestError, type PublicSubmissionInvite, type SubmissionConnectionInput } from '@/api/accountSubmission'
 const props = defineProps<{ token: string; invite: PublicSubmissionInvite }>()
 const emit = defineEmits<{ created: [token: string] }>()
 const { t } = useI18n()
 const MAX_KEYS = 100
 let nextID = 0, epoch = 0
-const newRow = (key = '') => ({ id: nextID++, key })
+const defaultConnection = (): SubmissionConnectionInput => ({ mode: props.invite.has_preset_proxy ? 'preset' : 'direct' })
+const newRow = (key = '') => ({ id: nextID++, key, connection: defaultConnection() })
 const rows = ref([newRow()])
 const name = ref(props.invite.name || '')
 const concurrency = ref(props.invite.concurrency || 1)
-const connection = ref<SubmissionConnectionInput>({ mode: props.invite.has_preset_proxy ? 'preset' : 'direct' })
 const busy = ref(false), uncertain = ref(false), message = ref('')
 const keys = computed(() => rows.value.map(row => row.key.trim()).filter(Boolean))
-function clearSecrets() { rows.value = [newRow()]; connection.value = { mode: 'direct' } }
-function remove(index: number) { rows.value[index].key = ''; rows.value.splice(index, 1) }
+function clearSecrets() {
+  for (const row of rows.value) { row.key = ''; row.connection = defaultConnection() }
+  rows.value = [newRow()]
+}
+function remove(index: number) { rows.value[index].key = ''; rows.value[index].connection = defaultConnection(); rows.value.splice(index, 1) }
 function paste(event: ClipboardEvent, index: number) {
   const text = event.clipboardData?.getData('text') || ''
   if (!/[\r\n]/.test(text)) return
@@ -47,8 +52,9 @@ function paste(event: ClipboardEvent, index: number) {
   if (rows.value.length - 1 + values.length > MAX_KEYS || values.some(value => value.length > 2048 || /\s/.test(value))) {
     message.value = t('admin.accounts.keyIntake.batchInvalid'); return
   }
+  const first = { ...rows.value[index], key: values[0] }
   rows.value[index].key = ''
-  rows.value.splice(index, 1, ...values.map(newRow))
+  rows.value.splice(index, 1, first, ...values.slice(1).map(newRow))
   message.value = ''
 }
 async function confirm() {
@@ -72,7 +78,8 @@ async function submit() {
   busy.value = true; message.value = ''
   const e = epoch, token = props.token
   try {
-    await submitAccountKeyBatch(token, values, { name: name.value, concurrency: concurrency.value, connection: connection.value })
+    const items = rows.value.filter(row => row.key.trim()).map(row => ({ api_key: row.key.trim(), connection: { ...row.connection, ...(row.connection.proxy ? { proxy: { ...row.connection.proxy } } : {}) } }))
+    await submitAccountKeyBatchItems(token, items, { name: name.value, concurrency: concurrency.value })
     if (e === epoch) { clearSecrets(); emit('created', token) }
   } catch (cause) {
     if (e !== epoch) return

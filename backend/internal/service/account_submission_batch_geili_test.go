@@ -69,3 +69,35 @@ func TestAccountSubmissionMemberRejectsIDsBeforeRepositoryAccess(t *testing.T) {
 		require.ErrorIs(t, err, ErrSubmissionInvalid)
 	}
 }
+
+func TestAccountSubmissionBatchItemsIndependentConnectionsAndValidation(t *testing.T) {
+	ctx := context.Background()
+	token := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	repo := &submissionBatchRepoStub{submissionRepoStub: submissionRepoStub{invite: &AccountSubmissionInvite{Config: AccountSubmissionConfig{Platform: PlatformAnthropic}, ExpiresAt: time.Now().Add(time.Hour)}}}
+	svc := NewAccountSubmissionService(repo, submissionAdminStub{})
+	items := []SubmissionBatchItem{
+		{APIKey: " synthetic-a ", Connection: SubmissionConnectionInput{Mode: "custom", Proxy: &SubmissionProxyDraft{Name: " Proxy A ", Protocol: "http", Host: "8.8.8.8", Port: 8080, Password: "synthetic-a-password"}}},
+		{APIKey: "synthetic-b", Connection: SubmissionConnectionInput{Mode: "custom", Proxy: &SubmissionProxyDraft{Name: "Proxy B", Protocol: "socks5", Host: "1.1.1.1", Port: 1080, Password: "synthetic-b-password"}}},
+		{APIKey: "synthetic-c", Connection: SubmissionConnectionInput{Mode: "direct"}},
+		{APIKey: "synthetic-d", Connection: SubmissionConnectionInput{Mode: "preset"}},
+	}
+	require.NoError(t, svc.SubmitBatchItems(ctx, token, items, SubmissionOptions{}))
+	require.Equal(t, []string{"synthetic-a", "synthetic-b", "synthetic-c", "synthetic-d"}, repo.keys)
+	require.Nil(t, repo.options.Connection)
+	require.Len(t, repo.options.PerKeyConnections, 4)
+	require.Equal(t, "8.8.8.8", repo.options.PerKeyConnections[0].Proxy.Host)
+	require.Equal(t, "1.1.1.1", repo.options.PerKeyConnections[1].Proxy.Host)
+	require.Equal(t, "direct", repo.options.PerKeyConnections[2].Mode)
+	require.Equal(t, "preset", repo.options.PerKeyConnections[3].Mode)
+	require.Equal(t, " Proxy A ", items[0].Connection.Proxy.Name) // Caller data stays independent.
+	require.ErrorIs(t, svc.SubmitBatchItems(ctx, token, items, SubmissionOptions{Connection: &SubmissionConnectionInput{Mode: "direct"}}), ErrSubmissionInvalid)
+	for _, connection := range []SubmissionConnectionInput{
+		{}, {Mode: "custom", Proxy: &SubmissionProxyDraft{Name: "private", Protocol: "http", Host: "127.0.0.1", Port: 8080}},
+		{Mode: "direct", Proxy: &SubmissionProxyDraft{}},
+	} {
+		bad := []SubmissionBatchItem{items[0], {APIKey: "synthetic-b", Connection: connection}}
+		require.ErrorIs(t, svc.SubmitBatchItems(ctx, token, bad, SubmissionOptions{}), ErrSubmissionInvalid)
+	}
+	require.Equal(t, 1, repo.submits) // An invalid member cannot produce a partial batch.
+	require.ErrorIs(t, svc.SubmitBatch(ctx, token, []string{"a", "b"}, SubmissionOptions{PerKeyConnections: []SubmissionConnectionInput{{Mode: "direct"}}}), ErrSubmissionInvalid)
+}

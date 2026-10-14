@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { post, get } = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: { post, get } }))
-import { getSubmissionUsage, inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, createSubmissionInvite } from '@/api/accountSubmission'
+import { getSubmissionUsage, inspectSubmissionInvite, submitAccountKey, SubmissionRequestError, createSubmissionInvite, submitAccountKeyBatchItems } from '@/api/accountSubmission'
 
 describe('external key submission requests', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -14,6 +14,16 @@ describe('external key submission requests', () => {
     expect(url).toBe('/api/v1/account-submissions/submit')
     expect(options).toMatchObject({ credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', redirect: 'error' })
     expect(JSON.parse(options.body)).toEqual({ token: 'synthetic-invite-token', api_key: 'synthetic-private-key' })
+    expect(post).not.toHaveBeenCalled()
+  })
+  it('sends each Key together with its independent proxy in the request body', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 0, data: { status: 'submitted' } }) })
+    vi.stubGlobal('fetch', fetch)
+    const items = [{ api_key: 'synthetic-a', connection: { mode: 'direct' as const } }, { api_key: 'synthetic-b', connection: { mode: 'custom' as const, proxy: { name: 'Proxy B', protocol: 'http', host: '8.8.8.8', port: 8080, username: '', password: 'synthetic-password' } } }]
+    await submitAccountKeyBatchItems('synthetic-token', items, { name: 'batch', concurrency: 2 })
+    const [url, options] = fetch.mock.calls[0]
+    expect(url).toBe('/api/v1/account-submissions/submit/batch')
+    expect(JSON.parse(options.body)).toEqual({ token: 'synthetic-token', items, name: 'batch', concurrency: 2 })
     expect(post).not.toHaveBeenCalled()
   })
   it('never exposes an original network error or its request credentials', async () => {
