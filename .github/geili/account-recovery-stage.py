@@ -132,6 +132,95 @@ def benchmark_client(command, payload):
     return json.loads(private_client(command, payload, BENCH_BATCH_DEADLINE_SECONDS))
 
 
+def benchmark_resource_identity(container):
+    """Validate the Linux resource controls that the baseline can copy exactly."""
+    host = container.get('HostConfig')
+    if not isinstance(host, dict):
+        raise RuntimeError('benchmark container is missing resource configuration')
+    unsupported = ('CpuRealtimePeriod', 'CpuRealtimeRuntime', 'CpuCount', 'CpuPercent',
+        'KernelMemory', 'KernelMemoryTCP', 'IOMaximumIOps', 'IOMaximumBandwidth',
+        'BlkioWeight', 'BlkioWeightDevice', 'BlkioDeviceReadBps', 'BlkioDeviceWriteBps',
+        'BlkioDeviceReadIOps', 'BlkioDeviceWriteIOps', 'CgroupParent', 'Devices',
+        'DeviceRequests', 'DeviceCgroupRules')
+    if any(host.get(key) not in (None, 0, '', [], {}) for key in unsupported):
+        raise RuntimeError('unsupported benchmark resource control; refuse unequal containers')
+    values = {key: host.get(key, 0) for key in ('NanoCpus', 'CpuQuota', 'CpuPeriod', 'CpuShares',
+              'Memory', 'MemorySwap', 'MemoryReservation', 'OomScoreAdj')}
+    if any(type(value) is not int for value in values.values()):
+        raise RuntimeError('benchmark resource controls require exact integer values')
+    if (any(values[key] < 0 for key in ('NanoCpus', 'CpuPeriod', 'CpuShares', 'Memory', 'MemoryReservation'))
+        or values['CpuQuota'] < -1 or values['MemorySwap'] < -1 or not -1000 <= values['OomScoreAdj'] <= 1000
+        or values['CpuPeriod'] and not 1000 <= values['CpuPeriod'] <= 1000000
+        or values['CpuQuota'] > 0 and values['CpuQuota'] < 1000
+        or values['CpuShares'] and not 2 <= values['CpuShares'] <= 262144):
+        raise RuntimeError('invalid benchmark CPU or memory resource values')
+    if values['NanoCpus'] and (values['CpuQuota'] or values['CpuPeriod']):
+        raise RuntimeError('NanoCpus cannot be combined with CPU quota/period')
+    memory, swap, reservation = values['Memory'], values['MemorySwap'], values['MemoryReservation']
+    if (memory and memory < 6 * 1024 * 1024 or memory and reservation > memory
+        or not memory and swap != 0 or memory and swap == 0
+        or memory and swap > 0 and swap < memory):
+        # A hard limit with zero swap invokes daemon defaults; do not silently
+        # substitute a limit instead of copying an explicit inspected identity.
+        raise RuntimeError('invalid or implicit benchmark memory/swap combination')
+    for key in ('CpusetCpus', 'CpusetMems'):
+        value = host.get(key, '')
+        if not isinstance(value, str) or (value and not re.fullmatch(r'[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*', value)):
+            raise RuntimeError('invalid benchmark CPU/NUMA affinity')
+        if any('-' in part and int(part.split('-')[0]) > int(part.split('-')[1]) for part in value.split(',')):
+            raise RuntimeError('invalid benchmark CPU/NUMA affinity range')
+        values[key] = value
+    for key, minimum, maximum in (('PidsLimit', -1, None), ('MemorySwappiness', 0, 100)):
+        value = host.get(key)
+        if value is not None and (type(value) is not int or value < minimum or maximum is not None and value > maximum):
+            raise RuntimeError('invalid benchmark PID or swap control')
+        values[key] = value
+    oom = host.get('OomKillDisable', False)
+    if oom is not None and type(oom) is not bool:
+        raise RuntimeError('invalid benchmark OOM control')
+    values['OomKillDisable'] = bool(oom)
+    if values['OomKillDisable'] and not memory:
+        raise RuntimeError('OOM kill disable requires a benchmark memory limit')
+    limits = host.get('Ulimits') or []
+    if not isinstance(limits, list):
+        raise RuntimeError('invalid benchmark ulimits')
+    allowed = {'as', 'cpu', 'data', 'fsize', 'locks', 'memlock', 'msgqueue', 'nice', 'nofile',
+               'nproc', 'rss', 'rtprio', 'rttime', 'sigpending', 'stack'}
+    values['Ulimits'] = []
+    for limit in limits:
+        if (not isinstance(limit, dict) or limit.get('Name') not in allowed
+            or any(type(limit.get(key)) is not int or limit[key] < -1 for key in ('Soft', 'Hard'))
+            or limit['Hard'] != -1 and (limit['Soft'] == -1 or limit['Soft'] > limit['Hard'])
+            or any(row['Name'] == limit['Name'] for row in values['Ulimits'])):
+            raise RuntimeError('invalid or duplicate benchmark ulimit')
+        values['Ulimits'].append({key: limit[key] for key in ('Name', 'Soft', 'Hard')})
+    return values
+
+
+def benchmark_resource_args(identity):
+    values = benchmark_resource_identity({'HostConfig': identity})
+    args = []
+    if values['NanoCpus']:
+        whole, fraction = divmod(values['NanoCpus'], 1000000000)
+        args += ['--cpus', str(whole) + ('.' + f'{fraction:09d}'.rstrip('0') if fraction else '')]
+    for key, flag in (('CpuQuota', '--cpu-quota'), ('CpuPeriod', '--cpu-period'), ('CpuShares', '--cpu-shares'),
+                      ('Memory', '--memory'), ('MemorySwap', '--memory-swap'), ('MemoryReservation', '--memory-reservation'),
+                      ('OomScoreAdj', '--oom-score-adj'), ('CpusetCpus', '--cpuset-cpus'), ('CpusetMems', '--cpuset-mems')):
+        if values[key]: args += [flag, str(values[key])]
+    for key, flag in (('PidsLimit', '--pids-limit'), ('MemorySwappiness', '--memory-swappiness')):
+        if values[key] is not None: args += [flag, str(values[key])]
+    if values['OomKillDisable']: args.append('--oom-kill-disable')
+    for limit in values['Ulimits']:
+        args += ['--ulimit', limit['Name'] + '=' + str(limit['Soft']) + ':' + str(limit['Hard'])]
+    return args
+
+
+def guard_benchmark_resources(primary, baseline, expected):
+    if (not isinstance(expected, dict) or benchmark_resource_identity(primary) != expected
+        or benchmark_resource_identity(baseline) != expected):
+        raise RuntimeError('benchmark primary or baseline resource identity changed')
+
+
 def load_ops(directory):
     path = Path(directory).resolve(strict=True) / 'accept-two-instance-cache-stage.py'
     spec = importlib.util.spec_from_file_location('recovery_stage_cache', path)
@@ -617,13 +706,16 @@ def fixture_type(cache, source):
         def start_baseline(self):
             self.guard()
             primary = self.inspect()[0]
+            resources = benchmark_resource_identity(primary)
+            resource_args = benchmark_resource_args(resources)
             image = json.loads(cache.b.stage.command(['docker', 'image', 'inspect', self.args.baseline_image]))[0]
             if image.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != self.args.baseline_revision:
                 raise RuntimeError('pre-existing immutable baseline image has a different revision')
             cache.assert_replica_port_available(primary['State']['Pid'], self.args.baseline_port)
             name = cache.b.stage.PROJECT + '-recovery-baseline-' + self.suffix.lower()
             record = {'name': name, 'owner': self.suffix, 'volume': name + '-data',
-                      'image': self.args.baseline_image, 'revision': self.args.baseline_revision, 'removed': False}
+                      'image': self.args.baseline_image, 'revision': self.args.baseline_revision, 'removed': False,
+                      'resource_identity': resources, 'primary_id': primary['Id']}
             self.snapshot['recovery_baseline'] = record
             cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
             for command in (['docker', 'inspect', name], ['docker', 'volume', 'inspect', record['volume']]):
@@ -637,7 +729,8 @@ def fixture_type(cache, source):
             cache.b.stage.command(['docker', 'volume', 'create', '--label', 'geili.cache_acceptance=' + record['owner'], record['volume']])
             record['id'] = cache.b.stage.command(['docker', 'run', '-d', '--name', name,
                 '--label', 'geili.cache_acceptance=' + record['owner'], '--network', 'container:' + primary['Id'],
-                '--env-file', str(path), '--mount', 'type=volume,source=' + record['volume'] + ',target=/app/data', record['image']]).strip()
+                '--env-file', str(path), '--mount', 'type=volume,source=' + record['volume'] + ',target=/app/data']
+                + resource_args + [record['image']]).strip()
             cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
             self.wait_until('owned baseline health', lambda: self.baseline_health(), 75)
 
@@ -649,7 +742,11 @@ def fixture_type(cache, source):
                 row['Id'] != record['id'] or not row.get('State', {}).get('Running') or
                 row['HostConfig'].get('NetworkMode') != 'container:' + self.expected_identity[0]):
                 raise RuntimeError('owned baseline image/revision/network identity differs')
-            return self.inspect()[0]['State']['Pid']
+            primary = self.inspect()[0]
+            if primary['Id'] != record.get('primary_id'):
+                raise RuntimeError('benchmark primary container identity changed')
+            guard_benchmark_resources(primary, row, record.get('resource_identity'))
+            return primary['State']['Pid']
 
         def baseline_health(self):
             pid = self.guard_baseline()
@@ -680,6 +777,8 @@ def fixture_type(cache, source):
             batches = []
             self.performance = {'baseline_image': self.args.baseline_image, 'baseline_revision': self.args.baseline_revision,
                 'candidate_image': self.args.expected_image, 'candidate_revision': self.args.expected_revision,
+                'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                'resource_identity': self.snapshot['recovery_baseline']['resource_identity'],
                 'batch_order': ['baseline', 'candidate', 'candidate', 'baseline'], 'batches': batches,
                 'batch_deadline_seconds': BENCH_BATCH_DEADLINE_SECONDS, 'batch_progress': []}
             for index, mode in enumerate(self.performance['batch_order']):
@@ -700,6 +799,12 @@ def fixture_type(cache, source):
                 batch['mode'] = mode
                 batches.append(batch)
                 progress['state'] = 'complete'
+                try:
+                    self.guard_baseline()
+                except RuntimeError:
+                    progress['state'] = 'invalid resource/container drift; completed samples retained, not accepted'
+                    cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)
+                    raise
                 cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)
             self.performance['summary'] = performance_summary(batches)
             cache.b.stage.private_json(self.private / 'account-recovery-performance.json', self.performance)

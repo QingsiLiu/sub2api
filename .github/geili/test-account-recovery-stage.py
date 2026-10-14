@@ -5,6 +5,7 @@ import json
 import io
 import threading
 import tempfile
+import copy
 from unittest.mock import patch, Mock
 from pathlib import Path
 from types import SimpleNamespace
@@ -97,6 +98,128 @@ class GuardTests(unittest.TestCase):
         self.assertNotIn('TRUNCATE', query)
         for ids in ([], [True], [0], [-1], ['13'], [13, 13], ['1); DELETE FROM accounts;']):
             with self.subTest(ids=ids), self.assertRaises(RuntimeError): s.cleanup_runtime_sql(ids)
+
+
+class BenchmarkResourceTests(unittest.TestCase):
+    def primary(self, **patch):
+        return {'Id': 'primary-id', 'State': {'Pid': 55, 'Running': True}, 'HostConfig': {
+            'NanoCpus': 1000000000, 'Memory': 1610612736, 'MemorySwap': 3221225472,
+            'CpuQuota': 0, 'CpuPeriod': 0, 'CpusetCpus': '', 'PidsLimit': None, **patch}}
+
+    def test_one_cpu_and_one_point_five_gib_copy_exact_bytes(self):
+        identity = s.benchmark_resource_identity(self.primary())
+        self.assertEqual(s.benchmark_resource_args(identity),
+            ['--cpus', '1', '--memory', '1610612736', '--memory-swap', '3221225472'])
+        self.assertEqual(identity['PidsLimit'], None)
+        self.assertEqual(identity['NanoCpus'], 1000000000)
+        fractional = s.benchmark_resource_identity(self.primary(NanoCpus=1000000001))
+        self.assertEqual(s.benchmark_resource_args(fractional)[:2], ['--cpus', '1.000000001'])
+
+    def test_cpu_quota_affinity_pid_and_soft_limits_copy_without_nano_cpus(self):
+        identity = s.benchmark_resource_identity(self.primary(NanoCpus=0, CpuQuota=50000,
+            CpuPeriod=100000, CpuShares=512, CpusetCpus='0-1,3', CpusetMems='0', PidsLimit=256,
+            MemorySwap=-1, MemoryReservation=536870912, MemorySwappiness=0,
+            OomKillDisable=True, OomScoreAdj=100, Ulimits=[{'Name': 'nofile', 'Soft': 4096, 'Hard': 8192}]))
+        flags = s.benchmark_resource_args(identity)
+        self.assertNotIn('--cpus', flags)
+        for flag, value in (('--cpu-quota', '50000'), ('--cpu-period', '100000'), ('--cpu-shares', '512'),
+                            ('--cpuset-cpus', '0-1,3'), ('--cpuset-mems', '0'), ('--pids-limit', '256'),
+                            ('--memory-swap', '-1'), ('--memory-reservation', '536870912'),
+                            ('--memory-swappiness', '0'), ('--oom-score-adj', '100'), ('--ulimit', 'nofile=4096:8192')):
+            self.assertEqual(flags[flags.index(flag) + 1], value)
+        self.assertIn('--oom-kill-disable', flags)
+
+    def test_unlimited_defaults_remain_unlimited(self):
+        identity = s.benchmark_resource_identity({'HostConfig': {}})
+        self.assertEqual(s.benchmark_resource_args(identity), [])
+        s.guard_benchmark_resources({'HostConfig': {}}, {'HostConfig': {'OomKillDisable': None, 'Ulimits': []}}, identity)
+        limits = s.benchmark_resource_identity({'HostConfig': {'CpuQuota': -1, 'PidsLimit': -1}})
+        self.assertEqual(s.benchmark_resource_args(limits), ['--cpu-quota', '-1', '--pids-limit', '-1'])
+
+    def test_invalid_or_uncopyable_controls_are_rejected_before_creation(self):
+        invalid = [dict(NanoCpus=True), dict(CpuQuota=100000), dict(CpuPeriod=100000),
+                   dict(NanoCpus=0, CpuPeriod=999), dict(Memory=-1), dict(MemorySwap=0),
+                   dict(MemorySwap=1024), dict(Memory=0), dict(MemoryReservation=3221225472),
+                   dict(CpusetCpus='0;--privileged'), dict(CpusetCpus='3-1'), dict(PidsLimit=True),
+                   dict(MemorySwappiness=101), dict(CpuRealtimeRuntime=1000), dict(BlkioWeight=500),
+                   dict(CgroupParent='/limited'), dict(DeviceRequests=[{'Count': -1}]),
+                   dict(Ulimits=[{'Name': 'nofile', 'Soft': 8192, 'Hard': 4096}])]
+        for patch in invalid:
+            with self.subTest(patch=patch), self.assertRaises(RuntimeError):
+                s.benchmark_resource_identity(self.primary(**patch))
+
+    def test_drift_on_either_container_invalidates_the_comparison(self):
+        original = self.primary()
+        identity = s.benchmark_resource_identity(original)
+        s.guard_benchmark_resources(original, copy.deepcopy(original), identity)
+        for side in ('primary', 'baseline'):
+            for patch in (dict(NanoCpus=2000000000), dict(MemorySwap=-1), dict(PidsLimit=128), dict(CpusetCpus='1')):
+                primary, baseline = copy.deepcopy(original), copy.deepcopy(original)
+                (primary if side == 'primary' else baseline)['HostConfig'].update(patch)
+                with self.subTest(side=side, patch=patch), self.assertRaises(RuntimeError):
+                    s.guard_benchmark_resources(primary, baseline, identity)
+        with self.assertRaises(RuntimeError): s.guard_benchmark_resources(original, original, None)
+
+    def test_start_baseline_passes_resources_and_guards_captured_identity(self):
+        primary = self.primary()
+        baseline = copy.deepcopy(primary)
+        baseline['Id'] = 'baseline-id'
+        baseline['HostConfig']['NetworkMode'] = 'container:primary-id'
+        commands, saved = [], []
+        def command(argv, **options):
+            commands.append(argv)
+            if argv[:3] == ['docker', 'image', 'inspect']:
+                return json.dumps([{'Config': {'Labels': {'org.opencontainers.image.revision': 'b' * 40}}}])
+            if argv[:2] == ['docker', 'inspect']: return json.dumps([baseline])
+            if argv[:2] == ['docker', 'run']: return 'baseline-id'
+            if argv[:3] == ['docker', 'volume', 'create']: return 'owned-volume'
+            if argv[0] == 'nsenter': return '[200,{}]'
+            raise AssertionError(argv)
+        stage = SimpleNamespace(PROJECT='owned-stage', command=command,
+            private_json=lambda path, payload: saved.append(copy.deepcopy(payload)))
+        cache = SimpleNamespace(fixture_type=lambda _: object, b=SimpleNamespace(stage=stage),
+            assert_replica_port_available=Mock(), replica_env=lambda *a: {'SERVER_PORT': '18520'},
+            container_owned=lambda *a: True, NETNS_REQUEST='offline-only')
+        fixture = s.fixture_type(cache, None)()
+        fixture.guard, fixture.inspect = Mock(), lambda: [primary]
+        fixture.args = SimpleNamespace(baseline_image='immutable-image', baseline_revision='b' * 40, baseline_port=18520)
+        fixture.suffix, fixture.snapshot, fixture.expected_identity = 'unit', {}, ('primary-id',)
+        fixture.wait_until = lambda name, predicate, seconds: self.assertTrue(predicate())
+        with tempfile.TemporaryDirectory() as directory, patch.object(s.subprocess, 'run', return_value=SimpleNamespace(returncode=1)):
+            fixture.private = Path(directory)
+            fixture.start_baseline()
+        argv = next(argv for argv in commands if argv[:2] == ['docker', 'run'])
+        self.assertEqual(argv[-7:], ['--cpus', '1', '--memory', '1610612736', '--memory-swap', '3221225472', 'immutable-image'])
+        record = fixture.snapshot['recovery_baseline']
+        self.assertEqual(record['resource_identity'], s.benchmark_resource_identity(primary))
+        self.assertEqual(record['primary_id'], 'primary-id')
+        self.assertEqual(fixture.guard_baseline(), 55)
+        primary['HostConfig']['NanoCpus'] = 2000000000
+        with self.assertRaises(RuntimeError): fixture.guard_baseline()
+        self.assertTrue(saved)
+
+    def test_batch_end_drift_preserves_completed_samples_and_refuses_acceptance(self):
+        saved = []
+        cache = SimpleNamespace(fixture_type=lambda _: object, b=SimpleNamespace(stage=SimpleNamespace(
+            private_json=lambda path, payload: saved.append(copy.deepcopy(payload)))))
+        fixture = s.fixture_type(cache, None)()
+        fixture.start_baseline = lambda: None
+        fixture.new_case = lambda label: {'key': {'key': 'synthetic-token'}}
+        fixture.snapshot = {'recovery_baseline': {'resource_identity': s.benchmark_resource_identity(self.primary())}}
+        fixture.private = Path('/offline-private')
+        fixture.args = SimpleNamespace(baseline_image='old-image', baseline_revision='b' * 40,
+            expected_image='new-image', expected_revision='a' * 40, baseline_port=18520)
+        fixture.guard_baseline = Mock(side_effect=[55, RuntimeError('resource drift')])
+        fixture.check = Mock()
+        batch = {'elapsed_seconds': 10, 'latencies_seconds': [.01] * 1000,
+            'response_statuses': [200] * 1000, 'failed_responses': 0, 'warmup_failed': 0}
+        with patch.object(s, 'benchmark_client', return_value=batch) as client:
+            with self.assertRaisesRegex(RuntimeError, 'resource drift'): fixture.performance_checks()
+        self.assertEqual(client.call_count, 1)
+        self.assertEqual(len(saved[-1]['batches'][0]['latencies_seconds']), 1000)
+        self.assertIn('not accepted', saved[-1]['batch_progress'][0]['state'])
+        self.assertNotIn('summary', saved[-1])
+        fixture.check.assert_not_called()
 
 
 class PerformanceTests(unittest.TestCase):
