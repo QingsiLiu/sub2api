@@ -15,7 +15,7 @@
       <fieldset :disabled="locked" class="space-y-4">
         <div>
           <label class="input-label" for="admin-grant-user">{{ t('admin.subscriptions.form.user') }}</label>
-          <div class="relative">
+          <div class="relative" data-assign-user-search>
             <input
               id="admin-grant-user"
               v-model="keyword"
@@ -230,6 +230,10 @@ function request(): AdminGrantRequest {
 }
 
 function debounceSearch() {
+  // Changing the search must never leave the previous assignment target selected.
+  if (selectedUser.value && keyword.value.trim() !== selectedUser.value.email) {
+    selectedUser.value = null
+  }
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(searchUsers, 300)
 }

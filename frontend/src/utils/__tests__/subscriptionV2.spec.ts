@@ -54,6 +54,12 @@ describe('subscription V2 quota projection', () => {
 
 describe('subscription V2 labels', () => {
   const t = (key: string, args?: Record<string, unknown>) => `${key}${args ? ':' + JSON.stringify(args) : ''}`
+  it('shows the effective custom quota instead of the internal compatibility mode or stale plan', () => {
+    const custom = { ...sub, contract: { ...contract, mode: 'legacy_daily' as const }, plan: { ...plan, daily_limit_usd: 450 }, quota_summary: { daily_limit_usd: 270 } } as UserSubscription
+    expect(subscriptionLabel(custom, t)).toBe('subscriptionRights.dailyQuotaLabel:{"daily":270}')
+    expect(subscriptionLabel({ ...custom, quota_summary: { ...custom.quota_summary!, daily_limit_usd: 0 } }, t)).toBe('subscriptionRights.compatibility')
+    expect(subscriptionLabel({ ...custom, quota_summary: { ...custom.quota_summary!, daily_limit_usd: null } }, t)).toBe('subscriptionRights.compatibility')
+  })
   it('labels renewal cycles separately from added units', () => {
     const order = { operation: 'renew', periods: 3, units: 2 } as PaymentOrder
     expect(subscriptionOrderLabel(order, t)).toContain('subscriptionRights.periods:{"count":3}')
