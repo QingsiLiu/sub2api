@@ -279,7 +279,7 @@ func (s *AccountRecoveryServiceGeili) RecheckAccountGeili(ctx context.Context, i
 // Only callers that already applied route, model, profit and continuity rules
 // may supply this predicate. Candidates never leave the original target group.
 func (s *AccountRecoveryServiceGeili) RecoverGroupGeili(ctx context.Context, groupID int64, model string, eligible func(context.Context, *Account) bool) bool {
-	if s == nil || groupID <= 0 || model == "" || isAccountRecoveryProbeGeili(ctx) || !RequestRecoveryAllowed(ctx) {
+	if s == nil || !AccountRecoveryScopeAllowedGeili(ctx) || groupID <= 0 || model == "" || isAccountRecoveryProbeGeili(ctx) || !RequestRecoveryAllowed(ctx) {
 		return false
 	}
 	key := fmt.Sprintf("%d:%s", groupID, model)
