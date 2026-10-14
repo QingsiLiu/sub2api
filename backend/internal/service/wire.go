@@ -264,6 +264,8 @@ func ProvideAccountTestService(
 	openAIGatewayService *OpenAIGatewayService,
 	settingService *SettingService,
 	pluginManager *PluginManager,
+	rateLimitService *RateLimitService,
+	cnBalance *CNProviderBalanceService,
 ) *AccountTestService {
 	service := NewAccountTestService(
 		accountRepo,
@@ -279,6 +281,7 @@ func ProvideAccountTestService(
 	service.SetOpenAIGatewayService(openAIGatewayService)
 	service.SetSettingService(settingService)
 	service.SetPluginManager(pluginManager)
+	AttachAccountRecoveryGeili(service, rateLimitService, cnBalance)
 	return service
 }
 

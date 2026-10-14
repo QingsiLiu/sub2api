@@ -272,7 +272,7 @@
                     <div :class="['h-6 w-1 shrink-0 rounded-full', sub.plan ? 'bg-primary-500' : platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || t('keys.subscriptionLabel') }}</span>
+                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ subscriptionLabel(sub, t) }}</span>
                         <span v-if="!sub.plan && sub.group" :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group.platform || '')]">{{ platformLabel(sub.group.platform || '') }}</span>
                       </div>
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
@@ -350,7 +350,7 @@ import type { UserSubscription } from '@/types'
 import { legacyActions, legacyPlanAvailable } from '@/utils/legacySubscription'
 import type { LegacyManagementOptions } from '@/types/payment'
 import LegacyEntitlementChanges from '@/components/payment/LegacyEntitlementChanges.vue'
-import { subscriptionActions, subscriptionQuota, contractLabel, subscriptionRefreshDelay, campaignStackSubscription } from '@/utils/subscriptionV2'
+import { subscriptionActions, subscriptionQuota, subscriptionLabel, contractLabel, subscriptionRefreshDelay, campaignStackSubscription } from '@/utils/subscriptionV2'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'

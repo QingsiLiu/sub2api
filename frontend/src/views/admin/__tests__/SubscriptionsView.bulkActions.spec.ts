@@ -2,18 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import SubscriptionsView from '../SubscriptionsView.vue'
 
-const { list, bulkAction, bulkAssign, listUsers, showError } = vi.hoisted(() => ({
-  list: vi.fn(), bulkAction: vi.fn(), bulkAssign: vi.fn(), listUsers: vi.fn(), showError: vi.fn()
+const { list, bulkAction, previewGrant, listUsers, showError } = vi.hoisted(() => ({
+  list: vi.fn(), bulkAction: vi.fn(), previewGrant: vi.fn(), listUsers: vi.fn(), showError: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
-    subscriptions: { list, bulkAction, bulkAssign },
+    subscriptions: { list, bulkAction, previewGrant },
     groups: { getAll: vi.fn().mockResolvedValue([]) },
     users: { list: listUsers }
   }
 }))
-vi.mock('@/api/admin/payment', () => ({ adminPaymentAPI: { getPlans: vi.fn().mockResolvedValue({ data: [{ id: 3, name: 'Plan 3', validity_days: 30, validity_unit: 'days' }, { id: 7, name: 'Plan 7', validity_days: 30, validity_unit: 'days' }] }) } }))
 
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
 vi.mock('vue-i18n', async () => ({
@@ -108,38 +107,25 @@ describe('subscription bulk operations', () => {
     expect(wrapper.getComponent({ name: 'DataTable' }).props('selectedKeys')).toEqual([])
   })
 
-  it('assigns multiple users once and retries only failed users', async () => {
+  it('opens the custom quota assignment flow without requiring a plan or group', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    await wrapper.findAll('button').find(button => button.text() === 'admin.subscriptions.assignSubscription')!.trigger('click')
-    const form = wrapper.get('#assign-subscription-form')
-    await form.get('input[type="checkbox"]').setValue(true)
-    form.getComponent({ name: 'Select' }).vm.$emit('update:modelValue', 7)
-    const search = form.get('[data-assign-user-search] input')
-    for (const id of [11, 22]) {
-      listUsers.mockResolvedValue({ items: [{ id, email: `user${id}@example.com` }] })
-      await search.trigger('focus')
-      await search.setValue(`user${id}`)
-      await vi.advanceTimersByTimeAsync(300)
-      await flushPromises()
-      await form.get('[data-assign-user-search] button').trigger('click')
-    }
-    expect(form.get('[data-test="assign-users"]').text()).toContain('user11@example.com')
-    expect(form.get('[data-test="assign-users"]').text()).toContain('user22@example.com')
-    let resolveAssign!: (result: unknown) => void
-    bulkAssign.mockReturnValueOnce(new Promise(resolve => { resolveAssign = resolve }))
-    await form.trigger('submit')
-    await form.trigger('submit')
-    expect(bulkAssign).toHaveBeenCalledTimes(1)
-    expect(bulkAssign).toHaveBeenCalledWith({ user_ids: [11, 22], plan_id: 7, validity_days: 30 })
-    resolveAssign({ success_count: 1, failed_count: 1, subscriptions: [{ user_id: 11 }], errors: ['User 22: conflict'] })
+    await wrapper.get('[data-test="open-admin-grant"]').trigger('click')
+    expect(wrapper.find('#assign-subscription-form').exists()).toBe(false)
+    const form = wrapper.get('#admin-grant-form')
+    expect(form.findComponent({ name: 'Select' }).exists()).toBe(false)
+    const search = form.get('#admin-grant-user')
+    listUsers.mockResolvedValue({ items: [{ id: 11, email: 'user11@example.com' }] })
+    await search.trigger('focus')
+    await search.setValue('user11')
+    await vi.advanceTimersByTimeAsync(300)
     await flushPromises()
-    expect(form.get('[data-test="assign-users"]').text()).not.toContain('user11@example.com')
-    expect(form.get('[data-test="assign-users"]').text()).toContain('user22@example.com')
-    expect(form.get('[data-test="batch-assign-result"]').text()).toContain('User 22: conflict')
-    bulkAssign.mockResolvedValueOnce({ success_count: 1, failed_count: 0, subscriptions: [{ user_id: 22 }], errors: [] })
+    await form.get('[data-assign-user-search] button').trigger('click')
+    await form.get('#admin-grant-daily').setValue(270)
+    await form.get('#admin-grant-days').setValue(30)
+    await form.get('#admin-grant-reason').setValue('线下续费，实收500元')
+    previewGrant.mockRejectedValueOnce(new Error('Preview unavailable'))
     await form.trigger('submit')
     await flushPromises()
-    expect(bulkAssign).toHaveBeenLastCalledWith({ user_ids: [22], plan_id: 7, validity_days: 30 })
-    expect(form.find('[data-test="assign-users"]').exists()).toBe(false)
+    expect(previewGrant).toHaveBeenCalledWith({ user_id: 11, daily_limit_usd: 270, days: 30, reason: '线下续费，实收500元' })
   })
 })

@@ -726,6 +726,11 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 		"max_tokens":  256,
 		"temperature": 1,
 	}
+	// geili hook: controlled recovery payload must be bounded before AWS signing.
+	if isAccountRecoveryProbeGeili(ctx) {
+		bedrockPayload["messages"] = []map[string]any{{"role": "user", "content": []map[string]any{{"type": "text", "text": accountRecoveryProbePromptGeili}}}}
+		bedrockPayload["max_tokens"] = 64
+	}
 	bedrockBody, _ := json.Marshal(bedrockPayload)
 
 	// Use non-streaming endpoint (response is standard Claude JSON)

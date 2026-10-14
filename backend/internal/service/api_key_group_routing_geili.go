@@ -86,7 +86,7 @@ func keyGroupEndpointSupported(group *Group, endpoint string) bool {
 // ResolveExplicitKeyRoutes freezes the ordered candidates once for the request.
 // It deliberately does not use DetectModelPlatform: two OpenAI transport groups
 // may expose unrelated GPT and national/custom model IDs.
-func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKey, model, endpoint string, resolver *CompositeRouteResolver) ([]CompositeRouteDecision, error) {
+func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKey, model, endpoint string, resolver *CompositeRouteResolver, stoppedTextRecovery ...bool) ([]CompositeRouteDecision, error) {
 	if key == nil || key.BillingSource == "" {
 		return nil, nil
 	}
@@ -128,6 +128,12 @@ func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKe
 			if known == model {
 				supported = true
 				break
+			}
+		}
+		if !supported && len(stoppedTextRecovery) > 0 && stoppedTextRecovery[0] {
+			supported, err = resolver.explicitRecoverableTextModelGeili(ctx, group, model, endpoint)
+			if err != nil {
+				return nil, err
 			}
 		}
 		if !supported {

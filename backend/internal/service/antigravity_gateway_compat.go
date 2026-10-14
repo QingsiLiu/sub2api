@@ -367,6 +367,10 @@ func antigravityCompatProxyURL(account *Account) string {
 }
 
 func (s *AntigravityGatewayService) handleAntigravityCompatTransportError(c *gin.Context, err error) error {
+	// geili hook: preserve the HTTP transport's classified admission decision.
+	if isUpstreamFailoverErrorGeili(err) {
+		return err
+	}
 	if switchErr, ok := IsAntigravityAccountSwitchError(err); ok {
 		return &UpstreamFailoverError{
 			StatusCode:        http.StatusServiceUnavailable,

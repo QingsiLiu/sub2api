@@ -51,6 +51,7 @@ func BeginTextForwardGuard(c *gin.Context, stream bool) func(error) error {
 	}
 	parent := c.Writer
 	c.Set("geili_supplier_failure", nil)
+	c.Set(anthropicStreamDiagnosticKeyGeili, nil)
 	w := &geiliTextForwardWriter{context: c, ResponseWriter: parent, headers: parent.Header().Clone(),
 		stage: newDefaultOpenAIFirstOutputStage(), status: http.StatusOK,
 		initialSize: parent.Size(), stream: stream}
@@ -431,6 +432,7 @@ func geiliPreOutput(c *gin.Context) bool {
 // GeiliUpstreamReadFailure only proposes replay for positive transport/completion
 // failures. Arbitrary local errors, oversized input and canceled callers stay final.
 func GeiliUpstreamReadFailure(c *gin.Context, err error) error {
+	rememberAnthropicStreamDiagnosticGeili(c, err)
 	if err == nil || !geiliPreOutput(c) {
 		return err
 	}
@@ -458,6 +460,9 @@ func GeiliUpstreamReadFailure(c *gin.Context, err error) error {
 		return err
 	}
 	code, message := "upstream_stream_incomplete", "Upstream response did not complete"
+	if diagnosticCode, diagnosticMessage, _, ok := AnthropicStreamDiagnosticGeili(err); ok {
+		code, message = diagnosticCode, diagnosticMessage
+	}
 	if strings.Contains(msg, "stream data interval timeout") {
 		code, message = "upstream_stream_idle", "Upstream stream data interval timeout"
 	}
@@ -608,7 +613,10 @@ func GeiliWriteStreamFailure(c *gin.Context, err error) {
 	if c == nil || c.Writer == nil || err == nil {
 		return
 	}
-	message := "Upstream response did not complete"
+	code, message := "upstream_stream_incomplete", "Upstream response did not complete"
+	if diagnosticCode, diagnosticMessage, _, ok := AnthropicStreamDiagnosticGeili(err); ok {
+		code, message = diagnosticCode, diagnosticMessage
+	}
 	var supplier *geiliUpstreamPayloadFailure
 	if errors.As(err, &supplier) {
 		message = supplier.message
@@ -617,9 +625,10 @@ func GeiliWriteStreamFailure(c *gin.Context, err error) {
 	if c.Request != nil {
 		path = strings.TrimRight(c.Request.URL.Path, "/")
 	}
-	errorBody := gin.H{"type": "upstream_error", "code": "upstream_stream_incomplete", "message": message}
+	errorBody := gin.H{"type": "upstream_error", "code": code, "message": message}
 	if errors.Is(err, context.DeadlineExceeded) || (c.Request != nil && !RequestRecoveryAllowed(c.Request.Context()) && c.Request.Context().Err() != context.Canceled) {
 		errorBody["code"] = "upstream_recovery_timeout"
+		code = "upstream_recovery_timeout"
 		message = "Upstream recovery timeout budget exhausted"
 		errorBody["message"] = message
 	}
@@ -656,7 +665,7 @@ func GeiliWriteStreamFailure(c *gin.Context, err error) {
 	_, _ = c.Writer.WriteString(frame)
 	c.Writer.Flush()
 	MarkResponseCommitted(c)
-	MarkOpsStreamFailure(c, "upstream_error", "upstream_stream_incomplete", message, http.StatusBadGateway)
+	MarkOpsStreamFailure(c, "upstream_error", code, message, http.StatusBadGateway)
 }
 
 // Record failures from direct JSON/semantic writes as well as staged commits;

@@ -1265,6 +1265,22 @@ export interface OpenCodeGoUsageSettings {
   debounce_minutes: number
 }
 
+export interface AccountRuntimeProbeGeili {
+  status: 'success' | 'failed' | 'checking'
+  model: string
+  checked_at: string
+  message?: string
+}
+
+export interface AccountRuntimeStateGeili {
+  state: 'enabled' | 'stopped' | 'temporarily_stopped' | 'balance_stopped'
+  balance_blocked: boolean
+  stop_reason: string
+  next_check_at?: string
+  last_probe?: AccountRuntimeProbeGeili
+  models?: Record<string, { next_check_at?: string; last_probe?: AccountRuntimeProbeGeili; blocked: boolean }>
+}
+
 export interface Account {
   id: number
   name: string
@@ -1322,6 +1338,7 @@ export interface Account {
   scheduler_scores?: AccountSchedulerGroupScore[] | null
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
+  runtime_state?: AccountRuntimeStateGeili
   status: 'active' | 'inactive' | 'error'
   error_message: string | null
   last_used_at: string | null

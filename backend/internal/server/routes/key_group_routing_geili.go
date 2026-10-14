@@ -200,7 +200,9 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		}
 		// geili hook: routing rejections must retain client intent before handler dispatch.
 		service.SetOpsIngressRequestContext(c, model, gjson.GetBytes(body, "stream").Bool() || strings.HasSuffix(path, ":streamGenerateContent"))
-		candidates, err := keys.ResolveExplicitKeyRoutes(c.Request.Context(), key, model, compositeRouteEndpointForPath(path), resolver)
+		// geili hook: request-only declarations can reach recovery; catalog listing stays unchanged.
+		allowStoppedText := recoveryTextRequest && !strings.HasSuffix(strings.TrimRight(path, "/"), "/responses/compact") && service.ExplicitKeyStoppedTextRecoveryAllowedGeili(c.Request.Context(), body)
+		candidates, err := keys.ResolveExplicitKeyRoutes(c.Request.Context(), key, model, compositeRouteEndpointForPath(path), resolver, allowStoppedText)
 		if err != nil {
 			writeCompositeRouteError(c, err)
 			return

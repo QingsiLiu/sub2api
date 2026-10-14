@@ -714,9 +714,9 @@ export default {
         itemFailed: 'Action failed'
       },
       grant: {
-        button: 'Grant entitlement',
-        title: 'Admin entitlement grant',
-        intro: 'Give a user an extra "daily quota × days" entitlement. It stacks with existing gift and paid entitlements and falls back automatically when it expires. Self-service tiers do not apply, so preview before confirming.',
+        button: 'Assign subscription',
+        title: 'Assign subscription',
+        intro: 'Set a user’s daily quota and validity directly without choosing a plan or group. Quota stacks with existing subscriptions and gifts, and each entitlement expires independently. Preview before confirming.',
         dailyLimit: 'Daily quota (USD)',
         days: 'Days',
         limitsHint: 'Daily quota 0.01–10000 USD, 1–3650 days, starting now.',
@@ -730,18 +730,18 @@ export default {
         grantExpires: 'Grant expires',
         timeline: 'Daily quota over time',
         perDay: '{amount}/day',
-        warning_self_service_paused: 'The pool switches to compatibility mode: while this grant is active the user cannot renew, upgrade or stack on their own, and refunds of existing paid orders need manual handling. Self-service resumes once it expires and no other paid entitlement remains.',
-        warning_creates_pool: 'The user has no active subscription. A new pool will be created and attached to the all-models subscription group.',
-        warning_converts_from_v2: 'The user is on a regular paid contract. It will switch to compatibility mode; existing paid entitlements are kept.',
-        warning_conversion_changes_quota: 'After switching to compatibility mode the daily quota is not "current quota + this grant". Check the entitlement list above before confirming.',
+        warning_self_service_paused: 'While this custom assignment is active, the user cannot renew, upgrade or stack on their own, and refunds of existing paid orders need manual handling. Self-service resumes once it expires and no other paid entitlement remains.',
+        warning_creates_pool: 'The user has no active subscription. An independent quota pool will be created; the API key’s selected groups determine routing.',
+        warning_converts_from_v2: 'The user has a standard subscription. Existing paid entitlements are kept, but self-service renewal, upgrade and stacking will be paused.',
+        warning_conversion_changes_quota: 'The resulting daily quota is not "current quota + this assignment". Check the entitlement list above before confirming.',
         warning_already_unlimited: 'The user is already unlimited; this grant does not change today\'s quota.',
         warning_user_not_active: 'This user account is not active and may not be able to use the grant.',
         done: 'Granted: entitlement #{id} in pool #{subscription}',
         retryHint: 'The grant result is not confirmed yet. Retrying reuses the same request and will not grant twice.',
         edit: 'Edit terms',
         preview: 'Preview',
-        confirm: 'Confirm grant',
-        retry: 'Retry grant',
+        confirm: 'Confirm assignment',
+        retry: 'Retry assignment',
         userRequired: 'Select a user',
         invalidDaily: 'Daily quota must be between 0.01 and 10000',
         invalidDays: 'Days must be a whole number from 1 to 3650',
@@ -762,7 +762,7 @@ export default {
         source_legacy: 'Legacy',
         mode: 'Billing mode',
         mode_v2: 'Regular contract',
-        mode_legacy_daily: 'Compatibility mode',
+        mode_legacy_daily: 'Daily quota',
         todayLimit: 'Daily quota today',
         poolExpires: 'Pool expires',
         reload: 'Reload',
@@ -863,20 +863,20 @@ export default {
         "Restore the subscription for '{user}'? If the original subscription has expired, it will be restored as expired.",
       guide: {
         title: 'Subscription Management Guide',
-        subtitle: 'Subscription mode lets you assign time-based usage quotas to users, with daily/weekly/monthly limits. Follow these steps to get started.',
+        subtitle: 'Assign a daily quota and validity period. Routing groups are selected independently, and quota resets at 00:00 Beijing time.',
         showGuide: 'Usage Guide',
         step1: {
-          title: 'Create a Subscription Group',
-          line1: 'Go to "Group Management" page, click "Create Group"',
-          line2: 'Set billing type to "Subscription", configure daily/weekly/monthly quota limits',
-          line3: 'Save the group and ensure its status is "Active"',
+          title: 'Configure Available Routes',
+          line1: 'In Group Management, enable subscription billing on the actual routing groups',
+          line2: 'Configure each group’s subscription rate multiplier; quota pools are independent of groups',
+          line3: 'Ensure the groups are active and have available upstream accounts',
           link: 'Go to Group Management'
         },
         step2: {
           title: 'Assign Subscription to User',
           line1: 'Click the "Assign Subscription" button in the top right',
           line2: 'Search for a user by email and select them',
-          line3: 'Choose a subscription group, set validity days, then click "Assign"'
+          line3: 'Enter the daily quota, validity days and reason, then preview and confirm the assignment'
         },
         step3: {
           title: 'Manage Existing Subscriptions'

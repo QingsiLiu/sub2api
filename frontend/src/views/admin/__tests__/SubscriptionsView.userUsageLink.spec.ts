@@ -4,9 +4,9 @@ import { defineComponent } from 'vue'
 
 import SubscriptionsView from '../SubscriptionsView.vue'
 
-const { listSubscriptions, assignSubscription, getAllGroups, listUsers, searchUsageUsers, showError } = vi.hoisted(() => ({
+const { listSubscriptions, previewGrant, getAllGroups, listUsers, searchUsageUsers, showError } = vi.hoisted(() => ({
   listSubscriptions: vi.fn(),
-  assignSubscription: vi.fn(),
+  previewGrant: vi.fn(),
   showError: vi.fn(),
   getAllGroups: vi.fn(),
   listUsers: vi.fn(),
@@ -15,14 +15,13 @@ const { listSubscriptions, assignSubscription, getAllGroups, listUsers, searchUs
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
-    subscriptions: { list: listSubscriptions, assign: assignSubscription },
+    subscriptions: { list: listSubscriptions, previewGrant },
     groups: { getAll: getAllGroups },
     users: { list: listUsers },
     usage: { searchUsers: searchUsageUsers }
   }
 }))
 
-vi.mock('@/api/admin/payment', () => ({ adminPaymentAPI: { getPlans: vi.fn().mockResolvedValue({ data: [{ id: 3, name: 'Plan 3', validity_days: 30, validity_unit: 'days' }, { id: 7, name: 'Plan 7', validity_days: 30, validity_unit: 'days' }] }) } }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
@@ -84,7 +83,7 @@ describe('admin subscription users', () => {
       total: 1,
       pages: 1
     })
-    assignSubscription.mockResolvedValue({})
+    previewGrant.mockRejectedValue(new Error('Preview unavailable'))
     getAllGroups.mockResolvedValue([])
     listUsers.mockResolvedValue({
       items: [{ id: 42, email: 'reader@example.com' }],
@@ -200,8 +199,8 @@ describe('admin subscription users', () => {
       await wrapper.findAll('button')
         .find((button) => button.text() === 'admin.subscriptions.assignSubscription')!
         .trigger('click')
-      const form = wrapper.get('#assign-subscription-form')
-      form.getComponent({ name: 'Select' }).vm.$emit('update:modelValue', 3)
+      const form = wrapper.get('#admin-grant-form')
+      await form.get('#admin-grant-reason').setValue('线下付款')
       const search = wrapper.get('[data-assign-user-search] input')
       await search.trigger('focus')
       await search.setValue('reader')
@@ -213,8 +212,8 @@ describe('admin subscription users', () => {
       await form.trigger('submit')
       await flushPromises()
 
-      expect(assignSubscription).not.toHaveBeenCalled()
-      expect(showError).toHaveBeenCalledWith('admin.subscriptions.pleaseSelectUser')
+      expect(previewGrant).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('admin.subscriptions.grant.userRequired')
       expect(listUsers).toHaveBeenCalledTimes(1)
 
       listUsers.mockResolvedValue({ items: [{ id: 84, email: 'another@example.com' }] })
@@ -226,9 +225,9 @@ describe('admin subscription users', () => {
       await form.trigger('submit')
       await flushPromises()
 
-      expect(assignSubscription).toHaveBeenCalledTimes(1)
-      expect(assignSubscription).toHaveBeenCalledWith({
-        user_id: 84, plan_id: 3, validity_days: 30
+      expect(previewGrant).toHaveBeenCalledTimes(1)
+      expect(previewGrant).toHaveBeenCalledWith({
+        user_id: 84, daily_limit_usd: 360, days: 30, reason: '线下付款'
       })
     } finally {
       wrapper.unmount()

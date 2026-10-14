@@ -77,7 +77,18 @@ export function campaignOnly(sub: Pick<UserSubscription, 'entitlements'>): boole
   return !!sub.entitlements?.length && sub.entitlements.every(lot => lot.source_type === 'campaign')
 }
 
-export function subscriptionLabel(sub: Pick<UserSubscription, 'entitlements' | 'contract' | 'plan' | 'group' | 'group_id'>, t: Translate): string {
-  if (campaignOnly(sub)) return t('subscriptionRights.campaignGift')
-  return sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || `Group #${sub.group_id}`
+export function subscriptionLabel(sub: Pick<UserSubscription, 'entitlements' | 'contract' | 'plan' | 'group' | 'group_id' | 'quota_summary'>, t: Translate): string {
+  // geili hook: name entitlements by their effective daily quota, not internal modes.
+  const daily = sub.quota_summary ? sub.quota_summary.daily_limit_usd : sub.plan?.daily_limit_usd ?? sub.group?.daily_limit_usd
+  if (campaignOnly(sub)) {
+    return daily != null && daily > 0
+      ? t('subscriptionRights.giftQuotaLabel', { daily })
+      : t('subscriptionRights.campaignGift')
+  }
+  if (sub.contract?.mode === 'legacy_daily') {
+    return daily != null && daily > 0
+      ? t('subscriptionRights.dailyQuotaLabel', { daily })
+      : t('subscriptionRights.compatibility')
+  }
+  return sub.contract ? contractLabel(sub.contract, t) : sub.plan?.name || sub.group?.name || t('subscriptionRights.compatibility')
 }

@@ -58,6 +58,11 @@ func (s *GatewayService) ForwardAsResponses(
 	originalModel := responsesReq.Model
 	clientStream := responsesReq.Stream
 	// geili hook: keep each failed attempt's prelude and headers private.
+	if e := checkRuntimeBeforeForwardGeili(ctx, s.accountRepo, account, originalModel); e != nil {
+		return nil, e
+	}
+	ctx = WithAccountModelFailureObservationGeili(ctx)
+	ctx = context.WithValue(ctx, accountRuntimeForwardModelKeyGeili{}, originalModel)
 	recoveryModel := originalModel
 	finish := BeginTextForwardGuard(c, clientStream)
 	defer func() {
@@ -66,6 +71,7 @@ func (s *GatewayService) ForwardAsResponses(
 		}
 		err = finish(err)
 		s.recordTextSupplierFailureGeili(ctx, c, account, recoveryModel, err)
+		s.rateLimitService.observeAccountResultGeili(ctx, c, account, originalModel, err)
 		var failover *UpstreamFailoverError
 		if errors.As(err, &failover) && failover.SafeToFailoverAfterWrite {
 			out = nil

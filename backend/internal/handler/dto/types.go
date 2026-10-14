@@ -239,6 +239,7 @@ type Account struct {
 	Priority                int                            `json:"priority"`
 	RateMultiplier          float64                        `json:"rate_multiplier"`
 	Status                  string                         `json:"status"`
+	RuntimeState            map[string]any                 `json:"runtime_state,omitempty"`
 	ErrorMessage            string                         `json:"error_message"`
 	LastUsedAt              *time.Time                     `json:"last_used_at"`
 	ExpiresAt               *int64                         `json:"expires_at"`
@@ -357,20 +358,21 @@ type AccountListItem struct {
 	OllamaCloudUsage  *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
 	OpenCodeGoUsage   *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
 
-	ProxyID                 *int64     `json:"proxy_id"`
-	ProxyFallbackOriginID   *int64     `json:"proxy_fallback_origin_id"`
-	ProxyFallbackOriginName *string    `json:"proxy_fallback_origin_name,omitempty"`
-	Concurrency             int        `json:"concurrency"`
-	LoadFactor              *int       `json:"load_factor,omitempty"`
-	Priority                int        `json:"priority"`
-	RateMultiplier          float64    `json:"rate_multiplier"`
-	Status                  string     `json:"status"`
-	ErrorMessage            string     `json:"error_message"`
-	LastUsedAt              *time.Time `json:"last_used_at"`
-	ExpiresAt               *int64     `json:"expires_at"`
-	AutoPauseOnExpired      bool       `json:"auto_pause_on_expired"`
-	CreatedAt               time.Time  `json:"created_at"`
-	UpdatedAt               time.Time  `json:"updated_at"`
+	ProxyID                 *int64         `json:"proxy_id"`
+	ProxyFallbackOriginID   *int64         `json:"proxy_fallback_origin_id"`
+	ProxyFallbackOriginName *string        `json:"proxy_fallback_origin_name,omitempty"`
+	Concurrency             int            `json:"concurrency"`
+	LoadFactor              *int           `json:"load_factor,omitempty"`
+	Priority                int            `json:"priority"`
+	RateMultiplier          float64        `json:"rate_multiplier"`
+	Status                  string         `json:"status"`
+	RuntimeState            map[string]any `json:"runtime_state,omitempty"`
+	ErrorMessage            string         `json:"error_message"`
+	LastUsedAt              *time.Time     `json:"last_used_at"`
+	ExpiresAt               *int64         `json:"expires_at"`
+	AutoPauseOnExpired      bool           `json:"auto_pause_on_expired"`
+	CreatedAt               time.Time      `json:"created_at"`
+	UpdatedAt               time.Time      `json:"updated_at"`
 
 	Schedulable bool `json:"schedulable"`
 

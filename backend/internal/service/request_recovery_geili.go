@@ -13,13 +13,16 @@ type requestRecoveryContextKey struct{}
 // requestRecoveryState belongs to the client request, not an account/group
 // attempt. Its clock starts only after the first recoverable upstream failure.
 type requestRecoveryState struct {
-	mu              sync.Mutex
-	budget          time.Duration
-	deadline        time.Time
-	now             func() time.Time
-	signatureUsed   bool
-	selectionWaits  int
-	replayForbidden bool
+	mu                        sync.Mutex
+	budget                    time.Duration
+	deadline                  time.Time
+	now                       func() time.Time
+	signatureUsed             bool
+	selectionWaits            int
+	replayForbidden           bool
+	accountRecoveryDeadline   time.Time
+	accountRecoverySelections map[string]bool
+	accountRecoveryRestored   map[int64]struct{}
 }
 
 func WithRequestRecovery(ctx context.Context, budget time.Duration) context.Context {
@@ -169,7 +172,10 @@ func ClaimRequestRecoverySelectionWait(ctx context.Context) bool {
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if state.selectionWaits >= 3 {
+	// The new standby recovery already owns the complete 30s selection wait.
+	// Do not append a legacy Retry-After backoff after that bounded search.
+	// Leave the ordinary generation/retry budget unchanged for a recovered account.
+	if !state.accountRecoveryDeadline.IsZero() || state.selectionWaits >= 3 {
 		return false
 	}
 	state.selectionWaits++

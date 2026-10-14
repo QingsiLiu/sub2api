@@ -1,14 +1,19 @@
 <template>
   <div class="flex items-center gap-2">
     <!-- Rate Limit Display (429) - Two-line layout -->
-    <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
-      <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
+    <div v-if="runtimeState === 'balance_stopped'" class="flex flex-col items-center gap-1">
+      <span class="badge text-xs badge-danger">{{ t('admin.accounts.runtime.balance_stopped') }}</span>
+      <span class="max-w-[180px] text-center text-[11px] text-gray-500">{{ t('admin.accounts.runtime.rechargeHint') }}</span>
+    </div>
+    <span v-else-if="runtimeState === 'stopped'" class="badge text-xs badge-gray">{{ t('admin.accounts.runtime.stopped') }}</span>
+    <div v-else-if="isRateLimited" class="flex flex-col items-center gap-1">
+      <span class="badge text-xs badge-warning">{{ t('admin.accounts.runtime.temporarily_stopped') }}</span>
       <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitResumeText }}</span>
     </div>
 
     <!-- Overload Display (529) - Two-line layout -->
     <div v-else-if="isOverloaded" class="flex flex-col items-center gap-1">
-      <span class="badge text-xs badge-danger">{{ t('admin.accounts.status.overloaded') }}</span>
+      <span class="badge text-xs badge-danger">{{ t('admin.accounts.runtime.temporarily_stopped') }}</span>
       <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ overloadCountdown }}</span>
     </div>
 
@@ -32,6 +37,16 @@
       </span>
     </template>
 
+    <div v-if="account.runtime_state?.next_check_at || account.runtime_state?.last_probe" class="text-[11px] text-gray-500 dark:text-gray-400">
+      <div v-if="account.runtime_state.next_check_at">{{ t('admin.accounts.runtime.nextCheck', { time: formatDateTime(account.runtime_state.next_check_at) }) }}</div>
+      <div v-if="account.runtime_state.last_probe">{{ t(`admin.accounts.runtime.probe_${account.runtime_state.last_probe.status}`, { model: account.runtime_state.last_probe.model, time: formatDateTime(account.runtime_state.last_probe.checked_at) }) }}</div>
+    </div>
+    <div v-if="blockedRuntimeModels.length" class="flex flex-col gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+      <div v-for="[model, state] in blockedRuntimeModels" :key="model">
+        {{ model }} · {{ t('admin.accounts.runtime.temporarily_stopped') }}
+        <span v-if="state.next_check_at"> · {{ t('admin.accounts.runtime.nextCheck', { time: formatDateTime(state.next_check_at) }) }}</span>
+      </div>
+    </div>
     <!-- Error Info Indicator -->
     <div v-if="hasError && account.error_message" class="group/error relative">
       <svg
@@ -162,6 +177,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import { accountRuntimeStateGeili } from '@/utils/accountRuntimeGeili'
 import type { Account } from '@/types'
 import { formatCountdown, formatDateTime, formatDateTimeToMinute, formatCountdownWithSuffix, formatTime } from '@/utils/format'
 
@@ -174,6 +190,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'show-temp-unsched', account: Account): void
 }>()
+
+const runtimeState = computed(() => accountRuntimeStateGeili(props.account))
+const blockedRuntimeModels = computed(() => Object.entries(props.account.runtime_state?.models ?? {}).filter(([, state]) => state.blocked))
 
 // Computed: is rate limited (429)
 const isRateLimited = computed(() => {
@@ -318,6 +337,9 @@ const tempUnschedRecoveryText = computed(() => {
 
 // Computed: status badge class
 const statusClass = computed(() => {
+  if (runtimeState.value === 'balance_stopped') return 'badge-danger'
+  if (runtimeState.value === 'temporarily_stopped') return 'badge-warning'
+  if (runtimeState.value === 'stopped') return 'badge-gray'
   if (hasError.value) {
     return 'badge-danger'
   }
@@ -338,22 +360,8 @@ const statusClass = computed(() => {
 
 // Computed: status text
 const statusText = computed(() => {
-  if (hasError.value) {
-    return t('admin.accounts.status.error')
-  }
-  if (isTempUnschedulable.value) {
-    return t('admin.accounts.status.tempUnschedulable')
-  }
-  if (props.account.status !== 'active') {
-    return t(`admin.accounts.status.${props.account.status}`)
-  }
-  if (isQuotaExceeded.value) {
-    return t('admin.accounts.status.quotaExceeded')
-  }
-  if (!props.account.schedulable) {
-    return t('admin.accounts.status.paused')
-  }
-  return t(`admin.accounts.status.${props.account.status}`)
+  return t(`admin.accounts.runtime.${runtimeState.value}`)
+
 })
 
 const handleTempUnschedClick = () => {

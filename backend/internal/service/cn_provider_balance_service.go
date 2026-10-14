@@ -92,7 +92,7 @@ func (s *CNProviderBalanceService) QueryBalance(ctx context.Context, accountID i
 }
 
 // QueryBalanceForAccount 探测已加载账号（配额监控 fetcher / 周期余额检测复用，
-// 避免二次 GetByID）。singleflight key 与 QueryBalance 相同，按账号 ID 合并。
+// 避免二次 GetByID）。同账号、同凭据与网络身份的并发查询合并。
 func (s *CNProviderBalanceService) QueryBalanceForAccount(ctx context.Context, account *Account) (*CNProviderBalanceResult, error) {
 	if s == nil || s.accountRepo == nil || s.httpUpstream == nil {
 		return nil, infraerrors.New(http.StatusInternalServerError, "CN_BALANCE_NOT_CONFIGURED", "cn provider balance service is not configured")
@@ -100,7 +100,8 @@ func (s *CNProviderBalanceService) QueryBalanceForAccount(ctx context.Context, a
 	if err := validatePayGAccount(account); err != nil {
 		return nil, err
 	}
-	key := "cn_balance:" + strconv.FormatInt(account.ID, 10)
+	// geili hook: never reuse old credential balance evidence after a key change.
+	key := "cn_balance:" + strconv.FormatInt(account.ID, 10) + ":" + accountBalanceIdentityGeili(account)
 	resultCh := s.flight.DoChan(key, func() (any, error) {
 		probeCtx, cancel := context.WithTimeout(context.Background(), cnBalanceUpstreamTimeout+5*time.Second)
 		defer cancel()
