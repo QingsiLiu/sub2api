@@ -8,19 +8,19 @@
     </div>
     <p class="input-hint">{{ t('admin.accounts.keyIntake.connectionHint') }}</p>
     <BaseDialog :show="show" :title="t('admin.proxies.createProxy')" width="normal" @close="close">
-      <form id="external-proxy-form" class="space-y-5" @submit.prevent="apply">
+      <form :id="formID" class="space-y-5" @submit.prevent="apply">
         <ProxyDraftFieldsGeili v-model="draft" :max-name-length="80" />
         <template v-if="hasPassword">
           <p class="input-hint">{{ t('admin.accounts.keyIntake.passwordKeep') }}</p>
           <label class="flex items-center gap-2 text-sm"><input v-model="clearPassword" type="checkbox" />{{ t('admin.accounts.keyIntake.passwordClear') }}</label>
         </template>
       </form>
-      <template #footer><button type="button" class="btn btn-secondary" @click="close">{{ t('common.cancel') }}</button><button type="submit" form="external-proxy-form" class="btn btn-primary">{{ t('common.save') }}</button></template>
+      <template #footer><button type="button" class="btn btn-secondary" @click="close">{{ t('common.cancel') }}</button><button type="submit" :form="formID" class="btn btn-primary">{{ t('common.save') }}</button></template>
     </BaseDialog>
   </div>
 </template>
 <script setup lang="ts">
-import { computed, ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onBeforeUnmount, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -29,6 +29,7 @@ import type { SubmissionConnectionInput } from '@/api/accountSubmission'
 const props = defineProps<{ modelValue: SubmissionConnectionInput; hasPreset?: boolean; hasPassword?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: SubmissionConnectionInput] }>()
 const { t } = useI18n()
+const formID = `external-proxy-${useId()}`
 const blank = (): ProxyDraftFields => ({ name: '', protocol: 'http', host: '', port: 8080, username: '', password: '' })
 const show = ref(false), draft = ref(blank()), clearPassword = ref(false)
 const options = computed(() => {

@@ -17,7 +17,7 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 	if err != nil {
 		return err
 	}
-	if options.PreparedAccount != nil {
+	if options.PreparedAccount != nil || (len(options.PerKeyConnections) > 0 && (len(options.PerKeyConnections) != len(keys) || options.Connection != nil)) {
 		return service.ErrSubmissionInvalid
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -39,6 +39,20 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 	if !usable {
 		return service.ErrSubmissionInactive
 	}
+	if len(options.PerKeyConnections) > 0 {
+		// Lock shared groups once and the preset proxy if any member uses it.
+		// The first member may be direct while a later one uses the preset.
+		references := invite.Config
+		references.ProxyID = nil
+		for _, connection := range options.PerKeyConnections {
+			if connection.Mode == "preset" {
+				references.ProxyID = invite.Config.ProxyID
+			}
+		}
+		if err = validateSubmissionReferences(ctx, tx, references); err != nil {
+			return err
+		}
+	}
 	baseName := invite.Config.Name
 	if options.Name != nil {
 		baseName = *options.Name
@@ -56,6 +70,10 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 			}
 		}
 		itemOptions := options
+		itemOptions.PerKeyConnections = nil
+		if len(options.PerKeyConnections) > 0 {
+			itemOptions.Connection = &options.PerKeyConnections[index]
+		}
 		name := baseName
 		if len(keys) > 1 {
 			suffix := " #" + strconv.Itoa(index+1)
@@ -66,7 +84,7 @@ func (r *accountSubmissionRepository) SubmitInviteBatch(ctx context.Context, has
 			name = string(runes) + suffix
 		}
 		itemOptions.Name = &name
-		if err = createSubmittedAccountInBatch(ctx, tx, member, key, itemOptions, index > 0); err != nil {
+		if err = createSubmittedAccountInBatch(ctx, tx, member, key, itemOptions, index > 0 || len(options.PerKeyConnections) > 0); err != nil {
 			return err
 		}
 	}

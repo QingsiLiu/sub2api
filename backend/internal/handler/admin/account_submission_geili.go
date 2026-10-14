@@ -131,14 +131,25 @@ func (h *AccountHandler) protectedSubmissionAccounts(c *gin.Context, ids []int64
 
 func (h *AccountHandler) SubmitAccountKeyBatch(c *gin.Context) {
 	var req struct {
-		Token   string   `json:"token"`
-		APIKeys []string `json:"api_keys"`
+		Token   string                        `json:"token"`
+		APIKeys []string                      `json:"api_keys"`
+		Items   []service.SubmissionBatchItem `json:"items"`
 		service.SubmissionOptions
 	}
-	if !decodeSubmissionJSONLimit(c, &req, 256*1024) {
+	if !decodeSubmissionJSONLimit(c, &req, 384*1024) {
 		return
 	}
-	if err := h.accountSubmission.SubmitBatch(c.Request.Context(), req.Token, req.APIKeys, req.SubmissionOptions); err != nil {
+	var err error
+	if req.Items != nil {
+		if req.APIKeys != nil {
+			response.ErrorFrom(c, service.ErrSubmissionInvalid)
+			return
+		}
+		err = h.accountSubmission.SubmitBatchItems(c.Request.Context(), req.Token, req.Items, req.SubmissionOptions)
+	} else {
+		err = h.accountSubmission.SubmitBatch(c.Request.Context(), req.Token, req.APIKeys, req.SubmissionOptions)
+	}
+	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

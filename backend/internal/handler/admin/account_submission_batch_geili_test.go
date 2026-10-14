@@ -36,12 +36,24 @@ func TestAccountSubmissionBatchStrictCredentialBoundary(t *testing.T) {
 	router.POST("/batch", h.SubmitAccountKeyBatch)
 	token := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
 	valid := `{"token":"` + token + `","api_keys":["synthetic-one","synthetic-two"]}`
-	for _, body := range []string{strings.Replace(valid, "}", `,"group_ids":[1]}`, 1), strings.Replace(valid, "}", `,"account_id":6381}`, 1), valid + ` {}`, `{"api_keys":["` + strings.Repeat("s", 257*1024) + `"]}`} {
+	for _, body := range []string{strings.Replace(valid, "}", `,"group_ids":[1]}`, 1), strings.Replace(valid, "}", `,"account_id":6381}`, 1), valid + ` {}`, `{"api_keys":["` + strings.Repeat("s", 385*1024) + `"]}`} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/batch", strings.NewReader(body)))
 		require.Equal(t, 400, rec.Code)
 		require.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
 		require.NotContains(t, rec.Body.String(), "synthetic-one")
+	}
+	for _, body := range []string{
+		`{"token":"` + token + `","items":[{"api_key":"synthetic-a","connection":{"mode":"direct","proxy_id":7}}]}`,
+		`{"token":"` + token + `","items":[{"api_key":"synthetic-a","connection":{"mode":"direct"}}],"api_keys":["synthetic-b"]}`,
+		`{"token":"` + token + `","items":[{"api_key":"synthetic-a"}]}`,
+		`{"token":"` + token + `","items":[{"api_key":"synthetic-a","connection":{"mode":"direct"}}],"connection":{"mode":"direct"}}`,
+		`{"token":"` + token + `","api_keys":["synthetic-a"],"PerKeyConnections":[]}`,
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/batch", strings.NewReader(body)))
+		require.Equal(t, 400, rec.Code)
+		require.NotContains(t, rec.Body.String(), "synthetic-a")
 	}
 	require.Zero(t, repo.count)
 	rec := httptest.NewRecorder()
@@ -60,4 +72,10 @@ func TestAccountSubmissionBatchStrictCredentialBoundary(t *testing.T) {
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/batch", strings.NewReader(string(body))))
 	require.Equal(t, 200, rec.Code)
 	require.Equal(t, 102, repo.count)
+	individual := `{"token":"` + token + `","items":[{"api_key":"synthetic-a","connection":{"mode":"direct"}},{"api_key":"synthetic-b","connection":{"mode":"custom","proxy":{"name":"test","protocol":"http","host":"8.8.8.8","port":8080}}}]}`
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/batch", strings.NewReader(individual)))
+	require.Equal(t, 200, rec.Code)
+	require.Equal(t, 104, repo.count)
+
 }
