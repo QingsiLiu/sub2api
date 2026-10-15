@@ -10,9 +10,9 @@
 
 相对现网 `.7`，仅增加 AUAPI 的显式 OpenAI Images 协议选择：`image_provider: openai` 的账号保留同步参考图编辑及常规异步包装路径，不被仅支持文生图的原生 AUAPI 任务适配器截获。三款 GPT 模型和参考图 multipart 原字节透传。原生媒体账号、历史任务、客户价卡与折扣保持。此候选直接基于生产 `e668f16d952666686fd1db5abde9f77cb4986077`，不包含主干待发的账号容灾、性能及流式改动；无迁移。
 
-- 功能 revision：`9f141ec64`（主干对应 `369cdc77c`）；候选 revision `2b3ea2b9c4ef1e283da2ef133ec481e9166f6046`；[CI38705973126](https://github.com/QingsiLiu/sub2api/actions/runs/38705973126) 构建中，镜像 digest 待 CI 产出。
+- 功能 revision：`9f141ec64`（主干对应 `369cdc77c`）；候选 revision `2b3ea2b9c4ef1e283da2ef133ec481e9166f6046`；[CI38705973126](https://github.com/QingsiLiu/sub2api/actions/runs/38705973126) 全部9任务及13制品门禁通过，345迁移保持；不可变镜像 `ghcr.io/qingsiliu/sub2api@sha256:7db7af9151ab8766d8a15e59c5023dafbf1e111a17b3023cac6a16f6eab30395`。
 - 部署状态：尚未部署 Stage、尚未发布生产。AUAPI 三款独立路由的生成/编辑估价当前返回 503，必须待上游验收发布，再用专用限额 Key 验证给力完整出图与结算后启用。
-- 本地定向单测、竞态及编译在主干通过；隔离候选相关单测、竞态与编译也已通过。实际出图、Stage、CI 不提前标为通过。
+- 本地定向单测、竞态及编译在主干通过；隔离候选相关单测、竞态与编译也已通过。实际出图和Stage 不提前标为通过。
 
 
 ## 0.2.16-geili.11（Stage功能通过，吞吐通过但尾延迟未通过，未发布生产）
