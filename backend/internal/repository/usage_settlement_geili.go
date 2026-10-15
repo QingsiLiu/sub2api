@@ -196,9 +196,7 @@ func clampSettlementBatch(n int) int {
 }
 func (r *usageBillingRepository) ProcessPendingSettlements(ctx context.Context, limit int) ([]service.UsageSettlementApplied, error) {
 	token := uuid.NewString()
-	rows, err := r.db.QueryContext(ctx, `WITH selected AS (
- SELECT id FROM usage_settlement_receipts WHERE state='pending' AND command IS NOT NULL AND record_source='live' AND next_settlement_at<=NOW() AND (settlement_lease_until IS NULL OR settlement_lease_until<NOW()) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $1)
- UPDATE usage_settlement_receipts r SET settlement_lease_token=$2,settlement_lease_until=NOW()+($3*INTERVAL '1 second'),settlement_attempts=settlement_attempts+1 FROM selected s WHERE r.id=s.id RETURNING r.id,r.command`, clampSettlementBatch(limit), token, settlementLease.Seconds())
+	rows, err := r.querySettlementClaimGeili(ctx, false, clampSettlementBatch(limit), token, settlementLease.Seconds())
 	if err != nil {
 		return nil, err
 	}
@@ -271,9 +269,7 @@ func settlementErrorCode(err error) string {
 func (r *usageBillingRepository) DeliverSettledUsage(ctx context.Context, limit int) (service.UsageSettlementDeliveryStats, error) {
 	var stats service.UsageSettlementDeliveryStats
 	token := uuid.NewString()
-	rows, err := r.db.QueryContext(ctx, `WITH selected AS (
- SELECT id FROM usage_settlement_receipts WHERE state='settled' AND delivered_at IS NULL AND record_source='live' AND record_completeness='complete' AND detail IS NOT NULL AND charged_amount IS NOT NULL AND next_delivery_at<=NOW() AND (delivery_lease_until IS NULL OR delivery_lease_until<NOW()) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $1)
- UPDATE usage_settlement_receipts r SET delivery_lease_token=$2,delivery_lease_until=NOW()+($3*INTERVAL '1 second'),delivery_attempts=delivery_attempts+1 FROM selected s WHERE r.id=s.id RETURNING r.id`, clampSettlementBatch(limit), token, settlementLease.Seconds())
+	rows, err := r.querySettlementClaimGeili(ctx, true, clampSettlementBatch(limit), token, settlementLease.Seconds())
 	if err != nil {
 		return stats, err
 	}

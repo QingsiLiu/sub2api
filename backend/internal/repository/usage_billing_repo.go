@@ -16,11 +16,12 @@ import (
 )
 
 type usageBillingRepository struct {
-	db *sql.DB
+	db          *sql.DB
+	claimsGeili *usageSettlementPreparedClaimsGeili
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
-	return &usageBillingRepository{db: sqlDB}
+	return &usageBillingRepository{db: sqlDB, claimsGeili: newUsageSettlementPreparedClaimsGeili(sqlDB)}
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
