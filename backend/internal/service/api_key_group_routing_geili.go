@@ -129,16 +129,9 @@ func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKe
 		if !keyGroupEndpointSupported(group, endpoint) {
 			continue
 		}
-		models, err := resolver.ExplicitGroupModels(ctx, group)
+		supported, err := resolver.explicitRequestedModelSupportedGeili(ctx, group, model)
 		if err != nil {
 			return nil, err
-		}
-		supported := false
-		for _, known := range models {
-			if known == model {
-				supported = true
-				break
-			}
 		}
 		if !supported && len(stoppedTextRecovery) > 0 && stoppedTextRecovery[0] {
 			supported, err = resolver.explicitRecoverableTextModelGeili(ctx, group, model, endpoint)
