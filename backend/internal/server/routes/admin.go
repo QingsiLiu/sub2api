@@ -377,6 +377,10 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 	accounts.Use(h.Admin.Account.AccountRuntimePresentationGeili())
 	{
 		accounts.GET("", h.Admin.Account.List)
+		// geili hook: assign or clear the supplier owner of an account.
+		if h.Admin.Supplier != nil {
+			accounts.PUT("/:id/supplier-owner", h.Admin.Supplier.AdminSetOwner)
+		}
 		// geili hook: administrator-owned upstream credential invitations.
 		accounts.GET("/submission-invites", h.Admin.Account.ListSubmissionInvites)
 		accounts.POST("/submission-invites", h.Admin.Account.CreateSubmissionInvite)

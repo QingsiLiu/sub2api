@@ -658,6 +658,15 @@ func (h *AccountHandler) List(c *gin.Context) {
 			return
 		}
 	}
+	// geili hook: administrators may scope the list to one supplier's accounts.
+	if raw := strings.TrimSpace(c.Query("supplier_owner_id")); raw != "" {
+		ownerID, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil || ownerID <= 0 {
+			response.ErrorFrom(c, infraerrors.BadRequest("INVALID_SUPPLIER_OWNER_FILTER", "invalid supplier owner filter"))
+			return
+		}
+		c.Request = c.Request.WithContext(service.WithAccountSupplierOwnerFilterGeili(c.Request.Context(), ownerID))
+	}
 	search := c.Query("search")
 	privacyMode := strings.TrimSpace(c.Query("privacy_mode"))
 	sortBy := c.DefaultQuery("sort_by", "name")

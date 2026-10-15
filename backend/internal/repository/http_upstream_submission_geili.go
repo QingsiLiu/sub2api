@@ -34,7 +34,8 @@ func (s *httpUpstreamService) submissionProxyPolicyGeili(req *http.Request, raw 
 			external = entry.external
 		} else {
 			ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
-			err := s.submissionDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM accounts a JOIN account_submission_invites_geili i ON i.account_id=a.id WHERE a.id=$1 AND a.extra->>'external_submission_form_geili'='true')`, id).Scan(&external)
+			// Supplier-owned accounts carry the same public-egress marker as external intake.
+			err := s.submissionDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM accounts a WHERE a.id=$1 AND a.extra->>'external_submission_form_geili'='true' AND (EXISTS(SELECT 1 FROM account_submission_invites_geili i WHERE i.account_id=a.id) OR EXISTS(SELECT 1 FROM account_supplier_owners_geili o WHERE o.account_id=a.id)))`, id).Scan(&external)
 			cancel()
 			if err != nil {
 				return "", service.ErrSubmissionUnavailable

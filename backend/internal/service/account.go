@@ -22,6 +22,9 @@ import (
 )
 
 type Account struct {
+	// geili hook: supplier owner, hydrated only for administrator presentation.
+	SupplierOwner *SupplierAccountOwnerGeili
+
 	// geili hook: runtime gates are persisted separately from editable extra.
 	RuntimeState            *AccountRuntimeStateGeili
 	ID                      int64

@@ -1113,6 +1113,8 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 	if err := applyAccountRuntimeAvailabilityFilterGeili(ctx, q); err != nil {
 		return nil, nil, err
 	}
+	// geili hook: supplier scope comes from the authenticated caller, never query params.
+	applyAccountSupplierOwnerFilterGeili(ctx, q)
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -1146,6 +1148,7 @@ func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, ac
 	if err := applyAccountRuntimeAvailabilityFilterGeili(ctx, q); err != nil {
 		return nil, err
 	}
+	applyAccountSupplierOwnerFilterGeili(ctx, q) // geili hook
 	accounts, err := q.All(ctx)
 	if err != nil {
 		return nil, err

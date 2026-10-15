@@ -53,6 +53,7 @@ func ProvideAdminHandlers(
 	opencodeGoUsage *service.OpenCodeGoUsageService,
 	claudeResetCredits *service.ClaudeResetCreditService,
 	accountSubmission *service.AccountSubmissionService,
+	supplierAccounts *service.SupplierAccountServiceGeili,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
@@ -99,6 +100,7 @@ func ProvideAdminHandlers(
 		Compliance:             complianceHandler,
 		AuditLog:               auditLogHandler,
 		BenefitCampaign:        benefitCampaignHandler,
+		Supplier:               admin.NewSupplierHandlerGeili(supplierAccounts, accountHandler),
 	}
 }
 

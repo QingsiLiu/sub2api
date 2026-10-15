@@ -884,6 +884,7 @@ func ProvideAPIKeyService(
 var ProviderSet = wire.NewSet(
 	// geili hook: external credential invitations.
 	NewAccountSubmissionService,
+	NewSupplierAccountServiceGeili,
 	NewResponseAuditService,
 	// Core services
 	ProvideAuthService,

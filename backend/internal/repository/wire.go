@@ -67,6 +67,7 @@ func ProvideSchedulerCache(rdb *redis.Client, cfg *config.Config) service.Schedu
 var ProviderSet = wire.NewSet(
 	// geili hook: external credential invitations.
 	NewAccountSubmissionRepository,
+	NewSupplierAccountRepositoryGeili,
 	NewResponseAuditRepository,
 	NewUserRepository,
 	NewAPIKeyRepository,

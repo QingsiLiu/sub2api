@@ -25,6 +25,7 @@ func (r *accountRepository) hydrateAccountRuntimePointersGeili(ctx context.Conte
 	if r.sql == nil {
 		return
 	} // Legacy read-only Ent projections have no raw executor.
+	hydrateAccountSupplierOwnersGeili(ctx, r.sql, accounts)
 	ids := make([]int64, 0, len(accounts))
 	for _, account := range accounts {
 		if account != nil {

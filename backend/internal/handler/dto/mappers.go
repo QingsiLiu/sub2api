@@ -287,6 +287,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		RateMultiplier:          a.BillingRateMultiplier(),
 		Status:                  a.Status,
 		RuntimeState:            service.PresentAccountRuntimeGeili(a),
+		SupplierOwner:           a.SupplierOwner,
 		ErrorMessage:            a.ErrorMessage,
 		LastUsedAt:              a.LastUsedAt,
 		ExpiresAt:               timeToUnixSeconds(a.ExpiresAt),

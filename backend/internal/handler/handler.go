@@ -45,6 +45,8 @@ type AdminHandlers struct {
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
 	BenefitCampaign        *admin.BenefitCampaignHandler
+	// geili hook: supplier console and supplier ownership administration.
+	Supplier *admin.SupplierHandlerGeili
 }
 
 // Handlers contains all HTTP handlers

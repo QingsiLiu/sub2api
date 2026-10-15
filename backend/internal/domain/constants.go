@@ -14,6 +14,8 @@ const (
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
+	// geili hook: suppliers keep user features and manage only their own upstream accounts.
+	RoleSupplier = "supplier"
 )
 
 // Platform constants

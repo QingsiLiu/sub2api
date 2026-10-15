@@ -247,6 +247,9 @@ type Account struct {
 	CreatedAt               time.Time                      `json:"created_at"`
 	UpdatedAt               time.Time                      `json:"updated_at"`
 
+	// geili hook: supplier owner shown to administrators.
+	SupplierOwner *service.SupplierAccountOwnerGeili `json:"supplier_owner,omitempty"`
+
 	Schedulable bool `json:"schedulable"`
 
 	RateLimitedAt    *time.Time `json:"rate_limited_at"`
