@@ -50,6 +50,16 @@ release and does not change the existing account's mapping or prices.
 
 If `security.url_allowlist.enabled` is enabled, add `api.auapi.ai` (or the configured AUAPI host) to the upstream host allowlist. The account marker is optional when `base_url` is an `auapi.ai` host, but setting `image_provider: auapi` is recommended for explicit routing.
 
+For AUAPI's OpenAI-compatible Images API, use a separate account with
+`image_provider: openai` and exact model mappings instead. This explicit marker
+disables native task interception for that account, so synchronous multipart
+edits and the regular async wrapper use the compatible Images endpoints. Keep
+the existing native media account separate: it still handles its already
+accepted tasks and its own model/spec tariffs. Publishing the compatible account
+requires AUAPI's independent model routes to be available and Stage verification
+of both generation and editing; an estimate returning `no available channel`
+must block activation.
+
 ## Enabling the feature (object storage)
 
 Asynchronous image tasks are **disabled by default** and gated on object storage. When the switch is off — or the S3 credentials are incomplete — the async endpoints return `404` and never create a task or write to Redis. This is deliberate: without offloading, large `b64_json` results (several MB each, e.g. `gpt-image-1`) would accumulate in Redis and exhaust its memory.
