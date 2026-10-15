@@ -41,3 +41,7 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 - 新流程的套餐额度与供应商分组解耦，方案及兼容边界见 `.github/geili/subscription-decoupling.md`。
 - 新 Key 必须明确 `billing_source`；复合路由使用有序 `group_ids`，不依赖全模型订阅分组。
 - `.github/geili/decoupled-acceptance.py` 验证独立额度池、付款履约、兑换、跨组切换和迁移幂等性。
+
+## 供应商角色
+
+- 角色 `supplier` 只管理自己上传的 API Key 账号并查看其使用记录，走独立 `/api/v1/supplier/*`，管理员接口不放行。方案、权限边界和验证见 `.github/geili/supplier-role.md`。
