@@ -245,6 +245,7 @@ class PerformanceTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def readline(self, limit): return self.stream.readline(limit)
+            def read(self, limit): return self.stream.read(limit)
         opener = SimpleNamespace(open=Mock(side_effect=lambda *a, **kw: Response()))
         output = io.StringIO()
         payload = {'url': 'http://127.0.0.1:18520/v1/messages', 'token': 'synthetic-unit-token', 'model': s.MODEL}
@@ -277,6 +278,7 @@ class PerformanceTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def readline(self, limit): return self.stream.readline(limit)
+            def read(self, limit): return self.stream.read(limit)
         opener = SimpleNamespace(open=Mock(side_effect=lambda *a, **kw: Response()))
         output = io.StringIO()
         payload = {'url':'http://127.0.0.1:18520/v1/messages','token':'synthetic-only','model':s.MODEL}

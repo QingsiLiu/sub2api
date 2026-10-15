@@ -71,11 +71,11 @@ def call(index):
   try:q=urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r,timeout=40)
   except urllib.error.HTTPError as e:q=e
   with q:
-   status=q.status;size=0;events=[];frame=[]
+   status=q.status;size=0;events=[];frame=[];prefix=q.read(1)
+   if prefix:first=time.monotonic()-t
    while True:
-    line=q.readline(1048577-size)
+    line=prefix+q.readline(1048577-size-len(prefix));prefix=b''
     if not line:break
-    if first is None:first=time.monotonic()-t
     size+=len(line)
     if size>1048576:raise RuntimeError('bounded stream exceeded')
     text=line.decode().rstrip('\r\n')
@@ -87,7 +87,9 @@ def call(index):
       if event.get('type')=='message_stop' and terminal is None:terminal=time.monotonic()-t
    if frame:
     data='\n'.join(x[5:].lstrip() for x in frame if x.startswith('data:'))
-    if data:events.append(json.loads(data))
+    if data:
+     event=json.loads(data);events.append(event)
+     if event.get('type')=='message_stop' and terminal is None:terminal=time.monotonic()-t
    ok=status==200 and size<=1048576 and any(e.get('type')=='message_stop' for e in events) and not any(e.get('error') or e.get('type')=='error' for e in events)
  except Exception:pass
  elapsed=time.monotonic()-t
