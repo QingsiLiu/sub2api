@@ -241,10 +241,11 @@ class PerformanceTests(unittest.TestCase):
         body = s.anthropic_sse(s.MODEL, 'healthy')
         class Response:
             status = 200
+            def __init__(self): self.stream = io.BytesIO(body)
             def __enter__(self): return self
             def __exit__(self, *args): pass
-            def read(self, limit): return body
-        opener = SimpleNamespace(open=Mock(return_value=Response()))
+            def readline(self, limit): return self.stream.readline(limit)
+        opener = SimpleNamespace(open=Mock(side_effect=lambda *a, **kw: Response()))
         output = io.StringIO()
         payload = {'url': 'http://127.0.0.1:18520/v1/messages', 'token': 'synthetic-unit-token', 'model': s.MODEL}
         with tempfile.TemporaryDirectory() as directory:
@@ -258,6 +259,8 @@ class PerformanceTests(unittest.TestCase):
             self.assertEqual({r['index'] for r in rows if r['phase'] == 'measured'}, set(range(1000)))
             self.assertEqual(sum(r['phase'] == 'warmup' for r in rows), 20)
             self.assertTrue(all(r['status'] == 200 and r['ok'] for r in rows))
+            self.assertTrue(all(0 <= r['first_byte_seconds'] <= r['terminal_seconds'] <= r['latency'] for r in rows))
+            self.assertTrue(all(r['tail_seconds'] >= 0 for r in rows))
             self.assertNotIn('synthetic-unit-token', journal.read_text())
         result = json.loads(output.getvalue())
         self.assertEqual(opener.open.call_count, 1020)
@@ -265,6 +268,23 @@ class PerformanceTests(unittest.TestCase):
         self.assertEqual(result['response_statuses'], [200] * 1000)
         self.assertEqual(result['failed_responses'], 0)
         self.assertEqual(result['warmup_failed'], 0)
+
+    def test_benchmark_keeps_reading_errors_after_terminal_event(self):
+        body = s.anthropic_sse(s.MODEL, 'healthy') + b'event: error\ndata: {"type":"error","error":{"type":"api_error"}}\n\n'
+        class Response:
+            status = 200
+            def __init__(self): self.stream = io.BytesIO(body)
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def readline(self, limit): return self.stream.readline(limit)
+        opener = SimpleNamespace(open=Mock(side_effect=lambda *a, **kw: Response()))
+        output = io.StringIO()
+        payload = {'url':'http://127.0.0.1:18520/v1/messages','token':'synthetic-only','model':s.MODEL}
+        with patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout',output), patch('urllib.request.build_opener',return_value=opener):
+            exec(compile(s.BENCH_REQUEST,'<benchmark-client>','exec'),{})
+        result = json.loads(output.getvalue())
+        self.assertEqual(result['failed_responses'],1000)
+        self.assertEqual(result['warmup_failed'],20)
 
     def test_exact_four_batches_prove_old_image_comparison(self):
         summary = s.performance_summary(self.batches())

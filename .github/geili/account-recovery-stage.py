@@ -66,18 +66,32 @@ def call(index):
  payload={'model':p['model'],'stream':True,'max_tokens':16,'messages':[{'role':'user','content':'fixture_performance_'+str(index)}]}
  h={'Content-Type':'application/json','Authorization':'Bearer '+p['token']}
  r=urllib.request.Request(p['url'],data=json.dumps(payload).encode(),headers=h)
- t=time.monotonic();status=None;ok=False
+ t=time.monotonic();status=None;ok=False;first=None;terminal=None
  try:
   try:q=urllib.request.build_opener(urllib.request.ProxyHandler({})).open(r,timeout=40)
   except urllib.error.HTTPError as e:q=e
   with q:
-   status=q.status;raw=q.read(1048577).decode();events=[]
-   for frame in raw.replace('\r\n','\n').split('\n\n'):
-    data='\n'.join(x[5:].lstrip() for x in frame.splitlines() if x.startswith('data:'))
+   status=q.status;size=0;events=[];frame=[]
+   while True:
+    line=q.readline(1048577-size)
+    if not line:break
+    if first is None:first=time.monotonic()-t
+    size+=len(line)
+    if size>1048576:raise RuntimeError('bounded stream exceeded')
+    text=line.decode().rstrip('\r\n')
+    if text:frame.append(text)
+    else:
+     data='\n'.join(x[5:].lstrip() for x in frame if x.startswith('data:'));frame=[]
+     if data:
+      event=json.loads(data);events.append(event)
+      if event.get('type')=='message_stop' and terminal is None:terminal=time.monotonic()-t
+   if frame:
+    data='\n'.join(x[5:].lstrip() for x in frame if x.startswith('data:'))
     if data:events.append(json.loads(data))
-   ok=status==200 and len(raw)<=1048576 and any(e.get('type')=='message_stop' for e in events) and not any(e.get('error') or e.get('type')=='error' for e in events)
+   ok=status==200 and size<=1048576 and any(e.get('type')=='message_stop' for e in events) and not any(e.get('error') or e.get('type')=='error' for e in events)
  except Exception:pass
- return {'index':index,'latency':time.monotonic()-t,'status':status,'ok':ok}
+ elapsed=time.monotonic()-t
+ return {'index':index,'latency':elapsed,'status':status,'ok':ok,'first_byte_seconds':first,'terminal_seconds':terminal,'tail_seconds':elapsed-terminal if terminal is not None else None}
 def collect(pool,indices,phase):
  futures=[pool.submit(call,index) for index in indices];rows=[]
  for future in as_completed(futures):
