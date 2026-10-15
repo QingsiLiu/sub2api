@@ -20,7 +20,14 @@ func (a *Account) IsAUAPIImageAccount() bool {
 	if a == nil || a.Platform != PlatformOpenAI || a.Type != AccountTypeAPIKey {
 		return false
 	}
-	if strings.EqualFold(strings.TrimSpace(a.GetCredential("image_provider")), "auapi") {
+	provider := strings.TrimSpace(a.GetCredential("image_provider"))
+	// geili hook: an AUAPI host can also expose the synchronous OpenAI Images
+	// protocol. Explicit protocol selection must win over hostname discovery,
+	// otherwise its edit/async requests are captured by the text-only adapter.
+	if strings.EqualFold(provider, "openai") {
+		return false
+	}
+	if strings.EqualFold(provider, "auapi") {
 		return true
 	}
 	base := strings.TrimSpace(a.GetCredential("base_url"))
