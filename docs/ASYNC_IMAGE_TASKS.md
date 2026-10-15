@@ -31,6 +31,23 @@ An OpenAI API-Key account can opt into AUAPI's native asynchronous GPT Image API
 
 When an eligible account is present in the selected OpenAI group, the existing async generation route translates the request to AUAPI's `pricing/estimate` and `images/tasks` endpoints. A PostgreSQL task snapshot stores the upstream task ID and idempotency key; the worker resumes polling after a process restart. AUAPI image tasks currently support JSON text-to-image only. Multipart edits, inline reference files, and streaming are rejected until a public HTTPS reference-media flow is added.
 
+The native adapter also recognizes `gpt-image-2.5-flare` and
+`gpt-image-2.5-sunburst` as independent model IDs. Map each ID to itself; do not
+map either to the legacy `gpt-image-2.5` model. GPT Image 2.5 models default to
+`quality: low` when omitted, and accept `xhigh` / `max` in addition to the
+existing quality values. Every enabled resolution/quality combination still
+requires its own approved `auapi_media_prices` entry on the account, such as
+`gpt-image-2.5-flare` → `1k:low`. A legacy model's price is never inherited.
+Missing prices reject the request before creating a task or reserving balance.
+
+Recognizing these IDs in source does not enable an upstream route. Before
+publishing them to Geili customers, verify the AUAPI model catalog, enabled
+supplier bindings, exact retail tariffs, and the complete Geili task/settlement
+flow in Stage. On 2026-10-15 the public AUAPI catalog still exposed only the
+legacy GPT Image 2.5 ID; the independent Flare/Sunburst routes and retail prices
+were pending upstream publication. This source preparation is not a production
+release and does not change the existing account's mapping or prices.
+
 If `security.url_allowlist.enabled` is enabled, add `api.auapi.ai` (or the configured AUAPI host) to the upstream host allowlist. The account marker is optional when `base_url` is an `auapi.ai` host, but setting `image_provider: auapi` is recommended for explicit routing.
 
 ## Enabling the feature (object storage)

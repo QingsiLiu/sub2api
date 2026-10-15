@@ -129,6 +129,11 @@ func buildAUAPIImagePayload(body []byte) (auapiImageRequest, string, error) {
 	switch in.Quality {
 	case "", "auto", "low", "medium", "high":
 		r.Parameters.Quality = in.Quality
+	case "xhigh", "max":
+		if !isAUAPIGPTImage25(in.Model) {
+			return r, "", errors.New("xhigh and max require a GPT Image 2.5 model")
+		}
+		r.Parameters.Quality = in.Quality
 	default:
 		return r, "", errors.New("unsupported AUAPI quality")
 	}

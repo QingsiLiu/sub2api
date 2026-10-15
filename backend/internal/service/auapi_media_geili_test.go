@@ -139,7 +139,7 @@ func TestAUAPIMediaIndependentSeedVersionAndKindIsolation(t *testing.T) {
 		require.True(t, supportedAUAPIMediaModel("video", model), model)
 		require.False(t, supportedAUAPIMediaModel("image", model), model)
 	}
-	for _, model := range []string{"gpt-image-2", "gpt-image-2.5", "gemini-3-pro-image-preview"} {
+	for _, model := range []string{"gpt-image-2", "gpt-image-2.5", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "gemini-3-pro-image-preview"} {
 		require.True(t, supportedAUAPIMediaModel("image", model), model)
 		require.False(t, supportedAUAPIMediaModel("video", model), model)
 	}

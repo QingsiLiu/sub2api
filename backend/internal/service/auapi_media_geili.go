@@ -40,7 +40,12 @@ func supportedAUAPIMediaModel(kind, model string) bool {
 	if kind == "video" {
 		return model == "wan3.0-video" || model == "seedance-2.5" || model == "dreamina-seedance-2-5-260628" || model == "MiniMax-H3" || model == "kling-3.0"
 	}
-	return model == "gpt-image-2" || model == "gpt-image-2.5" || model == "gemini-3-pro-image-preview"
+	return model == "gpt-image-2" || isAUAPIGPTImage25(model) || model == "gemini-3-pro-image-preview"
+}
+
+// Keep the two supplier-routed models distinct from the legacy generic model.
+func isAUAPIGPTImage25(model string) bool {
+	return model == "gpt-image-2.5" || model == "gpt-image-2.5-flare" || model == "gpt-image-2.5-sunburst"
 }
 
 func buildAUAPIVideoPayload(body []byte) (auapiImageRequest, string, error) {

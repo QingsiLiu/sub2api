@@ -177,7 +177,7 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 		return nil, false, infraerrors.ServiceUnavailable("NO_AUAPI_IMAGE_ACCOUNT", "No available AUAPI image account")
 	}
 	request.Model = account.GetMappedModel(routingModel)
-	if request.Model == "gpt-image-2.5" && request.Parameters.Quality == "" {
+	if isAUAPIGPTImage25(request.Model) && request.Parameters.Quality == "" {
 		request.Parameters.Quality = "low"
 	}
 	if !supportedAUAPIMediaModel(kind, request.Model) {
