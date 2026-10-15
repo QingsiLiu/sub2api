@@ -100,13 +100,14 @@ func (s *GatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.Context
 			if resolved, ok := ResolveBedrockModelID(account, validationModel); ok {
 				validationModel = resolved
 			}
-		} else if account.Type == AccountTypeAPIKey {
+		} else if account.Type == AccountTypeAPIKey && !account.IsAnthropicAPIKeyPassthroughEnabled() {
 			validationModel = account.GetMappedModel(validationModel)
 		}
 	}
 	if account != nil && account.Platform == PlatformAnthropic {
 		// geili hook: repair misplaced adaptive effort before validation, signing and usage parsing.
-		if body, changed := normalizeAnthropicThinkingEffortGeili(parsed.Body.Bytes(), validationModel); changed {
+		// Strict passthrough leaves the field to provider validation.
+		if body, changed := normalizeAnthropicThinkingEffortGeili(parsed.Body.Bytes(), validationModel); changed && !account.IsAnthropicAPIKeyPassthroughEnabled() {
 			if err := parsed.ReplaceBody(body); err != nil {
 				return nil, err
 			}
@@ -129,20 +130,13 @@ func (s *GatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.Context
 	beginUpstreamResponseModelObservation(c)
 
 	// Web Search 模拟：纯 web_search 请求时，直接调用搜索 API 构造响应
-	if account != nil && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body.Bytes()) {
+	if account != nil && !account.IsAnthropicAPIKeyPassthroughEnabled() && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body.Bytes()) {
 		return s.handleWebSearchEmulation(ctx, c, account, parsed)
 	}
 
 	if account != nil && account.IsAnthropicAPIKeyPassthroughEnabled() {
 		passthroughBody := parsed.Body.Bytes()
 		passthroughModel := parsed.Model
-		if passthroughModel != "" {
-			if mappedModel := account.GetMappedModel(passthroughModel); mappedModel != passthroughModel {
-				passthroughBody = s.replaceModelInBody(passthroughBody, mappedModel)
-				logger.LegacyPrintf("service.gateway", "Passthrough model mapping: %s -> %s (account: %s)", parsed.Model, mappedModel, account.Name)
-				passthroughModel = mappedModel
-			}
-		}
 		return s.forwardAnthropicAPIKeyPassthroughWithInput(ctx, c, account, anthropicPassthroughForwardInput{
 			Body:          passthroughBody,
 			Parsed:        parsed,

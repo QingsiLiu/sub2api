@@ -104,6 +104,11 @@ func TestAnthropicThinkingEffortGeiliForward(t *testing.T) {
 				}
 				require.NoError(t, err)
 				require.Equal(t, 200, rec.Code)
+				if passthrough {
+					// Strict passthrough sends the client's bytes; the provider validates the field.
+					require.Equal(t, body, string(upstream.lastBody))
+					return
+				}
 				require.False(t, gjson.GetBytes(upstream.lastBody, "thinking.effort").Exists())
 				require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "output_config.effort").String())
 				require.Equal(t, "adaptive", gjson.GetBytes(upstream.lastBody, "thinking.type").String())

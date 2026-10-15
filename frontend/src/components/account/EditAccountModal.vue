@@ -5889,7 +5889,7 @@ const handleSubmit = async () => {
       if (anthropicPassthroughEnabled.value) {
         newExtra.anthropic_passthrough = true
       } else {
-        delete newExtra.anthropic_passthrough
+        newExtra.anthropic_passthrough = false
       }
       if (anthropicAPIKeyAuthScheme.value === 'authorization_bearer') {
         newExtra.anthropic_apikey_auth_scheme = 'authorization_bearer'

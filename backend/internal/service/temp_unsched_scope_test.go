@@ -419,11 +419,16 @@ func TestCountTokensEntries_ExplicitModelScope401OnlyCoolsModel(t *testing.T) {
 			require.Error(t, svc.ForwardCountTokens(context.Background(), c, account, parsed))
 
 			require.NotNil(t, upstream.lastReq)
-			require.Equal(t, "claude-sonnet-4-5-upstream", gjson.GetBytes(upstream.lastBody, "model").String())
+			upstreamModel := "claude-sonnet-4-5-upstream"
+			if passthrough {
+				// Strict passthrough sends and cools the model the client requested.
+				upstreamModel = "claude-sonnet-4-5"
+			}
+			require.Equal(t, upstreamModel, gjson.GetBytes(upstream.lastBody, "model").String())
 			require.Zero(t, repo.errorCalls)
 			require.Zero(t, repo.tempCalls)
 			require.Len(t, repo.modelRateLimitCalls, 1)
-			require.Equal(t, "claude-sonnet-4-5-upstream", repo.modelRateLimitCalls[0].scope)
+			require.Equal(t, upstreamModel, repo.modelRateLimitCalls[0].scope)
 		})
 	}
 }

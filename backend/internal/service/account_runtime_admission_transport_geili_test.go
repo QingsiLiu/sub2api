@@ -78,7 +78,12 @@ func TestAccountBalanceGuardGeiliSupplierDebtAfterOutputDoesNotPersistDebt(t *te
 			var failover *UpstreamFailoverError
 			require.False(t, errors.As(err, &failover), "delivered output cannot authorize replay")
 			require.Contains(t, rec.Body.String(), "visible")
-			require.Equal(t, 1, strings.Count(rec.Body.String(), "event: error"))
+			if kind == AccountTypeAPIKey {
+				// Strict passthrough relays the provider's own error event unchanged.
+				require.Equal(t, 1, strings.Count(rec.Body.String(), `"code":"insufficient_balance"`))
+			} else {
+				require.Equal(t, 1, strings.Count(rec.Body.String(), "event: error"))
+			}
 			stored, readErr := repo.GetByID(context.Background(), account.ID)
 			require.NoError(t, readErr)
 			require.False(t, stored.RuntimeState.BalanceBlocked)

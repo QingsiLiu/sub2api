@@ -897,7 +897,7 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	// 该短路必须在 model_mapping 判定之前：账号从"白名单模式"切换到透传后，
 	// credentials 里常残留旧的非空 model_mapping，若不在此放行，透传账号会被
 	// model_mapping 白名单错误排除出候选集，导致 no available accounts / 404（issue #4936）。
-	if a.IsOpenAIPassthroughEnabled() {
+	if a.IsOpenAIPassthroughEnabled() || a.IsAnthropicAPIKeyPassthroughEnabled() {
 		return true
 	}
 	mapping := a.GetModelMapping()
@@ -2300,9 +2300,9 @@ func (a *Account) IsOpenAIOAuthPassthroughEnabled() bool {
 	return a != nil && a.IsOpenAIOAuth() && a.IsOpenAIPassthroughEnabled()
 }
 
-// IsAnthropicAPIKeyPassthroughEnabled 返回 Anthropic API Key 账号是否启用"自动透传（仅替换认证）"。
+// IsAnthropicAPIKeyPassthroughEnabled 返回 Anthropic API Key 账号是否启用严格透传（仅替换认证）。
 // 字段：accounts.extra.anthropic_passthrough。
-// 字段缺失或类型不正确时，按 false（关闭）处理。
+// geili: 只认显式 true；字段缺失或类型不正确时按 false（兼容模式）处理，存量账号不因默认值变更行为。
 func (a *Account) IsAnthropicAPIKeyPassthroughEnabled() bool {
 	if a == nil || a.Platform != PlatformAnthropic || a.Type != AccountTypeAPIKey || a.Extra == nil {
 		return false

@@ -197,7 +197,7 @@ func parseGatewayRequestCurrentBody(parsed *ParsedRequest, protocol string) erro
 			return fmt.Errorf("invalid model field type")
 		}
 		parsed.Model = modelResult.String()
-		if protocol == domain.PlatformAnthropic {
+		if protocol == domain.PlatformAnthropic && !parsed.preserveBody {
 			normalizedModel := normalizeClaudeCodeLongContextModel(parsed.Model)
 			if normalizedModel != parsed.Model {
 				normalizedBody, err := sjson.SetBytes(bodyBytes, "model", normalizedModel)
@@ -281,6 +281,7 @@ func DescribeInvalidJSON(body []byte) error {
 // 2. 将解析结果 ParsedRequest 传递给 Service 层
 // 3. 避免重复 json.Unmarshal，减少 CPU 和内存开销
 type ParsedRequest struct {
+	preserveBody    bool            // geili hook: strict Anthropic attempts keep the caller's bytes on refresh
 	Body            *RequestBodyRef // 原始请求体引用（保留用于转发）；替换内容请走 ReplaceBody
 	Model           string          // 请求的模型名称
 	Stream          bool            // 是否为流式请求
