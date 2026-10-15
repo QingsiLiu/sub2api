@@ -420,6 +420,8 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	}
 
 handleSuccess:
+	// geili hook: watchdogs use the actual model, including a fallback attempt.
+	SetOpsUpstreamModel(c, forwardedModel)
 	requestID := resp.Header.Get("x-request-id")
 	if requestID != "" {
 		c.Header("x-request-id", requestID)

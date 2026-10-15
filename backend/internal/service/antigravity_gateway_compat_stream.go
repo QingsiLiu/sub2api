@@ -282,7 +282,15 @@ func (s *AntigravityGatewayService) handleAntigravityCompatStream(
 	adapter antigravityCompatStreamAdapter,
 	prefix string,
 ) (*antigravityStreamResult, error) {
-	return s.handleAntigravityCompatStreamWithKeepaliveInterval(c, resp, startTime, originalModel, adapter, prefix, antigravityCompatPreContentKeepaliveInterval, antigravityCompatPreContentMaxWait)
+	// geili hook: the pre-content deadline must not undercut the thinking idle
+	// budget. Keep the explicit test/caller override in the lower-level reader.
+	maxWait := antigravityCompatPreContentMaxWait
+	if IsLongThinkingRequestModel(antigravityStreamModelGeili(c, originalModel)) {
+		if idle := s.antigravityStreamIntervalGeili(c, originalModel); idle > maxWait {
+			maxWait = idle
+		}
+	}
+	return s.handleAntigravityCompatStreamWithKeepaliveInterval(c, resp, startTime, originalModel, adapter, prefix, antigravityCompatPreContentKeepaliveInterval, maxWait)
 }
 
 func (s *AntigravityGatewayService) handleAntigravityCompatStreamWithKeepaliveInterval(
@@ -307,7 +315,7 @@ func (s *AntigravityGatewayService) handleAntigravityCompatStreamWithKeepaliveIn
 	events, stopScanner, maxLineSize := s.startAntigravityCompatScanner(resp.Body)
 	defer stopScanner()
 
-	timeout := s.antigravityCompatStreamTimeout()
+	timeout := s.antigravityStreamIntervalGeili(c, originalModel) // geili hook
 	timeoutTimer, timeoutCh := newAntigravityCompatTimer(timeout)
 	if timeoutTimer != nil {
 		defer timeoutTimer.Stop()
@@ -429,13 +437,6 @@ func (s *AntigravityGatewayService) startAntigravityCompatScanner(
 		}
 	}()
 	return events, func() { close(done) }, maxLineSize
-}
-
-func (s *AntigravityGatewayService) antigravityCompatStreamTimeout() time.Duration {
-	if s.settingService == nil || s.settingService.cfg == nil {
-		return 0
-	}
-	return time.Duration(s.settingService.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
 }
 
 func (s *AntigravityGatewayService) newAntigravityCompatKeepaliveTicker() (*time.Ticker, <-chan time.Time) {

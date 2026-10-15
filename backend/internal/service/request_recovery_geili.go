@@ -182,10 +182,6 @@ func ClaimRequestRecoverySelectionWait(ctx context.Context) bool {
 	return true
 }
 
-func IsLongThinkingRequestModel(model string) bool {
-	return isClaude55SignedThinkingModel(model) || isOpenAIGPT6AstraModel(model)
-}
-
 // LongThinkingRoute resolves the same channel -> account model mapping used by
 // the selected group. It only informs the default overall request budget; it
 // neither changes routing nor grants additional time beyond explicit limits.

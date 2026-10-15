@@ -18,11 +18,11 @@ func TestRequestRecoveryGeiliAliasLongModelClassification(t *testing.T) {
 		accounts []Account
 		want     bool
 	}{
-		{name: "account alias", accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"public-claude": "claude-opus-5-5"})}, want: true},
+		{name: "account alias", accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"public-claude": "claude-opus-5"})}, want: true},
 		{name: "channel alias", channel: map[string]string{"public-claude": "claude-opus-5-5"}, want: true},
 		{name: "channel then account", channel: map[string]string{"public-claude": "private-opus"}, accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"private-opus": "claude-opus-5-5"})}, want: true},
-		{name: "channel then ordinary account", channel: map[string]string{"public-claude": "private-sonnet"}, accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"private-sonnet": "claude-sonnet-4-5", "other-model": "claude-opus-5-5"})}},
-		{name: "unrelated long model", accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"public-claude": "claude-sonnet-4-5", "other-model": "claude-opus-5-5"})}},
+		{name: "channel then ordinary account", channel: map[string]string{"public-claude": "private-haiku"}, accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"private-haiku": "claude-3-haiku", "other-model": "claude-opus-5-5"})}},
+		{name: "unrelated long model", accounts: []Account{longAliasAccountGeili(PlatformAnthropic, map[string]any{"public-claude": "claude-3-haiku", "other-model": "claude-opus-5-5"})}},
 		{name: "wrong provider", accounts: []Account{longAliasAccountGeili(PlatformOpenAI, map[string]any{"public-claude": "gpt-6-astra"})}},
 		{name: "disabled account", accounts: []Account{{Platform: PlatformAnthropic, Status: StatusError, Schedulable: false, Credentials: map[string]any{"model_mapping": map[string]any{"public-claude": "claude-opus-5-5"}}}}},
 	} {

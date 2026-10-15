@@ -428,6 +428,8 @@ func (s *AntigravityGatewayService) consumeAntigravityCompatSuccess(
 	call *antigravityCompatUpstreamCall,
 	resp *http.Response,
 ) (*antigravityStreamResult, error) {
+	// geili hook: all compat readers classify the actual upstream model.
+	SetOpsUpstreamModel(c, call.billingModel)
 	if call.request.clientStream {
 		if call.request.protocol == antigravityCompatChatCompletions {
 			return s.handleChatCompletionsStreamingFromAntigravity(

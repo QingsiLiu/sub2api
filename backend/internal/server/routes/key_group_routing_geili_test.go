@@ -173,7 +173,11 @@ func TestExplicitKeyRoutingLongThinkingDefaultAndExplicitRootBudget(t *testing.T
 		parentBudget time.Duration
 		want         time.Duration
 	}{
-		{name: "ordinary-default", model: "gpt-6-sol", want: 600 * time.Second},
+		{name: "ordinary-default", model: "gpt-4o", want: 600 * time.Second},
+		{name: "sol-default", model: "gpt-6-sol", want: 1800 * time.Second},
+		{name: "opus5-default", model: "claude-opus-5", want: 1800 * time.Second},
+		{name: "gemini-default", model: "gemini-3.1-pro", want: 1800 * time.Second},
+		{name: "deepseek-default", model: "deepseek-reasoner", want: 1800 * time.Second},
 		{name: "astra-default", model: "gpt-6-astra", want: 1800 * time.Second},
 		{name: "opus-default", model: "claude-opus-5-5", want: 1800 * time.Second},
 		{name: "explicit600", model: "gpt-6-astra", gateway: config.GatewayConfig{KeyGroupRequestTimeoutSeconds: 600, KeyGroupRequestTimeoutExplicit: true}, want: 600 * time.Second},

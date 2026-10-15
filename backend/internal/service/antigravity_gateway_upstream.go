@@ -109,6 +109,8 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	}
 
 	// 处理成功响应（流式/非流式）
+	// geili hook: share the text-model idle budget with native/compat streams.
+	SetOpsUpstreamModel(c, originalModel)
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
@@ -205,13 +207,10 @@ func (s *AntigravityGatewayService) streamUpstreamResponse(c *gin.Context, resp 
 	}()
 	defer close(done)
 
-	streamInterval := time.Duration(0)
-	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.StreamDataIntervalTimeout > 0 {
-		streamInterval = time.Duration(s.settingService.cfg.Gateway.StreamDataIntervalTimeout) * time.Second
-	}
+	streamInterval := s.antigravityStreamIntervalGeili(c, "") // geili hook
 	var intervalTicker *time.Ticker
 	if streamInterval > 0 {
-		intervalTicker = time.NewTicker(streamInterval)
+		intervalTicker = time.NewTicker(streamIdleCheckPeriod(streamInterval))
 		defer intervalTicker.Stop()
 	}
 	var intervalCh <-chan time.Time

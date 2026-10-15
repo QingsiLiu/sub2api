@@ -128,7 +128,7 @@ func TestLongThinkingGeiliBudgetAndCompletion(t *testing.T) {
 	cfg := &config.Config{Gateway: config.GatewayConfig{StreamDataIntervalTimeout: 180, LongThinkingStreamDataIntervalTimeout: 600}}
 	require.Equal(t, 600*time.Second, longThinkingStreamInterval(cfg, "claude-opus-5-5", 180*time.Second))
 	require.Equal(t, 600*time.Second, longThinkingStreamInterval(cfg, "openai/gpt-6-astra-2026-09-01", 180*time.Second))
-	require.Equal(t, 180*time.Second, longThinkingStreamInterval(cfg, "gpt-6-sol", 180*time.Second))
+	require.Equal(t, 600*time.Second, longThinkingStreamInterval(cfg, "gpt-6-sol", 180*time.Second))
 	require.Zero(t, longThinkingStreamInterval(cfg, "claude-opus-5-5", 0))
 	cfg.Gateway.LongThinkingStreamDataIntervalTimeout = 0
 	require.Equal(t, 180*time.Second, longThinkingStreamInterval(cfg, "claude-opus-5-5", 180*time.Second))

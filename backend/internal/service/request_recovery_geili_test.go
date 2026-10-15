@@ -95,10 +95,10 @@ func TestRequestRecoveryGeiliAttemptDeadlineExpires(t *testing.T) {
 }
 
 func TestRequestRecoveryGeiliLongModels(t *testing.T) {
-	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "gpt-6", "gpt-6-astra", "gpt-6-astra-20261008"} {
+	for _, model := range []string{"claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-4-6", "gpt-6", "gpt-6-astra", "gpt-6-astra-20261008", "gpt-6-sol", "gpt-6-luna", "deepseek-reasoner"} {
 		require.True(t, IsLongThinkingRequestModel(model), model)
 	}
-	for _, model := range []string{"claude-opus-4-6", "gpt-6-sol", "gpt-6-luna", "deepseek-reasoner"} {
+	for _, model := range []string{"claude-3-haiku", "gpt-4o", "gpt-image-2", "deepseek-chat"} {
 		require.False(t, IsLongThinkingRequestModel(model), model)
 	}
 }

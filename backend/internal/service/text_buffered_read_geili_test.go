@@ -151,7 +151,8 @@ func TestTextBufferedReadGeiliIdleBudgetsAndLongThinkingWait(t *testing.T) {
 		idle          time.Duration
 		completeAfter time.Duration
 	}{
-		{"ordinary one second", "gpt-6-luna", time.Second, 0},
+		{"ordinary one second", "gpt-4o", time.Second, 0},
+		{"sol uses thinking budget", "gpt-6-sol", 3 * time.Second, 0},
 		{"long thinking three seconds", "gpt-6-astra", 3 * time.Second, 0},
 		{"long thinking exceeds ordinary wait", "gpt-6-astra", 3 * time.Second, 1400 * time.Millisecond},
 	} {

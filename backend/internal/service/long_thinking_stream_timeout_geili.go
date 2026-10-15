@@ -1,14 +1,15 @@
 package service
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/config"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
 // Keep a bounded watchdog for long silent thinking, independent of downstream
 // heartbeats. Explicitly disabling the ordinary watchdog still disables it.
 func longThinkingStreamInterval(cfg *config.Config, model string, ordinary time.Duration) time.Duration {
-	if cfg == nil || ordinary <= 0 || (!isClaude55SignedThinkingModel(model) && !isOpenAIGPT6AstraModel(model)) {
+	if cfg == nil || ordinary <= 0 || !IsLongThinkingRequestModel(model) {
 		return ordinary
 	}
 	extended := time.Duration(cfg.Gateway.LongThinkingStreamDataIntervalTimeout) * time.Second

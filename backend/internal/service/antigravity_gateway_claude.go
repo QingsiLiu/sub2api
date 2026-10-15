@@ -443,6 +443,8 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		}
 	}
 
+	// geili hook: classify the mapped model independently of the public alias.
+	SetOpsUpstreamModel(c, billingModel)
 	requestID := resp.Header.Get("x-request-id")
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
