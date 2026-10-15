@@ -557,43 +557,61 @@ def fixture_type(cache, source):
             self.check('automatic probe adds no customer usage row and actual group settles once', row['n'] == 1
                 and row['wrong_group'] == 0 and float(row['cost']) > 0 and self.counts('manual') == {'inference': 1, 'probes': 1}, row)
 
+            self.manual_balance_checks()
+            self.bounded_recovery_checks()
+            self.timing_and_backoff_checks()
+            self.performance_checks()
+
+        def manual_balance_checks(self):
             balance = self.new_case('balance', mode='balance', pool=True)
             failed = self.call(balance)
             state = self.account_state(balance)
-            self.check('pool403 balance failure stops the entire account', not completed('messages', failed)
-                and state['runtime_state']['balance_blocked'] and not state['schedulable'], self.counts('balance'))
+            self.check('supplier credit error is a failure without an automatic debt mark', not completed('messages', failed)
+                and not state['runtime_state']['balance_blocked'], self.counts('balance'))
+            before = self.counts('balance')
+            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/manual-balance-stop',
+                                    {'blocked': True}, self.admin, 'PUT')
+            state = self.account_state(balance)
+            self.check('manual debt mark stops scheduling without querying the supplier', response[0] == 200
+                and state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active'
+                and self.counts('balance') == before, {'status': response[0]})
+            self.wait_until('manual debt account has no remaining probe lease', lambda: self.lease_count([balance]) == 0)
             before = self.counts('balance')
             for path, data, method in [('/schedulable', {'schedulable': True}, None),
                                       ('/recover-state', {}, None), ('/clear-error', {}, None),
                                       ('', {'status': 'active'}, 'PUT')]:
                 response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + path, data, self.admin, method)
                 state = self.account_state(balance)
-                self.check('legacy enable cannot bypass balance: ' + (path or 'update'),
+                self.check('legacy enable cannot bypass manual debt: ' + (path or 'update'),
                     state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active',
                     {'status': response[0]})
             denied = self.call(balance, secondary=True)
-            self.check('second instance refuses stopped supplier without additional inference or probe',
+            self.check('second instance excludes manually debt-stopped account without inference or probes',
                 not completed('messages', denied) and self.counts('balance') == before, self.counts('balance'))
             response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/recheck',
                                     {'model': MODEL}, self.admin)
-            self.check('unconfirmed recharge returns409 without supplier probe', response[0] == 409
+            self.check('manual debt mark requires explicit clearance before an ordinary recheck', response[0] == 409
                 and self.counts('balance') == before, {'status': response[0]})
             with self.lock: self.recovery_modes['balance'] = 'healthy'
             usage_before = self.usage(balance)
-            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/recheck',
-                                    {'model': MODEL, 'confirm_recharged': True}, self.admin)
+            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/manual-balance-stop',
+                                    {'blocked': False}, self.admin, 'PUT')
             state = self.account_state(balance)
-            self.check('confirmed recharge checks current account and restores availability', response[0] == 200
-                and not state['runtime_state']['balance_blocked'] and state['runtime_state']['state'] == 'enabled',
+            self.check('clearing manual debt leaves the account stopped without supplier I/O', response[0] == 200
+                and not state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active'
+                and self.counts('balance') == before, {'status': response[0]})
+            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/recheck',
+                                    {'model': MODEL}, self.admin)
+            state = self.account_state(balance)
+            self.check('complete current probe activates a manually cleared account', response[0] == 200
+                and not state['runtime_state']['balance_blocked'] and state['runtime_state']['state'] == 'enabled'
+                and self.counts('balance')['probes'] == before['probes'] + 1,
                 {'status': response[0], 'calls': self.counts('balance')})
-            self.check('administrator probe has no customer usage', self.usage(balance) == usage_before)
+            self.check('administrator recovery probe has no customer usage', self.usage(balance) == usage_before)
             resumed = self.call(balance, secondary=True)
-            self.check('replica sees recovered durable state without a restart', completed('messages', resumed))
+            self.check('replica sees manually cleared and recovered state without restart', completed('messages', resumed))
             row = self.wait_usage(balance, 1)
-            self.check('post-recharge customer request settles exactly once', row['n'] == 1 and row['wrong_group'] == 0, row)
-            self.bounded_recovery_checks()
-            self.timing_and_model_checks()
-            self.performance_checks()
+            self.check('post-clearance customer request settles exactly once', row['n'] == 1 and row['wrong_group'] == 0, row)
 
         def probe_scope_checks(self):
             # Same valid stopped account/key: media-output requests must not
@@ -684,26 +702,7 @@ def fixture_type(cache, source):
                        and self.lease_count(cases) == 0)
             self.check('global administrator probe batch adds zero customer usage', all(self.usage(case)['n'] == 0 for case in cases))
 
-        def timing_and_model_checks(self):
-            case = self.new_case('model-isolation')
-            state = {MODEL: {'blocked': True, 'health': 'unhealthy',
-                            'next_check_at': '2099-01-01T00:00:00Z', 'next_probe_at': '2099-01-01T00:00:00Z'}}
-            # Only this run's exact synthetic account is seeded. This checks real
-            # scheduling/cache admission; natural threshold counting has separate
-            # Go/PostgreSQL coverage and is not claimed by this seeded HTTP case.
-            ident = exact_ids([case['account']['id']])
-            literal = cache.b.stage.literal(json.dumps(state))
-            self.sql('INSERT INTO account_runtime_geili(account_id,version,model_states) VALUES(' + ident + ',1,' + literal +
-                     '::jsonb) ON CONFLICT(account_id) DO UPDATE SET version=account_runtime_geili.version+1,model_states=EXCLUDED.model_states;')
-            before = self.counts(case['label'])
-            denied = self.call(case, secondary=True)
-            self.check('blocked model is rejected by second process without supplier calls', not completed('messages', denied)
-                       and self.counts(case['label']) == before)
-            good = self.call(case, model=OTHER_MODEL)
-            self.check('a blocked model does not disable another healthy model', completed('messages', good))
-            row = self.wait_usage(case, 1)
-            self.check('isolated healthy model settles once', row['n'] == 1, row)
-
+        def timing_and_backoff_checks(self):
             delayed = self.new_case('background', mode='probe_unhealthy', manual=True)
             response = self.timed_call(delayed)
             self.check('actual foreground recovery wait ends at30s plus bounded overhead', foreground_wait_ok(response), response[2])

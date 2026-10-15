@@ -334,6 +334,75 @@ class OracleTests(unittest.TestCase):
         self.assertEqual(len(checks), 6)
         self.assertTrue(all(passed for _, passed, _ in checks))
 
+    def manual_balance_fixture(self, auto_debt=False, auto_enable_on_clear=False):
+        fixture = s.fixture_type(SimpleNamespace(fixture_type=lambda _: object), None)()
+        calls, checks = [], []
+        counters = {'inference': 0, 'probes': 0}
+        state = {'status': 'active', 'schedulable': True,
+                 'runtime_state': {'state': 'enabled', 'balance_blocked': False}}
+        usage = {'n': 0, 'wrong_group': 0, 'cost': 0}
+        fixture.admin, fixture.lock, fixture.recovery_modes = 'synthetic-admin', threading.Lock(), {}
+        fixture.new_case = lambda label, **options: {'label': label, 'account': {'id': 13}}
+        fixture.account_state = lambda case: copy.deepcopy(state)
+        fixture.counts = lambda label: dict(counters)
+        fixture.lease_count = lambda cases: 0
+        fixture.wait_until = lambda label, predicate: self.assertTrue(predicate(), label)
+        fixture.usage = lambda case: dict(usage)
+        fixture.wait_usage = lambda case, count: dict(usage)
+        def check(name, passed, detail=None):
+            checks.append(name)
+            self.assertTrue(passed, name)
+        fixture.check = check
+        def request(path, body, token, method=None):
+            calls.append((path, body, method))
+            if path.endswith('/manual-balance-stop'):
+                self.assertEqual(method, 'PUT')
+                state['runtime_state']['balance_blocked'] = body['blocked']
+                state['runtime_state']['state'] = 'balance_stopped' if body['blocked'] else 'stopped'
+                state['status'], state['schedulable'] = 'inactive', False
+                if not body['blocked'] and auto_enable_on_clear:
+                    state['status'], state['schedulable'] = 'active', True
+                return [200, {}]
+            if path.endswith('/recheck'):
+                self.assertEqual(body, {'model': s.MODEL})
+                if state['runtime_state']['balance_blocked']: return [409, {}]
+                counters['probes'] += 1
+                state['runtime_state']['state'] = 'enabled'
+                state['status'], state['schedulable'] = 'active', True
+                return [200, {}]
+            return [409, {}]  # Legacy enable attempts cannot override the mark.
+        fixture.request = request
+        invoked = []
+        def call(case, secondary=False):
+            invoked.append(secondary)
+            if len(invoked) == 1:
+                counters['inference'] += 1
+                state['runtime_state']['balance_blocked'] = auto_debt
+                return [403, {'error': {'message': 'supplier credit unavailable'}}]
+            if state['runtime_state']['balance_blocked']: return [503, {}]
+            self.assertTrue(secondary)
+            self.assertEqual(state['runtime_state']['state'], 'enabled')
+            counters['inference'] += 1
+            usage.update(n=1, cost=.01)
+            return [200, s.anthropic_sse(s.MODEL, 'healthy').decode()]
+        fixture.call = call
+        return fixture, calls, checks, counters
+
+    def test_manual_debt_acceptance_requires_explicit_mark_clear_then_probe(self):
+        fixture, calls, checks, counters = self.manual_balance_fixture()
+        fixture.manual_balance_checks()
+        manual = [(body, method) for path, body, method in calls if path.endswith('/manual-balance-stop')]
+        self.assertEqual(manual, [({'blocked': True}, 'PUT'), ({'blocked': False}, 'PUT')])
+        self.assertEqual(counters, {'inference': 2, 'probes': 1})
+        self.assertEqual(len(checks), 13)
+        self.assertFalse(any('confirm_recharged' in body for _, body, _ in calls))
+
+    def test_manual_debt_oracle_rejects_automatic_debt_and_enable_on_clear(self):
+        for options in ({'auto_debt': True}, {'auto_enable_on_clear': True}):
+            with self.subTest(options=options):
+                fixture, _, _, _ = self.manual_balance_fixture(**options)
+                with self.assertRaises(AssertionError): fixture.manual_balance_checks()
+
     def test_response_detail_reports_status_and_terminals_without_payload(self):
         response = [403, {'error': {'message': 'private-message', 'code': 'MODEL_NOT_ALLOWED'}}]
         self.assertEqual(s.response_detail(response), {'status': 403, 'event_types': []})
