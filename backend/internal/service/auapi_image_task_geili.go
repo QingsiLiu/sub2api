@@ -26,6 +26,7 @@ var (
 type AUAPIImageTaskRecord struct {
 	TaskID                                                                     string
 	Kind                                                                       string `json:"kind,omitempty"`
+	GPTAsync                                                                   bool   `json:"gpt_async,omitempty"`
 	DurationSeconds                                                            int    `json:"duration_seconds,omitempty"`
 	UserID, APIKeyID, GroupID, AccountID                                       int64
 	Model, UpstreamModel                                                       string
@@ -111,6 +112,10 @@ func (s *AUAPIImageTaskService) SubmitVideo(ctx context.Context, key *APIKey, su
 }
 
 func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, sub *UserSubscription, body []byte, idem, kind string) (*ImageTask, bool, error) {
+	return s.submitMediaRequest(ctx, key, sub, body, idem, kind, nil)
+}
+
+func (s *AUAPIImageTaskService) submitMediaRequest(ctx context.Context, key *APIKey, sub *UserSubscription, body []byte, idem, kind string, prepared *auapiGPTPrepared) (*ImageTask, bool, error) {
 	if !s.Enabled() {
 		return nil, false, ErrImageTaskUnavailable
 	}
@@ -127,11 +132,17 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	if kind == "video" {
 		request, tier, err = buildAUAPIVideoPayload(body)
 	}
+	if prepared != nil {
+		request, tier, err = prepared.request, prepared.tier, nil
+	}
 	if err != nil {
 		return nil, false, infraerrors.BadRequest("invalid_request_error", err.Error())
 	}
 	canonical, _ := json.Marshal(request)
 	hash := HashUsageRequestPayload(canonical)
+	if prepared != nil {
+		hash = prepared.hash
+	}
 	idem = strings.TrimSpace(idem)
 	if len(idem) > 191 {
 		return nil, false, infraerrors.BadRequest("invalid_request_error", "Idempotency-Key exceeds 191 bytes")
@@ -168,7 +179,7 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	var account *Account
 	for i := range list {
 		a := &list[i]
-		if a.IsAUAPIImageAccount() && a.IsSchedulable() && a.IsModelSupported(routingModel) && a.GetCredential("api_key") != "" {
+		if a.IsAUAPIImageAccount() && a.IsSchedulable() && a.IsModelSupported(routingModel) && a.GetCredential("api_key") != "" && (prepared == nil || a.IsAUAPIGPTAsyncAccount()) {
 			account = a
 			break
 		}
@@ -180,14 +191,13 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	if isAUAPIGPTImage25(request.Model) && request.Parameters.Quality == "" {
 		request.Parameters.Quality = "low"
 	}
-	if !supportedAUAPIMediaModel(kind, request.Model) {
+	if !(prepared != nil && isAUAPIGPTAsyncModel(request.Model)) && !supportedAUAPIMediaModel(kind, request.Model) {
 		return nil, false, infraerrors.BadRequest("invalid_request_error", "Unsupported AUAPI media model mapping")
 	}
-	payload, _ := json.Marshal(request)
 	multiplier := s.gateway.ResolveUserGroupRateMultiplier(ctx, key.UserID, key.Group.ID, key.Group.BillingRateMultiplier(sub != nil))
 	multiplier = resolveAUAPIMediaRateMultiplier(kind, key, multiplier)
 	unitPrice := 0.0
-	if kind == "video" || request.Model != "gpt-image-2" {
+	if prepared == nil && (kind == "video" || request.Model != "gpt-image-2") {
 		unitPrice, err = auapiConfiguredMediaPrice(account, request, tier)
 		if err != nil {
 			return nil, false, infraerrors.BadRequest("MEDIA_PRICE_REQUIRED", err.Error())
@@ -197,7 +207,11 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 		if !apiKeyHasConfiguredImagePrice(key, tier) && (resolved == nil || (resolved.Mode != BillingModeImage && resolved.Mode != BillingModePerRequest)) {
 			return nil, false, infraerrors.BadRequest("IMAGE_PRICE_REQUIRED", "Configure a per-image price for this model and size before enabling AUAPI")
 		}
-		cost := s.gateway.calculateOpenAIImageCost(ctx, routingModel, key, &OpenAIForwardResult{ImageCount: 1, ImageSize: tier}, multiplier)
+		priceMultiplier := multiplier
+		if prepared != nil {
+			priceMultiplier = 1
+		} // the durable hold applies the owner multiplier once
+		cost := s.gateway.calculateOpenAIImageCost(ctx, routingModel, key, &OpenAIForwardResult{ImageCount: 1, ImageSize: tier}, priceMultiplier)
 		if cost == nil {
 			return nil, false, ErrImageTaskUnavailable
 		}
@@ -206,6 +220,17 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	if unitPrice < 0 || multiplier < 0 || math.IsNaN(unitPrice) || math.IsInf(unitPrice, 0) || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) {
 		return nil, false, ErrImageTaskUnavailable
 	}
+	if prepared != nil {
+		client := &auapiImageClient{account: account, gateway: s.gateway}
+		for _, upload := range prepared.uploads {
+			link, uploadErr := client.uploadGPTReference(ctx, upload)
+			if uploadErr != nil {
+				return nil, false, ErrImageTaskUnavailable.WithCause(uploadErr)
+			}
+			request.Parameters.ImageURLs = append(request.Parameters.ImageURLs, link)
+		}
+	}
+	payload, _ := json.Marshal(request)
 	now := time.Now().UTC()
 	prefix := "auimgtask_"
 	if kind == "video" {
@@ -213,6 +238,7 @@ func (s *AUAPIImageTaskService) submitMedia(ctx context.Context, key *APIKey, su
 	}
 	task := &AUAPIImageTaskRecord{TaskID: prefix + strings.ReplaceAll(uuid.NewString(), "-", ""), Kind: kind, DurationSeconds: request.Parameters.DurationSeconds, UserID: key.UserID, APIKeyID: key.ID, GroupID: key.Group.ID, AccountID: account.ID, Model: routingModel, UpstreamModel: request.Model, Status: ImageTaskStatusProcessing, Phase: "estimate", RequestJSON: payload, IdempotencyKey: idem, RequestHash: hash, ImageSize: tier, Count: request.Parameters.N, UnitPrice: unitPrice, RateMultiplier: multiplier, AccountRateMultiplier: account.BillingRateMultiplier(), HoldAmount: QuantizeUsageBillingAmount(unitPrice * multiplier * float64(request.Parameters.N)), CreatedAt: now, NextPollAt: now, ExpiresAt: now.Add(24 * time.Hour)}
 	task.UpstreamIdempotencyKey = "sub2api-" + task.TaskID
+	task.GPTAsync = prepared != nil
 	task.BaseURL = strings.TrimSpace(account.GetCredential("base_url"))
 	if task.BaseURL == "" {
 		task.BaseURL = AUAPIImageDefaultBaseURL
@@ -355,10 +381,13 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 		copy.Credentials[k] = v
 	}
 	copy.Credentials["base_url"] = t.BaseURL
+	if t.GPTAsync {
+		copy.Credentials["image_provider"] = "auapi_gpt_async"
+	}
 	client := &auapiImageClient{account: &copy, gateway: s.gateway}
 	switch t.Phase {
 	case "estimate":
-		if t.Kind == "video" || t.UpstreamModel != "gpt-image-2" {
+		if !t.GPTAsync && (t.Kind == "video" || t.UpstreamModel != "gpt-image-2") {
 			amount, e := client.EstimateRetail(ctx, t.RequestJSON, t.UpstreamIdempotencyKey)
 			if e != nil {
 				return e
@@ -371,9 +400,28 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 		}
 		t.Phase = "submit"
 	case "submit":
+		if t.GPTAsync {
+			// Persist the uncertain state before POST. A crash after dispatch must
+			// never restart procurement; accepted work is recovered by task ID.
+			t.Phase = "reconcile"
+			if err := s.repo.Save(ctx, t); err != nil {
+				return err
+			}
+		}
 		// Same server-generated idempotency key survives a timeout or crash before Save.
 		id, e := client.Submit(ctx, t.RequestJSON, t.UpstreamIdempotencyKey)
 		if e != nil {
+			// Main's runtime admission rejects locally before dispatch; release
+			// this hold even though the GPT crash barrier is already persisted.
+			if t.GPTAsync && isAccountRuntimeAdmissionFailureGeili(e) {
+				t.Phase, t.HTTPStatus = "fail", http.StatusServiceUnavailable
+				t.ErrorJSON = imageTaskErrorJSON("account_unavailable", "Supplier account unavailable; no task was submitted")
+			}
+			var httpErr *auapiHTTPError
+			if t.GPTAsync && errors.As(e, &httpErr) && !httpErr.Retryable() {
+				t.Phase, t.HTTPStatus = "fail", httpErr.Status
+				t.ErrorJSON = imageTaskErrorJSON("api_error", "AUAPI task rejected before acceptance")
+			}
 			return e
 		}
 		t.UpstreamTaskID = id

@@ -208,3 +208,42 @@ For URL responses, `image_url` mirrors the first `data[].url` for simple clients
 All submit and poll responses include `Cache-Control: no-store`, preventing a CDN from caching the `processing` state. Tasks and results expire 24 hours after their latest state update. A task executes for at most 30 minutes.
 
 Task ownership is scoped to both user and API key. Unknown task IDs and IDs owned by another key both return `404`, avoiding task-existence disclosure. Polling remains available when the completed generation used the key's remaining balance; normal authentication, disabled-key, user, IP, and group checks still apply.
+
+## GPT reference uploads and durable AUAPI polling
+
+For the image studio's three GPT models, use a separate account with
+`image_provider: auapi_gpt_async` and exact mappings for `gpt-image-2`,
+`gpt-image-2.5-flare`, and `gpt-image-2.5-sunburst`. This marker is opt-in;
+existing `auapi` media accounts and explicit `openai` accounts keep their
+protocols. Clients continue using the existing generation/edit async endpoints
+and their normal JSON/multipart bodies. This does not change synchronous API
+requests into durable tasks; clients must use the async endpoints.
+
+The service validates all reference files and options, checks eligibility and
+customer pricing, then sends each original PNG/JPEG/WebP as raw bytes to
+`/v1/media/references` using the selected account's own API Key. Each file must
+be at most 10 MiB and 40 megapixels. The upload receipt must retain its byte
+count, MIME type and dimensions and provide an HTTPS URL. Uploads do not start
+image generation. Only those links enter the PostgreSQL snapshot; temporary
+multipart files are never passed into the upstream asynchronous task.
+
+The worker estimates and creates one JSON `/v1/async/tasks` request, then queries
+`/v1/tasks/{id}` and authenticated content endpoints. The task freezes the
+protocol, account, base URL, parameters and upstream idempotency key. Before a
+creation POST, the worker persists a reconciliation barrier. A lost response or
+process restart with uncertain acceptance retains the hold for reconciliation
+and never automatically creates a replacement. Existing settlement, ownership,
+lease fencing and archive flows are reused.
+
+All 21 explicit image-studio size presets retain their 1K/2K/4K tariffs. The
+three models use the existing customer group/channel image prices; upstream USD
+retail quotes do not replace customer prices. The effective customer multiplier
+is applied once, including zero. Automatic sizes have no fixed customer tariff
+and are rejected before uploads or procurement; choose an explicit size. Masks,
+streaming, partial images, unsupported fields and inline data URLs are rejected
+before procurement. JPEG/WebP compression zero is preserved as an explicit value.
+
+The synchronous AUAPI Images API can still hit an approximately 125-second
+edge timeout. Wrapping that synchronous upstream request in a local task does
+not solve the upstream timeout; the `openai` protocol candidate `.12` is not
+sufficient evidence for releasing the new durable GPT flow.
