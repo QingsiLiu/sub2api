@@ -90,7 +90,7 @@ func (r *CompositeRouteResolver) explicitRecoverableTextModelGeili(ctx context.C
 			if !recoveryAccountEligibleGeili(fresh, model, time.Now(), true) || !accountRecoveryProbeTextModelGeili(fresh.GetMappedModel(model)) {
 				continue
 			}
-			if fresh.IsActive() && fresh.Schedulable && fresh.IsSchedulable() && (state == nil || !state.Models[model].Blocked) {
+			if fresh.IsActive() && fresh.Schedulable && fresh.IsSchedulable() {
 				continue
 			}
 			return true, nil

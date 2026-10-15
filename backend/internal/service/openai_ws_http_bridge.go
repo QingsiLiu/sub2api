@@ -773,7 +773,6 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		if normalized, changed := normalizeCompletedImageGenerationStatus(upstreamMessage); changed {
 			upstreamMessage = normalized
 		}
-		s.observeOpenAIWSBalanceGeili(ctx, account, upstreamMessage)
 		eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(upstreamMessage)
 		responseModelObserver.ObserveOpenAI(upstreamMessage, eventType)
 		if responseID == "" && eventResponseID != "" {

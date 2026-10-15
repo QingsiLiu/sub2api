@@ -1087,11 +1087,6 @@ func (s *GeminiCachedContentService) doUpstream(ctx context.Context, account *Ac
 	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, geminiCachedContentResponseMaxBytes))
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300
-	// geili hook: preserve a received debt fact even if the body ends with a
-	// read error. Bound cache get/patch/delete keep their mutation contract.
-	if !success && method == http.MethodPost {
-		observeNativePaidSupplierDebtGeili(ctx, s.compat.rateLimitService, account, resp.StatusCode, respBody)
-	}
 	if err != nil {
 		if success {
 			return nil, &GeminiCachedContentMalformedResponseError{Err: err}

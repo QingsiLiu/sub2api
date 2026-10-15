@@ -38,7 +38,7 @@ func TestAUAPINativeBalanceGeiliLocalAdmissionIsNotUnknownAcceptance(t *testing.
 	}
 }
 
-func TestAUAPINativeBalanceGeiliOnlyNewTaskErrorsPersistDebt(t *testing.T) {
+func TestAUAPINativeBalanceGeiliSupplierErrorsLeaveDebtManual(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, body string
 		status                   int
@@ -64,15 +64,14 @@ func TestAUAPINativeBalanceGeiliOnlyNewTaskErrorsPersistDebt(t *testing.T) {
 			_, _, err := client.request(ctx, tc.method, tc.path, []byte(`{}`), "fixture", 1024)
 			var failure *auapiHTTPError
 			require.ErrorAs(t, err, &failure)
-			require.Equal(t, tc.debt, r.markCalls == 1)
+			require.Zero(t, r.markCalls)
 			require.NotContains(t, err.Error(), "NEVER_STORE_SUPPLIER_TEXT")
 			if tc.debt {
 				require.Equal(t, tc.status >= 500, failure.Retryable(), "an actual supplier 5xx still has unknown acceptance")
-				require.NoError(t, r.markErr, "already observed debt survives customer cancellation")
 				state, e := r.GetAccountRuntimeGeili(context.Background(), a.ID)
 				require.NoError(t, e)
-				require.True(t, state.BalanceBlocked)
-				require.Equal(t, "supplier_insufficient_balance", state.BalanceReason)
+				require.False(t, state.BalanceBlocked)
+				require.Empty(t, state.BalanceReason)
 			}
 		})
 	}
@@ -148,7 +147,7 @@ func (r *auapiCompleteErrorEOFGeili) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func TestAUAPINativeBalanceGeiliCompleteDebtErrorBeforeEOFPersists(t *testing.T) {
+func TestAUAPINativeBalanceGeiliCompleteErrorRetainsUncertaintyWithoutDebt(t *testing.T) {
 	a := auapiNativeBalanceAccountGeili()
 	r := &nativePaidDebtRepoGeili{recoveryRuntimeRepoGeili: newRecoveryRuntimeRepoGeili(a)}
 	up := &nativePaidDebtUpstreamGeili{response: &http.Response{StatusCode: 503, Header: make(http.Header),
@@ -158,5 +157,5 @@ func TestAUAPINativeBalanceGeiliCompleteDebtErrorBeforeEOFPersists(t *testing.T)
 	var failure *auapiHTTPError
 	require.ErrorAs(t, err, &failure)
 	require.True(t, failure.Retryable(), "preserve real supplier acceptance uncertainty")
-	require.Equal(t, 1, r.markCalls)
+	require.Zero(t, r.markCalls)
 }

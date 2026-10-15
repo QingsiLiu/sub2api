@@ -38,10 +38,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	if s == nil || account == nil {
 		return nil, wrapOpenAIWSFallback("invalid_state", errors.New("service or account is nil"))
 	}
-	// geili hook: reject unavailable accounts before connection/task setup.
-	if err := s.checkOpenAIWSRuntimeGeili(ctx, account, nil, mappedModel); err != nil {
-		return nil, err
-	}
 	responseModelObserver := &upstreamResponseModelObserver{}
 
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
@@ -223,10 +219,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}(),
 	})
 	if err != nil {
-		// geili hook: keep admission scope and persist debt from upgrade responses.
-		if admissionErr := s.openAIWSDialAdmissionGeili(ctx, account, err); admissionErr != nil {
-			return nil, admissionErr
-		}
 		var agentDialErr *openAIWSDialError
 		if s.isAgentIdentityAccount(ctx, account) && errors.As(err, &agentDialErr) && isAgentIdentityTaskInvalidWSDialError(agentDialErr) && agentTaskRecoveryTried != nil && !*agentTaskRecoveryTried {
 			*agentTaskRecoveryTried = true
@@ -350,10 +342,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
-	// geili hook: HTTP-to-native-WS dispatch must recheck shared availability.
-	if err := s.checkOpenAIWSRuntimeGeili(ctx, account, nil, mappedModel); err != nil {
-		return nil, err
-	}
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -621,8 +609,6 @@ readLoop:
 			message = normalized
 		}
 
-		// geili hook: preserve post-output supplier debt on native WS.
-		s.observeOpenAIWSBalanceGeili(ctx, account, message)
 		eventType, eventResponseID, responseField := parseOpenAIWSEventEnvelope(message)
 		if eventType == "" {
 			continue

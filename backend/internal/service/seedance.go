@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -132,16 +131,7 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var nativeReader io.Reader = resp.Body
-	var debtCapture *nativePaidSupplierDebtCaptureGeili
-	if endpoint == SeedanceEndpointCreate && resp.StatusCode >= 400 {
-		debtCapture = &nativePaidSupplierDebtCaptureGeili{Reader: nativeReader}
-		nativeReader = debtCapture
-	}
-	responseBody, err := ReadUpstreamResponseBody(nativeReader, s.cfg, c, openAITooLargeError)
-	if debtCapture != nil {
-		observeNativePaidSupplierDebtGeili(ctx, s.rateLimitService, account, resp.StatusCode, debtCapture.body)
-	}
+	responseBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
 	}

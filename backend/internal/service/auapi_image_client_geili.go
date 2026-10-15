@@ -225,17 +225,6 @@ func (c *auapiImageClient) request(ctx context.Context, method, path string, bod
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if method == http.MethodPost && (path == "/v1/images/tasks" || path == "/v1/videos/tasks") {
-			// Only inspect bounded structured errors from new paid submissions.
-			// Existing task polling/content and pricing metadata stay unchanged.
-			const errorLimit = 64 << 10
-			errorBody, _ := io.ReadAll(io.LimitReader(resp.Body, errorLimit+1))
-			// A complete JSON error remains an observed fact even if the
-			// connection reports an incomplete framing error after those bytes.
-			if len(errorBody) <= errorLimit && json.Valid(errorBody) {
-				observeNativePaidSupplierDebtGeili(ctx, c.gateway.rateLimitService, c.account, resp.StatusCode, errorBody)
-			}
-		}
 		delay := time.Duration(0)
 		if seconds, e := strconv.Atoi(resp.Header.Get("Retry-After")); e == nil && seconds > 0 {
 			delay = time.Duration(min(seconds, 300)) * time.Second

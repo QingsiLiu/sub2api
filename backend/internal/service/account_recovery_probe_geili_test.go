@@ -103,13 +103,13 @@ func TestAccountRecoveryProbeGeili_SyntheticIndependentBoundedRequest(t *testing
 		name, body string
 		status     int
 		complete   bool
-		balance    bool
 	}{
-		{"complete", anthropicCompletionFixtureGeili(geiliAnthropicStart, geiliAnthropicBlock, geiliAnthropicText, geiliAnthropicClosed, geiliAnthropicReason, geiliAnthropicStop), 200, true, false},
-		{"truncated even though admin tester passes EOF", anthropicCompletionFixtureGeili(geiliAnthropicStart, geiliAnthropicBlock, geiliAnthropicText), 200, false, false},
-		{"balance", `{"error":{"message":"insufficient balance"}}`, 403, false, true},
-		{"forbidden has no state mutation", `{"error":{"message":"forbidden PRIVATE_TOKEN"}}`, 403, false, false},
-		{"oversized response", strings.Repeat("X", accountRecoveryProbeMaxBytesGeili+1), 200, false, false},
+		{"complete", anthropicCompletionFixtureGeili(geiliAnthropicStart, geiliAnthropicBlock, geiliAnthropicText, geiliAnthropicClosed, geiliAnthropicReason, geiliAnthropicStop), 200, true},
+		{"truncated even though admin tester passes EOF", anthropicCompletionFixtureGeili(geiliAnthropicStart, geiliAnthropicBlock, geiliAnthropicText), 200, false},
+		{"balance", `{"error":{"message":"insufficient balance"}}`, 403, false},
+		{"stream balance error stays generic", anthropicCompletionFixtureGeili(geiliAnthropicStart, `{"type":"error","error":{"type":"invalid_request_error","code":"insufficient_balance","message":"credit balance is too low"}}`), 200, false},
+		{"forbidden has no state mutation", `{"error":{"message":"forbidden PRIVATE_TOKEN"}}`, 403, false},
+		{"oversized response", strings.Repeat("X", accountRecoveryProbeMaxBytesGeili+1), 200, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			upstream := &accountRecoveryProbeHTTPGeili{response: &http.Response{StatusCode: tc.status, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(tc.body))}}
@@ -127,9 +127,7 @@ func TestAccountRecoveryProbeGeili_SyntheticIndependentBoundedRequest(t *testing
 				require.Error(t, err)
 				require.NotContains(t, err.Error(), "PRIVATE_TOKEN")
 			}
-			if tc.balance {
-				require.ErrorIs(t, err, ErrAccountBalanceBlockedGeili)
-			}
+			require.NotErrorIs(t, err, ErrAccountBalanceBlockedGeili, "supplier responses cannot create manual debt state")
 			require.Zero(t, repo.writes)
 			require.Equal(t, 1, upstream.calls)
 			var payload map[string]any

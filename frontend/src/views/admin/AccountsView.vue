@@ -466,7 +466,7 @@
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
     <AccountRecheckDialogGeili :show="showRecheck" :account="recheckingAcc" @close="showRecheck = false" @checked="handleRechecked" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @recheck="handleRecheck" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @recheck="handleRecheck" @manual-balance-stop="handleManualBalanceStop" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -2412,6 +2412,23 @@ const handleRechecked = (a: Account) => {
   patchAccountInList(a)
   enterAutoRefreshSilentWindow()
   appStore.showSuccess(t('admin.accounts.runtime.success'))
+}
+const manualBalanceUpdating = new Set<number>()
+const handleManualBalanceStop = async (a: Account) => {
+  if (manualBalanceUpdating.has(a.id)) return
+  const blocked = !a.runtime_state?.balance_blocked
+  manualBalanceUpdating.add(a.id)
+  try {
+    const updated = await adminAPI.accounts.setManualBalanceStop(a.id, blocked)
+    patchAccountInList(updated)
+    enterAutoRefreshSilentWindow()
+    appStore.showSuccess(t(blocked ? 'admin.accounts.runtime.balanceMarked' : 'admin.accounts.runtime.balanceCleared'))
+    reload()
+  } catch (error: any) {
+    appStore.showError(error?.message || t('admin.accounts.runtime.balanceUpdateFailed'))
+  } finally {
+    manualBalanceUpdating.delete(a.id)
+  }
 }
 const handleRecoverState = async (a: Account) => {
   if (a.runtime_state?.balance_blocked) { handleRecheck(a); return }

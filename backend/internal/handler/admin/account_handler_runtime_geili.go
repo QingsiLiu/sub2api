@@ -11,6 +11,29 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SetManualBalanceStopGeili is an administrative label, with no supplier I/O.
+// Clearing it leaves the account stopped until separately enabled or recovered.
+func (h *AccountHandler) SetManualBalanceStopGeili(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	var req struct {
+		Blocked *bool `json:"blocked"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Blocked == nil {
+		response.BadRequest(c, "A boolean blocked field is required")
+		return
+	}
+	account, err := h.rateLimitService.SetManualBalanceStopGeili(c.Request.Context(), id, *req.Blocked)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), account))
+}
+
 // RecheckAccountGeili uses the runtime recovery service. Clearing state alone
 // cannot prove a model is usable or acknowledge an unpaid upstream balance.
 func (h *AccountHandler) RecheckAccountGeili(c *gin.Context) {

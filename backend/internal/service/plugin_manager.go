@@ -956,10 +956,6 @@ func (m *PluginManager) RoundTripOpenAIOAuth(ctx context.Context, request *http.
 	if route.runtime == nil {
 		return nil, true, fmt.Errorf("OpenAI OAuth 插件不可用: %s", route.unavailable)
 	}
-	// geili hook: native plugin I/O bypasses HTTPUpstream's final debt barrier.
-	if err := checkNativePluginBalanceGeili(ctx, request, account); err != nil {
-		return nil, true, err
-	}
 	if route.runtime.client.Exited() {
 		runtimeErr := errors.New("OpenAI OAuth 插件进程已退出")
 		if stateErr := m.markRuntimeUnavailable(route, runtimeErr.Error()); stateErr != nil {

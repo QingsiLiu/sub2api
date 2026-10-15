@@ -37,8 +37,6 @@ type AccountRecoveryServiceGeili struct {
 	accounts                 AccountRepository
 	runtime                  AccountRuntimeRepositoryGeili
 	probe                    AccountRecoveryProberGeili
-	verifyBalance            AccountBalanceVerifierGeili
-	balanceLatch             AccountBalanceLatchCacheGeili
 	clearSchedulingBlock     func(context.Context, int64) error
 	notifySchedulingRecovery func(int64)
 	ctx                      context.Context
@@ -48,13 +46,15 @@ type AccountRecoveryServiceGeili struct {
 	wg                       sync.WaitGroup
 }
 
-func NewAccountRecoveryServiceGeili(accounts AccountRepository, probe AccountRecoveryProberGeili, balance AccountBalanceVerifierGeili) *AccountRecoveryServiceGeili {
+// The legacy balance callback is retained only for call-site compatibility.
+// Manual account state is the sole debt authority for recovery.
+func NewAccountRecoveryServiceGeili(accounts AccountRepository, probe AccountRecoveryProberGeili, _ AccountBalanceVerifierGeili) *AccountRecoveryServiceGeili {
 	r, ok := accounts.(AccountRuntimeRepositoryGeili)
 	if !ok || probe == nil {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &AccountRecoveryServiceGeili{accounts: accounts, runtime: r, probe: probe, verifyBalance: balance, ctx: ctx, cancel: cancel, jobs: make(map[string]*accountRecoveryJobGeili)}
+	return &AccountRecoveryServiceGeili{accounts: accounts, runtime: r, probe: probe, ctx: ctx, cancel: cancel, jobs: make(map[string]*accountRecoveryJobGeili)}
 }
 func (s *AccountRecoveryServiceGeili) Stop() {
 	if s != nil {
@@ -93,91 +93,39 @@ func (s *AccountRecoveryServiceGeili) check(ctx context.Context, account *Accoun
 	if err != nil {
 		return err
 	}
-	// A shadow cannot authorize a paid check of its debt-blocked credential owner.
-	// Recharge confirmation and recovery must target that original account.
+	// Manual debt marks are authoritative. A child cannot override the
+	// credential owner's mark, even through an explicit administrator recheck.
 	if fresh.ParentAccountID != nil && *fresh.ParentAccountID != fresh.ID {
-		owner, e := s.runtime.GetAccountRuntimeGeili(ctx, *fresh.ParentAccountID)
+		owner, e := s.accounts.GetByID(ctx, *fresh.ParentAccountID)
 		if e != nil {
 			return e
 		}
-		if owner != nil && owner.BalanceBlocked {
+		if owner == nil {
+			return ErrAccountProbeUnhealthyGeili
+		}
+		ownerState, e := s.runtime.GetAccountRuntimeGeili(ctx, owner.ID)
+		if e != nil {
+			return e
+		}
+		if ownerState != nil && ownerState.BalanceBlocked {
 			return ErrAccountBalanceBlockedGeili
 		}
-		if s.balanceLatch != nil {
-			token, e := s.balanceLatch.GetAccountBalanceLatchGeili(ctx, *fresh.ParentAccountID)
-			if e != nil {
-				return NewAccountRuntimeAdmissionErrorGeili("verification_unavailable")
-			}
-			if token != "" {
-				return ErrAccountBalanceBlockedGeili
-			}
-		}
-	}
-	latchToken := ""
-	if s.balanceLatch != nil {
-		latchToken, err = s.balanceLatch.GetAccountBalanceLatchGeili(ctx, account.ID)
-		if err != nil {
-			return NewAccountRuntimeAdmissionErrorGeili("verification_unavailable")
-		}
-		if latchToken != "" && (state == nil || !state.BalanceBlocked) {
-			if err := s.runtime.MarkAccountBalanceBlockedGeili(ctx, account.ID, "supplier_insufficient_balance"); err != nil {
-				return err
-			}
-			fresh, err = s.accounts.GetByID(ctx, account.ID)
-			if err != nil {
-				return err
-			}
-			state, err = s.runtime.GetAccountRuntimeGeili(ctx, account.ID)
-			if err != nil {
-				return err
-			}
+		if !owner.IsCredentialUsableForShadow() {
+			return ErrAccountProbeUnhealthyGeili
 		}
 	}
 	fresh.RuntimeState = state
 	if len(admission) > 0 && !admission[0](ctx, fresh) {
 		return ErrAccountRuntimeConflictGeili
 	}
-	verified := false
-	if state != nil && state.BalanceBlocked {
-		known, sufficient := false, false
-		if s.verifyBalance != nil {
-			known, sufficient, err = s.verifyBalance(ctx, fresh)
-			if err != nil {
-				return err
-			}
-		}
-		if known && !sufficient {
-			return ErrAccountBalanceBlockedGeili
-		}
-		if !known && !confirmed {
+	// The legacy admin API treats confirm_recharged as an explicit manual
+	// grant. Never infer that grant from a supplier balance query or a probe.
+	verified := state != nil && state.BalanceBlocked && source == "admin" && confirmed
+	if state != nil && state.BalanceBlocked && !verified {
+		if source == "admin" {
 			return ErrAccountRechargeConfirmationRequiredGeili
 		}
-		verified = known && sufficient || confirmed
-		// Trusted balance readers may persist their snapshot. Reload that write,
-		// but never accept a changed credential, proxy or group as the same grant.
-		before := *fresh
-		before.UpdatedAt = time.Time{}
-		reloaded, e := s.accounts.GetByID(ctx, account.ID)
-		if e != nil {
-			return e
-		}
-		after := *reloaded
-		after.UpdatedAt = time.Time{}
-		if MakeAccountProbeSnapshotGeili(&before).Fingerprint != MakeAccountProbeSnapshotGeili(&after).Fingerprint {
-			return ErrAccountRuntimeConflictGeili
-		}
-		newState, e := s.runtime.GetAccountRuntimeGeili(ctx, account.ID)
-		if e != nil {
-			return e
-		}
-		if newState == nil || newState.Version != state.Version || !newState.BalanceBlocked {
-			return ErrAccountRuntimeConflictGeili
-		}
-		reloaded.RuntimeState = newState
-		fresh = reloaded
-		if len(admission) > 0 && !admission[0](ctx, fresh) {
-			return ErrAccountRuntimeConflictGeili
-		}
+		return ErrAccountBalanceBlockedGeili
 	}
 	if !recoveryAccountEligibleGeili(fresh, model, time.Now(), false) {
 		return ErrAccountProbeUnhealthyGeili
@@ -201,10 +149,6 @@ func (s *AccountRecoveryServiceGeili) check(ctx context.Context, account *Accoun
 	result.HTTPStatus, result.TimeToFirstTokenMs = observation.HTTPStatus, observation.TimeToFirstTokenMs
 	if probeErr != nil || !complete {
 		result.Reason = "probe_failed"
-		if errors.Is(probeErr, ErrAccountBalanceBlockedGeili) {
-			result.Reason = "supplier_insufficient_balance"
-			_ = s.runtime.MarkAccountBalanceBlockedGeili(ctx, account.ID, result.Reason)
-		}
 		if err := s.runtime.RecordAccountProbeGeili(ctx, result); err != nil {
 			return err
 		}
@@ -216,15 +160,6 @@ func (s *AccountRecoveryServiceGeili) check(ctx context.Context, account *Accoun
 	_, err = s.runtime.ActivateAccountAfterProbeGeili(ctx, AccountProbeActivationGeili{Snapshot: snapshot, Model: model, TrustedBalanceVerified: verified})
 	if err != nil {
 		return err
-	}
-	if s.balanceLatch != nil {
-		cleared, e := s.balanceLatch.ClearAccountBalanceLatchGeili(ctx, account.ID, latchToken)
-		if e != nil {
-			return e
-		}
-		if !cleared {
-			return ErrAccountRuntimeConflictGeili
-		}
 	}
 	if genericTemporary && s.clearSchedulingBlock != nil {
 		if err := s.clearSchedulingBlock(ctx, account.ID); err != nil {
@@ -249,10 +184,7 @@ func recoveryAccountEligibleGeili(a *Account, model string, now time.Time, respe
 		if a.RuntimeState.BalanceBlocked {
 			return false
 		}
-		if t := a.RuntimeState.NextCheckAt; t != nil && now.Before(*t) {
-			return false
-		}
-		if m, ok := a.RuntimeState.Models[model]; ok && m.NextCheckAt != nil && now.Before(*m.NextCheckAt) {
+		if p := a.RuntimeState.Models[model].LastProbe; p != nil && (!p.Success || !p.Complete) && p.NextProbeAt != nil && now.Before(*p.NextProbeAt) {
 			return false
 		}
 	}
@@ -418,14 +350,7 @@ func (s *AccountRecoveryServiceGeili) runGroup(key string, groupID int64, model 
 					continue
 				}
 				a.RuntimeState = state
-				if s.balanceLatch != nil {
-					token, latchErr := s.balanceLatch.GetAccountBalanceLatchGeili(attemptCtx, a.ID)
-					if latchErr != nil || token != "" {
-						continue
-					}
-				}
-				blocked := state != nil && (state.StopReason == "temporary_failure" || state.Models[model].Blocked)
-				if a.IsActive() && a.Schedulable && !blocked && !(a.TempUnschedulableUntil != nil && time.Now().Before(*a.TempUnschedulableUntil)) && !(a.OverloadUntil != nil && time.Now().Before(*a.OverloadUntil)) {
+				if a.IsSchedulable() {
 					continue
 				}
 				if !recoveryAccountEligibleGeili(&a, model, time.Now(), true) || eligible != nil && !eligible(attemptCtx, &a) {
@@ -502,11 +427,22 @@ func PresentAccountRuntimeGeili(a *Account) map[string]any {
 	if r == nil {
 		return view
 	}
-	view["balance_blocked"], view["stop_reason"], view["next_check_at"] = r.BalanceBlocked, r.StopReason, r.NextCheckAt
+	view["balance_blocked"] = r.BalanceBlocked
 	if r.BalanceBlocked {
-		view["state"] = "balance_stopped"
-	} else if r.StopReason == "temporary_failure" {
-		view["state"] = "temporarily_stopped"
+		view["state"], view["stop_reason"] = "balance_stopped", "balance"
+	} else if state == "temporarily_stopped" {
+		view["stop_reason"] = "temporary_failure"
+	} else if state == "stopped" && r.StopReason == "manual" {
+		view["stop_reason"] = "manual"
+	}
+	probeNextCheck := func(p *AccountProbeResultGeili) *time.Time {
+		if !r.BalanceBlocked && p != nil && (!p.Success || !p.Complete) && p.NextProbeAt != nil && time.Now().Before(*p.NextProbeAt) {
+			return p.NextProbeAt
+		}
+		return nil
+	}
+	if state != "enabled" {
+		view["next_check_at"] = probeNextCheck(r.LastProbe)
 	}
 	probeView := func(p *AccountProbeResultGeili) any {
 		if p == nil {
@@ -521,7 +457,12 @@ func PresentAccountRuntimeGeili(a *Account) map[string]any {
 	view["last_probe"] = probeView(r.LastProbe)
 	models := make(map[string]any, len(r.Models))
 	for name, m := range r.Models {
-		models[name] = map[string]any{"blocked": m.Blocked, "next_check_at": m.NextCheckAt, "last_probe": probeView(m.LastProbe)}
+		if m.LastProbe == nil {
+			continue
+		}
+		// Keep the response field for older clients, without presenting retired
+		// consecutive-failure flags as an ongoing scheduling prohibition.
+		models[name] = map[string]any{"blocked": false, "next_check_at": probeNextCheck(m.LastProbe), "last_probe": probeView(m.LastProbe)}
 	}
 	view["models"] = models
 	return view

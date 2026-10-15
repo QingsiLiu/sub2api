@@ -191,8 +191,8 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
-	// geili hook: confirmed account-wide blocks never expire with a retry timer.
-	if a.RuntimeState != nil && (a.RuntimeState.BalanceBlocked || a.RuntimeState.StopReason == "temporary_failure") {
+	// geili hook: a manual debt mark remains authoritative until cleared.
+	if a.RuntimeState != nil && a.RuntimeState.BalanceBlocked {
 		return false
 	}
 	if !a.IsActive() || !a.Schedulable {

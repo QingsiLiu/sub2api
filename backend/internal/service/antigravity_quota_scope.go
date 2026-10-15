@@ -38,10 +38,6 @@ func (a *Account) IsSchedulableForModelWithContext(ctx context.Context, requeste
 	if a == nil {
 		return false
 	}
-	// geili hook: only the failed model is stopped until a complete check.
-	if a.RuntimeState != nil && a.RuntimeState.Models[requestedModel].Blocked {
-		return false
-	}
 	if !a.IsSchedulable() {
 		return false
 	}

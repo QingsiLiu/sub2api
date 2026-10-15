@@ -303,14 +303,6 @@ const (
 // 自定义错误码开启时覆盖后续所有逻辑（包括临时不可调度）。
 func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Account, statusCode int, responseBody []byte, requestedModel ...string) ErrorPolicyResult {
 	ctx = withTempUnschedulableModel(ctx, requestedModel)
-	if s.stopSupplierBalanceGeili(ctx, account, statusCode, responseBody) {
-		return ErrorPolicyTempUnscheduled
-	}
-	// geili hook: transient 5xx (including configured 529) use model recovery;
-	// the actual error handler/observer records once, never a permanent policy.
-	if s.usesModelRuntimeHTTPFailureGeili(ctx, account, statusCode) {
-		return ErrorPolicyNone
-	}
 	if account.IsCustomErrorCodesEnabled() {
 		if account.ShouldHandleErrorCode(statusCode) {
 			return ErrorPolicyMatched
@@ -342,15 +334,6 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte, requestedModel ...string) (shouldDisable bool) {
 	ctx = withTempUnschedulableModel(ctx, requestedModel)
-	if s.stopSupplierBalanceGeili(ctx, account, statusCode, responseBody) {
-		return true
-	}
-	// geili hook: override pool/custom-code whole-account stops for ordinary
-	// runtime 5xx; credentials and provider windows retain the existing paths.
-	if s.usesModelRuntimeHTTPFailureGeili(ctx, account, statusCode) {
-		s.recordRuntimeHTTPFailureGeili(ctx, account, firstRequestedModel(requestedModel))
-		return false
-	}
 	// Team 联动熔断必须先于池模式/自定义错误码/临时不可调度的各类早退；
 	// 同请求内与 fastpath 调用点的重复触发由方法内去重吸收。
 	s.maybeHandleOpenAITeamLinkedError(ctx, account, statusCode, responseBody)

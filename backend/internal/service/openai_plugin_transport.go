@@ -10,9 +10,7 @@ func (s *OpenAIGatewayService) SetPluginManager(manager *PluginManager) {
 // 插件返回标准 http.Response，响应解析、错误映射、SSE 和计费仍由现有核心链处理。
 func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
 	if s.pluginManager != nil {
-		// geili hook: only the real plugin branch consumes this native verifier.
-		pluginRequest := withNativePluginBalanceVerifierGeili(request, s.httpUpstream)
-		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(pluginRequest.Context(), pluginRequest, proxyURL, account)
+		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
 			return response, err
 		}
@@ -29,9 +27,7 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 	useTLSFallback bool,
 ) (*http.Response, error) {
 	if s.pluginManager != nil {
-		// geili hook: administrative native tests share the mandatory debt barrier.
-		pluginRequest := withNativePluginBalanceVerifierGeili(request, s.httpUpstream)
-		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(pluginRequest.Context(), pluginRequest, proxyURL, account)
+		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
 			return response, err
 		}

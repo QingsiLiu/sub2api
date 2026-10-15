@@ -336,17 +336,6 @@ func (s *AccountTestService) ProbeAccountRecoveryGeili(ctx context.Context, acco
 	if len(upstream.captures) == 0 {
 		return false, errAccountRecoveryProbeIncompleteGeili
 	}
-	for _, capture := range upstream.captures {
-		if supplierAccountBalanceFailureGeili(account, capture.status, capture.body) {
-			return false, ErrAccountBalanceBlockedGeili
-		}
-		frames, _ := accountRecoveryProbeFramesGeili(capture.body)
-		for _, frame := range frames {
-			if supplierAccountBalanceFailureGeili(account, capture.status, []byte(frame.Raw)) {
-				return false, ErrAccountBalanceBlockedGeili
-			}
-		}
-	}
 	last := upstream.captures[len(upstream.captures)-1]
 	if account.Platform == PlatformGemini || account.Platform == PlatformAntigravity {
 		if normalizeAntigravityModelName(last.model) != normalizeAntigravityModelName(expectedModel) {

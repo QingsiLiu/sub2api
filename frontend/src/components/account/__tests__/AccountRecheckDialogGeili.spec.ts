@@ -24,15 +24,15 @@ describe('AccountRecheckDialogGeili', () => {
     expect(wrapper.emitted('checked')).toEqual([[account()]])
     wrapper.unmount()
   })
-  it('does not recheck an unpaid account until recharge is explicitly confirmed', async () => {
+  it('requires a separate manual balance clear before any recheck', async () => {
     recheck.mockReset().mockResolvedValue(account())
     const wrapper = open(true)
     await wrapper.find('input').setValue('gpt-6')
     await wrapper.find('form').trigger('submit')
     expect(recheck).not.toHaveBeenCalled()
-    await wrapper.find('[data-test="confirm"] button').trigger('click')
-    await flushPromises()
-    expect(recheck).toHaveBeenCalledWith(1, { model: 'gpt-6', confirm_recharged: true })
+    expect(wrapper.find('[role="alert"]').text()).toBe('admin.accounts.runtime.rechargeHint')
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="confirm"]').exists()).toBe(false)
     wrapper.unmount()
   })
   it('keeps the failed account untouched and allows another explicit check', async () => {

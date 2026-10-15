@@ -16,28 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type nilRuntimeAdmissionRepositoryGeili struct{ *recoveryRuntimeRepoGeili }
-
-func (*nilRuntimeAdmissionRepositoryGeili) CheckAccountRuntimeAdmissionGeili(context.Context, int64, string) (*AccountRuntimeAdmissionGeili, error) {
-	return nil, nil
-}
-
-func TestAccountRuntimeAdmissionGeiliReadAndNilFailurePreserveRequestScope(t *testing.T) {
-	account := stoppedRecoveryAccountGeili(1, 7)
-	repo := newRecoveryRuntimeRepoGeili(account)
-	repo.admissionError = errors.New("private database address")
-	for _, source := range []AccountRepository{repo, &nilRuntimeAdmissionRepositoryGeili{repo}} {
-		err := checkRuntimeBeforeForwardGeili(context.Background(), source, &account, "m")
-		var failure *UpstreamFailoverError
-		require.ErrorAs(t, err, &failure)
-		require.Equal(t, GatewayFailureScopeRequest, failure.Scope)
-		require.Equal(t, NextAccountStop, failure.NextAccountAction)
-		require.Equal(t, 503, failure.StatusCode)
-		require.False(t, failure.ShouldReportAccountScheduleFailure())
-		require.NotContains(t, string(failure.ResponseBody), "private database address")
-	}
-}
-
 func TestAccountRuntimeAdmissionGeiliTransportAdaptersPreserveClassifiedDecision(t *testing.T) {
 	adapters := []struct {
 		name string
@@ -77,19 +55,7 @@ func TestAccountRuntimeAdmissionGeiliTransportAdaptersPreserveClassifiedDecision
 	}
 }
 
-func TestAccountRuntimeAdmissionGeiliDoesNotPunishSupplier(t *testing.T) {
-	for _, reason := range []string{"verification_unavailable", "balance", "model_failure"} {
-		a := stoppedRecoveryAccountGeili(1, 7)
-		repo := newRecoveryRuntimeRepoGeili(a)
-		(&RateLimitService{accountRepo: repo}).observeAccountResultGeili(context.Background(), nil, &a, "m", NewAccountRuntimeAdmissionErrorGeili(reason))
-		stored, err := repo.GetByID(context.Background(), a.ID)
-		require.NoError(t, err)
-		require.Empty(t, stored.RuntimeState.Models)
-		require.False(t, stored.RuntimeState.BalanceBlocked)
-	}
-}
-
-func TestAccountBalanceGuardGeiliSupplierDebtAfterSemanticOutput(t *testing.T) {
+func TestAccountBalanceGuardGeiliSupplierDebtAfterOutputDoesNotPersistDebt(t *testing.T) {
 	for _, kind := range []string{AccountTypeOAuth, AccountTypeAPIKey} {
 		t.Run(kind, func(t *testing.T) {
 			account := newAnthropicOAuthAccountForPartialUsageTest()
@@ -115,8 +81,8 @@ func TestAccountBalanceGuardGeiliSupplierDebtAfterSemanticOutput(t *testing.T) {
 			require.Equal(t, 1, strings.Count(rec.Body.String(), "event: error"))
 			stored, readErr := repo.GetByID(context.Background(), account.ID)
 			require.NoError(t, readErr)
-			require.True(t, stored.RuntimeState.BalanceBlocked)
-			require.False(t, stored.Schedulable)
+			require.False(t, stored.RuntimeState.BalanceBlocked)
+			require.True(t, stored.Schedulable)
 		})
 	}
 }
@@ -145,19 +111,4 @@ func TestAccountRuntimeAdmissionGeiliAntigravityDoesNotRetryOrRecordNetworkFault
 	_, recorded := c.Get(OpsUpstreamErrorsKey)
 	require.False(t, recorded)
 	require.Nil(t, account.TempUnschedulableUntil)
-}
-
-func TestAccountRuntimeAdmissionGeiliCanceledCustomerDoesNotEraseObservedSupplierDebt(t *testing.T) {
-	a := stoppedRecoveryAccountGeili(1, 7)
-	repo := newRecoveryRuntimeRepoGeili(a)
-	cache := newAccountDebtLatchTestGeili()
-	svc := &RateLimitService{accountRepo: repo, tempUnschedCache: cache}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	supplier := &geiliUpstreamPayloadFailure{status: 502, payload: []byte(`{"type":"error","error":{"code":"insufficient_balance"}}`)}
-	svc.observeAccountResultGeili(ctx, nil, &a, "m", supplier)
-	stored, _ := repo.GetByID(context.Background(), a.ID)
-	require.True(t, stored.RuntimeState.BalanceBlocked)
-	require.NotEmpty(t, cache.tokens[a.ID])
-	require.Empty(t, stored.RuntimeState.Models, "canceled clients must not add model failure counters")
 }

@@ -422,6 +422,12 @@ export async function recheck(id: number, body: { model: string; confirm_recharg
   return data
 }
 
+/** Manually exclude or release an upstream balance stop; both actions leave it stopped. */
+export async function setManualBalanceStop(id: number, blocked: boolean): Promise<Account> {
+  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}/manual-balance-stop`, { blocked })
+  return data
+}
+
 export async function recoverState(id: number): Promise<Account> {
   const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/recover-state`)
   return data
@@ -1163,6 +1169,7 @@ export const accountsAPI = {
   clearRateLimit,
   recoverState,
   recheck,
+  setManualBalanceStop,
   resetAccountQuota,
   getTempUnschedulableStatus,
   resetTempUnschedulable,

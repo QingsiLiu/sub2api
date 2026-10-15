@@ -371,16 +371,24 @@ func TestAccountRecoveryGeiliRechargeConfirmationAndCurrentGrant(t *testing.T) {
 	require.True(t, r.records[0].BalanceVerified)
 }
 
-func TestAccountRecoveryGeiliInsufficientTrustedBalanceDoesNotProbeEvenConfirmed(t *testing.T) {
-	a := stoppedRecoveryAccountGeili(1, 7)
-	a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, BalanceBlocked: true, Models: map[string]AccountModelHealthGeili{}}
-	r := newRecoveryRuntimeRepoGeili(a)
-	var calls atomic.Int64
-	s := NewAccountRecoveryServiceGeili(r, func(context.Context, *Account, string) (bool, error) { calls.Add(1); return true, nil }, func(context.Context, *Account) (bool, bool, error) { return true, false, nil })
-	defer s.Stop()
-	_, err := s.RecheckAccountGeili(context.Background(), 1, "m", true)
-	require.ErrorIs(t, err, ErrAccountBalanceBlockedGeili)
-	require.Zero(t, calls.Load())
+func TestAccountRecoveryGeiliLegacyVerifierIsNeverCalled(t *testing.T) {
+	for _, blocked := range []bool{false, true} {
+		t.Run(fmt.Sprintf("manual_blocked=%t", blocked), func(t *testing.T) {
+			a := stoppedRecoveryAccountGeili(1, 7)
+			a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, BalanceBlocked: blocked, Models: map[string]AccountModelHealthGeili{}}
+			r := newRecoveryRuntimeRepoGeili(a)
+			var calls atomic.Int64
+			s := NewAccountRecoveryServiceGeili(r, func(context.Context, *Account, string) (bool, error) { calls.Add(1); return true, nil }, func(context.Context, *Account) (bool, bool, error) {
+				t.Fatal("manual recovery must not request supplier balance")
+				return true, false, errors.New("legacy supplier unavailable")
+			})
+			defer s.Stop()
+			updated, err := s.RecheckAccountGeili(context.Background(), 1, "m", true)
+			require.NoError(t, err)
+			require.Equal(t, int64(1), calls.Load())
+			require.False(t, updated.RuntimeState.BalanceBlocked)
+		})
+	}
 }
 
 func TestAccountRecoveryGeiliStaleCASCannotActivate(t *testing.T) {
@@ -463,17 +471,19 @@ func TestAccountRecoveryGeiliStopCancelsProbeAndRemovesJob(t *testing.T) {
 	r.mu.Unlock()
 }
 
-func TestAccountRecoveryGeiliFutureWindowAndModelIsolation(t *testing.T) {
+func TestAccountRecoveryGeiliProbeBackoffIsNotPermanentModelDisable(t *testing.T) {
 	a := stoppedRecoveryAccountGeili(1, 7)
 	future := time.Now().Add(time.Hour)
-	a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, Models: map[string]AccountModelHealthGeili{"a": {Blocked: true, NextCheckAt: &future}}}
+	a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, Models: map[string]AccountModelHealthGeili{"a": {
+		Blocked: true, NextCheckAt: &future,
+		LastProbe: &AccountProbeResultGeili{Model: "a", NextProbeAt: &future},
+	}}}
 	require.False(t, recoveryAccountEligibleGeili(&a, "a", time.Now(), true))
 	require.True(t, recoveryAccountEligibleGeili(&a, "b", time.Now(), true))
-	r := newRecoveryRuntimeRepoGeili(a)
-	require.NoError(t, checkRuntimeBeforeForwardGeili(context.Background(), r, &a, "b"))
-	var f *UpstreamFailoverError
-	require.ErrorAs(t, checkRuntimeBeforeForwardGeili(context.Background(), r, &a, "a"), &f)
-	require.Equal(t, GatewayFailureScopeAccount, f.Scope)
+	a.Status, a.Schedulable = StatusActive, true
+	require.True(t, a.IsSchedulable(), "old model flags do not prohibit normal scheduling")
+	a.RuntimeState.Models["a"] = AccountModelHealthGeili{Blocked: true, NextCheckAt: &future}
+	require.True(t, recoveryAccountEligibleGeili(&a, "a", time.Now(), true), "only failed probes impose recovery backoff")
 }
 
 func TestAccountRecoveryGeiliTwoServicesShareRepositoryLease(t *testing.T) {

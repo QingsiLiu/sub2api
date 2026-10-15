@@ -26,7 +26,7 @@ func runtimeIntegrationAccountGeili(t *testing.T, repo *accountRepository) *serv
 }
 
 func TestAccountRuntimeGeiliIntegrationDebtCannotBeClearedByLegacyMutations(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	require.NoError(t, repo.MarkAccountBalanceBlockedGeili(ctx, account.ID, "supplier_insufficient_balance"))
@@ -52,7 +52,7 @@ func TestAccountRuntimeGeiliIntegrationDebtCannotBeClearedByLegacyMutations(t *t
 }
 
 func TestAccountRuntimeGeiliIntegrationLateGrantCannotOverwriteCredentialChange(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	require.NoError(t, repo.RecordModelFailureGeili(ctx, account.ID, "", "transport_failure", time.Time{}))
@@ -67,7 +67,7 @@ func TestAccountRuntimeGeiliIntegrationLateGrantCannotOverwriteCredentialChange(
 }
 
 func TestAccountRuntimeGeiliIntegrationHealthyProbeAtomicallyActivates(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	require.NoError(t, repo.RecordModelFailureGeili(ctx, account.ID, "", "transport_failure", time.Time{}))
@@ -88,7 +88,7 @@ func TestAccountRuntimeGeiliIntegrationHealthyProbeAtomicallyActivates(t *testin
 }
 
 func TestAccountRuntimeGeiliIntegrationDistributedLeaseBudget(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	var accounts []*service.Account
 	var leases []*service.AccountProbeLeaseGeili
@@ -120,7 +120,7 @@ func TestAccountRuntimeGeiliIntegrationDistributedLeaseBudget(t *testing.T) {
 }
 
 func TestAccountRuntimeGeiliIntegrationStartupReclamationAndPagination(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	first := runtimeIntegrationAccountGeili(t, repo)
 	second := runtimeIntegrationAccountGeili(t, repo)
@@ -162,7 +162,7 @@ func TestAccountRuntimeGeiliIntegrationStartupReclamationAndPagination(t *testin
 }
 
 func TestAccountRuntimeGeiliIntegrationModelBlockDoesNotExpireOrClearOtherModels(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	for _, model := range []string{"claude-opus-5", "claude-sonnet-5"} {
@@ -191,7 +191,7 @@ func TestAccountRuntimeGeiliIntegrationModelBlockDoesNotExpireOrClearOtherModels
 }
 
 func TestAccountRuntimeGeiliIntegrationLateGroupChangeInvalidatesProbe(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	require.NoError(t, repo.RecordModelFailureGeili(ctx, account.ID, "", "transport_failure", time.Time{}))
@@ -210,7 +210,7 @@ func TestAccountRuntimeGeiliIntegrationLateGroupChangeInvalidatesProbe(t *testin
 }
 
 func TestAccountRuntimeGeiliIntegrationProbeBackoffPersistsWithoutInvalidatingCAS(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	checked := time.Now()
@@ -232,7 +232,7 @@ func TestAccountRuntimeGeiliIntegrationProbeBackoffPersistsWithoutInvalidatingCA
 }
 
 func TestAccountRuntimeGeiliIntegrationProbeClearsOnlyGenericTemporaryStop(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	for _, tc := range []struct {
 		name, reason string
@@ -268,7 +268,7 @@ func TestAccountRuntimeGeiliIntegrationProbeClearsOnlyGenericTemporaryStop(t *te
 }
 
 func TestAccountRuntimeGeiliIntegrationParentDebtBlocksAllShadows(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	parent := runtimeIntegrationAccountGeili(t, repo)
 	shadow := runtimeIntegrationAccountGeili(t, repo)
@@ -298,7 +298,7 @@ func TestAccountRuntimeGeiliIntegrationParentDebtBlocksAllShadows(t *testing.T) 
 }
 
 func TestAccountRuntimeGeiliIntegrationProbeClearsGenericOverloadWithoutRateWindow(t *testing.T) {
-	ctx := context.Background()
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
 	_, err := integrationDB.Exec(`UPDATE accounts SET status='inactive',schedulable=FALSE,overload_until=NOW()+INTERVAL '1 hour',updated_at=NOW() WHERE id=$1`, account.ID)
@@ -313,4 +313,41 @@ func TestAccountRuntimeGeiliIntegrationProbeClearsGenericOverloadWithoutRateWind
 	require.NoError(t, err)
 	require.Nil(t, account.OverloadUntil)
 	require.True(t, account.IsSchedulable())
+}
+
+func TestAccountRuntimeGeiliIntegrationShadowActivationUsesCurrentCredentialOwner(t *testing.T) {
+	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
+	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
+	for _, tc := range []struct {
+		name, mutation string
+		allowed        bool
+	}{
+		{"credential cooldown", `temp_unschedulable_until=NOW()+INTERVAL '1 hour'`, false},
+		{"credential expired", `auto_pause_on_expired=TRUE,expires_at=NOW()-INTERVAL '1 hour'`, false},
+		{"owner stopped", `status='inactive'`, false},
+		{"independent global dimension", `schedulable=FALSE,rate_limit_reset_at=NOW()+INTERVAL '1 hour',overload_until=NOW()+INTERVAL '1 hour'`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent := runtimeIntegrationAccountGeili(t, repo)
+			child := runtimeIntegrationAccountGeili(t, repo)
+			_, err := integrationDB.ExecContext(ctx, `UPDATE accounts SET parent_account_id=$2,quota_dimension='spark',status='inactive',schedulable=FALSE WHERE id=$1`, child.ID, parent.ID)
+			require.NoError(t, err)
+			child, err = repo.GetByID(ctx, child.ID)
+			require.NoError(t, err)
+			snapshot := service.MakeAccountProbeSnapshotGeili(child)
+			require.NoError(t, repo.RecordAccountProbeGeili(ctx, service.AccountProbeResultGeili{Snapshot: snapshot, Model: "fixture-model", Source: "automatic", Success: true, Complete: true, CheckedAt: time.Now()}))
+			// The owner changes after probing, without changing the child's CAS.
+			_, err = integrationDB.ExecContext(ctx, `UPDATE accounts SET `+tc.mutation+` WHERE id=$1`, parent.ID)
+			require.NoError(t, err)
+			_, err = repo.ActivateAccountAfterProbeGeili(ctx, service.AccountProbeActivationGeili{Snapshot: snapshot, Model: "fixture-model"})
+			if tc.allowed {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, service.ErrAccountRuntimeConflictGeili)
+			}
+			var active bool
+			require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT status='active' AND schedulable FROM accounts WHERE id=$1`, child.ID).Scan(&active))
+			require.Equal(t, tc.allowed, active)
+		})
+	}
 }

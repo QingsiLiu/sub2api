@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
-	dbpredicate "github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
@@ -21,7 +19,7 @@ import (
 var _ service.AccountRuntimeRepositoryGeili = (*accountRepository)(nil)
 
 func (r *accountRepository) hydrateAccountRuntimePointersGeili(ctx context.Context, accounts []*service.Account) {
-	if isAccountModelCatalogContextGeili(ctx) {
+	if !service.AccountRuntimePresentationAllowedGeili(ctx) || isAccountModelCatalogContextGeili(ctx) {
 		return
 	}
 	if r.sql == nil {
@@ -35,8 +33,8 @@ func (r *accountRepository) hydrateAccountRuntimePointersGeili(ctx context.Conte
 	}
 	states, err := r.LoadAccountRuntimeBatchGeili(ctx, ids)
 	if err != nil {
-		// Presentation is best effort; forwarding uses mandatory database
-		// admission and never relies on a missing display/cache field.
+		// Presentation is best effort. Manual controls persist the scheduling
+		// stop in accounts; forwarding does not load this display metadata.
 		logger.LegacyPrintf("repository.account", "runtime display hydration failed: %v", err)
 		return
 	}
@@ -45,20 +43,6 @@ func (r *accountRepository) hydrateAccountRuntimePointersGeili(ctx context.Conte
 			account.RuntimeState = states[account.ID]
 		}
 	}
-}
-
-func applyAccountRuntimeAvailabilityFilterGeili(ctx context.Context, q *dbent.AccountQuery) {
-	filter := service.AccountAvailabilityFilterGeili(ctx)
-	if filter != "balance_stopped" && filter != "temporarily_stopped" {
-		return
-	}
-	q.Where(dbpredicate.Account(func(s *entsql.Selector) {
-		condition := `r.balance_blocked`
-		if filter == "temporarily_stopped" {
-			condition = `NOT r.balance_blocked AND (r.stop_reason='temporary_failure' OR EXISTS (SELECT 1 FROM jsonb_each(r.model_states) m WHERE m.value->>'blocked'='true'))`
-		}
-		s.Where(entsql.ExprP(`EXISTS (SELECT 1 FROM account_runtime_geili r WHERE r.account_id=` + s.C("id") + ` AND ` + condition + `)`))
-	}))
 }
 
 const accountRuntimeColumnsGeili = `account_id,version,balance_blocked,balance_reason,balance_blocked_at,stop_reason,protection_enabled,model_states,last_probe,next_check_at,updated_at`
@@ -346,6 +330,19 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 			return err
 		}
 		account.RuntimeState = state
+		if account.ParentAccountID != nil {
+			// Fault-path only. Parent manual stop updates all children in its
+			// transaction. Avoid a child->parent lock inversion with that writer;
+			// if it is waiting on this child, its later UPDATE wins the stop.
+			var allowed bool
+			err := accountRuntimeQueryRowGeili(ctx, view.sql, `SELECT p.deleted_at IS NULL AND p.status='active' AND (p.temp_unschedulable_until IS NULL OR p.temp_unschedulable_until<=NOW()) AND (NOT p.auto_pause_on_expired OR p.expires_at IS NULL OR p.expires_at>NOW()) AND NOT COALESCE(r.balance_blocked,FALSE) FROM accounts p LEFT JOIN account_runtime_geili r ON r.account_id=p.id WHERE p.id=$1`, *account.ParentAccountID).Scan(&allowed)
+			if errors.Is(err, sql.ErrNoRows) || err == nil && !allowed {
+				return service.ErrAccountRuntimeConflictGeili
+			}
+			if err != nil {
+				return err
+			}
+		}
 		matches, err := lockAndMatchProbeProxyIdentity(ctx, view.client, account)
 		if err != nil {
 			return err

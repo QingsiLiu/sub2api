@@ -371,6 +371,10 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	accounts := admin.Group("/accounts")
+	// Keep irreversible credit redemption on the original admin/audit/compliance
+	// chain; account display metadata is unnecessary for this operation.
+	accounts.POST("/:id/claude/reset-credits/redeem", h.Admin.Account.RedeemClaudeResetCredit)
+	accounts.Use(h.Admin.Account.AccountRuntimePresentationGeili())
 	{
 		accounts.GET("", h.Admin.Account.List)
 		// geili hook: administrator-owned upstream credential invitations.
@@ -389,8 +393,6 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.PUT("/opencode-go-usage/settings", h.Admin.Account.UpdateOpenCodeGoUsageSettings)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.GET("/:id/claude/reset-credits", h.Admin.Account.ClaudeResetCredits)
-		// Same protection as the Codex reset-quota route (admin auth, audit, compliance guard).
-		accounts.POST("/:id/claude/reset-credits/redeem", h.Admin.Account.RedeemClaudeResetCredit)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
@@ -415,6 +417,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		// geili hook: bounded check of an explicitly selected model.
 		accounts.POST("/:id/recheck", h.Admin.Account.RecheckAccountGeili)
+		accounts.PUT("/:id/manual-balance-stop", h.Admin.Account.SetManualBalanceStopGeili)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
 		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
 		accounts.POST("/:id/set-privacy", h.Admin.Account.SetPrivacy)

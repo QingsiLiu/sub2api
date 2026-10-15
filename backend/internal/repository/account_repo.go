@@ -1110,7 +1110,9 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
 	// geili hook: availability is independent of the legacy status filter.
-	applyAccountRuntimeAvailabilityFilterGeili(ctx, q)
+	if err := applyAccountRuntimeAvailabilityFilterGeili(ctx, q); err != nil {
+		return nil, nil, err
+	}
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -1141,7 +1143,9 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 
 func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, error) {
 	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
-	applyAccountRuntimeAvailabilityFilterGeili(ctx, q)
+	if err := applyAccountRuntimeAvailabilityFilterGeili(ctx, q); err != nil {
+		return nil, err
+	}
 	accounts, err := q.All(ctx)
 	if err != nil {
 		return nil, err

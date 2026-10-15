@@ -83,12 +83,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if account == nil {
 		return errors.New("account is nil")
 	}
-	// geili hook: native WS must admit the first request before identity/lease work.
-	ctx = withAccountWSBalanceObservationGeili(ctx)
-	ctx = WithAccountModelFailureObservationGeili(ctx)
-	if err := s.checkOpenAIWSRuntimeGeili(ctx, account, firstClientMessage, ""); err != nil {
-		return err
-	}
 	// geili hook: freeze encrypted-state ownership before any ingress normalization.
 	var encryptedErr error
 	ctx, hooks, encryptedErr = s.withOpenAIEncryptedWSHooksGeili(ctx, c, clientConn, account, firstClientMessage, hooks)
@@ -602,7 +596,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		var bridgeAccountFailoverInput []json.RawMessage
 		bridgeAccountFailoverInputExists := false
 		for turn := 1; ; turn++ {
-			ctx = WithAccountModelFailureObservationGeili(ctx)
 			if turn > 1 && hooks != nil && hooks.BeforeRequest != nil {
 				if err := hooks.BeforeRequest(turn, currentBridgePayload.rawForHash, currentBridgePayload.originalModel); err != nil {
 					return err
@@ -901,13 +894,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		acquireCtx, acquireCancel := context.WithTimeout(ctx, acquireTimeout)
 		lease, acquireErr := pool.Acquire(acquireCtx, req)
 		acquireCancel()
-		// geili hook: a rejected upgrade is also supplier evidence.
-		if admissionErr := s.openAIWSDialAdmissionGeili(ctx, account, acquireErr); admissionErr != nil {
-			if turn > 1 {
-				return nil, newOpenAIWSCurrentTurnFailoverError(admissionErr, nil)
-			}
-			return nil, admissionErr
-		}
 		var dialErr *openAIWSDialError
 		if acquireErr != nil && s.isAgentIdentityAccount(ctx, account) && errors.As(acquireErr, &dialErr) && isAgentIdentityTaskInvalidWSDialError(dialErr) && !agentTaskRecoveryTried {
 			agentTaskRecoveryTried = true
@@ -999,10 +985,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if lease == nil {
 			return nil, errors.New("upstream websocket lease is nil")
 		}
-		// geili hook: every dispatch, including same-turn retries, gets a fresh verdict.
-		if err := s.checkOpenAIWSRuntimeGeili(ctx, account, payload, originalModel); err != nil {
-			return nil, err
-		}
 		turnStart := time.Now()
 		wroteDownstream := false
 		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(payload), s.openAIWSWriteTimeout()); err != nil {
@@ -1066,8 +1048,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				upstreamMessage = normalized
 			}
 
-			// geili hook: persist debt before any downstream output/recovery handling.
-			s.observeOpenAIWSBalanceGeili(ctx, account, upstreamMessage)
 			eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(upstreamMessage)
 			responseModelObserver.ObserveOpenAI(upstreamMessage, eventType)
 			if responseID == "" && eventResponseID != "" {
@@ -1510,16 +1490,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return true
 	}
 	for {
-		// geili hook: later-turn rejection must never make the handler replay its first frame.
-		if err := s.checkOpenAIWSRuntimeGeili(ctx, account, currentPayload, currentOriginalModel); err != nil {
-			if turn > 1 {
-				return newOpenAIWSCurrentTurnFailoverError(err, nil)
-			}
-			return err
-		}
-		if !skipBeforeTurn {
-			ctx = WithAccountModelFailureObservationGeili(ctx)
-		}
 		if turn > 1 && !skipBeforeTurn && hooks != nil && hooks.BeforeRequest != nil {
 			if err := hooks.BeforeRequest(turn, currentClientPayload, currentOriginalModel); err != nil {
 				return err

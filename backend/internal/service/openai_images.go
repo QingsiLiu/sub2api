@@ -714,8 +714,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 				Kind:               "failover",
 				Message:            OpenAIImagesInsufficientBalanceMessage,
 			})
-			// geili hook: persist account debt before the image-only cooldown returns.
-			s.observeOpenAIImagesSupplierBalanceGeili(upstreamCtx, account, resp.StatusCode, respBody)
 			s.coolOpenAIImagesInsufficientBalance(upstreamCtx, account)
 			return nil, newOpenAIImagesInsufficientBalanceFailoverError(resp.StatusCode, resp.Header, respBody)
 		}

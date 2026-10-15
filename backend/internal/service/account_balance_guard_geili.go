@@ -6,10 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
 
@@ -77,144 +74,12 @@ func supplierAccountBalanceFailureGeili(account *Account, status int, body []byt
 	return supplierBalanceFailureGeili(body)
 }
 
-func (s *RateLimitService) observeAccountResultGeili(ctx context.Context, c *gin.Context, a *Account, model string, err error) {
-	if s == nil || a == nil || isAccountRecoveryProbeGeili(ctx) {
-		return
-	}
-	// Debt is a supplier fact even if the customer disconnects after receiving
-	// the error frame. Keep it outside health counters and their cancellation/
-	// de-duplication gates; local admissions must not create a new observation.
-	if isAccountRuntimeAdmissionFailureGeili(err) {
-		return
-	}
-	var supplier *geiliUpstreamPayloadFailure
-	if errors.As(err, &supplier) && s.stopSupplierBalanceGeili(ctx, a, supplier.status, supplier.payload) {
-		return
-	}
-	var f *UpstreamFailoverError
-	if errors.As(err, &f) && s.stopSupplierBalanceGeili(ctx, a, f.StatusCode, f.ResponseBody) {
-		f.RetryableOnSameAccount = false
-		f.NextAccountAction = NextAccountRetry
-		return
-	}
-	if ctx.Err() != nil {
-		return
-	}
-	if forwarded := AccountRuntimeForwardModelGeili(ctx); forwarded != "" {
-		model = forwarded
-	}
-	model = strings.TrimSpace(model)
-	r, ok := s.accountRepo.(AccountRuntimeRepositoryGeili)
-	if !ok {
-		return
-	}
-	if c != nil {
-		key := "geili_health_observed_" + model
-		if old, exists := c.Get(key); exists && old == a.ID {
-			return
-		}
-		c.Set(key, a.ID)
-	}
-	if err == nil {
-		_ = r.ResetAccountModelSuccessGeili(ctx, a.ID, model)
-		return
-	}
-	// A local protocol validator rejection is not proof of supplier availability.
-	if _, _, _, yes := AnthropicStreamDiagnosticGeili(err); yes {
-		return
-	}
-	if errors.As(err, &f) {
-		if gjson.GetBytes(f.ResponseBody, "error.code").String() == "upstream_tool_arguments_invalid" {
-			return
-		}
-		if f.Scope == GatewayFailureScopeRequest || f.StatusCode < 500 {
-			return
-		}
-		if !ClaimAccountModelFailureObservationGeili(ctx, a.ID, model) {
-			return
-		}
-		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer cancel()
-		_ = r.RecordModelFailureGeili(persist, a.ID, model, "temporary_upstream_failure", time.Now().Add(time.Minute))
-	}
-}
-
-func (s *RateLimitService) stopSupplierBalanceGeili(ctx context.Context, account *Account, status int, body []byte) bool {
-	if s == nil || account == nil || (status != 400 && status != 401 && status != 402 && status != 403 && status != 429 && status < 500) || !supplierAccountBalanceFailureGeili(account, status, body) {
-		return false
-	}
-	ownerID := account.ID
-	if account.ParentAccountID != nil && *account.ParentAccountID > 0 {
-		ownerID = *account.ParentAccountID
-	}
-	r, hasRuntime := s.accountRepo.(AccountRuntimeRepositoryGeili)
-	latch, hasLatch := s.tempUnschedCache.(AccountBalanceLatchCacheGeili)
-	if !hasRuntime && !hasLatch {
-		return false
-	}
-	alreadyBlocked := account.RuntimeState != nil && account.RuntimeState.BalanceBlocked
-	alreadyPersisted := alreadyBlocked && account.RuntimeState.BalanceReason == "supplier_insufficient_balance"
-	persisted := alreadyPersisted
-	// The independent latch survives a failed PostgreSQL write. Duplicate hooks
-	// in this attempt keep its token; a new observation from a fresh account
-	// gets a new token so an older recovery grant cannot erase it.
-	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-	defer cancel()
-	if hasLatch && !alreadyBlocked {
-		if _, err := latch.SetAccountBalanceLatchGeili(persist, ownerID); err != nil {
-			logger.LegacyPrintf("service.ratelimit", "supplier balance latch persistence failed account_id=%d", ownerID)
-		}
-	}
-	// A failed database write leaves BalanceReason unset; duplicate hooks retry
-	// it. Successful duplicates retain the version used by recovery's CAS.
-	// Store only a fixed reason, never supplier/customer text.
-	if hasRuntime && !alreadyPersisted {
-		durable, cancelDurable := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer cancelDurable()
-		if err := r.MarkAccountBalanceBlockedGeili(durable, ownerID, "supplier_insufficient_balance"); err != nil {
-			logger.LegacyPrintf("service.ratelimit", "supplier balance runtime persistence failed account_id=%d", ownerID)
-		} else {
-			persisted = true
-		}
-	}
-	account.Status, account.Schedulable = StatusError, false
-	if account.RuntimeState == nil {
-		account.RuntimeState = &AccountRuntimeStateGeili{AccountID: account.ID}
-	}
-	account.RuntimeState.BalanceBlocked = true
-	if persisted {
-		account.RuntimeState.BalanceReason = "supplier_insufficient_balance"
-	} else {
-		account.RuntimeState.BalanceReason = ""
-	}
-	account.RuntimeState.StopReason = "balance"
-	return true
-}
-
 func accountRuntimeFailureGeili(reason string) error {
 	payload := []byte(`{"error":{"type":"upstream_error","code":"account_unavailable","message":"Selected account is temporarily unavailable"}}`)
 	if reason == "balance" {
 		payload = []byte(`{"error":{"type":"upstream_error","code":"supplier_balance_exhausted","message":"Selected supplier account has insufficient balance"}}`)
 	}
 	return &UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable, ResponseBody: payload, SafeToFailoverAfterWrite: true, NextAccountAction: NextAccountRetry, Scope: GatewayFailureScopeAccount, Reason: accountRuntimeAdmissionReasonGeili}
-}
-
-func checkRuntimeBeforeForwardGeili(ctx context.Context, repo AccountRepository, account *Account, model string) error {
-	if account == nil || isAccountRecoveryProbeGeili(ctx) {
-		return nil
-	}
-	r, ok := repo.(AccountRuntimeRepositoryGeili)
-	if !ok {
-		return nil
-	}
-	verdict, err := r.CheckAccountRuntimeAdmissionGeili(ctx, account.ID, model)
-	if err != nil || verdict == nil {
-		return NewAccountRuntimeAdmissionErrorGeili("verification_unavailable")
-	}
-	if verdict != nil && !verdict.Allowed {
-		return NewAccountRuntimeAdmissionErrorGeili(verdict.Reason)
-	}
-	return nil
 }
 
 // These context keys are private. HTTP clients cannot supply a probe exemption

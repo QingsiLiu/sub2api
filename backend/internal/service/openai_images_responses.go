@@ -1885,10 +1885,6 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		respBody := s.readUpstreamErrorBody(resp)
 		_ = resp.Body.Close()
 		respBody = s.redactAgentIdentitySensitiveBody(upstreamCtx, account, respBody)
-		// geili hook: native plugin responses can wrap the same supplier debt code.
-		if direct {
-			s.observeOpenAIImagesSupplierBalanceGeili(upstreamCtx, account, resp.StatusCode, respBody)
-		}
 		if direct && (resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed) {
 			return s.forwardOpenAIImagesOAuth(withOpenAIImagesForceResponses(ctx), c, account, parsed, channelMappedModel)
 		}

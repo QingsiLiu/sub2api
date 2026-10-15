@@ -164,10 +164,6 @@ type openAIHTTP2FallbackState struct {
 // 7. 代理变更时清空旧连接池，避免复用错误代理
 // 8. 账号并发数与连接池上限对应（账号隔离策略下）
 type httpUpstreamService struct {
-	// geili hook: production generation dispatch verifies durable account gates.
-	runtimeAdmissionRepoGeili     accountRuntimeAdmissionReaderGeili
-	runtimeAdmissionRequiredGeili bool
-	runtimeBalanceLatchGeili      service.AccountBalanceLatchCacheGeili
 	// geili hook: public invitation accounts retain their egress policy.
 	submissionDB            *sql.DB
 	submissionPolicyCache   sync.Map
@@ -211,10 +207,6 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 //   - 调用方必须关闭 resp.Body，否则会导致 inFlight 计数泄漏
 //   - inFlight > 0 的客户端不会被淘汰，确保活跃请求不被中断
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
-	// geili hook: reject before transport selection, dispatch markers or body I/O.
-	if err := s.checkAccountRuntimeGenerationGeili(req, accountID); err != nil {
-		return nil, err
-	}
 	// geili hook: keep public direct/proxy policies in pool selection.
 	var policyErr error
 	proxyURL, policyErr = s.submissionProxyPolicyGeili(req, proxyURL, accountID)
@@ -265,13 +257,9 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 // profile 为 nil 时不启用 TLS 指纹，行为与 Do 方法相同。
 // profile 非 nil 时使用指定的 Profile 进行 TLS 指纹伪装。
 func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
-	// Delegated paths perform the policy and runtime check exactly once in Do.
+	// Delegated paths resolve the egress policy exactly once in Do.
 	if profile == nil || (req != nil && req.URL != nil && strings.EqualFold(req.URL.Scheme, "http")) {
 		return s.Do(req, proxyURL, accountID, accountConcurrency)
-	}
-	// geili hook: reject before egress policy resolution or fingerprinted dialing.
-	if err := s.checkAccountRuntimeGenerationGeili(req, accountID); err != nil {
-		return nil, err
 	}
 	// geili hook: keep public direct/proxy policies in pool selection.
 	var policyErr error

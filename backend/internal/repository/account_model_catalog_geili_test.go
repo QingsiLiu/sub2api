@@ -52,15 +52,18 @@ func expectModelCatalogAccountConversionGeili(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery(`SELECT .* FROM "account_groups"`).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 }
 
-func TestAccountModelCatalogGeiliOnlyDirectorySkipsRuntimePresentation(t *testing.T) {
+func TestAccountModelCatalogGeiliOnlyAdminOptsIntoRuntimePresentation(t *testing.T) {
 	for _, call := range []string{"catalog", "original availability", "admin GetByID", "scheduler list", "GetByIDs"} {
 		t.Run(call, func(t *testing.T) {
 			repo, mock, counter := modelCatalogRepositoryGeili(t)
 			expectModelCatalogAccountConversionGeili(mock)
-			if call != "catalog" {
+			if call == "admin GetByID" {
 				mock.ExpectQuery(`SELECT .* FROM account_runtime_geili WHERE account_id=ANY\(\$1\)`).WithArgs("{17}").WillReturnRows(runtimeRowsGeili(`{}`))
 			}
 			ctx := context.Background()
+			if call == "admin GetByID" {
+				ctx = service.WithAccountRuntimePresentationGeili(ctx)
+			}
 			var accounts []service.Account
 			var err error
 			switch call {
@@ -86,7 +89,7 @@ func TestAccountModelCatalogGeiliOnlyDirectorySkipsRuntimePresentation(t *testin
 			require.NoError(t, err)
 			require.Len(t, accounts, 1)
 			require.Equal(t, "claude-opus-5", accounts[0].GetModelMapping()["claude-opus-5"])
-			if call == "catalog" {
+			if call != "admin GetByID" {
 				require.Nil(t, accounts[0].RuntimeState)
 				require.Zero(t, counter.presentation.Load(), "even a swallowed best-effort query error must count as a read")
 			} else {

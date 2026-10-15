@@ -48,12 +48,10 @@ func (u *nativePaidDebtUpstreamGeili) DoWithTLS(req *http.Request, proxy string,
 type nativePaidDebtRepoGeili struct {
 	*recoveryRuntimeRepoGeili
 	markCalls int
-	markErr   error
 }
 
 func (r *nativePaidDebtRepoGeili) MarkAccountBalanceBlockedGeili(ctx context.Context, id int64, reason string) error {
 	r.markCalls++
-	r.markErr = ctx.Err()
 	return r.recoveryRuntimeRepoGeili.MarkAccountBalanceBlockedGeili(ctx, id, reason)
 }
 
@@ -104,7 +102,7 @@ func TestNativePaidDebtGeiliLocalAdmissionKeepsErrorAndNeverMarksAccepted(t *tes
 	}
 }
 
-func TestNativePaidDebtGeiliConfirmedSupplierDebtSurvivesClientCancel(t *testing.T) {
+func TestNativePaidDebtGeiliSupplierErrorDoesNotAutomaticallyMarkDebt(t *testing.T) {
 	for _, kind := range []string{"grok-videos", "grok-images", "seedance", "cache"} {
 		for _, status := range []int{http.StatusPaymentRequired, http.StatusServiceUnavailable} {
 			t.Run(kind+"/"+http.StatusText(status), func(t *testing.T) {
@@ -122,12 +120,11 @@ func TestNativePaidDebtGeiliConfirmedSupplierDebtSurvivesClientCancel(t *testing
 				err, clientBody := runNativePaidDebtGeili(t, kind, ctx, a, up, limits)
 				require.Error(t, err)
 				require.True(t, errors.Is(ctx.Err(), context.Canceled))
-				require.Equal(t, 1, r.markCalls)
-				require.NoError(t, r.markErr)
+				require.Zero(t, r.markCalls)
 				stored, e := r.GetByID(context.Background(), a.ID)
 				require.NoError(t, e)
-				require.True(t, stored.RuntimeState.BalanceBlocked)
-				require.Equal(t, "supplier_insufficient_balance", stored.RuntimeState.BalanceReason)
+				require.False(t, stored.RuntimeState.BalanceBlocked)
+				require.Empty(t, stored.RuntimeState.BalanceReason)
 				if kind == "seedance" {
 					require.JSONEq(t, body, clientBody, "preserve the native vendor error")
 				}
@@ -188,7 +185,7 @@ func (r *nativePaidDebtUnexpectedEOFGeili) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func TestNativePaidDebtGeiliCompleteErrorBeforeReadFailureStillRecordsDebt(t *testing.T) {
+func TestNativePaidDebtGeiliIncompleteErrorKeepsNativeFailureWithoutDebt(t *testing.T) {
 	for _, kind := range []string{"grok-videos", "seedance", "cache"} {
 		t.Run(kind, func(t *testing.T) {
 			a := nativePaidDebtAccountGeili(kind)
@@ -200,28 +197,12 @@ func TestNativePaidDebtGeiliCompleteErrorBeforeReadFailureStillRecordsDebt(t *te
 			up := &nativePaidDebtUpstreamGeili{response: response}
 			err, _ := runNativePaidDebtGeili(t, kind, context.Background(), a, up, &RateLimitService{accountRepo: r})
 			require.Error(t, err)
-			require.Equal(t, 1, r.markCalls)
+			require.Zero(t, r.markCalls)
 			if kind != "grok-videos" {
 				require.ErrorIs(t, err, io.ErrUnexpectedEOF, "retain the native read failure")
 			}
 		})
 	}
-}
-
-func TestNativePaidDebtGeiliCaptureIsBoundedAndPreservesNativeBytes(t *testing.T) {
-	body := "{\"error\":{\"code\":\"invalid_request\"},\"padding\":\"" + strings.Repeat("x", nativePaidSupplierDebtMaxBytesGeili+128) + "\"}"
-	capture := &nativePaidSupplierDebtCaptureGeili{Reader: strings.NewReader(body)}
-	raw, err := io.ReadAll(capture)
-	require.NoError(t, err)
-	require.Equal(t, body, string(raw))
-	require.Len(t, capture.body, nativePaidSupplierDebtMaxBytesGeili)
-	a := nativePaidDebtAccountGeili("seedance")
-	r := &nativePaidDebtRepoGeili{recoveryRuntimeRepoGeili: newRecoveryRuntimeRepoGeili(*a)}
-	response := grokMediaContentStatusResponse(body)
-	response.StatusCode = http.StatusBadRequest
-	_, clientBody := runNativePaidDebtGeili(t, "seedance", context.Background(), a, &nativePaidDebtUpstreamGeili{response: response}, &RateLimitService{accountRepo: r})
-	require.Equal(t, body, clientBody, "bounded debt capture must not truncate the native error response")
-	require.Zero(t, r.markCalls)
 }
 
 func TestNativePaidDebtGeiliVideoPollDoesNotInstallNewDebtPolicy(t *testing.T) {
@@ -237,4 +218,24 @@ func TestNativePaidDebtGeiliVideoPollDoesNotInstallNewDebtPolicy(t *testing.T) {
 	require.Error(t, err)
 	require.Zero(t, r.markCalls)
 	require.Equal(t, 1, up.requests)
+}
+
+func TestNativePaidDebtGeiliSuccessfulDispatchAddsNoRuntimeIO(t *testing.T) {
+	for _, kind := range []string{"seedance", "cache", "grok-images", "grok-videos"} {
+		t.Run(kind, func(t *testing.T) {
+			account := nativePaidDebtAccountGeili(kind)
+			account.Credentials["pool_mode"] = true
+			repo := newTransportRuntimeIORepoGeili(*account)
+			cache := &transportRuntimeIOCacheGeili{}
+			response := grokMediaContentStatusResponse(`{"id":"task_fixture","request_id":"task_fixture","data":[{"url":"https://cdn.example.test/image.png"}]}`)
+			upstream := &nativePaidDebtUpstreamGeili{response: response}
+			ctx, dispatch := ctxkey.WithUpstreamDispatch(context.Background())
+			err, _ := runNativePaidDebtGeili(t, kind, ctx, account, upstream, &RateLimitService{accountRepo: repo, tempUnschedCache: cache})
+			require.NoError(t, err)
+			require.True(t, dispatch.Started())
+			require.Equal(t, 1, upstream.requests)
+			require.Zero(t, repo.runtimeCalls.Load())
+			require.Zero(t, cache.calls.Load())
+		})
+	}
 }

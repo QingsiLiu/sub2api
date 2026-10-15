@@ -902,9 +902,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			responseBody = handshakeErr.Body
 		}
 		dialErr := &openAIWSDialError{StatusCode: statusCode, ResponseHeaders: cloneHeader(handshakeHeaders), ResponseBody: responseBody, Err: err}
-		if admissionErr := s.openAIWSDialAdmissionGeili(ctx, account, dialErr); admissionErr != nil {
-			return admissionErr
-		}
 		if s.isAgentIdentityAccount(ctx, account) && isAgentIdentityTaskInvalidWSDialError(dialErr) && !agentTaskRecoveryTried {
 			agentTaskRecoveryTried = true
 			if recoveryErr := s.recoverAgentIdentityTask(ctx, account, account.GetCredential("task_id")); recoveryErr != nil {
@@ -1063,9 +1060,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			requestModelForThisFrame := ""
 			if isResponseCreate {
-				// geili hook: a new turn is a new observation; the relay settles
-				// old turn callbacks before its terminal write opens this lifecycle.
-				ResetAccountModelFailureObservationGeili(ctx)
 				requestModelForThisFrame = usageMeta.requestModelForFrame(payload)
 				if requestModelForThisFrame == "" {
 					requestModelForThisFrame = capturedSessionModel
@@ -1116,13 +1110,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
 			}
-			// geili hook: use the final mapped model and check each accepted turn.
-			if isResponseCreate {
-				if err := s.checkOpenAIWSRuntimeGeili(ctx, account, payload, model); err != nil {
-					// The handler retains only the initial frame; no later-turn replay is safe.
-					return payload, nil, newOpenAIWSCurrentTurnFailoverError(err, nil)
-				}
-			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）
 			// 的 response.create 帧上更新 usageMeta，使用
@@ -1163,10 +1150,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			cancel()
 		},
 	}
-	// geili hook: first write and encrypted retry also require a current verdict.
-	if err := s.checkOpenAIWSRuntimeGeili(ctx, account, firstClientMessage, initialRequestModel); err != nil {
-		return err
-	}
 	upstreamFirstMessageSent := false
 	firstWriteCtx, cancelFirstWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
 	firstWriteErr := relayUpstreamFrameConn.WriteFrame(firstWriteCtx, coderws.MessageText, firstClientMessage)
@@ -1200,7 +1183,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		firstTurnStartedAt = hooks.InitialTurnStartedAt
 	}
 	failureAccountSideEffectsApplied := false
-	failureSideEffectsTurn := int32(-1)
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
 		ClientConn:         policyClientConn,
@@ -1237,10 +1219,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					hooks.TurnStarted(turnNo, turn.StartedAt)
 				}
 				turnRequestModel, turnUpstreamModel := usageMeta.turnModels(turn.RequestModel)
-				// geili hook: a completed turn breaks a run of model failures.
-				if turn.TerminalEventType == "response.completed" || turn.TerminalEventType == "response.done" {
-					s.rateLimitService.observeAccountResultGeili(ctx, nil, account, turnUpstreamModel, nil)
-				}
 				turnResult := &OpenAIForwardResult{
 					RequestID: turn.RequestID,
 					Usage: OpenAIUsage{
@@ -1322,14 +1300,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
-				// geili hook: some suppliers omit response.created. De-duplicate
-				// paired errors within a turn, without suppressing the next turn.
-				if currentTurn := completedTurns.Load(); currentTurn != failureSideEffectsTurn {
-					failureSideEffectsTurn = currentTurn
-					failureAccountSideEffectsApplied = false
-				}
-				// geili hook: observe before retry/downstream cancellation.
-				s.observeOpenAIWSBalanceGeili(ctx, account, payload)
 				// geili hook: before the first delivered frame, reconnect this
 				// same account once with safely cleaned reasoning history.
 				if completedTurns.Load() == 0 && !wroteDownstream {
