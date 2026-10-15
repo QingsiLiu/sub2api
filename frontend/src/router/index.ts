@@ -642,6 +642,31 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.usage.description'
     }
   },
+  // geili hook: supplier console (own accounts and their usage only).
+  {
+    path: '/supplier/accounts',
+    name: 'SupplierAccounts',
+    component: () => import('@/views/supplier/SupplierAccountsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSupplier: true,
+      title: 'Supplier Accounts',
+      titleKey: 'supplier.accounts.title',
+      descriptionKey: 'supplier.accounts.description'
+    }
+  },
+  {
+    path: '/supplier/usage',
+    name: 'SupplierUsage',
+    component: () => import('@/views/supplier/SupplierUsageView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresSupplier: true,
+      title: 'Supplier Usage',
+      titleKey: 'supplier.usage.title',
+      descriptionKey: 'supplier.usage.description'
+    }
+  },
   {
     path: '/admin/affiliates',
     redirect: '/admin/affiliates/invites'
@@ -893,6 +918,11 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
     next('/dashboard')
+    return
+  }
+
+  if (to.meta.requiresSupplier === true && !authStore.isSupplier) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

@@ -20,6 +20,12 @@ declare module 'vue-router' {
     requiresAdmin?: boolean
 
     /**
+     * geili hook: whether this route requires the supplier role
+     * @default false
+     */
+    requiresSupplier?: boolean
+
+    /**
      * Page title for this route
      */
     title?: string

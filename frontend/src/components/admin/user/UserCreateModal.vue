@@ -85,10 +85,12 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
+const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin' | 'supplier', balance: '', concurrency: 1, rpm_limit: 0 })
 const roleOptions = computed(() => [
   { value: 'user', label: t('admin.users.roles.user') },
   { value: 'admin', label: t('admin.users.roles.admin') },
+  // geili hook: supplier role.
+  { value: 'supplier', label: t('admin.users.roles.supplier') },
 ])
 
 const stepUp = useStepUp()

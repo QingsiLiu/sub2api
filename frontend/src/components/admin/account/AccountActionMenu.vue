@@ -63,6 +63,11 @@
               <Icon name="refresh" size="sm" />
               {{ t('admin.accounts.resetQuota') }}
             </button>
+            <!-- geili hook: supplier ownership -->
+            <button @click="$emit('set-supplier-owner', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
+              <Icon name="users" size="sm" />
+              {{ t('supplier.admin.setOwner') }}
+            </button>
           </template>
         </div>
       </div>
@@ -78,7 +83,7 @@ import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
 const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
-const emit = defineEmits(['close', 'recheck', 'manual-balance-stop', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
+const emit = defineEmits(['close', 'recheck', 'manual-balance-stop', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow', 'set-supplier-owner'])
 const { t } = useI18n()
 const menuRef = ref<HTMLElement | null>(null)
 const { width: viewportWidth, height: viewportHeight } = useWindowSize()

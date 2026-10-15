@@ -84,7 +84,7 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'admin' | 'user' | 'supplier' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -1339,6 +1339,7 @@ export interface Account {
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   runtime_state?: AccountRuntimeStateGeili
+  supplier_owner?: { id: number; email: string } | null // geili hook: supplier owner
   status: 'active' | 'inactive' | 'error'
   error_message: string | null
   last_used_at: string | null
@@ -2177,7 +2178,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'admin' | 'user' | 'supplier'
   balance?: number
   concurrency?: number
   rpm_limit?: number

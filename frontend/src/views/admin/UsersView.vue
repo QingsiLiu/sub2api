@@ -29,7 +29,8 @@
                 :options="[
                   { value: '', label: t('admin.users.allRoles') },
                   { value: 'admin', label: t('admin.users.admin') },
-                  { value: 'user', label: t('admin.users.user') }
+                  { value: 'user', label: t('admin.users.user') },
+                  { value: 'supplier', label: t('supplier.roleName') }
                 ]"
                 @change="applyFilter"
               />
@@ -337,7 +338,7 @@
           </template>
 
           <template #cell-role="{ value }">
-            <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
+            <span :class="['badge', value === 'admin' ? 'badge-purple' : value === 'supplier' ? 'badge-primary' : 'badge-gray']">
               {{ t('admin.users.roles.' + value) }}
             </span>
           </template>
@@ -620,6 +621,16 @@
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
+
+              <!-- geili hook: jump to this supplier's accounts -->
+              <router-link
+                v-if="row.role === 'supplier'"
+                :to="{ path: '/admin/accounts', query: { supplier_owner_id: String(row.id) } }"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              >
+                <Icon name="globe" size="sm" />
+                <span class="text-xs">{{ t('supplier.admin.viewAccounts') }}</span>
+              </router-link>
 
               <!-- Toggle Status Button (not for admin) -->
               <button

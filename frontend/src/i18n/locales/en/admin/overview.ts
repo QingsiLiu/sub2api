@@ -746,7 +746,8 @@ export default {
       totalRecharged: 'Total Recharged',
       roles: {
         admin: 'Admin',
-        user: 'User'
+        user: 'User',
+        supplier: 'Supplier'
       },
       // Settings Dropdowns
       filterSettings: 'Filter Settings',

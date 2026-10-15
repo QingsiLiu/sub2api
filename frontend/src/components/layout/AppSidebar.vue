@@ -144,6 +144,27 @@
             <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
           </router-link>
         </div>
+
+        <!-- geili hook: supplier console, scoped to the supplier's own accounts -->
+        <div v-if="authStore.isSupplier" class="sidebar-section">
+          <div class="sidebar-section-title" :class="{ 'sidebar-section-title-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
+            <span class="sidebar-section-title-text" :class="{ 'sidebar-section-title-text-collapsed': sidebarCollapsed }">
+              {{ t('supplier.navSection') }}
+            </span>
+          </div>
+          <router-link
+            v-for="item in supplierNavItems"
+            :key="item.path"
+            :to="item.path"
+            class="sidebar-link mb-1"
+            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :title="sidebarCollapsed ? item.label : undefined"
+            @click="handleMenuItemClick(item.path)"
+          >
+            <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+          </router-link>
+        </div>
       </template>
     </nav>
 
@@ -759,6 +780,12 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
 const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))
+
+// geili hook: suppliers only reach their own accounts and those accounts' usage.
+const supplierNavItems = computed((): NavItem[] => [
+  { path: '/supplier/accounts', label: t('supplier.nav.accounts'), icon: GlobeIcon },
+  { path: '/supplier/usage', label: t('supplier.nav.usage'), icon: ChartIcon }
+])
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {

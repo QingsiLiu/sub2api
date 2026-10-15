@@ -2,6 +2,11 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
+        <!-- geili hook: list scoped to one supplier from the users page -->
+        <div v-if="params.supplier_owner_id" class="mb-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <span class="badge badge-primary">{{ t('supplier.admin.ownerFilter', { id: params.supplier_owner_id }) }}</span>
+          <button type="button" class="text-primary-600 hover:underline dark:text-primary-400" @click="clearSupplierOwnerFilterGeili">{{ t('supplier.admin.clearOwnerFilter') }}</button>
+        </div>
         <div class="flex flex-wrap-reverse items-start justify-between gap-3">
           <AccountTableFilters
             class="lg:w-auto lg:flex-1"
@@ -246,6 +251,11 @@
               </HelpTooltip>
               <span v-else class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
               <span
+                v-if="row.supplier_owner"
+                class="mt-0.5 self-start badge badge-primary max-w-[200px] truncate"
+                :title="row.supplier_owner.email"
+              >{{ t('supplier.admin.owner') }} · {{ row.supplier_owner.email }}</span>
+              <span
                 v-if="accountDisplayEmail(row)"
                 class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]"
                 :title="accountDisplayEmail(row) + (row.parent_chatgpt_account_id ? ' · ' + row.parent_chatgpt_account_id : '')"
@@ -466,7 +476,8 @@
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
     <AccountRecheckDialogGeili :show="showRecheck" :account="recheckingAcc" @close="showRecheck = false" @checked="handleRechecked" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @recheck="handleRecheck" @manual-balance-stop="handleManualBalanceStop" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @recheck="handleRecheck" @manual-balance-stop="handleManualBalanceStop" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" @set-supplier-owner="openSupplierOwnerGeili" />
+    <SupplierOwnerDialogGeili :show="supplierOwnerAcc !== null" :account="supplierOwnerAcc" @close="supplierOwnerAcc = null" @saved="handleSupplierOwnerSavedGeili" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -499,6 +510,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
@@ -518,6 +530,7 @@ import AccountTableActions from '@/components/admin/account/AccountTableActions.
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
+import SupplierOwnerDialogGeili from '@/components/admin/account/SupplierOwnerDialogGeili.vue'
 import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import AccountSubmissionInviteModal from '@/components/account/AccountSubmissionInviteModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
@@ -549,6 +562,8 @@ import { formatMultiplier } from '@/utils/formatters'
 import type { Account, AccountListItem, AccountPlatform, AccountSchedulerGroupScore, AccountType, AccountUsageInfo, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
@@ -1105,9 +1120,33 @@ const {
     lite: '1',
     include_scheduler_score: shouldIncludeSchedulerScore() ? '1' : '0',
     sort_by: sortState.sort_by,
-    sort_order: sortState.sort_order
+    sort_order: sortState.sort_order,
+    // geili hook: optional supplier scope, opened from the users page.
+    supplier_owner_id: typeof route?.query?.supplier_owner_id === 'string' ? route.query.supplier_owner_id : ''
   }
 })
+
+// geili hook: supplier ownership administration.
+const supplierOwnerAcc = ref<Account | null>(null)
+const openSupplierOwnerGeili = (a: Account) => {
+  supplierOwnerAcc.value = a
+}
+const handleSupplierOwnerSavedGeili = (owner: { id: number; email: string } | null) => {
+  const target = supplierOwnerAcc.value
+  supplierOwnerAcc.value = null
+  if (!target) return
+  const row = accounts.value.find((item) => item.id === target.id)
+  if (row) row.supplier_owner = owner
+}
+const clearSupplierOwnerFilterGeili = () => {
+  const requestParams = params as any
+  requestParams.supplier_owner_id = ''
+  if (route && router) {
+    const { supplier_owner_id: _removed, ...query } = route.query
+    void router.replace({ query })
+  }
+  reload()
+}
 
 const {
   selectedSet,

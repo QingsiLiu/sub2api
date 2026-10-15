@@ -96,6 +96,9 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin'
   })
 
+  // geili hook: suppliers keep user features plus a scoped supplier console.
+  const isSupplier = computed(() => user.value?.role === 'supplier')
+
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
@@ -498,6 +501,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    isSupplier,
     isSimpleMode,
     hasPendingAuthSession,
 

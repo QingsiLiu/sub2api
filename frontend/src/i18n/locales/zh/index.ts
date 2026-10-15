@@ -9,9 +9,11 @@ import misc from './misc'
 import subscriptionRights from './subscriptionRights'
 
 import responseAudit from './responseAudit'
+import supplier from './supplier'
 
 export default {
   ...responseAudit,
+  ...supplier,
   ...subscriptionRights,
   ...landing,
   ...common,
