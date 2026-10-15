@@ -7,7 +7,7 @@
 - Claude：Sonnet 3.7、Opus/Sonnet 4 及以后、Haiku 4.5 及以后，以及现有 effort 目录中的 Fable/Mythos 等模型。
 - OpenAI：GPT 5 及以后（含 Sol、Luna、Astra、Codex、mini/nano 和日期变体）、o 系列，以及 Codex 文本别名。
 - Gemini：2.5 及以后文本模型；Grok：3-mini、4 及以后文本模型。
-- DeepSeek：reasoner/R1、V3.1 及以后；GLM：4.5 及以后；Kimi：K2.5 及以后；MiniMax：M2 及以后；Qwen：Qwen3 及以后，显式 coder/instruct 名称保留普通预算。
+- DeepSeek：reasoner/R1、V3.1 及以后；GLM：4.5 及以后；Kimi：K2.5 及以后；MiniMax：M2 及以后；Qwen：Qwen3 及以后；coder/instruct 名称仅在另有显式思考标识时扩展等待。
 - 其他明确带 `thinking`、`reasoning`、`reasoner` 或 `r1` 分段的文本模型也使用思考预算。
 - 识别大小写、供应商路径前缀、Bedrock 地区前缀和日期变体。版本族按数字比较，无须每发布一个补丁版本再添加固定名单。
 - 图片、音频、视频、embedding、rerank 等媒体名称及显式 `non-reasoning` / `non-thinking` 不进入此规则；名称判断不验证或授予模型能力。
