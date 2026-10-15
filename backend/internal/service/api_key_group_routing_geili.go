@@ -107,13 +107,18 @@ func (s *APIKeyService) ResolveExplicitKeyRoutes(ctx context.Context, key *APIKe
 	if !key.UsesGroupListRouting() && key.GroupID != nil {
 		ids = []int64{*key.GroupID}
 	}
-	owner, err := s.userRepo.GetByID(ctx, key.UserID)
+	initial, err := s.readExplicitRouteInitialGeili(ctx, key.UserID, ids)
 	if err != nil {
 		return nil, err
 	}
+	owner := initial.owner
 	decisions := []CompositeRouteDecision{}
-	for _, id := range ids {
-		group, err := s.groupRepo.GetByIDLite(ctx, id)
+	for index, id := range ids {
+		// geili hook: consume the joined first-group read exactly once.
+		group, err := initial.firstGroup, initial.firstGroupErr
+		if index > 0 {
+			group, err = s.groupRepo.GetByIDLite(ctx, id)
+		}
 		if err != nil || !s.canBindExplicitGroup(ctx, owner, group) {
 			if !key.UsesGroupListRouting() {
 				return nil, ErrGroupNotAllowed
