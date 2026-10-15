@@ -115,9 +115,11 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 	// geili hook: AUAPI exposes native tasks rather than a synchronous Images
 	// response. Keep its task ID in PostgreSQL so polling resumes after restart.
 	requestModel := ""
+	var parsedImages *service.OpenAIImagesRequest
 	if h.openAI != nil && h.openAI.gatewayService != nil {
 		if parsed, parseErr := h.openAI.gatewayService.ParseOpenAIImagesRequest(c, body); parseErr == nil {
 			requestModel = parsed.Model
+			parsedImages = parsed
 		}
 	}
 	if h.auapi != nil && apiKey.GroupID != nil {
@@ -127,12 +129,8 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 			return
 		}
 		if available {
-			if strings.Contains(c.Request.URL.Path, "/images/edits") {
-				imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", "AUAPI asynchronous image tasks currently support text-to-image generation only")
-				return
-			}
 			subscription, _ := middleware2.GetSubscriptionFromContext(c)
-			task, replayed, err := h.auapi.Submit(c.Request.Context(), apiKey, subscription, body, c.GetHeader("Idempotency-Key"))
+			task, replayed, err := h.auapi.SubmitImageRequest(c.Request.Context(), apiKey, subscription, body, parsedImages, c.GetHeader("Idempotency-Key"))
 			if err != nil {
 				imageTaskJSONError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 				return

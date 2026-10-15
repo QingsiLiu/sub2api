@@ -27,7 +27,7 @@ func (a *Account) IsAUAPIImageAccount() bool {
 	if strings.EqualFold(provider, "openai") {
 		return false
 	}
-	if strings.EqualFold(provider, "auapi") {
+	if strings.EqualFold(provider, "auapi") || a.IsAUAPIGPTAsyncAccount() {
 		return true
 	}
 	base := strings.TrimSpace(a.GetCredential("base_url"))
@@ -43,14 +43,19 @@ type auapiImageRequest struct {
 		Prompt string `json:"prompt"`
 	} `json:"input"`
 	Parameters struct {
-		N               int    `json:"n"`
-		Size            string `json:"size,omitempty"`
-		Resolution      string `json:"resolution,omitempty"`
-		Quality         string `json:"quality,omitempty"`
-		OutputFormat    string `json:"output_format,omitempty"`
-		Ratio           string `json:"ratio,omitempty"`
-		DurationSeconds int    `json:"duration,omitempty"`
-		GenerateAudio   *bool  `json:"generate_audio,omitempty"`
+		N                 int      `json:"n"`
+		Size              string   `json:"size,omitempty"`
+		Resolution        string   `json:"resolution,omitempty"`
+		Quality           string   `json:"quality,omitempty"`
+		OutputFormat      string   `json:"output_format,omitempty"`
+		Ratio             string   `json:"ratio,omitempty"`
+		DurationSeconds   int      `json:"duration,omitempty"`
+		GenerateAudio     *bool    `json:"generate_audio,omitempty"`
+		ImageURLs         []string `json:"image_urls,omitempty"`
+		Background        string   `json:"background,omitempty"`
+		OutputCompression *int     `json:"output_compression,omitempty"`
+		Moderation        string   `json:"moderation,omitempty"`
+		InputFidelity     string   `json:"input_fidelity,omitempty"`
 	} `json:"parameters"`
 }
 
@@ -280,6 +285,8 @@ func (c *auapiImageClient) Submit(ctx context.Context, body []byte, idem string)
 	}
 	if request.Kind == "video" {
 		path = "/v1/videos/tasks"
+	} else if c.account.IsAUAPIGPTAsyncAccount() {
+		path = "/v1/async/tasks"
 	}
 	err := c.json(ctx, "POST", path, body, idem, &out)
 	if err != nil {
