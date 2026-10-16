@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import socket
 from urllib.parse import urlsplit
@@ -28,6 +29,12 @@ NAMES = ('fixture_lookup', 'fixture_other')
 PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
 SCHEMA = {'type': 'object', 'properties': {'value': {'type': 'string'}}, 'required': ['value'], 'additionalProperties': False}
 PROTOCOLS = ('responses', 'chat/completions')
+THINKING_MODEL = 'gemini-3-flash-preview'
+
+
+def upstream_model(mode):
+    # A fixture mapping establishes capabilities; the opaque argon alias does not.
+    return THINKING_MODEL if mode == 'thinking' else supplier.MODEL
 
 
 def base_payload(protocol, stream):
@@ -49,7 +56,7 @@ def tools(protocol):
 
 
 def scenarios(protocol):
-    common = ['rich', 'thinking', 'json_object', 'json_schema', 'budget_one', 'tools', 'max_tokens',
+    common = ['rich', 'thinking', 'nullable', 'json_object', 'json_schema', 'budget_one', 'tools', 'max_tokens',
               'reject_zero', 'reject_negative', 'reject_schema', 'reject_format', 'reject_state',
               'reject_store', 'reject_encrypted', 'reject_input', 'empty', 'missing_finish', 'error', 'disconnect']
     return common + (['stop_string', 'stop_array'] if protocol == 'chat/completions' else [])
@@ -68,6 +75,9 @@ def case_payload(protocol, mode, stream):
                 {'role': 'user', 'content': 'Native first turn'}, {'role': 'assistant', 'content': 'Native previous answer'},
                 {'role': 'user', 'content': [{'type': 'text', 'text': 'Native image marker'},
                     {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + PNG}}]}]
+    elif mode == 'nullable':
+        value.update({key: None for key in ('max_tokens', 'max_completion_tokens', 'max_output_tokens',
+            'tools', 'functions', 'reasoning_effort', 'temperature', 'top_p')})
     elif mode in ('json_object', 'json_schema', 'reject_schema', 'reject_format'):
         format_type = 'not_a_format' if mode == 'reject_format' else ('json_object' if mode == 'json_object' else 'json_schema')
         schema = {'$ref': '#/$defs/value'} if mode == 'reject_schema' else copy.deepcopy(SCHEMA)
@@ -231,7 +241,7 @@ def fixture_type(cache, source):
                         fixture.native_calls.append({'label': label, 'mode': mode, 'path': urlsplit(self.path).path, 'body': body})
                         if getattr(fixture, 'private', None):
                             cache.b.stage.private_json(fixture.private / 'gemini-native-mock-calls.json', fixture.native_calls)
-                    if supplier.upstream_kind(endpoint) != 'native':
+                    if re.fullmatch(r'v1beta/models/' + re.escape(upstream_model(mode)) + r':(?:streamGenerateContent|generateContent)', endpoint) is None:
                         return self.reply({'error': {'message': 'Anthropic bridge is forbidden in native acceptance'}}, 400)
                     stream = ':streamGenerateContent' in endpoint
                     rows = mock_rows(mode, stream)
@@ -255,7 +265,7 @@ def fixture_type(cache, source):
             self.native_modes[label] = mode
             account = self.api('/admin/accounts', {'name': 'Gemini native ' + label + ' ' + self.suffix,
                 'platform': 'gemini', 'type': 'apikey', 'credentials': {'api_key': 'synthetic-native-only',
-                'base_url': supplier.mock_url(self.mock_base, label), 'model_mapping': {supplier.MODEL: supplier.MODEL}},
+                'base_url': supplier.mock_url(self.mock_base, label), 'model_mapping': {supplier.MODEL: upstream_model(mode)}},
                 'group_ids': [group['id']], 'priority': 1, 'concurrency': 4}, self.admin)
             self.snapshot['gemini_supplier_accounts'][str(account['id'])] = account['name']
             cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
@@ -270,7 +280,7 @@ def fixture_type(cache, source):
             self.check(label + ': exactly one native upstream call', len(calls) == 1, {'upstream_calls': len(calls)})
             call = calls[0]
             body = call['body']
-            self.check(label + ': native model action without Anthropic fields', '/v1beta/models/' + supplier.MODEL + ':' in call['path']
+            self.check(label + ': native model action without Anthropic fields', '/v1beta/models/' + upstream_model(mode) + ':' in call['path']
                 and 'anthropic_version' not in body and 'messages' not in body and isinstance(body.get('contents'), list))
             cfg = body.get('generationConfig', {})
             if mode == 'rich':
@@ -286,6 +296,9 @@ def fixture_type(cache, source):
                     self.check(label + ': exact strict schema', cfg.get('responseJsonSchema') == SCHEMA)
             if mode == 'budget_one':
                 self.check(label + ': explicit budget one is not clamped', cfg.get('maxOutputTokens') == 1)
+            if mode == 'nullable':
+                self.check(label + ': nullable defaults retained without native null parameters', cfg.get('maxOutputTokens') == 8192
+                    and 'temperature' not in cfg and 'topP' not in cfg and 'tools' not in body)
             if mode == 'thinking':
                 self.check(label + ': supported explicit thinking effort retained', cfg.get('thinkingConfig') == {'thinkingLevel': 'HIGH', 'includeThoughts': True})
             if mode.startswith('stop_'):

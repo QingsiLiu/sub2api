@@ -1,18 +1,27 @@
-## 0.2.16-geili.19（Gemini原生Responses与Chat适配，候选待验证，未上生产）
+## 0.2.16-geili.20（Gemini原生文本适配可空参数修复，候选待CI/Stage，未上生产）
+
+这是第二批原生适配的最终候选，继承`.19`的Responses/Chat共享原生转换、工具/签名、JSON/schema、stop、输出预算和流式终止修复。`.19`尚未部署时，兼容探针发现常见SDK显式发送可空参数为null会误报400，因此撤回原候选并顺延编号。
+
+- 将已支持的8个顶层可空参数null按“未提供”处理：`max_tokens`、`max_completion_tokens`、`max_output_tokens`、`tools`、`functions`、`reasoning_effort`、`temperature`、`top_p`。未指定预算仍8192、显式1原样转发；零、负数、false、错误类型和原不支持能力仍在出网前拒绝。不扩大Responses的Chat参数别名或嵌套参数语义。
+- Stage验收器增加可空参数场景（两协议、双实例共82场景/86请求），思考场景使用明确模型映射；修正首批查询过滤的harness提交为`55d3b9aac4a4af82dba7a5bd1df2e4ed3992b0c5`，不改首批运行镜像。
+- 第一批固定`.18`/`d7fabe053ad0a2b6973faba26169cf3a8eac1e2f`保持独立，不受本批阻塞。生产基线仍`.17`/`c058cf8d277d3e9725eb3b1329e36eefdeb79ca7`；本批revision/digest待新候选CI，不能使用`.19`旧镜像或旧CI结果。
+- 部署状态：尚未部署Stage/生产。无新增迁移、真实供应商/支付/媒体调用，未获生产授权。生产`.17`独立OOM止血方案及隔离验证按用户最新要求另行准备；不宣称本批已经修复OOM。
+
+## 0.2.16-geili.19（Gemini原生Responses与Chat适配，CI通过但候选已撤回，未部署）
 
 继承第一批`.18`供应商容灾与日志修复，新增Gemini原生Responses分支；Responses/Chat共用原生请求与响应转换，不再经Anthropic请求格式中转。保留系统指令、多轮、图片输入、函数工具调用与回传，支持JSON/schema、Chat stop和明确输出预算；显式1不再抬到128，非法预算出网前400。流式完整读取EOF后才产生成功终止，预算截断与失败区分，已有语义输出不重放，usage按实际转发能力结算。
 
 - 函数调用通过`gemini_thought_signature`扩展回放原生签名；有供应商call id时无损回传。同名并行工具按调用ID区分。未知基础模型别名不猜测thinking能力；显式不支持的参数、schema、工具/输入或有状态能力在出网前拒绝，详见[原生适配边界](.github/geili/gemini-openai-native.md)。
-- 无新增迁移；媒体生成仍走原路径。第一批固定revision `d7fabe053ad0a2b6973faba26169cf3a8eac1e2f`；本批revision以发布提交为准，digest待独立候选CI。
-- 部署状态：尚未部署Stage/生产。两批独立CI/同镜像Stage证据不得混用；无真实供应商、支付或媒体调用，本批没有生产发布授权。
+- 无新增迁移；媒体生成仍走原路径。第一批固定revision `d7fabe053ad0a2b6973faba26169cf3a8eac1e2f`；本批固定revision `e33d4f39c6e3dd91de47e9feced5def64f9ad885` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:f36f8f647dfe03877a6420d3e862d7c953a0a3336dc61b459ba14d6d40c4f9ca`。[CI38868587014](https://github.com/QingsiLiu/sub2api/actions/runs/38868587014)全部9任务/13制品门禁通过，347份迁移SHA逐文件保持。
+- 部署状态：未部署Stage/生产。最终兼容探针确认可选SDK参数为null时误报400；本候选已撤回，由`.20`修复并重新独立CI/Stage，原CI证据不改写或套用。无真实供应商、支付或媒体调用，没有生产发布授权。
 
-## 0.2.16-geili.18（Gemini供应商故障恢复，候选待CI/Stage，未上生产）
+## 0.2.16-geili.18（Gemini供应商故障恢复，CI通过、Stage验收中，未上生产）
 
 相对生产`.17`，Gemini文本请求收到精确识别的供应商预扣费不足、零余额或号池暂无资源时，直接换合法账号，不再同号重复六次；同组耗尽可由复合Key继续合法候选组，全部不可用返回503/`upstream_unavailable`。请求局部排除按账号或实际模型跨组共享，已有正文/工具副作用不重放，原恢复预算与客户端期限保持。普通400、媒体、缓存绑定、其他平台保持；不自动持久停号、不新增健康存储读取，欠费仍由管理员手动管理。
 
 - 补齐最后上游错误事件与真实出站路径，后台分别展示客户端状态和最终上游状态，旧状态字段/筛选语义保持；无新增迁移，不改历史错误数据。详情见[方案与事故记录](.github/geili/gemini-supplier-recovery.md)。
-- 生产基线revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7` / digest `sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。本批revision以当前发布提交为准；镜像digest待候选CI，不宣称已产出。
-- 部署状态：尚未部署Stage/生产。本地检查、CI和同镜像Stage逐项完成后追加实际证据；第二批原生协议适配不混入本候选。无真实供应商/支付/媒体调用，没有本批生产发布授权。
+- 生产基线revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7` / digest `sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。本批固定revision `d7fabe053ad0a2b6973faba26169cf3a8eac1e2f` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:24a4ba51be2331ea5b5b8ac5fe13d09e4247659575713dbd88fde00bb8d15f3a`。[CI38866975440](https://github.com/QingsiLiu/sub2api/actions/runs/38866975440)全部9任务/13制品门禁通过，347份迁移SHA逐文件保持。
+- 已经canonical部署Stage，备份`20261016T073821Z-candidate`、health200、迁移结构24项通过。首轮非支付验收因Stage历史派生统计多2条/USD198失败，同时生产`.17`发生独立OOM重启使保全指纹变化；原失败报告、原`restored:false`快照及完整原字节归档保留。本轮自有资源已独立核验停用；精确移除历史孤儿派生桶后后台自行重建，原始用量、全部收据及钱包SHA保持。新非支付r2为51/51、restored=true；首个供应商恢复场景也已验证三账号各一次与单次结算，但验收器误用不支持Key筛选的接口，已另提交修正并显式固定harness身份，原失败不改写。其余同镜像验收进行中。第二批原生协议适配不混入本候选；证据在运维仓`docs/reports/gemini-supplier-v18-20261016/`。未部署生产，无真实供应商/支付/媒体调用，没有本批生产发布授权。
 
 ## 0.2.16-geili.17（供应商角色与严格透传全主干，已发布 Stage 和生产）
 

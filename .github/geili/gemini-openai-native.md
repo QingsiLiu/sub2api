@@ -1,6 +1,6 @@
 # Gemini 原生 OpenAI 协议适配
 
-第二批候选`.19`继承`.18`供应商故障恢复；原生产基线`.17`保持祖先。Gemini Responses明确分流到Gemini原生接口，Chat文本请求共用转换。媒体生成保持旧入口，不把该能力扩张成媒体恢复或有状态会话服务。
+第二批候选`.20`（撤回有可空参数兼容回归的`.19`）继承`.18`供应商故障恢复；原生产基线`.17`保持祖先。Gemini Responses明确分流到Gemini原生接口，Chat文本请求共用转换。媒体生成保持旧入口，不把该能力扩张成媒体恢复或有状态会话服务。
 
 ## 请求
 
@@ -8,7 +8,7 @@
 
 支持文本、多轮system/developer/user/assistant、现有图片输入、函数声明、工具选择、function_call/function_call_output及Chat工具消息。Codex客户端工具复用既有降级及名称恢复。函数签名以`gemini_thought_signature`扩展保留在Responses函数调用项和Chat工具调用项；客户端需要在完整历史中原样回传。供应商提供的函数调用ID也必须无损往返，同名并行及逆序回传按ID关联。
 
-JSON object及已支持的JSON schema转换为Gemini MIME/schema配置，不用提示词模拟约束。严格schema仅接受可无损表达子集，不可表达的约束出网前400；工具参数schema与文本输出schema分开验证。工具`strict:true`在默认/auto选择下使用原生`VALIDATED`，required/指定函数保持`ANY`，none保持`NONE`；原生约束为请求级，混合声明也不放宽严格工具。Chat stop转换为原生stopSequences。预算按当前接口优先级解析，显式正整数原样发送，0/负数拒绝，缺省8192；不再把1抬为128。原有Responses的messages/prompt兼容保留，原生input优先。
+JSON object及已支持的JSON schema转换为Gemini MIME/schema配置，不用提示词模拟约束。严格schema仅接受可无损表达子集，不可表达的约束出网前400；工具参数schema与文本输出schema分开验证。工具`strict:true`在默认/auto选择下使用原生`VALIDATED`，required/指定函数保持`ANY`，none保持`NONE`；原生约束为请求级，混合声明也不放宽严格工具。Chat stop转换为原生stopSequences。预算按当前接口优先级解析，显式正整数原样发送，0/负数拒绝，缺省8192；不再把1抬为128。原有Responses的messages/prompt兼容保留，原生input优先。既有可空SDK顶层参数null按未提供处理，预算默认8192；原拒绝的零/负数、错误类型和无法表示的能力保持。
 
 思考配置只按映射后的已知型号转换，费用标记来自实际转发参数。未知别名（含未解析至已知型号的argon）不猜基础模型；未给effort沿用供应商默认，无法确定支持的显式effort明确拒绝。
 

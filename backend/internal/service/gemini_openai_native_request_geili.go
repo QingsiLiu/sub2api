@@ -27,6 +27,14 @@ func parseGeminiOpenAIRequestGeili(body []byte, chat bool, mappedModel string) (
 	if source == nil {
 		return nil, fmt.Errorf("request must be an object")
 	}
+	// Optional SDK fields explicitly set to null have the same meaning as
+	// omission in the previous typed request DTOs. Keep this top-level list
+	// narrow: zero, false and malformed nested fields still require validation.
+	for _, key := range []string{"max_tokens", "max_completion_tokens", "max_output_tokens", "tools", "functions", "reasoning_effort", "temperature", "top_p"} {
+		if value, exists := source[key]; exists && value == nil {
+			delete(source, key)
+		}
+	}
 	model, _ := source["model"].(string)
 	if strings.TrimSpace(model) == "" {
 		return nil, fmt.Errorf("model is required")

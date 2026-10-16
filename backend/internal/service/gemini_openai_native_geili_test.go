@@ -614,3 +614,101 @@ func TestGeminiOpenAINativeTextOnlyBoundary(t *testing.T) {
 	require.Empty(t, w.Body.String())
 	require.NotContains(t, w.Body.String(), "image/png")
 }
+
+func TestGeminiOpenAIOptionalTopLevelNullUsesOmittedDefaults(t *testing.T) {
+	fields := []string{"max_tokens", "max_completion_tokens", "max_output_tokens", "tools", "functions", "reasoning_effort", "temperature", "top_p"}
+	for _, chat := range []bool{false, true} {
+		for _, field := range append(append([]string{}, fields...), "all") {
+			t.Run(map[bool]string{false: "responses", true: "chat"}[chat]+"/"+field, func(t *testing.T) {
+				body := map[string]any{"model": "gemini-3.1-pro"}
+				if chat {
+					body["messages"] = []any{map[string]any{"role": "user", "content": "synthetic"}}
+				} else {
+					body["input"] = "synthetic"
+				}
+				if field == "all" {
+					for _, key := range fields {
+						body[key] = nil
+					}
+				} else {
+					body[field] = nil
+				}
+				raw, _ := json.Marshal(body)
+				request, err := parseGeminiOpenAIRequestGeili(raw, chat, "gemini-3.1-pro")
+				require.NoError(t, err)
+				require.Equal(t, int64(8192), gjson.GetBytes(request.body, "generationConfig.maxOutputTokens").Int())
+				for _, path := range []string{"generationConfig.temperature", "generationConfig.topP", "generationConfig.thinkingConfig", "tools"} {
+					require.False(t, gjson.GetBytes(request.body, path).Exists(), path)
+				}
+			})
+		}
+	}
+}
+
+func TestGeminiOpenAINullBudgetDoesNotOverridePositiveBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		options map[string]any
+		budget  int64
+	}{
+		{"null legacy then positive completion", map[string]any{"max_tokens": nil, "max_completion_tokens": 1}, 1},
+		{"positive legacy then null completion", map[string]any{"max_tokens": 1, "max_completion_tokens": nil}, 1},
+		{"both null", map[string]any{"max_tokens": nil, "max_completion_tokens": nil}, 8192},
+		{"positive completion keeps precedence", map[string]any{"max_tokens": 2, "max_completion_tokens": 1}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]any{"model": "gemini-3.1-pro", "messages": []any{map[string]any{"role": "user", "content": "synthetic"}}}
+			for key, value := range tc.options {
+				body[key] = value
+			}
+			raw, _ := json.Marshal(body)
+			request, err := parseGeminiOpenAIRequestGeili(raw, true, "gemini-3.1-pro")
+			require.NoError(t, err)
+			require.Equal(t, tc.budget, gjson.GetBytes(request.body, "generationConfig.maxOutputTokens").Int())
+		})
+	}
+	// Null normalization must not create Chat budget aliases for native Responses.
+	request, err := parseGeminiOpenAIRequestGeili([]byte(`{"model":"gemini-3.1-pro","input":"synthetic","max_output_tokens":null,"max_tokens":1,"max_completion_tokens":1}`), false, "gemini-3.1-pro")
+	require.NoError(t, err)
+	require.Equal(t, int64(8192), gjson.GetBytes(request.body, "generationConfig.maxOutputTokens").Int())
+}
+
+func TestGeminiOpenAINullNormalizationPreservesRejectionAndNoDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name, options string
+		chat          bool
+	}{
+		{"zero legacy with null completion", `"max_tokens":0,"max_completion_tokens":null`, true},
+		{"negative completion with null legacy", `"max_tokens":null,"max_completion_tokens":-1`, true},
+		{"false legacy", `"max_tokens":false`, true},
+		{"empty legacy", `"max_tokens":""`, true},
+		{"string completion", `"max_completion_tokens":"1"`, true},
+		{"false tools", `"tools":false`, true},
+		{"false functions", `"functions":false`, true},
+		{"false effort", `"reasoning_effort":false`, true},
+		{"false temperature", `"temperature":false`, true},
+		{"string top_p", `"top_p":"0.5"`, true},
+		{"zero output", `"max_output_tokens":0`, false},
+		{"negative output", `"max_output_tokens":-1`, false},
+		{"nested effort null", `"reasoning":{"effort":null}`, false},
+		{"nested format null", `"text":{"format":null}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := `"input":"synthetic"`
+			path := "/v1/responses"
+			if tc.chat {
+				input = `"messages":[{"role":"user","content":"synthetic"}]`
+				path = "/v1/chat/completions"
+			}
+			raw := []byte(`{"model":"gemini-3.1-pro",` + input + `,` + tc.options + `}`)
+			upstream := &queuedHTTPUpstreamStub{}
+			svc := &GeminiMessagesCompatService{httpUpstream: upstream, cfg: &config.Config{}}
+			c, w := newAntigravityCompatContext(http.MethodPost, path, raw)
+			result, err := svc.forwardOpenAINativeGeili(context.Background(), c, geminiSignalTestAccount(), raw, tc.chat)
+			require.Error(t, err)
+			require.Nil(t, result)
+			require.Equal(t, 400, w.Code)
+			require.Empty(t, upstream.requestBodies)
+		})
+	}
+}

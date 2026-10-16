@@ -22,9 +22,20 @@ def sse(rows):
 class OracleTests(unittest.TestCase):
     def test_input_matrix_contains_only_requested_protocols(self):
         self.assertEqual(s.PROTOCOLS, ('responses', 'chat/completions'))
-        self.assertEqual(len(s.scenarios('responses')), 19)
-        self.assertEqual(len(s.scenarios('chat/completions')), 21)
-        self.assertEqual(sum(len(s.scenarios(p)) for p in s.PROTOCOLS) * 2 - 2, 78)
+        self.assertEqual(len(s.scenarios('responses')), 20)
+        self.assertEqual(len(s.scenarios('chat/completions')), 22)
+        self.assertEqual(sum(len(s.scenarios(p)) for p in s.PROTOCOLS) * 2 - 2, 82)
+
+    def test_nullable_sdk_fields_are_sent_as_null_and_thinking_is_explicitly_mapped(self):
+        for protocol in s.PROTOCOLS:
+            body = s.case_payload(protocol, 'nullable', False)
+            for key in ('max_tokens', 'max_completion_tokens', 'max_output_tokens', 'tools',
+                        'functions', 'reasoning_effort', 'temperature', 'top_p'):
+                self.assertIn(key, body)
+                self.assertIsNone(body[key])
+        self.assertEqual(s.upstream_model('thinking'), s.THINKING_MODEL)
+        self.assertNotEqual(s.upstream_model('thinking'), s.supplier.MODEL)
+        self.assertEqual(s.upstream_model('nullable'), s.supplier.MODEL)
 
     def test_budget_and_formats_use_the_real_client_wire_shapes(self):
         for protocol in s.PROTOCOLS:
@@ -166,6 +177,14 @@ class MockHTTPTests(unittest.TestCase):
         rows = s.supplier.events(response.read().decode())
         self.assertEqual(len(rows), 3)
         self.assertEqual(rows[-1]['candidates'][0]['finishReason'], 'STOP')
+
+    def test_thinking_mock_accepts_only_the_explicit_fixture_mapping(self):
+        wrong = self.request('v1beta/models/' + s.supplier.MODEL + ':generateContent', 'thinking')
+        self.assertEqual(wrong.status, 400)
+        wrong.read()
+        mapped = self.request('v1beta/models/' + s.THINKING_MODEL + ':generateContent', 'thinking')
+        self.assertEqual(mapped.status, 200)
+        self.assertTrue(json.loads(mapped.read())['candidates'][0]['content']['parts'][0]['thought'])
 
     def test_http_mock_physically_disconnects_before_declared_body_length(self):
         response = self.request('v1beta/models/' + s.supplier.MODEL + ':streamGenerateContent?alt=sse', 'disconnect')
