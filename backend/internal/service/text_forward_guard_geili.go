@@ -281,7 +281,12 @@ func (w *geiliTextForwardWriter) Write(p []byte) (int, error) {
 			w.ResponseWriter.Header().Set("Content-Type", "text/event-stream")
 			w.ResponseWriter.Header().Set("Cache-Control", "no-cache")
 			w.ResponseWriter.Header().Set("X-Accel-Buffering", "no")
-			if _, err := w.ResponseWriter.Write([]byte(": keepalive\n\n")); err != nil {
+			neutral := []byte(": keepalive\n\n")
+			if w.context.GetBool("anthropic_passthrough") {
+				// Strict Anthropic passthrough keeps the provider's own neutral frame.
+				neutral = frame
+			}
+			if _, err := w.ResponseWriter.Write(neutral); err != nil {
 				w.writeErr = err
 				return 0, err
 			}

@@ -264,27 +264,15 @@ func TestBuildUpstreamRequestOAuthMimic_MidConversationOutputConfig(t *testing.T
 	}
 }
 
-// API-key passthrough 透传路径：客户端 header 带/不带该 beta 时，
-// 出站 header 与 body 的 message-level output_config 必须同进同退。
+// API-key 严格透传路径：客户端 header 带/不带该 beta 时，出站 header 与 body
+// 都与客户端原样一致，由上游自行校验，不在网关侧删改 message-level output_config。
 func TestBuildUpstreamRequestAnthropicAPIKeyPassthrough_MidConversationOutputConfigConsistentWithClientHeader(t *testing.T) {
 	cases := []struct {
 		name       string
 		clientBeta string
-		wantField  bool
-		wantMsgLen int
 	}{
-		{
-			name:       "client_header_has_beta",
-			clientBeta: "oauth-2025-04-20," + claude.BetaMidConversationOutputConfig,
-			wantField:  true,
-			wantMsgLen: 2,
-		},
-		{
-			name:       "client_header_missing_beta",
-			clientBeta: "oauth-2025-04-20",
-			wantField:  false,
-			wantMsgLen: 1,
-		},
+		{name: "client_header_has_beta", clientBeta: "oauth-2025-04-20," + claude.BetaMidConversationOutputConfig},
+		{name: "client_header_missing_beta", clientBeta: "oauth-2025-04-20"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -304,15 +292,8 @@ func TestBuildUpstreamRequestAnthropicAPIKeyPassthrough_MidConversationOutputCon
 			)
 			require.NoError(t, err)
 
-			outBody := readUpstreamBodyForTest(t, req)
-			outBeta := getHeaderRaw(req.Header, "anthropic-beta")
-
-			require.Equalf(t, tc.wantField, anthropicBetaTokensContains(outBeta, claude.BetaMidConversationOutputConfig),
-				"出站 header 必须与客户端传入的 beta 一致（outgoing beta=%q）", outBeta)
-			require.Equal(t, tc.wantField, gjson.GetBytes(outBody, "messages.0.output_config").Exists(),
-				"header/body 必须一致")
-			require.Len(t, gjson.GetBytes(outBody, "messages").Array(), tc.wantMsgLen,
-				"缺 beta 时空控制 system 消息整条删除；带 beta 时保留")
+			require.Equal(t, string(body), string(readUpstreamBodyForTest(t, req)), "strict passthrough never rewrites the body")
+			require.Equal(t, tc.clientBeta, getHeaderRaw(req.Header, "anthropic-beta"), "strict passthrough forwards the client beta header")
 		})
 	}
 }

@@ -185,7 +185,7 @@ func TestHandleNonStreamingResponseAnthropicAPIKeyPassthrough_ForceCacheBillingR
 			require.NoError(t, err)
 			require.Equal(t, int(gjson.Get(tt.body, "usage.input_tokens").Int()), usage.InputTokens, "local accounting must retain the unclassified usage")
 			require.Equal(t, int(gjson.Get(tt.body, "usage.cache_read_input_tokens").Int()), usage.CacheReadInputTokens, "local accounting must convert exactly once in RecordUsage")
-			require.JSONEq(t, tt.want, rec.Body.String())
+			require.Equal(t, tt.body, rec.Body.String(), "billing policy must not rewrite upstream usage")
 		})
 	}
 }

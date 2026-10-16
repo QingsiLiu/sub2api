@@ -116,3 +116,24 @@ func TestAccount_GetAnthropicAPIKeyAuthScheme(t *testing.T) {
 		})
 	}
 }
+
+func TestStrictAnthropicRequiresExplicitOptIn(t *testing.T) {
+	native := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+	require.False(t, native.IsAnthropicAPIKeyPassthroughEnabled(), "existing accounts keep compatibility mode")
+	native.Credentials = map[string]any{"base_url": "https://api.anthropic.com"}
+	require.False(t, native.IsAnthropicAPIKeyPassthroughEnabled())
+	native.Extra = map[string]any{"anthropic_passthrough": true}
+	require.True(t, native.IsAnthropicAPIKeyPassthroughEnabled())
+	native.Extra["anthropic_passthrough"] = false
+	require.False(t, native.IsAnthropicAPIKeyPassthroughEnabled())
+	relay := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Credentials: map[string]any{"base_url": "https://relay.example"}, Extra: map[string]any{"anthropic_passthrough": true}}
+	require.True(t, relay.IsAnthropicAPIKeyPassthroughEnabled())
+}
+
+func TestStrictAnthropicAccountMappingDoesNotRestrictModels(t *testing.T) {
+	account := newAnthropicAPIKeyAccountForTest()
+	account.Credentials["model_mapping"] = map[string]any{"old-model": "mapped-model"}
+	require.True(t, account.IsModelSupported("new-provider-model"))
+	account.Extra["anthropic_passthrough"] = false
+	require.False(t, account.IsModelSupported("new-provider-model"))
+}

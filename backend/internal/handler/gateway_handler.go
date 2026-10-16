@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -145,7 +146,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	defer h.maybeLogCompatibilityFallbackMetrics(reqLog)
 
 	// 读取请求体
-	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
+	body, err := readAnthropicGatewayRequestBody(c.Request, h.cfg, apiKey)
 	if err != nil {
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
@@ -162,14 +163,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	setOpsRequestContext(c, "", false)
 
-	bodyRef := service.NewRequestBodyRef(body)
-	parsedReq, err := service.ParseGatewayRequest(bodyRef, domain.PlatformAnthropic)
+	clientRequestBody := body
+	parsedReq, err := parseAnthropicGatewayRequest(body, h.cfg, apiKey)
 	if err != nil {
 		logRequestBodyParseFailure(reqLog, body, err)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
 	body = parsedReq.Body.Bytes()
+	routedRequestBody := bytes.Clone(body)
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
 	bindRequestedReasoningEffort(c, body, reqModel)
@@ -236,6 +238,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// Track if we've started streaming (for error handling)
 	streamStarted := false
+	// Native Anthropic status and SSE bytes belong to the provider. Waiting
+	// for local admission must not commit HTTP 200 or prepend synthetic pings.
+	if apiKey.Group != nil && apiKey.Group.Platform == service.PlatformAnthropic {
+		c.Set("gateway_suppress_wait_ping", true)
+	}
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {
@@ -398,7 +405,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			setOpsSelectedAccount(c, account.ID, account.Platform)
 
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
-			if account.IsInterceptWarmupEnabled() {
+			if !account.IsAnthropicAPIKeyPassthroughEnabled() && account.IsInterceptWarmupEnabled() {
 				interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, isClaudeCodeClient)
 				if interceptType != InterceptTypeNone {
 					if selection.Acquired && selection.ReleaseFunc != nil {
@@ -761,7 +768,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			)
 
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
-			if account.IsInterceptWarmupEnabled() {
+			if !account.IsAnthropicAPIKeyPassthroughEnabled() && account.IsInterceptWarmupEnabled() {
 				interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, isClaudeCodeClient)
 				if interceptType != InterceptTypeNone {
 					if selection.Acquired && selection.ReleaseFunc != nil {
@@ -924,6 +931,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// Bedrock CC 兼容：清理 body 专有字段 + 过滤 anthropic-beta header，适用于所有转发路径
 			if err := attemptParsedReq.ReplaceBody(h.gatewayService.ApplyBedrockCCCompat(c, attemptParsedReq.Body.Bytes(), attemptParsedReq.Model, account, apiKey.GroupID)); err != nil {
 				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+				return
+			}
+			if account.IsAnthropicAPIKeyPassthroughEnabled() && !useStrictAnthropicBody(attemptParsedReq, routedRequestBody, clientRequestBody) {
+				if queueRelease != nil {
+					queueRelease()
+				}
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Group routing or reasoning policy would modify a strict Anthropic request; use a request that satisfies the configured policy")
 				return
 			}
 			attemptBody := attemptParsedReq.Body.Bytes()
@@ -1188,6 +1205,10 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 	if forcedPlatform, ok := middleware2.GetForcePlatformFromContext(c); ok && strings.TrimSpace(forcedPlatform) != "" {
 		platform = forcedPlatform
+	}
+
+	if h.tryAnthropicUpstreamModels(c, apiKey, platform) {
+		return
 	}
 
 	if platform == service.PlatformOpenAI && apiKey != nil && apiKey.Group != nil &&
@@ -1956,6 +1977,10 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 	}
 	c.Set("geili_upstream_failure_final", true)
 	streamStarted = upstreamFailureStreamStarted(c, streamStarted)
+	// geili hook: strict Anthropic passthrough returns the last native upstream error unchanged.
+	if service.WriteStrictAnthropicFailoverGeili(c, failoverErr, streamStarted) {
+		return
+	}
 	statusCode := failoverErr.StatusCode
 	responseBody := failoverErr.ResponseBody
 	if service.IsOpenAISilentRefusalErrorBody(responseBody) {
@@ -2195,7 +2220,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	defer h.maybeLogCompatibilityFallbackMetrics(reqLog)
 
 	// 读取请求体
-	body, err := readLenientJSONRequestBodyWithPrealloc(c.Request, h.cfg)
+	body, err := readAnthropicGatewayRequestBody(c.Request, h.cfg, apiKey)
 	if err != nil {
 		if maxErr, ok := extractMaxBytesError(err); ok {
 			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
@@ -2212,8 +2237,8 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 
 	setOpsRequestContext(c, "", false)
 
-	bodyRef := service.NewRequestBodyRef(body)
-	parsedReq, err := service.ParseGatewayRequest(bodyRef, domain.PlatformAnthropic)
+	clientRequestBody := body
+	parsedReq, err := parseAnthropicGatewayRequest(body, h.cfg, apiKey)
 	if err != nil {
 		logRequestBodyParseFailure(reqLog, body, err)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
@@ -2277,6 +2302,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		return
 	}
 	setOpsSelectedAccount(c, account.ID, account.Platform)
+
+	if account.IsAnthropicAPIKeyPassthroughEnabled() && !useStrictAnthropicBody(parsedReq, parsedReq.Body.Bytes(), clientRequestBody) {
+		h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionHash)
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
 
 	// 转发请求（不记录使用量）
 	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {

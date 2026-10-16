@@ -4670,7 +4670,7 @@ const codexFingerprintModeOptions = computed(() => [
   { value: 'full' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintFull') },
 ])
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
-const anthropicPassthroughEnabled = ref(false)
+const anthropicPassthroughEnabled = ref(true)
 const anthropicAPIKeyAuthScheme = ref<AnthropicAPIKeyAuthScheme>('x_api_key')
 const webSearchEmulationMode = ref('default')
 const webSearchGlobalEnabled = ref(false)
@@ -5209,7 +5209,7 @@ watch(
       codexCLIOnlyAppServerEnabled.value = false
     }
     if (newPlatform !== 'anthropic') {
-      anthropicPassthroughEnabled.value = false
+      anthropicPassthroughEnabled.value = true
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
       webSearchEmulationMode.value = 'default'
     }
@@ -5239,7 +5239,7 @@ watch(
       codexCLIOnlyAppServerEnabled.value = false
     }
     if (platform !== 'anthropic' || category !== 'apikey') {
-      anthropicPassthroughEnabled.value = false
+      anthropicPassthroughEnabled.value = true
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
       webSearchEmulationMode.value = 'default'
     }
@@ -5670,7 +5670,7 @@ const resetForm = () => {
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
   codexFingerprintMode.value = 'off'
-  anthropicPassthroughEnabled.value = false
+  anthropicPassthroughEnabled.value = true
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
   // Reset quota control state
@@ -5822,7 +5822,7 @@ const buildAnthropicExtra = (base?: Record<string, unknown>): Record<string, unk
   if (anthropicPassthroughEnabled.value) {
     extra.anthropic_passthrough = true
   } else {
-    delete extra.anthropic_passthrough
+    extra.anthropic_passthrough = false
   }
   if (anthropicAPIKeyAuthScheme.value === 'authorization_bearer') {
     extra.anthropic_apikey_auth_scheme = 'authorization_bearer'

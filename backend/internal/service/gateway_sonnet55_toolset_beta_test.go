@@ -90,6 +90,11 @@ func TestSonnet55ToolsetBetaFilteredAfterAccountOverrideAndOnVertex(t *testing.T
 			req, err := build.fn()
 			require.NoError(t, err)
 			header := getHeaderRaw(req.Header, "anthropic-beta")
+			if build.name == "passthrough" {
+				// Strict passthrough ignores account header overrides entirely.
+				require.Empty(t, header)
+				return
+			}
 			require.False(t, containsBetaToken(header, claude.BetaFineGrainedToolStreaming))
 			require.True(t, containsBetaToken(header, claude.BetaContext1M))
 		})
