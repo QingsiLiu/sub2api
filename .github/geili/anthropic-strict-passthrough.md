@@ -31,3 +31,5 @@
 
 - 单元测试：`internal/service/gateway_anthropic_strict_test.go`、`gateway_anthropic_strict_geili_test.go`，以及 handler、routes 中的 `StrictAnthropic*` 测试。
 - 上线前必须用真实第一方 Key 验收：thinking/signature 双向回放；篡改一个字符或改 system 前缀后被上游拒绝；工具名和参数字面量不变；CRLF；3xx/4xx/5xx 的状态码、正文和头；Models 分页；count_tokens；Files 上传和下载；流式与非流式计费入账。只看到 200 不算通过。
+
+2026-10-16 的 `.17` 发布例外：用户当次明确“我没有这个第一方 Key，要这个干啥？目的是啥，这个 patch 打进去了就行，不用再重复测试验收”，因此本候选不再执行上述真实第一方验收，记录为 `excluded_by_owner`，不记 passed。本任务不为任何账号开启严格透传；现有 CI 和合成证据保持原结论。该例外仅绑定 `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7` / `sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`，不证明真实上游的签名回放行为，也不单独构成生产发布授权。完整记录见运维仓 `docs/reports/supplier-strict-v17-20261016/`。
