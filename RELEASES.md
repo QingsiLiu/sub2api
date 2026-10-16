@@ -17,7 +17,7 @@
 - 无新增迁移；媒体生成仍走原路径。第一批固定revision `d7fabe053ad0a2b6973faba26169cf3a8eac1e2f`；本批固定revision `e33d4f39c6e3dd91de47e9feced5def64f9ad885` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:f36f8f647dfe03877a6420d3e862d7c953a0a3336dc61b459ba14d6d40c4f9ca`。[CI38868587014](https://github.com/QingsiLiu/sub2api/actions/runs/38868587014)全部9任务/13制品门禁通过，347份迁移SHA逐文件保持。
 - 部署状态：未部署Stage/生产。最终兼容探针确认可选SDK参数为null时误报400；本候选已撤回，由`.20`修复并重新独立CI/Stage，原CI证据不改写或套用。无真实供应商、支付或媒体调用，没有生产发布授权。
 
-## 0.2.16-geili.18（Gemini供应商故障恢复，CI通过、Stage验收中，未上生产）
+## 0.2.16-geili.18（Gemini供应商故障恢复，CI通过、Stage部分通过后停止，未上生产）
 
 相对生产`.17`，Gemini文本请求收到精确识别的供应商预扣费不足、零余额或号池暂无资源时，直接换合法账号，不再同号重复六次；同组耗尽可由复合Key继续合法候选组，全部不可用返回503/`upstream_unavailable`。请求局部排除按账号或实际模型跨组共享，已有正文/工具副作用不重放，原恢复预算与客户端期限保持。普通400、媒体、缓存绑定、其他平台保持；不自动持久停号、不新增健康存储读取，欠费仍由管理员手动管理。
 
@@ -25,6 +25,7 @@
 - 生产基线revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7` / digest `sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。本批固定revision `d7fabe053ad0a2b6973faba26169cf3a8eac1e2f` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:24a4ba51be2331ea5b5b8ac5fe13d09e4247659575713dbd88fde00bb8d15f3a`。[CI38866975440](https://github.com/QingsiLiu/sub2api/actions/runs/38866975440)全部9任务/13制品门禁通过，347份迁移SHA逐文件保持。
 - 已经canonical部署Stage，备份`20261016T073821Z-candidate`、health200、迁移结构24项通过。首轮非支付验收因Stage历史派生统计多2条/USD198失败，同时生产`.17`发生独立OOM重启使保全指纹变化；原失败报告、原`restored:false`快照及完整原字节归档保留。本轮自有资源已独立核验停用；精确移除历史孤儿派生桶后后台自行重建，原始用量、全部收据及钱包SHA保持。新非支付r2为51/51、restored=true；首个供应商恢复场景也已验证三账号各一次与单次结算，但验收器误用不支持Key筛选的接口，已另提交修正并显式固定harness身份，原失败不改写。其余同镜像验收进行中。第二批原生协议适配不混入本候选；证据在运维仓`docs/reports/gemini-supplier-v18-20261016/`。未部署生产，无真实供应商/支付/媒体调用，没有本批生产发布授权。
 - 新上游36/36、缓存17/17均通过并恢复；恢复r3中已执行48项功能检查通过，但生产`.17`于08:22:53Z自然OOM重启，使本轮保全失败，四批性能未完成，整体不能判通过。已精确停止本轮、保留失败和部分计时journal；用户/Key/分组/账号停用，临时runtime、副本、基线、latch、端口和未完成收据均独立核验回收，原失败快照原字节归档。补跑供应商矩阵后优先交Stage给内存任务，不在同一持续OOM条件下循环重跑，不放宽p95/吞吐门槛。
+- 用户取消压测后，供应商补跑也主动停止：只执行5/32请求，39条已执行检查通过，但`matrix_complete=false/passed=false`，不宣称完整验收。08:35:31Z退出，`restored/runtime_restored/replica_removed=true`、无清理错误，Stage锁释放；不再派发新测试请求。先前完整通过结果和每次中断的原报告分别保留，两批均无生产发布授权。
 
 ## 0.2.16-geili.17（供应商角色与严格透传全主干，已发布 Stage 和生产）
 
