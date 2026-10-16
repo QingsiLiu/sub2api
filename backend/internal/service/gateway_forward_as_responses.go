@@ -155,6 +155,11 @@ func (s *GatewayService) ForwardAsResponses(
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
+	// geili hook: record the endpoint actually dispatched, including Gemini compatibility attempts.
+	SetActualOpenAIUpstreamEndpoint(c, upstreamReq.URL.Path)
+	if account.Platform == PlatformGemini {
+		SetGeminiActualUpstreamURLGeili(c, upstreamReq.URL.String())
+	}
 	// Bill the final Anthropic effort after conversion and account normalization.
 	// For example, OpenAI xhigh is forwarded as output_config.effort=max.
 	reasoningEffort := NormalizeClaudeOutputEffort(gjson.GetBytes(forwardedBody, "output_config.effort").String())
@@ -170,6 +175,9 @@ func (s *GatewayService) ForwardAsResponses(
 			UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
 		})
 	}
+	if account.Platform == PlatformGemini {
+		SetGeminiUpstreamResponseHeadersGeili(c, resp.Header)
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// 12. Handle error response with failover
@@ -180,6 +188,11 @@ func (s *GatewayService) ForwardAsResponses(
 
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+
+		// geili hook: known supplier resource failures skip same-account retries and persistent policies.
+		if failure := geminiSupplierFailureGeili(ctx, c, account, resp.StatusCode, respBody, resp.Header, upstreamReq.URL.String(), mappedModel); failure != nil {
+			return nil, failure
+		}
 
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -204,6 +217,10 @@ func (s *GatewayService) ForwardAsResponses(
 			}
 		}
 
+		// geili hook: retain the final upstream context for non-failover errors too.
+		setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, "")
+		c.Set(OpsUpstreamErrorDetailKey, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{Platform: account.Platform, AccountID: account.ID, AccountName: account.Name, ProxyID: opsUpstreamProxyID(account), ProxyName: opsUpstreamProxyName(account), UpstreamStatusCode: resp.StatusCode, UpstreamRequestID: resp.Header.Get("x-request-id"), UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()), Kind: "http_error", Message: upstreamMsg})
 		// Non-failover error: return Responses-formatted error to client
 		writeResponsesError(c, mapUpstreamStatusCode(resp.StatusCode), "server_error", upstreamMsg)
 		return nil, fmt.Errorf("upstream error: %d %s", resp.StatusCode, upstreamMsg)

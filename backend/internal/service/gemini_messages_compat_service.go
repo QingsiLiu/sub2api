@@ -724,9 +724,22 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
+		// geili hook: capture actual endpoint before dispatch.
+		SetActualOpenAIUpstreamEndpoint(c, upstreamReq.URL.Path)
+		SetGeminiActualUpstreamURLGeili(c, upstreamReq.URL.String())
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
+		}
+
+		SetGeminiUpstreamResponseHeadersGeili(c, resp.Header)
+
+		// geili hook: known supplier failures bypass same-account retries and persistent state policies.
+		if failure, rebuilt := s.geminiSupplierFailureResponseGeili(ctx, c, account, resp, upstreamReq.URL.String(), mappedModel); failure != nil {
+			_ = rebuilt.Body.Close()
+			return nil, failure
+		} else {
+			resp = rebuilt
 		}
 
 		// Special-case: signature/thought_signature validation errors are not transient, but may be fixed by
@@ -1253,6 +1266,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
+		// geili hook: capture actual endpoint before dispatch.
+		SetActualOpenAIUpstreamEndpoint(c, upstreamReq.URL.Path)
+		SetGeminiActualUpstreamURLGeili(c, upstreamReq.URL.String())
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			transportErr := s.handleUpstreamTransportError(ctx, c, account, err)
@@ -1274,6 +1290,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			return nil, transportErr
 		}
 
+		SetGeminiUpstreamResponseHeadersGeili(c, resp.Header)
+
 		// 引用缓存不存在、上游网关持有缓存的账号不可用先于错误策略识别：错误策略会写临时不可调度，
 		// 重试与换号也无法恢复。
 		if passthrough, rebuilt := s.cachedContentPassthroughInLoop(ctx, account, resp); passthrough {
@@ -1281,6 +1299,16 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			break
 		} else {
 			resp = rebuilt
+		}
+
+		// geili hook: only native text generation participates; bound cache errors above keep their contract.
+		if (action == "generateContent" || action == "streamGenerateContent") && !geminiSupplierMediaRequestGeili(body) {
+			if failure, rebuilt := s.geminiSupplierFailureResponseGeili(ctx, c, account, resp, upstreamReq.URL.String(), mappedModel); failure != nil {
+				_ = rebuilt.Body.Close()
+				return nil, failure
+			} else {
+				resp = rebuilt
+			}
 		}
 
 		// 错误策略优先：匹配则跳过重试直接处理。

@@ -39,9 +39,12 @@ type OpsErrorLog struct {
 
 	Severity string `json:"severity"`
 
-	StatusCode int    `json:"status_code"`
-	Platform   string `json:"platform"`
-	Model      string `json:"model"`
+	// geili hook: retain the legacy effective status and expose the two source columns.
+	ClientStatusCode   *int   `json:"client_status_code"`
+	UpstreamStatusCode *int   `json:"upstream_status_code"`
+	StatusCode         int    `json:"status_code"`
+	Platform           string `json:"platform"`
+	Model              string `json:"model"`
 
 	Resolved           bool       `json:"resolved"`
 	ResolvedAt         *time.Time `json:"resolved_at"`
@@ -83,7 +86,6 @@ type OpsErrorLogDetail struct {
 	ErrorBody string `json:"error_body"`
 
 	// Upstream context (optional)
-	UpstreamStatusCode   *int   `json:"upstream_status_code,omitempty"`
 	UpstreamErrorMessage string `json:"upstream_error_message,omitempty"`
 	UpstreamErrorDetail  string `json:"upstream_error_detail,omitempty"`
 	UpstreamErrors       string `json:"upstream_errors,omitempty"` // JSON array (string) for display/parsing

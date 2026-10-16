@@ -489,6 +489,17 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 		ev.AtUnixMs = time.Now().UnixMilli()
 	}
 	ev.Platform = strings.TrimSpace(ev.Platform)
+	// geili hook: enrich existing Gemini events from the actual dispatch; do
+	// not append a second event or overwrite an explicit event snapshot.
+	if ev.Platform == PlatformGemini {
+		if strings.TrimSpace(ev.UpstreamURL) == "" {
+			ev.UpstreamURL = c.GetString(geminiActualUpstreamURLKeyGeili)
+		}
+		if strings.TrimSpace(ev.UpstreamRequestID) == "" {
+			ev.UpstreamRequestID = c.GetString(geminiActualUpstreamRequestIDKeyGeili)
+		}
+		ev.UpstreamURL = safeGeminiUpstreamURLGeili(ev.UpstreamURL)
+	}
 	normalizeOpsUpstreamProxyAttribution(&ev)
 	ev.UpstreamRequestID = strings.TrimSpace(ev.UpstreamRequestID)
 	ev.UpstreamResponseBody = strings.TrimSpace(ev.UpstreamResponseBody)

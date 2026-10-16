@@ -199,6 +199,10 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				reqLog.Info("gateway.cc.account_select_aborted_client_disconnected", zap.Error(err))
 				return
 			}
+			// geili hook: carry proven request-local failures across groups.
+			if h.geminiSupplierSelectionFailureGeili(c, err, fs.LastFailoverErr, streamStarted) {
+				return
+			}
 			if len(fs.FailedAccountIDs) == 0 {
 				cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, groupPlatform)
 				cls = classifySelectionFailureError(err, cls)
@@ -411,6 +415,10 @@ func (h *GatewayHandler) chatCompletionsErrorResponse(c *gin.Context, status int
 
 // handleCCFailoverExhausted writes a failover-exhausted error in CC format.
 func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *service.UpstreamFailoverError, streamStarted bool) {
+	// geili hook: retain supplier provenance without leaking account balances.
+	if h.writeGeminiSupplierUnavailableGeili(c, lastErr, streamStarted) {
+		return
+	}
 	if c != nil && service.IsResponseCommitted(c) {
 		return
 	}

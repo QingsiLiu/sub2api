@@ -354,6 +354,8 @@ export default {
         time: '时间',
         phase: '阶段',
         status: '状态码',
+        clientStatus: '客户端',
+        finalUpstreamStatus: '最终上游',
         upstreamStatus: '上游状态码',
         message: '消息',
         rootCause: '根因',

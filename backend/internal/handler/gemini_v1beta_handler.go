@@ -355,6 +355,8 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	if channelMapping.Mapped {
 		modelName = channelMapping.MappedModel
 	}
+	// geili hook: this native selection model already includes channel mapping.
+	c.Request = c.Request.WithContext(service.WithGeminiSupplierSelectionModelGeili(c.Request.Context(), modelName))
 
 	// 引用显式缓存的请求只能发往持有该缓存的账号，且不参与会话粘性与换号。
 	cachedContentBinding, body, ok := h.resolveGeminiCachedContentBinding(c, reqLog, apiKey, modelName, body)
@@ -564,6 +566,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				reqLog.Info("gemini.cached_content.bound_account_unavailable", zap.Int64("account_id", cachedContentBinding.AccountID), zap.Error(err))
 				markOpsRoutingCapacityLimited(c)
 				googleError(c, http.StatusServiceUnavailable, geminiCachedContentUnavailableMessage)
+				return
+			}
+			// geili hook: carry proven request-local failures across groups.
+			if h.geminiSupplierSelectionFailureGeili(c, err, fs.LastFailoverErr, c.Writer.Written()) {
 				return
 			}
 			if len(fs.FailedAccountIDs) == 0 {
@@ -834,6 +840,10 @@ func parseGeminiModelAction(rest string) (model string, action string, err error
 }
 
 func (h *GatewayHandler) handleGeminiFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError) {
+	// geili hook: retain the native Google error envelope for unavailable suppliers.
+	if h.writeGeminiSupplierUnavailableGeili(c, failoverErr, c.Writer.Written()) {
+		return
+	}
 	if failoverErr == nil {
 		googleError(c, http.StatusBadGateway, "Upstream request failed")
 		return

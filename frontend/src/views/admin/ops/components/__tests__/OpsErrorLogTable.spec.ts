@@ -122,3 +122,31 @@ describe('OpsErrorLogTable i18n keys exist in the errorLog namespace', () => {
     })
   }
 })
+
+
+describe('OpsErrorLogTable client and final upstream status', () => {
+  it('renders the client failure separately from the legacy upstream-first status', () => {
+    const wrapper = mountTable({ status_code: 400, client_status_code: 503, upstream_status_code: 400 })
+    const statusCell = wrapper.findAll('tbody td').find(cell => cell.text().includes('admin.ops.errorDetail.clientStatus'))!
+    expect(statusCell.text()).toContain('admin.ops.errorDetail.clientStatus503')
+    expect(statusCell.text()).toContain('admin.ops.errorDetail.finalUpstreamStatus400')
+    wrapper.unmount()
+  })
+
+  it('shows successful recovery with its failed upstream attempt', () => {
+    const wrapper = mountTable({ status_code: 403, client_status_code: 200, upstream_status_code: 403 })
+    const statusCell = wrapper.findAll('tbody td').find(cell => cell.text().includes('admin.ops.errorDetail.clientStatus'))!
+    expect(statusCell.text()).toContain('admin.ops.errorDetail.clientStatus200')
+    expect(statusCell.text()).toContain('admin.ops.errorDetail.finalUpstreamStatus403')
+    wrapper.unmount()
+  })
+
+  it('distinguishes an absent upstream status from explicit credential failure zero', async () => {
+    const wrapper = mountTable({ status_code: 503, client_status_code: 503, upstream_status_code: null })
+    const statusText = () => wrapper.findAll('tbody td').find(cell => cell.text().includes('admin.ops.errorDetail.clientStatus'))!.text()
+    expect(statusText()).toContain('admin.ops.errorDetail.finalUpstreamStatus—')
+    await wrapper.setProps({ rows: [{ ...wrapper.props('rows')[0], status_code: 0, upstream_status_code: 0 }] })
+    expect(statusText()).toContain('admin.ops.errorDetail.finalUpstreamStatus0')
+    wrapper.unmount()
+  })
+})

@@ -23,6 +23,7 @@ type requestRecoveryState struct {
 	accountRecoveryDeadline   time.Time
 	accountRecoverySelections map[string]bool
 	accountRecoveryRestored   map[int64]struct{}
+	geminiSupplierFailures    map[int64]map[string]bool
 }
 
 func WithRequestRecovery(ctx context.Context, budget time.Duration) context.Context {

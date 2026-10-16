@@ -354,6 +354,8 @@ export default {
         time: 'Time',
         phase: 'Phase',
         status: 'Status',
+        clientStatus: 'Client',
+        finalUpstreamStatus: 'Final Upstream',
         upstreamStatus: 'Upstream Status',
         message: 'Message',
         rootCause: 'Root Cause',

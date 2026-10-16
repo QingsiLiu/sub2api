@@ -364,6 +364,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
 					return
 				}
+				// geili hook: carry proven request-local failures across groups.
+				if h.geminiSupplierSelectionFailureGeili(c, err, fs.LastFailoverErr, streamStarted) {
+					return
+				}
 				if len(fs.FailedAccountIDs) == 0 {
 					cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, service.PlatformGemini)
 					if !cls.ModelNotFound {
@@ -706,6 +710,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if err != nil {
 				if failoverClientGone(c) {
 					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
+					return
+				}
+				// geili hook: carry proven request-local failures across groups.
+				if h.geminiSupplierSelectionFailureGeili(c, err, fs.LastFailoverErr, streamStarted) {
 					return
 				}
 				if len(fs.FailedAccountIDs) == 0 {
@@ -1964,6 +1972,10 @@ func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotT
 }
 
 func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {
+	// geili hook: classified Gemini supplier failures share the same 503 contract.
+	if h.writeGeminiSupplierUnavailableGeili(c, failoverErr, streamStarted) {
+		return
+	}
 	// geili: retain the failure's upstream origin independently of its code.
 	if c != nil && service.IsResponseCommitted(c) {
 		return

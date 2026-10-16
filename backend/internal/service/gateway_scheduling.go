@@ -1163,6 +1163,10 @@ func (s *GatewayService) isAccountSchedulableForModelSelection(ctx context.Conte
 	if account == nil {
 		return false
 	}
+	// geili hook: do not redispatch a proven supplier failure in another group.
+	if s.geminiSupplierAccountExcludedGeili(ctx, account, requestedModel) {
+		return false
+	}
 	return account.IsSchedulableForModelWithContext(ctx, requestedModel)
 }
 

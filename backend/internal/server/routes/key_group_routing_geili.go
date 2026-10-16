@@ -48,6 +48,12 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 		// geili: one recovery state survives account and selected-group attempts,
 		// including legacy keys. Media/task endpoints keep their replay contract.
 		recoveryTextRequest := isRecoveryTextRequest(c.Request)
+		// geili hook: native endpoints get only a request-local exclusion set.
+		// Do not preread native bodies, enable stopped-account probes or alter budgets.
+		if c.Request.Method == http.MethodPost && strings.Contains(c.Request.URL.Path, "/v1beta/models/") &&
+			(strings.HasSuffix(c.Request.URL.Path, ":generateContent") || strings.HasSuffix(c.Request.URL.Path, ":streamGenerateContent")) {
+			c.Request = c.Request.WithContext(service.WithGeminiSupplierRecoveryGeili(c.Request.Context()))
+		}
 		if recoveryTextRequest {
 			budget := 600 * time.Second
 			if cfg != nil {
@@ -318,6 +324,8 @@ func explicitKeyRouting(keys *service.APIKeyService, resolver *service.Composite
 			}
 			retry := !service.OpenAIEncryptedRoutePinnedGeili(c.Request.Context()) && key.UsesGroupListRouting() && index+1 < len(candidates) && writer.canRetry() && service.BeginRequestRecovery(c.Request.Context())
 			if retry {
+				// geili hook: retain upstream diagnostics when an authorized group takes over.
+				handler.CarryGeminiSupplierFailureContextGeili(c, attempt)
 				attempts = append(attempts, service.KeyRouteAttempt{GroupID: *decision.TargetGroupID, Reason: http.StatusText(writer.Status())})
 				continue
 			}

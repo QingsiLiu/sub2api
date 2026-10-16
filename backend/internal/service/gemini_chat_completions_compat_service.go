@@ -122,9 +122,22 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		}
 		requestIDHeader = idHeader
 
+		// geili hook: capture actual endpoint before dispatch.
+		SetActualOpenAIUpstreamEndpoint(c, upstreamReq.URL.Path)
+		SetGeminiActualUpstreamURLGeili(c, upstreamReq.URL.String())
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
+		}
+
+		SetGeminiUpstreamResponseHeadersGeili(c, resp.Header)
+
+		// geili hook: explicit supplier unavailability is request-local, before account policy writes.
+		if failure, rebuilt := s.geminiSupplierFailureResponseGeili(ctx, c, account, resp, upstreamReq.URL.String(), mappedModel); failure != nil {
+			_ = rebuilt.Body.Close()
+			return nil, failure
+		} else {
+			resp = rebuilt
 		}
 
 		if matched, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mappedModel); matched {

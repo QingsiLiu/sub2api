@@ -49,6 +49,9 @@ func WriteTextRecoveryFailure(c *gin.Context, status int, body []byte) {
 		errType = "upstream_error"
 	}
 	code := gjson.GetBytes(body, "error.code").String()
+	if GetInboundEndpoint(c) == EndpointGeminiModels {
+		code = gjson.GetBytes(body, "error.details.0.reason").String()
+	}
 	message := gjson.GetBytes(body, "error.message").String()
 	if message == "" {
 		message = "Upstream request failed"
@@ -56,6 +59,10 @@ func WriteTextRecoveryFailure(c *gin.Context, status int, body []byte) {
 	service.MarkOpsStreamFailure(c, errType, code, message, status)
 	if inboundIsResponses(c) {
 		_ = writeResponsesFailedSSE(c, errType, code, message)
+	} else if GetInboundEndpoint(c) == EndpointGeminiModels {
+		// geili hook: retain the native error envelope after a neutral heartbeat.
+		_, _ = c.Writer.WriteString("data: " + string(body) + "\n\n")
+		c.Writer.Flush()
 	} else {
 		errorObject := gin.H{"type": errType, "message": message}
 		payload := gin.H{"error": errorObject}

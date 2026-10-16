@@ -43,7 +43,8 @@ describe('OpsErrorDetailModal', () => {
       error_owner: 'provider',
       error_source: 'gateway',
       severity: 'P1',
-      status_code: 502,
+      status_code: 429,
+      client_status_code: 502,
       upstream_status_code: 429,
       platform: 'openai',
       model: 'gpt-5.6',
@@ -71,8 +72,10 @@ describe('OpsErrorDetailModal', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('provider rate limit exhausted')
-    expect(wrapper.text()).toContain('admin.ops.errorDetail.upstreamStatus')
+    expect(wrapper.text()).toContain('admin.ops.errorDetail.finalUpstreamStatus')
     expect(wrapper.text()).toContain('429')
+    expect(wrapper.text()).toContain('admin.ops.errorDetail.clientStatus')
+    expect(wrapper.text()).toContain('502')
     expect(wrapper.findAll('pre')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('admin.ops.errorDetail.payloads.upstream_detail')
   })

@@ -469,6 +469,11 @@ func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) 
 		return
 	}
 	service.ClearOpsUpstreamModel(c)
+	// geili hook: Gemini services record actual transport paths per attempt.
+	if len(platform) > 0 && platform[0] == service.PlatformGemini {
+		service.ClearActualOpenAIUpstreamEndpoint(c)
+		service.ClearGeminiActualUpstreamGeili(c)
+	}
 	// geili hook: per-attempt attribution, no scheduler state changes.
 	if c.Request != nil {
 		service.ResponseAuditFromContext(c.Request.Context()).Attribute(accountID, 0, "")

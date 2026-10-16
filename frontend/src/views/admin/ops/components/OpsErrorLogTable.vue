@@ -109,9 +109,16 @@
 
         <template #cell-status="{ row }">
           <div class="flex items-center gap-1.5">
-            <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getStatusClass(row.status_code)">
-              {{ row.status_code }}
-            </span>
+            <div class="space-y-1 text-xs">
+              <div class="flex items-center gap-1">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('admin.ops.errorDetail.clientStatus') }}</span>
+                <span class="inline-flex items-center rounded px-2 py-0.5 font-medium" :class="getStatusClass(row.client_status_code ?? 0)">{{ row.client_status_code ?? '—' }}</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('admin.ops.errorDetail.finalUpstreamStatus') }}</span>
+                <span class="inline-flex items-center rounded px-2 py-0.5 font-medium" :class="getStatusClass(row.upstream_status_code ?? 0)">{{ row.upstream_status_code ?? '—' }}</span>
+              </div>
+            </div>
             <span
               v-if="row.severity"
               :class="['rounded px-1.5 py-0.5 text-[10px] font-medium', getSeverityClass(row.severity)]"
