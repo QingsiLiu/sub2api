@@ -38,6 +38,11 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
+	// geili hook: text compatibility shares the direct Gemini native converter.
+	// Media keeps its existing independent generation and accounting contract.
+	if ShouldUseGeminiOpenAINativeGeili(account, ccReq.Model) {
+		return s.forwardOpenAINativeGeili(ctx, c, account, body, true)
+	}
 	originalModel := ccReq.Model
 	clientStream := ccReq.Stream
 	includeUsage := ccReq.StreamOptions != nil && ccReq.StreamOptions.IncludeUsage

@@ -33,6 +33,8 @@ jobs:
           python3 .github/geili/test-account-submission-stage.py
           python3 .github/geili/test_encrypted_route_stage.py
           python3 .github/geili/test-account-recovery-stage.py
+          python3 .github/geili/test-gemini-supplier-stage.py
+          python3 .github/geili/test-gemini-native-stage.py
       - uses: actions/upload-artifact@v7
         with:
           name: geili-candidate-frontend
