@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -58,13 +59,21 @@ func TestGeminiAIStudioToolsGeiliPreservesNormalizationSemantics(t *testing.T) {
 
 func TestGeminiAIStudioNoToolsGeiliLargeBodyDoesNotAllocate(t *testing.T) {
 	body := largeGeminiNoToolsBodyGeili()
-	allocs := testing.AllocsPerRun(5, func() {
+	// Other service goroutines can allocate during this test. Count bytes with
+	// room for their small allocations, while still rejecting even one full
+	// 20 MiB body copy or discarded JSON decode across the measured calls.
+	_ = normalizeGeminiRequestForAIStudio(body)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for i := 0; i < 3; i++ {
 		got := normalizeGeminiRequestForAIStudio(body)
 		if &body[0] != &got[0] {
 			t.Fatal("no-tools normalization must retain the original body")
 		}
-	})
-	require.Zero(t, allocs, "no-tools normalization must not decode large conversation content")
+	}
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(body)
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(len(body)/4), "no-tools normalization must not copy or decode large conversation content")
 }
 
 func largeGeminiNoToolsBodyGeili() []byte {

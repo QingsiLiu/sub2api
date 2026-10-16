@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"runtime"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -57,13 +58,20 @@ func TestAnthropicBodySnapshotGeiliRejectsRepairedClientJSON(t *testing.T) {
 
 func TestAnthropicBodySnapshotGeiliLargeBodyDoesNotAllocate(t *testing.T) {
 	body := bytes.Repeat([]byte("x"), 20<<20)
-	allocs := testing.AllocsPerRun(5, func() {
+	// Service goroutines may allocate concurrently. The byte budget tolerates
+	// their small allocations but rejects even one full 20 MiB routing copy.
+	_ = snapshotAnthropicRoutedBodyGeili(body)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for i := 0; i < 3; i++ {
 		snapshot := snapshotAnthropicRoutedBodyGeili(body)
 		if !snapshot.matches(body) {
 			t.Fatal("unchanged large body must match")
 		}
-	})
-	require.Zero(t, allocs, "routing snapshots must not allocate another large request body")
+	}
+	runtime.ReadMemStats(&after)
+	runtime.KeepAlive(body)
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(len(body)/4), "routing snapshots must not allocate another large request body")
 }
 
 var anthropicBodySnapshotBenchmarkSinkGeili anthropicRoutedBodySnapshotGeili
