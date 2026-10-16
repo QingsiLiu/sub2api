@@ -1,11 +1,14 @@
-## 0.2.16-geili.17（供应商角色主干候选，未构建镜像，未部署）
+## 0.2.16-geili.17（供应商角色主干候选，已部署 Stage，未上生产）
 
 新增用户角色「供应商」：保留普通用户功能，另有仅含账号管理与使用记录的供应商后台，范围限定为本人上传的账号。上传仅限 API Key，落库即停用、不可调度、无分组，由管理员审核后启用；修改 Key/Base URL 自动暂停调度。使用记录隐藏用户、Key、IP 与客户实付金额，只显示账号成本。管理员可在用户管理设置角色，在账号列表查看/过滤/指派归属供应商。方案见 [供应商角色](.github/geili/supplier-role.md)。
 
 - 功能 revision `0a7f0e143`、`3ba5169c1`、`ea09137d8`；新增迁移 `283_account_supplier_owners_geili.sql`，原有迁移不变。
 - 同版合入 Anthropic 严格透传（`24a546836`，合并 `9d74cc1ff`，方案见 [Anthropic 严格透传](.github/geili/anthropic-strict-passthrough.md)）：仅对显式开启 `extra.anthropic_passthrough=true` 的账号生效，存量账号不变；上线前须用真实第一方 Key 完成该文档列出的验收。
 - 这是**全主干**候选：同时包含 `.10`～`.15` 尚未上生产的流式/容灾/欠费/路由读取/思考模型等待预算改动（生产 `.16` 为基于 `.7` 的隔离 revision `4a00d7a6c`，已是本主干祖先）。`.11` 的完整性能门槛曾未通过，`.14`/`.15` 未做 Stage；本候选上生产前必须按全主干重做 Stage 业务、双实例、容灾和 4000 请求性能验收，不能沿用任何旧候选证据。
-- 本机验证（合并后）：Go 编译与 default/unit 全量、网关竞态套件（沙箱禁止 unix socket/本机回环导致的插件、验证码、OAuth 用例除外），前端类型检查、构建与 vitest 全量通过。PostgreSQL 集成测试由候选 CI 执行。尚无 CI 运行、镜像 digest、Stage 或生产部署。
+- 本机验证（合并后）：Go 编译与 default/unit 全量、网关竞态套件（沙箱禁止 unix socket/本机回环导致的插件、验证码、OAuth 用例除外），前端类型检查、构建与 vitest 全量通过。
+- 候选 revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7`；镜像 `ghcr.io/qingsiliu/sub2api@sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。候选 CI 38843372886 全部 9 任务通过（含 PostgreSQL integration）；上游 CI 的 golangci-lint 失败（主干长期失败，本批新增 6 条，含严格透传未检查 `WriteString` 与未使用的 `replaceAllBytes`）。
+- 已经正式入口部署 Stage：健康 200、版本正确、生产指纹不变。同镜像合成验收全部通过：迁移结构 24、非支付业务 51、上游增量 36、双实例缓存 17、容灾 50；4×1000 全 200，p95 增量 -1255.780ms、吞吐比 1.40443（门槛 ≤10ms / ≥0.98），夹具全部恢复。记录见运维仓 `docs/reports/supplier-strict-v17-20261016/`。
+- 未上生产。尚缺：严格透传第一方 Key 真实验收、供应商角色 Stage 验收、本候选发布契约与当次生产授权。
 
 ## 0.2.16-geili.16（GPT 持久异步图生图，已发布Stage和生产）
 
