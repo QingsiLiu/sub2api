@@ -619,6 +619,8 @@ func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsColle
 	// ENTIRELY to host metrics. Never mix a container "used" with a host "total":
 	// doing so reports a misleadingly tiny percentage (e.g. 60MB / 23GB ~= 0.3%).
 	cgroupUsed, cgroupTotal, cgroupOK := readCgroupMemoryBytes()
+	// geili hook: distinguish live Go objects from retained idle heap at the existing cadence.
+	logRuntimeMemoryGeili(cgroupUsed, cgroupTotal, cgroupOK)
 	var host *mem.VirtualMemoryStat
 	if !cgroupOK || cgroupTotal == 0 {
 		if vm, err := mem.VirtualMemoryWithContext(ctx); err == nil {

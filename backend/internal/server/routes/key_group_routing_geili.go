@@ -26,7 +26,7 @@ import (
 // immutable across attempts; each attempt receives its own group/key/context.
 func explicitKeyRouting(keys *service.APIKeyService, resolver *service.CompositeRouteResolver, h *handler.Handlers, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestStarted := time.Now()
+		requestStarted := requestMemoryIngressTimeGeili(c.Request) // geili hook: include admission preread time in the existing deadline.
 		// geili hook: mark every HTTP gateway request before legacy-key early
 		// returns. Only the three text POST routes can trigger account probes.
 		accountRecoveryText := isRecoveryTextRequest(c.Request) && !strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/responses/compact")
