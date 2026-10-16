@@ -246,7 +246,15 @@ class PerformanceTests(unittest.TestCase):
             def __exit__(self, *args): pass
             def readline(self, limit): return self.stream.readline(limit)
             def read(self, limit): return self.stream.read(limit)
-        opener = SimpleNamespace(open=Mock(side_effect=lambda *a, **kw: Response()))
+        open_count = 0
+        open_count_lock = threading.Lock()
+        def open_response(*args, **kwargs):
+            nonlocal open_count
+            # unittest.mock call_count is not atomic across benchmark workers.
+            with open_count_lock:
+                open_count += 1
+            return Response()
+        opener = SimpleNamespace(open=open_response)
         output = io.StringIO()
         payload = {'url': 'http://127.0.0.1:18520/v1/messages', 'token': 'synthetic-unit-token', 'model': s.MODEL}
         with tempfile.TemporaryDirectory() as directory:
@@ -264,7 +272,7 @@ class PerformanceTests(unittest.TestCase):
             self.assertTrue(all(r['tail_seconds'] >= 0 for r in rows))
             self.assertNotIn('synthetic-unit-token', journal.read_text())
         result = json.loads(output.getvalue())
-        self.assertEqual(opener.open.call_count, 1020)
+        self.assertEqual(open_count, 1020)
         self.assertEqual(len(result['latencies_seconds']), 1000)
         self.assertEqual(result['response_statuses'], [200] * 1000)
         self.assertEqual(result['failed_responses'], 0)
