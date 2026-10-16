@@ -1,4 +1,4 @@
-## 0.2.16-geili.17（供应商角色主干候选，已部署 Stage，未上生产）
+## 0.2.16-geili.17（供应商角色与严格透传全主干，已发布 Stage 和生产）
 
 新增用户角色「供应商」：保留普通用户功能，另有仅含账号管理与使用记录的供应商后台，范围限定为本人上传的账号。上传仅限 API Key，落库即停用、不可调度、无分组，由管理员审核后启用；修改 Key/Base URL 自动暂停调度。使用记录隐藏用户、Key、IP 与客户实付金额，只显示账号成本。管理员可在用户管理设置角色，在账号列表查看/过滤/指派归属供应商。方案见 [供应商角色](.github/geili/supplier-role.md)。
 
@@ -9,7 +9,7 @@
 - 候选 revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7`；镜像 `ghcr.io/qingsiliu/sub2api@sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。候选 CI 38843372886 全部 9 任务通过（含 PostgreSQL integration）；上游 CI 的 golangci-lint 失败（主干长期失败，本批新增 6 条，含严格透传未检查 `WriteString` 与未使用的 `replaceAllBytes`）。
 - 已经正式入口部署 Stage：健康 200、版本正确、生产指纹不变。同镜像合成验收全部通过：迁移结构 24、非支付业务 51、上游增量 36、双实例缓存 17、容灾 50；4×1000 全 200，p95 增量 -1255.780ms、吞吐比 1.40443（门槛 ≤10ms / ≥0.98），夹具全部恢复。记录见运维仓 `docs/reports/supplier-strict-v17-20261016/`。
 - 续接验收：本镜像供应商 Stage 39 项、1440/390 页面18项、生产保全14项通过，总计249项 Stage 检查；合成使用记录精确移除，自有账号停用、用户禁用，原首轮缺少分组的失败报告保留。独立v26契约绑定当前候选/CI/原始报告SHA256/24小时内时间与恢复结果；生产预备份 `/root/backups/geili-supplier-strict-v17-preflight-20261016T065244Z`。生产原345份迁移不变，本次新增282运行时及283供应商归属后为347份。
-- 未上生产。严格透传真实验收已按当次用户要求排除，不启用任何账号严格模式；当前证明 `production_ready=false`，仍待当次明确生产授权。证据与恢复详情见运维仓 `docs/reports/supplier-strict-v17-20261016/`，不复用旧候选结果。
+- 已按用户当次生产授权及知悉旧`.16` OOM后的继续授权，经正式prod入口将Stage同digest发布生产，恢复健康9.883秒；22项生产保全与10项公网版本/鉴权检查通过，347迁移、新增约束与触发器有效，原345账本、PG/Redis、Stage、相邻应用与env/config/Nginx保持，Compose只换app镜像。新预备份 `/root/backups/geili-supplier-strict-v17-preflight-20261016T065915Z`、正式备份 `/root/backups/subscription-prod-image-bump-20261016T070058Z`。发布前旧`.16`于14:53:48达到6GiB内存限额后OOM自动重启；21项新基线比对通过，原事件、旧快照与失败报告保留，不声称本版已修复OOM。严格透传真实验收按用户要求排除，不启用任何账号严格模式；支付/真实供应商/媒体未执行。回退`.16`镜像保留新增表与业务数据，不整库回灌。证据见运维仓 `docs/reports/supplier-strict-v17-20261016/`。
 
 ## 0.2.16-geili.16（GPT 持久异步图生图，已发布Stage和生产）
 
