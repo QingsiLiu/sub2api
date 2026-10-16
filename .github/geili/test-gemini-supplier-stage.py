@@ -108,6 +108,28 @@ class FixtureTests(unittest.TestCase):
         fixture.api = api
         return fixture
 
+    def test_client_errors_use_supported_exact_key_filter_and_client_status(self):
+        f = self.fixture()
+        paths = []
+        def api(path, **kwargs):
+            paths.append(path)
+            if path == '/admin/ops/errors?view=all&api_key_id=11':
+                return {'items': []}
+            # The request-errors endpoint silently ignores this query argument.
+            return {'items': [{'api_key_id': 99, 'client_status_code': 403}]}
+        f.api = api
+        self.assertEqual(f.client_error_rows(11), [])
+        self.assertEqual(paths, ['/admin/ops/errors?view=all&api_key_id=11'])
+        for row in ({'api_key_id': 99, 'client_status_code': 403},
+                    {'api_key_id': 11, 'client_status_code': 200, 'upstream_status_code': 400},
+                    {'api_key_id': 11, 'upstream_status_code': 400}):
+            f.api = lambda *a, **kw: {'items': [row]}
+            with self.subTest(row=row), self.assertRaises(RuntimeError):
+                f.client_error_rows(11)
+        valid = {'api_key_id': 11, 'client_status_code': 503, 'upstream_status_code': 400}
+        f.api = lambda *a, **kw: {'items': [valid]}
+        self.assertEqual(f.client_error_rows(11), [valid])
+
     def test_fixture_uses_only_gemini_mock_pool_retries_and_valid_balance_key(self):
         f = self.fixture(); key, accounts = f.new_case('unit', 'cross-group')
         groups = [body for path, body in f.writes if path == '/admin/groups']

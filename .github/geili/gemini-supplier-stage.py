@@ -263,8 +263,18 @@ def fixture_type(cache, source):
             else:
                 self.check(label + ': failure creates no successful usage or settlement', self.sql(query)[0] == {'logs': 0, 'receipts': 0, 'settled': 0})
 
+        def client_error_rows(self, key_id):
+            exact_ids([key_id])
+            # The legacy endpoint supports exact Key filtering and excludes
+            # recovered upstream events. request-errors ignores api_key_id.
+            rows = self.api('/admin/ops/errors?view=all&api_key_id=' + str(key_id), token=self.admin).get('items')
+            if not isinstance(rows, list) or any(r.get('api_key_id') != key_id
+                    or type(r.get('client_status_code')) is not int or r['client_status_code'] < 400 for r in rows):
+                raise RuntimeError('client error query returned unrelated or recovered rows')
+            return rows
+
         def check_errors(self, label, key, expected_status, expected_upstream):
-            rows = self.eventually(label + ' error log', lambda: self.api('/admin/ops/request-errors?view=all&api_key_id=' + str(key['id']), token=self.admin).get('items'))
+            rows = self.eventually(label + ' error log', lambda: self.client_error_rows(key['id']))
             self.check(label + ': one client error row', len(rows) == 1)
             row = rows[0]
             self.check(label + ': list distinguishes client and final upstream', row.get('client_status_code') == expected_status and row.get('upstream_status_code') == expected_upstream and row['status_code'] == expected_upstream)
@@ -303,7 +313,7 @@ def fixture_type(cache, source):
                             self.check_errors(label, key, expected, 400)
                         self.check_accounting(label, key, successful)
                         if successful:
-                            request_errors = self.api('/admin/ops/request-errors?view=all&api_key_id=' + str(key['id']), token=self.admin).get('items')
+                            request_errors = self.client_error_rows(key['id'])
                             self.check(label + ': recovered attempts are not failed client requests', request_errors == [])
                         ids = exact_ids([a['id'] for a in accounts])
                         state = self.sql("SELECT json_build_object('id',id,'status',status,'schedulable',schedulable) FROM accounts WHERE id IN (" + ids + ');')
