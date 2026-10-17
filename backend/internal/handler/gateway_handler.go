@@ -1993,6 +1993,10 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 	if service.WriteStrictAnthropicFailoverGeili(c, failoverErr, streamStarted) {
 		return
 	}
+	// geili hook: a Bedrock-only validation error keeps its native 400 once every account rejects it.
+	if service.WriteAnthropicChannelIncompatibleExhaustedGeili(c, failoverErr, streamStarted) {
+		return
+	}
 	statusCode := failoverErr.StatusCode
 	responseBody := failoverErr.ResponseBody
 	if service.IsOpenAISilentRefusalErrorBody(responseBody) {

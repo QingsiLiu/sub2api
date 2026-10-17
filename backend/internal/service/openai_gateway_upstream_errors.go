@@ -255,6 +255,10 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Acc
 	if isOpenAIInstantInferenceQuotaError(upstreamMsg, upstreamBody) {
 		return true
 	}
+	// geili hook: a project-level service_tier denial is valid on other accounts.
+	if isOpenAIServiceTierNotAllowedGeili(statusCode, upstreamBody) {
+		return true
+	}
 	// cyber_policy is request-scoped even when an intermediary wraps the
 	// provider response in a retryable 5xx status. Never punish or rotate the
 	// selected credential for it.

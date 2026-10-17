@@ -29,3 +29,22 @@
 
 - 换号耗尽时若失败账号里含"本轮被跳过的饱和账号"，可对它们做短冷却，避免下一个请求再次先选中。
 - 中转欠费文本若出现新的固定模板，按同一"结构化字段 + 精确模板"方式扩展，不做模糊匹配。
+
+## 第二批（2026-10-18）
+
+### OpenAI `service_tier` 被项目拒绝
+
+- 现象：用户 3885 用 Codex Desktop 开快速模式（`service_tier=priority`），账号 6217 `gpt-官-SGAPI` 从 10-16 18:17 起返回 400 `Invalid service_tier argument: The requested service tier is not allowed for this project.`（`param=service_tier`）。此前 7 天该号有 134 次 priority 成功，最后一次 10-16 11:48，推测上游项目权限被调整。7 天共 6 次，全部为该用户、该账号。
+- 处理（`openai_service_tier_failover_geili.go`）：只认 400 + `error.param=service_tier` + "service tier is not allowed" 文案，普通 HTTP 与自动透传两条路径都在当前请求内换号；不改账号状态，不改写用户请求。全部账号都拒绝时原样回写这条 400（结构化 type/param/message），不会被映射成泛化的 502。
+- 不做：所有账号拒绝时去掉 `service_tier` 重发。那会把用户的快速模式悄悄降成普通模式并改变计费，需要单独授权。同组另外三个账号近 24 小时只有 `default` 成功记录，无法确认它们接受 priority。
+
+### Bedrock 渠道校验 400
+
+- 现象：`cc-官-ps`(6314)、`cc-aws-apizn`(6418) 背后是 Bedrock，Claude Code 新字段/新 beta（`output_config.format`、`redact-thinking-2026-02-12`、`prompt-caching-scope-2026-01-05`、`thinking-token-count-2026-05-13` 等）会得到 `Bedrock Runtime … ValidationException: … Extra inputs are not permitted` 或 `Unexpected value(s) … anthropic-beta`。7 天约 70 次，均同一用户；直连 Anthropic 账号可以正常处理同一请求。
+- 处理（扩展 `gateway_anthropic_account_failure_geili.go`）：只认同时带 `Bedrock Runtime` 与 `ValidationException:` 信封、且为 extra input / anthropic-beta 不支持的 400，当前请求换号。`prompt is too long`、`tool_choice` 不支持等 Bedrock 请求本身问题、以及直连 Anthropic 返回的同类 400 都保持原样不换号。该失败不计入账号调度健康（`ShouldReportAccountScheduleFailure=false`），全部账号拒绝时原样回写原生 400。
+- 不做：在网关里替 Bedrock 账号删字段。字段语义（如结构化输出 `output_config.format`）删除后结果会变，需要逐字段评估。
+
+### 验收
+
+- 新增正负例：`service_tier` 拒绝/非法 tier 值/其他 param/提示词回显/纯文本/非 400；Bedrock extra input 与 beta 拒绝命中，直连 Anthropic extra input、Bedrock prompt too long、tool_choice 不命中；两种耗尽回写均为原生 400。
+- `go test -tags=unit ./internal/service/ ./internal/handler/... ./internal/server/...` 与无 tag 的 service/handler 全部通过，`gofmt` 无差异；未部署 Stage/生产，未分配版本号。

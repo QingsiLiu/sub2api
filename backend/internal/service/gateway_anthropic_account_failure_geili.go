@@ -25,6 +25,20 @@ var anthropicAccountQuotaMarkersGeili = []string{
 
 const anthropicAccountScopedMaxMessageGeili = 4096
 
+// anthropicChannelIncompatibleReasonGeili: a Bedrock-backed relay rejected an
+// Anthropic API field or beta that Bedrock lacks. A direct account can serve it.
+const anthropicChannelIncompatibleReasonGeili GatewayFailureReason = "upstream_channel_incompatible"
+
+// isBedrockChannelValidationGeili matches only the Bedrock Runtime validation
+// envelope, so a direct Anthropic 400 for the same field stays final.
+func isBedrockChannelValidationGeili(lower string) bool {
+	if !strings.Contains(lower, "bedrock runtime") || !strings.Contains(lower, "validationexception:") {
+		return false
+	}
+	return strings.Contains(lower, "extra inputs are not permitted") ||
+		(strings.Contains(lower, "unexpected value(s)") && strings.Contains(lower, "anthropic-beta"))
+}
+
 // classifyAnthropicAccountScopedFailureGeili inspects structured error fields
 // only. Echoed prompts, HTML and plain-text bodies are never evidence.
 func classifyAnthropicAccountScopedFailureGeili(status int, body []byte) (reason GatewayFailureReason, matched bool) {
@@ -55,6 +69,9 @@ func classifyAnthropicAccountScopedFailureGeili(status int, body []byte) (reason
 		if strings.Contains(lower, marker) {
 			return geminiSupplierCapacityReasonGeili, true
 		}
+	}
+	if status == http.StatusBadRequest && isBedrockChannelValidationGeili(lower) {
+		return anthropicChannelIncompatibleReasonGeili, true
 	}
 	return "", false
 }
@@ -123,4 +140,15 @@ func isAnthropicAccountScopedFailureGeili(account *Account, status int, body []b
 	}
 	_, matched := classifyAnthropicAccountScopedFailureGeili(status, body)
 	return matched
+}
+
+// WriteAnthropicChannelIncompatibleExhaustedGeili keeps the native 400 the
+// client received before this failover existed, once every account rejected it.
+func WriteAnthropicChannelIncompatibleExhaustedGeili(c *gin.Context, failoverErr *UpstreamFailoverError, streamStarted bool) bool {
+	if c == nil || failoverErr == nil || failoverErr.Reason != anthropicChannelIncompatibleReasonGeili || streamStarted || c.Writer.Written() {
+		return false
+	}
+	SetOpsUpstreamError(c, failoverErr.StatusCode, sanitizeUpstreamErrorMessage(extractUpstreamErrorMessage(failoverErr.ResponseBody)), "")
+	c.Data(failoverErr.StatusCode, "application/json", failoverErr.ResponseBody)
+	return true
 }

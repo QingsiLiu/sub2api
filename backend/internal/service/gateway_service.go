@@ -730,7 +730,7 @@ func (e *UpstreamFailoverError) IsCredentialFailure() bool {
 // and inference failures retain their existing scheduler-health behavior.
 func (e *UpstreamFailoverError) ShouldReportAccountScheduleFailure() bool {
 	// geili hook: a local protocol veto did not contact or fail the upstream.
-	if e == nil || IsGeminiSupplierUnavailableGeili(e) || e.Reason == openAIToolProtocolFailureReason || e.Reason == accountRuntimeAdmissionReasonGeili {
+	if e == nil || IsGeminiSupplierUnavailableGeili(e) || e.Reason == openAIToolProtocolFailureReason || e.Reason == accountRuntimeAdmissionReasonGeili || e.Reason == anthropicChannelIncompatibleReasonGeili {
 		return false
 	}
 	return !e.IsCredentialFailure() || e.Scope == GatewayFailureScopeAccount

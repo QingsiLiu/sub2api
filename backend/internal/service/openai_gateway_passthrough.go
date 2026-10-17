@@ -824,6 +824,10 @@ func shouldFailoverOpenAIPassthroughResponse(account *Account, statusCode int, r
 	if isOpenAIInstantInferenceQuotaError("", responseBody) {
 		return true
 	}
+	// geili hook: a project-level service_tier denial is valid on other accounts.
+	if isOpenAIServiceTierNotAllowedGeili(statusCode, responseBody) {
+		return true
+	}
 	if hit, _, _ := detectOpenAICyberPolicy(responseBody); hit {
 		return false
 	}
