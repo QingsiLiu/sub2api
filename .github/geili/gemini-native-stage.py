@@ -29,6 +29,8 @@ NAMES = ('fixture_lookup', 'fixture_other')
 PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
 SCHEMA = {'type': 'object', 'properties': {'value': {'type': 'string'}}, 'required': ['value'], 'additionalProperties': False}
 PROTOCOLS = ('responses', 'chat/completions')
+# The product caps API key creation per user per hour (default 60); rotate owners below it.
+KEY_SLOT_SIZE = 40
 THINKING_MODEL = 'gemini-3-flash-preview'
 
 
@@ -260,6 +262,16 @@ def fixture_type(cache, source):
                         self.connection.close()
             self.server.RequestHandlerClass = NativeMock
 
+        def key_owner(self):
+            # One key per scenario exceeds api_key_create.max_per_user_per_hour (default
+            # 60). Rotate owned synthetic users instead of relaxing the candidate limit.
+            if not hasattr(self, '_key_owners'):
+                self._key_owners = [self.owner]
+            slot = len(self.native_modes) // KEY_SLOT_SIZE
+            while len(self._key_owners) <= slot:
+                self._key_owners.append(self.user('native-keys-' + str(len(self._key_owners))))
+            return self._key_owners[slot]['token']
+
         def new_native_case(self, label, mode):
             group = self.group(label)
             self.native_modes[label] = mode
@@ -270,7 +282,7 @@ def fixture_type(cache, source):
             self.snapshot['gemini_supplier_accounts'][str(account['id'])] = account['name']
             cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
             return self.api('/keys', {'name': 'Gemini native ' + label, 'billing_source': 'balance',
-                'routing_mode': 'single', 'group_id': group['id'], 'quota': 1}, self.owner['token'])
+                'routing_mode': 'single', 'group_id': group['id'], 'quota': 1}, self.key_owner())
 
         def call(self, protocol, data, key, secondary):
             self.synthetic_requests += 1
