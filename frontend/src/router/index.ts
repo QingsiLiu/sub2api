@@ -508,7 +508,7 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'nav.channelStatus'
     }
   },
-  // geili hook: native GPT group IQ monitor (replaces the /gpt-iq-monitor/ iframe page).
+  // geili hook: GPT group IQ monitor (native sidebar page).
   {
     path: '/gpt-iq',
     name: 'GptIqMonitor',
