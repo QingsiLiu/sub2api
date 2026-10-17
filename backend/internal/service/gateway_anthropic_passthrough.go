@@ -179,7 +179,8 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		if readErr != nil {
 			return nil, readErr
 		}
-		if resp.StatusCode >= 400 && s.shouldFailoverUpstreamError(resp.StatusCode) {
+		// geili hook: relay key quota / unsupported model also move to another account.
+		if resp.StatusCode >= 400 && (s.shouldFailoverUpstreamError(resp.StatusCode) || isAnthropicAccountScopedFailureGeili(account, resp.StatusCode, body)) {
 			return nil, s.strictAnthropicFailoverGeili(ctx, c, account, resp, upstreamReq, body, input.RequestModel)
 		}
 		if s.rateLimitService != nil && resp.StatusCode >= 400 {

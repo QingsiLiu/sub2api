@@ -678,6 +678,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	pricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
 	c.Request = c.Request.WithContext(pricingCtx)
 
+	enableOpenAISlotBusyFailoverGeili(c) // geili hook: saturated accounts try another account
 	for {
 		defer armRequestRecoveryAttempt(c)()
 		// Streaming Forward intentionally detaches the upstream request so usage can
@@ -729,6 +730,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
 				}
 				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
+				return
+			}
+			// geili hook: only saturated accounts were excluded; keep their original error.
+			if lastFailoverErr == nil && writeOpenAISlotBusyExhaustedGeili(c) {
 				return
 			}
 			if lastFailoverErr != nil {
@@ -796,9 +801,15 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 			continue
 		}
+		// geili hook: a saturated account is excluded for this request only.
+		if slotResult == openAISlotAcquireBusyGeili {
+			failedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		if slotResult != openAISlotAcquireOK {
 			return
 		}
+		clearOpenAISlotBusyGeili(c)
 
 		// Forward request
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
@@ -2428,6 +2439,12 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 			zap.Int64("account_id", account.ID),
 			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
 		)
+		// geili hook: one full account queue lets the request try another account.
+		if deferOpenAISlotBusyGeili(c, func() {
+			writeError(http.StatusTooManyRequests, "rate_limit_error", gatewayQueueFullCode, "Too many pending requests, please retry later")
+		}) {
+			return nil, openAISlotAcquireBusyGeili
+		}
 		writeError(http.StatusTooManyRequests, "rate_limit_error", gatewayQueueFullCode, "Too many pending requests, please retry later")
 		return nil, openAISlotAcquireFailed
 	}
@@ -2452,6 +2469,10 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 	if err != nil {
 		reqLog.Warn("openai.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		status, errType, code, message := concurrencyErrorResponse(err, "account")
+		// geili hook: only a saturated slot (never cancellation) moves to another account.
+		if code == gatewayConcurrencyLimitCode && deferOpenAISlotBusyGeili(c, func() { writeError(status, errType, code, message) }) {
+			return nil, openAISlotAcquireBusyGeili
+		}
 		writeError(status, errType, code, message)
 		return nil, openAISlotAcquireFailed
 	}

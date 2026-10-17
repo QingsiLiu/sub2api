@@ -179,6 +179,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	ccPricingCtx, pricingAt := h.gatewayService.WithOpenAIRequestPricingContext(c.Request.Context(), apiKey.GroupID)
 	c.Request = c.Request.WithContext(ccPricingCtx)
 
+	enableOpenAISlotBusyFailoverGeili(c) // geili hook: saturated accounts try another account
 	for {
 		defer armRequestRecoveryAttempt(c)()
 		if failoverClientGone(c) {
@@ -217,6 +218,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
 				return
 			} else {
+				// geili hook: only saturated accounts were excluded; keep their original error.
+				if lastFailoverErr == nil && writeOpenAISlotBusyExhaustedGeili(c) {
+					return
+				}
 				if lastFailoverErr != nil {
 					h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
 				} else {
@@ -248,9 +253,15 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			}
 			continue
 		}
+		// geili hook: a saturated account is excluded for this request only.
+		if slotResult == openAISlotAcquireBusyGeili {
+			failedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		if slotResult != openAISlotAcquireOK {
 			return
 		}
+		clearOpenAISlotBusyGeili(c)
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()

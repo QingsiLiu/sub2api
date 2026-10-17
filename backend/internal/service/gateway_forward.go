@@ -690,6 +690,11 @@ func (s *GatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.Context
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// geili hook: relay key quota / unsupported model fail over within this request.
+	if failoverErr := s.anthropicAccountScopedFailoverGeili(ctx, c, account, resp, reqModel); failoverErr != nil {
+		return nil, failoverErr
+	}
+
 	// 处理重试耗尽的情况
 	if resp.StatusCode >= 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
