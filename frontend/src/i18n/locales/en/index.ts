@@ -10,10 +10,12 @@ import subscriptionRights from './subscriptionRights'
 
 import responseAudit from './responseAudit'
 import supplier from './supplier'
+import gptIq from './gptIq'
 
 export default {
   ...responseAudit,
   ...supplier,
+  ...gptIq,
   ...subscriptionRights,
   ...landing,
   ...common,

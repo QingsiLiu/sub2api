@@ -508,6 +508,19 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'nav.channelStatus'
     }
   },
+  // geili hook: native GPT group IQ monitor (replaces the /gpt-iq-monitor/ iframe page).
+  {
+    path: '/gpt-iq',
+    name: 'GptIqMonitor',
+    component: () => import('@/views/user/GptIqMonitorView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'GPT IQ Monitor',
+      titleKey: 'gptIq.nav',
+      descriptionKey: 'gptIq.description'
+    }
+  },
   {
     path: '/admin/subscriptions',
     name: 'AdminSubscriptions',

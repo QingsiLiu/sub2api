@@ -657,6 +657,26 @@ const SignalIcon = {
     )
 }
 
+// geili hook: GPT IQ monitor nav icon and legacy iframe entry detection.
+const PulseIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3 12h4l2.5-6 5 12 2.5-6H21'
+        })
+      ]
+    )
+}
+
+function isLegacyGptIqMenuItem(url?: string): boolean {
+  return /\/gpt-iq-monitor\/?(?:[?#]|$)/.test(url || '')
+}
+
 const ShieldIcon = {
   render: () =>
     h(
@@ -763,6 +783,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
       icon: null,
       iconSvg: item.icon_svg,
     })),
+    // geili hook: native GPT IQ monitor, kept last where the old iframe entry sat.
+    { path: '/gpt-iq', label: t('gptIq.nav'), icon: PulseIcon },
   )
   return items
 }
@@ -792,6 +814,8 @@ const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
   return items
     .filter((item) => item.visibility === 'user')
+    // geili hook: the old iframe entry is superseded by the native /gpt-iq page.
+    .filter((item) => !isLegacyGptIqMenuItem(item.url))
     .sort((a, b) => a.sort_order - b.sort_order)
 })
 
