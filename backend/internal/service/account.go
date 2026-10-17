@@ -630,6 +630,8 @@ func stringMappingFromRaw(raw any) map[string]string {
 }
 
 func (a *Account) GetModelMapping() map[string]string {
+	// geili hook: one Account is shared by concurrent requests; serialize the cache fill.
+	defer lockAccountCache(a)()
 	runtimeVersion := xai.RuntimeModelMappingVersion()
 	credentialsPtr := mapPtr(a.Credentials)
 	rawMapping, _ := a.Credentials["model_mapping"].(map[string]any)

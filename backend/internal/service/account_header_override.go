@@ -111,6 +111,9 @@ func (a *Account) GetHeaderOverrides() map[string]string {
 		return resolveHeaderOverrides(stringMappingFromRaw(a.Credentials[credKeyHeaderOverrides]))
 	}
 
+	// geili hook: one Account is shared by concurrent requests; serialize the cache fill.
+	defer lockAccountCache(a)()
+
 	credentialsPtr := mapPtr(a.Credentials)
 	rawPtr := mapPtr(rawMapping)
 	rawLen := len(rawMapping)
