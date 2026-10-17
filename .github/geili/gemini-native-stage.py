@@ -269,7 +269,11 @@ def fixture_type(cache, source):
                 self._key_owners = [self.owner]
             slot = len(self.native_modes) // KEY_SLOT_SIZE
             while len(self._key_owners) <= slot:
-                self._key_owners.append(self.user('native-keys-' + str(len(self._key_owners))))
+                owner = self.user('native-keys-' + str(len(self._key_owners)))
+                # Same mock-only funding as the primary owner; balance keys are rejected at 0.
+                self.api('/admin/users/' + str(owner['id']) + '/balance',
+                         {'balance': 100, 'operation': 'set', 'notes': 'Owned mock-only Gemini acceptance; no payment'}, self.admin)
+                self._key_owners.append(owner)
             return self._key_owners[slot]['token']
 
         def new_native_case(self, label, mode):
