@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -171,7 +170,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	body = parsedReq.Body.Bytes()
-	routedRequestBody := bytes.Clone(body)
+	// geili hook: detect later in-place rewrites without retaining a second large body.
+	routedRequestBody := snapshotAnthropicRoutedBodyGeili(body)
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
 	bindRequestedReasoningEffort(c, body, reqModel)
@@ -941,7 +941,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 				return
 			}
-			if account.IsAnthropicAPIKeyPassthroughEnabled() && !useStrictAnthropicBody(attemptParsedReq, routedRequestBody, clientRequestBody) {
+			if account.IsAnthropicAPIKeyPassthroughEnabled() && !useStrictAnthropicBodySnapshotGeili(attemptParsedReq, routedRequestBody, clientRequestBody) {
 				if queueRelease != nil {
 					queueRelease()
 				}

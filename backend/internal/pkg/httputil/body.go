@@ -93,7 +93,7 @@ func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
 		return raw, nil
 	}
 
-	decoded, err := decompressRequestBody(enc, raw)
+	decoded, err := decompressRequestBodyWithReservationGeili(enc, raw, req.Body)
 	if err != nil {
 		return nil, fmt.Errorf("decode Content-Encoding %q: %w", enc, err)
 	}
@@ -117,6 +117,8 @@ func readRequestBodyChunks(reader io.Reader, initialCapacity int, contentLength 
 		if remaining := contentLength - int64(total); remaining >= 0 && remaining < int64(chunkCapacity) {
 			chunkCapacity = int(remaining) + 1
 		}
+		// geili hook: reserve ingress capacity before allocating the next chunk.
+		chunkCapacity = requestBodyReadChunkCapacityGeili(reader, chunkCapacity)
 		chunk := make([]byte, chunkCapacity)
 		n := 0
 		var err error
@@ -166,28 +168,40 @@ func ReadLenientJSONRequestBodyWithPrealloc(req *http.Request, maxNormalizedByte
 }
 
 func decompressRequestBody(encoding string, raw []byte) ([]byte, error) {
+	return decompressRequestBodyWithReservationGeili(encoding, raw, nil)
+}
+
+func decompressRequestBodyWithReservationGeili(encoding string, raw []byte, bodyReader io.Reader) ([]byte, error) {
+	// geili hook: reserve decoder workspace before it can allocate, then meter
+	// decoded chunks and their final assembly independently of compressed size.
+	budget, err := requestBodyDecompressionBudgetForGeili(bodyReader, encoding)
+	if err != nil {
+		return nil, err
+	}
 	switch encoding {
 	case "zstd":
-		dec, err := zstd.NewReader(bytes.NewReader(raw))
+		// geili hook: keep streaming decoder history within the existing decoded
+		// body bound; the library default can otherwise allocate a 512 MiB window.
+		dec, err := zstd.NewReader(bytes.NewReader(raw), zstd.WithDecoderMaxMemory(uint64(maxDecompressedBodySize)), zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
 		if err != nil {
 			return nil, err
 		}
 		defer dec.Close()
-		return io.ReadAll(io.LimitReader(dec, maxDecompressedBodySize))
+		return readDecompressedRequestBodyGeili(dec, budget)
 	case "gzip", "x-gzip":
 		gr, err := gzip.NewReader(bytes.NewReader(raw))
 		if err != nil {
 			return nil, err
 		}
 		defer func() { _ = gr.Close() }()
-		return io.ReadAll(io.LimitReader(gr, maxDecompressedBodySize))
+		return readDecompressedRequestBodyGeili(gr, budget)
 	case "deflate":
 		zr, err := zlib.NewReader(bytes.NewReader(raw))
 		if err != nil {
 			return nil, err
 		}
 		defer func() { _ = zr.Close() }()
-		return io.ReadAll(io.LimitReader(zr, maxDecompressedBodySize))
+		return readDecompressedRequestBodyGeili(zr, budget)
 	default:
 		return nil, errors.New("unsupported Content-Encoding")
 	}

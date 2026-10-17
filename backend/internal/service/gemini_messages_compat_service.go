@@ -3620,6 +3620,10 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 }
 
 func normalizeGeminiRequestForAIStudio(body []byte) []byte {
+	// geili hook: keep large no-tools payloads out of the full JSON decode path.
+	if !geminiAIStudioToolsMayNeedNormalizationGeili(body) {
+		return body
+	}
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return body

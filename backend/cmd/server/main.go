@@ -66,6 +66,9 @@ func main() {
 		return
 	}
 
+	// geili hook: leave GC headroom below a finite container hard limit.
+	configureContainerMemoryGeili()
+
 	// CLI setup mode
 	if *setupMode {
 		if err := setup.RunCLI(); err != nil {
