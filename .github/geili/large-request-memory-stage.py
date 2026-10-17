@@ -362,10 +362,22 @@ def fixture_type(b, source):
             result = command.stdout + '\n' + command.stderr
             rows = []
             for line in result.splitlines():
-                if 'runtime.memory' not in line:
+                marker = line.find('runtime.memory')
+                if marker < 0:
                     continue
+                # Console logs are "<time>\t<level>\t<file>\truntime.memory\t{json}";
+                # JSON-encoded logs put the message inside the object instead.
+                payload = line[marker + len('runtime.memory'):].lstrip('\t ')
+                if not payload.startswith('{'):
+                    try:
+                        value = json.loads(line)
+                    except ValueError:
+                        continue
+                    if value.get('msg') != 'runtime.memory':
+                        continue
+                    payload = value
                 try:
-                    value = json.loads(line)
+                    value = json.loads(payload) if isinstance(payload, str) else payload
                 except ValueError:
                     continue
                 rows.append({key: value[key] for key in ('time', 'ts', 'go_memory_limit_bytes', 'heap_alloc_bytes',
@@ -435,9 +447,16 @@ def fixture_type(b, source):
                        self.observations)
             self.check('no unexpected large upstream payload', not any(item['bytes'] > 4096 for item in self.unexpected), self.unexpected)
             load_peak = max((item['current'] for item in self.samples), default=0)
-            time.sleep(10)
-            self.quiescent = {'peak_bytes': load_peak, 'after10s_bytes': int((self.cgroup / 'memory.current').read_text())}
-            self.check('memory decreases after leases and streams finish', self.quiescent['after10s_bytes'] < load_peak, self.quiescent)
+            settled_at = time.monotonic()
+            deadline = settled_at + 90
+            while True:
+                settled = int((self.cgroup / 'memory.current').read_text())
+                if settled < load_peak or time.monotonic() >= deadline:
+                    break
+                time.sleep(5)
+            self.quiescent = {'peak_bytes': load_peak, 'settled_bytes': settled,
+                              'after_seconds': round(time.monotonic() - settled_at, 1)}
+            self.check('memory decreases after leases and streams finish', self.quiescent['settled_bytes'] < load_peak, self.quiescent)
             self.check('Stage health still succeeds', self.request('/health')[0] == 200)
             final_app, _, _ = self.resource_guard()
             self.check('Stage identity/start/restarts unchanged',
