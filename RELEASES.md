@@ -1,11 +1,15 @@
-## 0.2.16-geili.22（全主干：Gemini 原生适配 + 大请求内存保护 + 智商监控原生页，待 CI/Stage）
+## 0.2.16-geili.22（全主干：Gemini 原生适配 + 大请求内存保护 + 智商监控原生页 + service_tier/Bedrock 换号，已发布 Stage 和生产）
 
 按用户要求把 `.21` 内存修复直接合入 `geili/main`，与主干上一并只发一次，不再单独发两个候选。相对生产 `.17`，本候选同时包含：
 
 - **已入主干的 `.18`/`.19`/`.20` Gemini 改动**：供应商故障恢复、原生 Responses/Chat 转换、可空参数按未提供处理。原候选的独立 CI/Stage 证据不再适用，本候选必须整体重做 Stage 业务、双实例、容灾和性能验收。
 - **`.21` 大请求内存保护**（内容见下一节）：Messages 用不可变摘要替代整份路由正文副本，Gemini 无工具请求避免全量解码；容器默认 75% Go 软内存目标、1/12 原始正文总字节准入，超载在供应商调用/计费之前返回可重试 503。
 - **智商监控原生页**：侧栏「GPT智商」改为控制台原生 `/gpt-iq`，只保留这一版；数据仍取同源探测服务 `/gpt-iq-monitor/api/`（运维仓 `apps/gpt-iq-monitor-service`），该服务 401 只在页内提示，不触发控制台登出。无后端、迁移或计费改动。旧 iframe 自定义菜单项由发行时删除 settings 记录下线，运维仓同时把 `/gpt-iq-monitor/` 301 到 `/gpt-iq`。
-- 生产基线 revision `c058cf8d277d3e9725eb3b1329e36eefdeb79ca7` / digest `sha256:2fb6369c592b2bb37856239eacf8c87c32eecf4741f99fe23346f8cedbc52547`。本候选 revision、CI 与镜像 digest 待实际结果追加；`backend/cmd/server/VERSION` 已改为 `0.2.16-geili.22`。
+- **Account 懒缓存竞态修复**（`608c227ca`）：首个 `.22` 候选的 gateway_race 报 `GetModelMapping`/`GetHeaderOverrides` 懒缓存真实数据竞争；同一 `*Account` 被并发请求共享，改为按账号指针分片加锁。
+- **service_tier 拒绝与 Bedrock 渠道校验 400 请求内换号**（`e600fb993`，验收中途由另一会话推入，用户要求一并发布、只补测新增功能）。
+- 发布 revision `e819adf7f2c54ac2fe6904f27a1d78832ae6d5df` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:bc9668c026252f3b331dc7ef21ea456cec5cad4f386de197bce953ccd5de9e4e`，候选 CI 39060727560 全部 9 任务/13 门禁通过。生产基线 `.17` / `c058cf8d2` / `2fb6369c`。
+- Stage：最终候选上非支付业务 51、新增换号 15、Gemini 原生矩阵 426 项/82 场景、迁移结构通过；上游增量 36、双实例 17、Gemini 供应商 258、内存保护 39、容灾+性能 50（p95 +3.2ms、吞吐比 0.996）在 `4a998b454` 上通过，契约 v30 用 Git 固定其与最终候选只差 `e600fb993` 及一个验收脚本。未通过的原始尝试全部保留，详见运维仓 `docs/reports/full-main-v22-20261018/`。
+- 生产：2026-10-18 05:37Z 经正式入口发布同 digest，停机 9.5 秒，PG/Redis 指纹不变，重启 0。旧「GPT智商」iframe 菜单项已删、`/gpt-iq-monitor/` 301 到 `/gpt-iq`。支付、真实供应商、真实媒体未执行。
 - 无新增迁移、客户账号/Key/价卡变更，无真实付费供应商/支付/媒体调用；生产发布需要验收完成后的当次明确授权。Stage 若未反代 `/gpt-iq-monitor/api/`，原生页只显示「读取失败」，不影响其他功能。
 
 ## 0.2.16-geili.21（大请求内存保护，隔离候选，已被 .22 接管，未部署生产）
