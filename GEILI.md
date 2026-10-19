@@ -4,9 +4,9 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 ## 当前基线
 
-- 当前 `0.2.17-geili.1` 候选固定 `681c9385e56492cfd5de6a4a04ecc664f0979918` / `7c3ff7ade6a97b697bdd85fa2ce2c2562e0fb2ecd68f4da60baf416e9a24fb74`，已通过CI9任务/13门禁，准备Stage，生产仍`.23`。保留完整Geili与蓝绿排空，后续文档CI不得替换该digest；验收及生产实际状态见RELEASES.md顶部。用户本次已授权验证后不停机试发。
+- 当前生产 `0.2.17-geili.1` 固定 `681c9385e56492cfd5de6a4a04ecc664f0979918` / `7c3ff7ade6a97b697bdd85fa2ce2c2562e0fb2ecd68f4da60baf416e9a24fb74`，已通过CI9任务/13门禁及同镜像完整Stage，13:54:50Z已平滑切流生产，14:01:01Z完成canonical恢复接入。原始`.23`保留并负责后台，新版后台暂停，实际`legacy_retained`，下一次发布被阻止，未完成旧实例回收。保留完整Geili与蓝绿排空，后续文档CI不得替换该digest；验收及生产实际状态见RELEASES.md顶部。用户本次已授权验证后不停机试发。
 
-- 2026-10-19最新基线：生产`.23` / `94f3b743d03e8775ab0b54efaf7249cad166a183` / `ee14e1c23e74398b6a0cd648c4cd8146febb3f9fc5c30cd83a888dd1c1a6ff4c`，蓝绿候选`.24` / `d0107479ed89969d8415ca0c29b013ad443a255b` / `bf08ef0db00dc9037430e2c990fea611f498e5d9753938e47aa739c41be54993`已Stage、未生产。只固定验收镜像，不按后续文档提交的CI或VERSION选制品。发布设计见`.github/geili/bluegreen-release.md`，实际状态以RELEASES.md顶部及运维仓本次原始报告为准；以下旧候选说明保留为历史。
+- 2026-10-19早期历史基线（已被上条`.1`接管）：生产`.23` / `94f3b743d03e8775ab0b54efaf7249cad166a183` / `ee14e1c23e74398b6a0cd648c4cd8146febb3f9fc5c30cd83a888dd1c1a6ff4c`，蓝绿候选`.24` / `d0107479ed89969d8415ca0c29b013ad443a255b` / `bf08ef0db00dc9037430e2c990fea611f498e5d9753938e47aa739c41be54993`已Stage、未生产。只固定验收镜像，不按后续文档提交的CI或VERSION选制品。发布设计见`.github/geili/bluegreen-release.md`，实际状态以RELEASES.md顶部及运维仓本次原始报告为准；以下旧候选说明保留为历史。
 
 - GPT持久异步图生图固定隔离候选`.16` / `4a00d7a6c9780d185f7b8a1861780b8f7867adaa` / `sha256:2508a6966a5895df2f9d8670b9dc3100f1078a7a2d52645de6b1e0665efd745c`直接继承生产`.7`及`.12`，不含主干待验`.14`/`.15`。CI9任务/13门禁、同镜像382项Stage、最终三模型1K/2K/4K生成/编辑18规格通过；实际19次含原4K/high失败退款1，原失败保持。网页保持只选分辨率/比例/张数，内部1K/low、2K/medium、4K/low，R2主站GET/HEAD与192项网页测试/build通过；9张编辑视觉通过，自有Stage资源恢复，实扣USD0.78/退0.07。v25正式生产证明通过，按用户10月16日当次授权已由canonical将同digest发布生产，恢复健康9.783秒、16项生产保全通过；AUAPI账号6410已启用并绑定34/63，静态工作台20261016-gpt-auapi已切换，公网三文件SHA/接口与鉴权复核通过。仅固定该隔离镜像，不能按VERSION选含其他改动的全主干镜像。
 
