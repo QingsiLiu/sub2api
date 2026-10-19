@@ -690,7 +690,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithSchedulerForCapability(
-			c.Request.Context(),
+			selectContextGeili(c),
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
@@ -733,6 +733,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				return
 			}
 			// geili hook: only saturated accounts were excluded; keep their original error.
+			// Re-admit them once and wait for a slot instead of failing while they are healthy.
+			if lastFailoverErr == nil && requeueBusyAccountsGeili(c, failedAccountIDs) {
+				reqLog.Debug("openai.account_slot_busy_requeued")
+				continue
+			}
 			if lastFailoverErr == nil && writeOpenAISlotBusyExhaustedGeili(c) {
 				return
 			}
@@ -804,6 +809,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// geili hook: a saturated account is excluded for this request only.
 		if slotResult == openAISlotAcquireBusyGeili {
 			failedAccountIDs[account.ID] = struct{}{}
+			markOpenAISlotBusyAccountGeili(c, account.ID)
 			continue
 		}
 		if slotResult != openAISlotAcquireOK {

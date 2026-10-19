@@ -5,7 +5,18 @@ package handler
 // says nothing about the rest of the group. Opted-in routing loops exclude it
 // for this request only and select again; when no other account can be
 // chosen, the original concurrency error is written exactly as before.
+//
+// geili hook: excluding a busy account also removes it from this request's
+// candidate set. When it was the only account for the model, the next
+// selection reports "no available accounts" even though the account is healthy
+// and its slots turn over quickly. One bounded requeue re-admits the saturated
+// accounts so the request keeps waiting for a slot (with SSE keepalive) instead
+// of failing. It never reaches the account-recovery probe, which only restores
+// unschedulable accounts and cannot help a busy one.
 import (
+	"context"
+
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,6 +24,8 @@ const (
 	openAISlotBusyFailoverKeyGeili = "geili_openai_slot_busy_failover"
 	// Extra accounts tried after a slot wait timeout; each may wait its own WaitPlan.
 	openAISlotBusyMaxSwitchesGeili = 3
+	// Saturated exclusions are re-admitted this many times before the error is final.
+	openAISlotBusyMaxRequeuesGeili = 1
 )
 
 // openAISlotAcquireBusyGeili: the selected account stayed saturated. Nothing
@@ -21,6 +34,8 @@ const openAISlotAcquireBusyGeili openAISlotAcquireResult = 100
 
 type openAISlotBusyStateGeili struct {
 	switches int
+	requeues int
+	busy     map[int64]struct{}
 	write    func()
 }
 
@@ -42,6 +57,19 @@ func openAISlotBusyStateFromGeili(c *gin.Context) *openAISlotBusyStateGeili {
 	return state
 }
 
+// markOpenAISlotBusyAccountGeili records that an account left this request's
+// candidate set only because its slots were busy, never because it failed.
+func markOpenAISlotBusyAccountGeili(c *gin.Context, accountID int64) {
+	state := openAISlotBusyStateFromGeili(c)
+	if state == nil {
+		return
+	}
+	if state.busy == nil {
+		state.busy = make(map[int64]struct{}, 4)
+	}
+	state.busy[accountID] = struct{}{}
+}
+
 // deferOpenAISlotBusyGeili keeps the concurrency error unwritten while another
 // account may still take the request. It returns false when the caller did not
 // opt in or the switch budget is spent, so the error is written immediately.
@@ -55,6 +83,42 @@ func deferOpenAISlotBusyGeili(c *gin.Context, write func()) bool {
 	return true
 }
 
+// requeueBusyAccountsGeili re-admits saturated accounts once selection runs out
+// of candidates. It returns false when any exclusion was a real failure, when
+// nothing was saturated, or when the requeue budget is spent, so callers fall
+// through to the original error.
+func requeueBusyAccountsGeili(c *gin.Context, excluded map[int64]struct{}) bool {
+	state := openAISlotBusyStateFromGeili(c)
+	if state == nil || len(state.busy) == 0 || len(excluded) == 0 ||
+		state.requeues >= openAISlotBusyMaxRequeuesGeili || requestRecoveryStopped(c) {
+		return false
+	}
+	for id := range excluded {
+		if _, busy := state.busy[id]; !busy {
+			return false
+		}
+	}
+	for id := range excluded {
+		delete(excluded, id)
+	}
+	state.requeues++
+	state.write = nil
+	return true
+}
+
+// selectContextGeili marks the selection context while a saturated candidate can
+// still be re-admitted. The account-recovery probe only restores accounts that
+// are not schedulable, so probing a pool whose only loss was saturation cannot
+// help and would delay the request by up to its foreground budget.
+func selectContextGeili(c *gin.Context) context.Context {
+	ctx := c.Request.Context()
+	state := openAISlotBusyStateFromGeili(c)
+	if state != nil && len(state.busy) > 0 && state.requeues < openAISlotBusyMaxRequeuesGeili {
+		return service.WithBusyRequeuePendingGeili(ctx)
+	}
+	return service.ClearBusyRequeuePendingGeili(ctx)
+}
+
 // writeOpenAISlotBusyExhaustedGeili writes the deferred concurrency error when
 // selection ran out of accounts and no upstream failure is a better answer.
 func writeOpenAISlotBusyExhaustedGeili(c *gin.Context) bool {
@@ -64,6 +128,11 @@ func writeOpenAISlotBusyExhaustedGeili(c *gin.Context) bool {
 	}
 	write := state.write
 	state.write = nil
+	if c != nil && c.Writer != nil && !c.Writer.Written() {
+		// A saturated pool is transient: tell clients when to come back instead
+		// of letting them treat the failure as an outage.
+		c.Header("Retry-After", "3")
+	}
 	write()
 	return true
 }

@@ -8,6 +8,11 @@ import (
 
 func recoverySelectionAllowedGeili(ctx context.Context, err error) bool {
 	used, _ := ctx.Value(accountRecoverySelectionContextGeili{}).(bool)
+	// geili hook: a caller that only lost saturated accounts waits for a slot
+	// instead; probing unschedulable accounts cannot free a busy one.
+	if BusyRequeuePendingGeili(ctx) {
+		return false
+	}
 	return AccountRecoveryScopeAllowedGeili(ctx) && !used && !isAccountRecoveryProbeGeili(ctx) && errors.Is(err, ErrNoAvailableAccounts) && !strings.Contains(err.Error(), "pricing restriction") && RequestRecoveryAllowed(ctx)
 }
 
