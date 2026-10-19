@@ -4,10 +4,10 @@
 
 ## 应用接口
 
-只有显式 `GEILI_RELEASE_CONTROL=true` 时监听**容器内** `127.0.0.1:9091`，必须提供 `GEILI_RELEASE_SLOT`（字母、数字、下划线或短横线，1–64字符）。不发布管理端口，不在公开Gin路由注册这些接口。
+只有显式 `GEILI_RELEASE_CONTROL=true` 时监听**容器内** `127.0.0.1:9091`，管理请求还需随机私密令牌，仅 `/app/sub2api -release-control <action>` 在容器内读取；令牌不入参数、日志、环境或公开响应。必须提供 `GEILI_RELEASE_SLOT`（字母、数字、下划线或短横线，1–64字符）。不发布管理端口，不在公开Gin路由注册这些接口。
 
 - `GET /release/ready`：应用初始化完成、非排空，且PG、Redis、计费WAL/结算健康可用才200；否则503。依赖检查只在管理探针发生，不进入正常请求热路径。
-- `GET /release/status`：协议版本1、请求前缀、数据库连接池上限、排空状态、按HTTP/WebSocket/异步图片/邮件/计费/后台周期分类的活动数及后台总数。
+- `GET /release/status`：协议版本2、请求前缀、数据库连接池上限、排空状态、按HTTP/WebSocket/异步图片/邮件/计费/后台周期分类的活动数及后台总数。
 - `POST /release/pause`：停止新后台周期/领取；保留当前已领取工作，HTTP继续。
 - `POST /release/drain`：pause并标记不就绪；继续服务旧Nginx worker的存量请求。
 - `POST /release/resume`：取得共享卷后台所有权后恢复；已有其他owner则409。用于激活与回退，不会重放模型请求。

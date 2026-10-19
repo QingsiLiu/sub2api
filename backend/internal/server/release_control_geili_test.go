@@ -17,15 +17,22 @@ import (
 )
 
 func TestGeiliReleaseReadinessAndPrivateMutations(t *testing.T) {
-	c := &ReleaseControl{controller: releaselifecycle.New(true, false), dataDir: t.TempDir(), slot: "blue"}
+	c := &ReleaseControl{controller: releaselifecycle.New(true, false), dataDir: t.TempDir(), slot: "blue", token: "synthetic-control-token"}
 	defer c.Close()
 	get := func(method, path string) int {
 		r := httptest.NewRecorder()
-		c.Handler().ServeHTTP(r, httptest.NewRequest(method, path, nil))
+		request := httptest.NewRequest(method, path, nil)
+		request.Header.Set("Authorization", "Bearer "+c.token)
+		c.Handler().ServeHTTP(r, request)
 		return r.Code
 	}
 	if get("GET", "/release/ready") != 503 {
 		t.Fatal("startup reported ready")
+	}
+	unauthenticated := httptest.NewRecorder()
+	c.Handler().ServeHTTP(unauthenticated, httptest.NewRequest("POST", "/release/drain", nil))
+	if unauthenticated.Code != http.StatusForbidden || c.controller.Status().Draining {
+		t.Fatal("unauthenticated loopback request mutated lifecycle")
 	}
 	c.controller.MarkReady()
 	if get("GET", "/release/ready") != 200 {

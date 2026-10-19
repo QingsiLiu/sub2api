@@ -2,10 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -33,10 +37,11 @@ type ReleaseControl struct {
 	dataDir    string
 	slot       string
 	controller *releaselifecycle.Controller
+	token      string
 }
 
 func ProvideReleaseControl(cfg *config.Config, db *sql.DB, rdb *redis.Client, settlement *service.UsageSettlementWorker) (*ReleaseControl, error) {
-	for _, name := range []string{"GEILI_RELEASE_CONTROL", "GEILI_BACKGROUND_ACTIVE"} {
+	for _, name := range []string{"GEILI_RELEASE_CONTROL"} {
 		if v := os.Getenv(name); v != "" && v != "true" && v != "false" {
 			return nil, fmt.Errorf("%s must be true or false", name)
 		}
@@ -69,6 +74,16 @@ func (c *ReleaseControl) Start() error {
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:9091")
 	if err != nil {
+		return err
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		_ = listener.Close()
+		return err
+	}
+	c.token = hex.EncodeToString(secret)
+	if err := os.WriteFile("/tmp/.geili-release-token", []byte(c.token), 0600); err != nil {
+		_ = listener.Close()
 		return err
 	}
 	c.server = &http.Server{Handler: c.Handler(), ReadHeaderTimeout: 5 * time.Second}
@@ -128,7 +143,14 @@ func (c *ReleaseControl) Handler() http.Handler {
 		c.pause()
 		c.writeStatus(w, http.StatusOK)
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Loopback alone is insufficient when an upstream issues an HTTP redirect.
+		if c.token == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+c.token)) != 1 {
+			http.Error(w, "release control authentication required", http.StatusForbidden)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (c *ReleaseControl) resume() error {
@@ -216,7 +238,7 @@ func (c *ReleaseControl) writeStatus(w http.ResponseWriter, code int) {
 		RequestPrefix string `json:"request_prefix"`
 		PoolMax       int    `json:"database_max_open_conns"`
 		PoolIdle      int    `json:"database_max_idle_conns"`
-	}{c.lifecycle().Status(), 1, os.Getpid(), service.RequestIDPrefix(), c.poolMax, c.poolIdle})
+	}{c.lifecycle().Status(), 2, os.Getpid(), service.RequestIDPrefix(), c.poolMax, c.poolIdle})
 }
 
 func (c *ReleaseControl) lifecycle() *releaselifecycle.Controller {
@@ -224,4 +246,37 @@ func (c *ReleaseControl) lifecycle() *releaselifecycle.Controller {
 		return c.controller
 	}
 	return releaselifecycle.Default
+}
+
+// RunReleaseControlCommand keeps the private token out of argv, inspect, logs,
+// and the operator's response. It does not initialize the application or DB.
+func RunReleaseControlCommand(action string) error {
+	method := http.MethodGet
+	switch action {
+	case "status", "ready":
+	case "pause", "drain", "resume":
+		method = http.MethodPost
+	default:
+		return errors.New("unknown release control action")
+	}
+	token, err := os.ReadFile("/tmp/.geili-release-token")
+	if err != nil {
+		return errors.New("release control is not running")
+	}
+	request, err := http.NewRequest(method, "http://127.0.0.1:9091/release/"+action, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+string(token))
+	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(request)
+	if err != nil {
+		return errors.New("release control unavailable")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("release control HTTP %d", response.StatusCode)
+	}
+	_, err = io.Copy(os.Stdout, io.LimitReader(response.Body, 1<<20))
+	return err
 }
