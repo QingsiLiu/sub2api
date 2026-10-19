@@ -4,7 +4,7 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 ## 当前基线
 
-- 正在准备 `0.2.17-geili.1`，将官方稳定标签 v0.2.17 合入完整 Geili 主干，保留蓝绿排空与既有计费。当前生产仍 `.23`，实际新候选身份和 CI/Stage/生产状态见 RELEASES.md 顶部；本次已获用户验证后不停机试发授权。
+- 当前 `0.2.17-geili.1` 候选固定 `681c9385e56492cfd5de6a4a04ecc664f0979918` / `7c3ff7ade6a97b697bdd85fa2ce2c2562e0fb2ecd68f4da60baf416e9a24fb74`，已通过CI9任务/13门禁，准备Stage，生产仍`.23`。保留完整Geili与蓝绿排空，后续文档CI不得替换该digest；验收及生产实际状态见RELEASES.md顶部。用户本次已授权验证后不停机试发。
 
 - 2026-10-19最新基线：生产`.23` / `94f3b743d03e8775ab0b54efaf7249cad166a183` / `ee14e1c23e74398b6a0cd648c4cd8146febb3f9fc5c30cd83a888dd1c1a6ff4c`，蓝绿候选`.24` / `d0107479ed89969d8415ca0c29b013ad443a255b` / `bf08ef0db00dc9037430e2c990fea611f498e5d9753938e47aa739c41be54993`已Stage、未生产。只固定验收镜像，不按后续文档提交的CI或VERSION选制品。发布设计见`.github/geili/bluegreen-release.md`，实际状态以RELEASES.md顶部及运维仓本次原始报告为准；以下旧候选说明保留为历史。
 
