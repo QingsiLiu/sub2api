@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
@@ -92,6 +95,16 @@ func TestForwardOpenAIWSV2_KeepsOutboundAndObservedServiceTiersSeparate(t *testi
 			require.Equal(t, "default", result.UpstreamResponseServiceTier)
 			require.Equal(t, "priority", captureConn.lastWrite["service_tier"],
 				"outbound WS payload still carries the requested Fast tier")
+			if !tc.stream {
+				require.Positive(t, gjson.Get(rec.Body.String(), "created_at").Int(), "WS to buffered HTTP must retain the stamped response object")
+			} else {
+				for _, line := range strings.Split(rec.Body.String(), "\n") {
+					payload, ok := strings.CutPrefix(line, "data: ")
+					if ok && gjson.Get(payload, "type").String() == "response.completed" {
+						require.Positive(t, gjson.Get(payload, "response.created_at").Int())
+					}
+				}
+			}
 		})
 	}
 }

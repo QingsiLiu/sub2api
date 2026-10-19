@@ -616,6 +616,8 @@ readLoop:
 		}
 		if stamped, changed := createdAtStamper.Stamp(message, eventType); changed {
 			message = stamped
+			// Buffered HTTP extracts the same stamped object as SSE forwards.
+			responseField = gjson.GetBytes(message, "response")
 		}
 		responseModelObserver.ObserveOpenAI(message, eventType)
 		eventCount++
