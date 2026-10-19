@@ -160,6 +160,12 @@ func (c *OpsMetricsCollector) getInterval() time.Duration {
 }
 
 func (c *OpsMetricsCollector) collectOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_metrics_collector:collectOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if c == nil {
 		return
 	}

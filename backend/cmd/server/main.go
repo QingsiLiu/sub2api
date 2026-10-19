@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/releaselifecycle"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
@@ -156,6 +157,11 @@ func runMainServer() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 	defer app.Cleanup()
+	// geili hook: the control listener is never exposed through nginx.
+	if err := app.ReleaseControl.Start(); err != nil {
+		log.Fatalf("Failed to start release control: %v", err)
+	}
+	defer app.ReleaseControl.Close()
 	if app.PluginManager != nil {
 		if err := app.PluginManager.Start(context.Background()); err != nil {
 			log.Printf("Plugin manager started in degraded state: %v", err)
@@ -179,6 +185,7 @@ func runMainServer() {
 	}()
 
 	log.Printf("Server started on %s", app.Server.Addr)
+	releaselifecycle.Default.MarkReady()
 
 	// 等待中断信号
 	quit := make(chan os.Signal, 1)
@@ -187,11 +194,21 @@ func runMainServer() {
 
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if err := app.Server.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+	// geili hook: release-enabled processes never impose a deployment deadline
+	// on customer streams. Shutdown alone does not wait for hijacked WebSockets.
+	if releaselifecycle.Default.Enabled() {
+		releaselifecycle.Default.Drain()
+		if err := app.Server.Shutdown(context.Background()); err != nil {
+			log.Printf("Server shutdown: %v", err)
+		}
+		_ = releaselifecycle.Default.Wait(context.Background())
+		_ = handler.DrainDurableUsageRecords(context.Background())
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := app.Server.Shutdown(ctx); err != nil {
+			log.Printf("Server forced to shutdown: %v", err)
+		}
 	}
 
 	log.Println("Server exited")

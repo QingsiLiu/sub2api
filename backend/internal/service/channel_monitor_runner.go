@@ -302,6 +302,12 @@ func (r *ChannelMonitorRunner) releaseInFlight(id int64) {
 // runOne 执行单个监控的检测。普通错误只记日志；API key 解密失败会撤销任务。
 // 任务结束时（含 panic recover）必须释放 in-flight 槽。
 func (r *ChannelMonitorRunner) runOne(id int64, name string) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("channel_monitor_runner:runOne")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), monitorRequestTimeout+monitorPingTimeout+monitorRunOneBuffer)
 	defer cancel()
 

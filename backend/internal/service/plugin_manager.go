@@ -1043,6 +1043,9 @@ func (m *PluginManager) publishRuntimeLocked(installation *PluginInstallation, r
 
 func (m *PluginManager) newRuntime(ctx context.Context, installation *PluginInstallation) (*pluginRuntime, error) {
 	socketDir := filepath.Join(m.installer.RootDir(), "runtime")
+	if slot := os.Getenv("GEILI_RELEASE_SLOT"); os.Getenv("GEILI_RELEASE_CONTROL") == "true" && slot != "" {
+		socketDir = filepath.Join(socketDir, slot)
+	} // geili hook: isolate per-instance plugin sockets.
 	if err := os.MkdirAll(socketDir, 0o700); err != nil {
 		return nil, err
 	}

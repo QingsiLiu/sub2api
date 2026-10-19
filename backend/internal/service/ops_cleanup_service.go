@@ -282,6 +282,12 @@ func (s *OpsCleanupService) refreshEffectiveBeforeRun(ctx context.Context) {
 }
 
 func (s *OpsCleanupService) runScheduled() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_cleanup_service:runScheduled")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if s == nil || s.db == nil || s.opsRepo == nil {
 		return
 	}

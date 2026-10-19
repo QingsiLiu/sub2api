@@ -257,6 +257,12 @@ func (s *BackupService) Start() {
 // recoverStaleRecords expires interrupted operations only after their maximum
 // runtime. Re-read, status persistence and object deletion share the writer lock.
 func (s *BackupService) recoverStaleRecords() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("backup_service:recoverStaleRecords")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(s.bgCtx, 5*time.Minute)
 	defer cancel()
 	ctx, release, err := s.lockBackupRecordUpdates(ctx)
@@ -544,6 +550,12 @@ func (s *BackupService) removeCronSchedule() {
 }
 
 func (s *BackupService) runScheduledBackup() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("backup_service:runScheduledBackup")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	s.wg.Add(1)
 	defer s.wg.Done()
 
@@ -750,8 +762,10 @@ func (s *BackupService) StartBackup(ctx context.Context, triggeredBy string, exp
 	// 在启动 goroutine 前完成拷贝，避免数据竞争
 	result := *record
 
+	releaseDone := beginReleaseWorkGeili("backup-operation") // geili hook: register before goroutine launch.
 	s.wg.Add(1)
 	go func() {
+		defer releaseDone()
 		defer s.wg.Done()
 		defer func() {
 			s.opMu.Lock()
@@ -1031,8 +1045,10 @@ func (s *BackupService) StartRestore(ctx context.Context, backupID string) (*Bac
 	launched = true
 	result := *record
 
+	releaseDone := beginReleaseWorkGeili("backup-operation") // geili hook: register before goroutine launch.
 	s.wg.Add(1)
 	go func() {
+		defer releaseDone()
 		defer s.wg.Done()
 		defer func() {
 			s.opMu.Lock()

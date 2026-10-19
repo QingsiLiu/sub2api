@@ -214,6 +214,12 @@ func (s *ChannelMonitorV2Aggregator) wait(interval time.Duration) bool {
 }
 
 func (s *ChannelMonitorV2Aggregator) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("channel_monitor_v2_aggregator:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	s.mu.Lock()
 	parent := s.ctx
 	s.mu.Unlock()

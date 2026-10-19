@@ -99,6 +99,12 @@ func (s *CNProviderBalanceCheckService) Stop() {
 }
 
 func (s *CNProviderBalanceCheckService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("cn_provider_balance_check_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	// 收集 coding 探测目标（kimi/deepseek + 智谱）与 payg 检查队列。
 	// coding 探测统一在收集完成后按 4 并发执行：单账号探测 15-20s，串行 ×
 	// 多账号会耗尽整体预算（120s 上限），排在后面的账号快照会饥饿，

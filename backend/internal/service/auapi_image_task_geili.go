@@ -660,14 +660,7 @@ func (s *AUAPIImageTaskService) Start() {
 }
 func (s *AUAPIImageTaskService) directWorker(ctx context.Context) {
 	for ctx.Err() == nil {
-		ids, err := s.repo.Due(ctx, 1)
-		if err == nil {
-			for _, id := range ids {
-				_, _ = s.Process(ctx, auapiQueueID(id))
-			}
-		} else {
-			slog.Warn("auapi image recovery failed", "error", err)
-		}
+		s.processDueReleaseGeili(ctx)
 		sleepOrDone(ctx, time.Duration(maxAUAPIInt(1, s.cfg.AUAPIImage.PollIntervalSeconds))*time.Second)
 	}
 }
@@ -697,4 +690,20 @@ func resolveAUAPIMediaRateMultiplier(kind string, key *APIKey, effective float64
 		return resolveVideoRateMultiplier(key, effective)
 	}
 	return resolveImageRateMultiplier(key, effective)
+}
+
+func (s *AUAPIImageTaskService) processDueReleaseGeili(ctx context.Context) {
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("auapi-image")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
+	ids, err := s.repo.Due(ctx, 1)
+	if err == nil {
+		for _, id := range ids {
+			_, _ = s.Process(ctx, auapiQueueID(id))
+		}
+	} else {
+		slog.Warn("auapi image recovery failed", "error", err)
+	}
 }

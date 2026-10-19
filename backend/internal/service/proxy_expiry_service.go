@@ -50,6 +50,12 @@ func (s *ProxyExpiryService) Stop() {
 }
 
 func (s *ProxyExpiryService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("proxy_expiry_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	changed, err := s.proxyRepo.SweepExpiredProxies(ctx, time.Now())

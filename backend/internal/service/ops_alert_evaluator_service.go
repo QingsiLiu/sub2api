@@ -154,6 +154,12 @@ func (s *OpsAlertEvaluatorService) getInterval() time.Duration {
 }
 
 func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_alert_evaluator_service:evaluateOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if s == nil || s.opsRepo == nil {
 		return
 	}

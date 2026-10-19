@@ -154,6 +154,12 @@ func (w *UsageSettlementWorker) run(delivery bool) {
 	}
 }
 func (w *UsageSettlementWorker) process(ctx context.Context, delivery bool) error {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("usage_settlement_runtime_geili:process")
+	if !releaseAllowed {
+		return nil
+	}
+	defer releaseDone()
 	if delivery {
 		stats, err := w.repo.DeliverSettledUsage(ctx, 32)
 		w.delivered.Add(uint64(stats.Delivered))
@@ -273,13 +279,7 @@ func (w *UsageSettlementWorker) replayIngress() {
 		if w.ctx.Err() != nil {
 			return
 		}
-		ctx, cancel := context.WithTimeout(w.ctx, 10*time.Second)
-		stats, err := replayUsageSettlementIngress(ctx, w.cfg, w.repo, 32)
-		cancel()
-		if err != nil && w.ctx.Err() == nil {
-			w.failures.Add(1)
-			slog.Error("ALERT settlement ingress retry retained", "error", err, "stats", stats)
-		}
+		w.replayIngressReleaseGeili()
 		select {
 		case <-w.ctx.Done():
 			return
@@ -327,13 +327,7 @@ func (w *UsageSettlementWorker) pollVideoTasks() {
 		if w.ctx.Err() != nil {
 			return
 		}
-		ctx, cancel := context.WithTimeout(w.ctx, 60*time.Second)
-		err := w.video.ProcessDurableGrokVideoTasks(ctx, 4)
-		cancel()
-		if err != nil && w.ctx.Err() == nil {
-			w.failures.Add(1)
-			slog.Error("ALERT asynchronous video evidence retry retained", "error", err)
-		}
+		w.pollVideoReleaseGeili()
 		select {
 		case <-w.ctx.Done():
 			return
@@ -361,4 +355,34 @@ func (w *UsageSettlementWorker) reconcileRecent() {
 }
 func settlementReconciliationMismatch(r *UsageSettlementReconciliation) bool {
 	return r != nil && (r.AmountMismatchCount > 0 || r.DetailMissingCount > 0 || r.IdentityMismatchCount > 0 || r.DedupMismatchCount > 0 || r.SubscriptionMismatchCount > 0)
+}
+
+func (w *UsageSettlementWorker) replayIngressReleaseGeili() {
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("replayIngressReleaseGeili")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
+	ctx, cancel := context.WithTimeout(w.ctx, 10*time.Second)
+	stats, err := replayUsageSettlementIngress(ctx, w.cfg, w.repo, 32)
+	cancel()
+	if err != nil && w.ctx.Err() == nil {
+		w.failures.Add(1)
+		slog.Error("ALERT settlement ingress retry retained", "error", err, "stats", stats)
+	}
+}
+
+func (w *UsageSettlementWorker) pollVideoReleaseGeili() {
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("pollVideoReleaseGeili")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
+	ctx, cancel := context.WithTimeout(w.ctx, 60*time.Second)
+	err := w.video.ProcessDurableGrokVideoTasks(ctx, 4)
+	cancel()
+	if err != nil && w.ctx.Err() == nil {
+		w.failures.Add(1)
+		slog.Error("ALERT asynchronous video evidence retry retained", "error", err)
+	}
 }

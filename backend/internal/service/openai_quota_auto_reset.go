@@ -217,6 +217,12 @@ func (s *OpenAIQuotaAutoResetService) runScanner() {
 }
 
 func (s *OpenAIQuotaAutoResetService) scanEnabledAccounts(ctx context.Context) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("openai_quota_auto_reset:scanEnabledAccounts")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	release, scan := s.tryAcquireScanLock(ctx)
 	if !scan {
 		return
@@ -276,6 +282,12 @@ type openAIAutoResetAssessment struct {
 }
 
 func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accountID int64) error {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("openai_quota_auto_reset:evaluateAccount")
+	if !releaseAllowed {
+		return nil
+	}
+	defer releaseDone()
 	ctx = withOpenAIAutoResetContext(ctx)
 	account, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil || account == nil {

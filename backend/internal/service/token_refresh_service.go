@@ -485,6 +485,12 @@ func (s *TokenRefreshService) processRefresh() {
 
 // processRefreshContext executes one bounded, cursor-resumable refresh cycle.
 func (s *TokenRefreshService) processRefreshContext(parent context.Context) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("token_refresh_service:processRefreshContext")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if parent == nil {
 		parent = context.Background()
 	}

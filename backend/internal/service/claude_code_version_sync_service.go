@@ -118,6 +118,12 @@ func (s *ClaudeCodeVersionSyncService) syncedWithinInterval() bool {
 }
 
 func (s *ClaudeCodeVersionSyncService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("claude_code_version_sync_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), claudeCodeVersionSyncTimeout)
 	defer cancel()
 

@@ -24,6 +24,7 @@ import (
 var ProviderSet = wire.NewSet(
 	ProvideRouter,
 	ProvideHTTPServer,
+	ProvideReleaseControl, // geili hook: container-local release coordination.
 )
 
 // ProvideRouter 提供路由器
@@ -49,6 +50,7 @@ func ProvideRouter(
 
 	r := gin.New()
 	r.Use(middleware2.Recovery())
+	r.Use(releaseLifecycleGeili()) // geili hook: includes streaming/hijacked handler lifetime.
 	configureTrustedProxies(r, cfg.Server)
 
 	// Wire up websearch Manager builder so it initializes on startup and rebuilds on config save.

@@ -144,6 +144,12 @@ func (s *OpsScheduledReportService) run() {
 }
 
 func (s *OpsScheduledReportService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_scheduled_report_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if s == nil || s.opsService == nil || s.emailService == nil {
 		return
 	}

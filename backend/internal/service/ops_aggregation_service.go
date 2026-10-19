@@ -147,6 +147,12 @@ func (s *OpsAggregationService) dailyLoop() {
 }
 
 func (s *OpsAggregationService) aggregateHourly() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_aggregation_service:aggregateHourly")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if s == nil || s.opsRepo == nil {
 		return
 	}
@@ -247,6 +253,12 @@ func (s *OpsAggregationService) aggregateHourly() {
 }
 
 func (s *OpsAggregationService) aggregateDaily() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("ops_aggregation_service:aggregateDaily")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if s == nil || s.opsRepo == nil {
 		return
 	}

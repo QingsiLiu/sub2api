@@ -94,6 +94,12 @@ func (s *BatchImageCleanupService) CleanupOutput(ctx context.Context, batchID st
 }
 
 func (s *BatchImageCleanupService) RunOnce(ctx context.Context, now time.Time) (BatchImageCleanupRunResult, error) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("batch_image_cleanup:RunOnce")
+	if !releaseAllowed {
+		return BatchImageCleanupRunResult{}, nil
+	}
+	defer releaseDone()
 	if s == nil || s.Repo == nil {
 		return BatchImageCleanupRunResult{}, ErrBatchImageCleanupFailed
 	}

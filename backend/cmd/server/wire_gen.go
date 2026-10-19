@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/releaselifecycle"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/server"
@@ -352,6 +353,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	stepUpAuthMiddleware := middleware.NewStepUpAuthMiddleware(totpService, userService, settingService)
 	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, optionalJWTAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, auditLogMiddleware, stepUpAuthMiddleware, apiKeyService, subscriptionService, opsService, settingService, compositeRouteResolver, redisClient)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
+	releaseControl, err := server.ProvideReleaseControl(configConfig, db, redisClient, usageSettlementWorker)
+	if err != nil {
+		return nil, err
+	}
 	opsMetricsCollector := service.ProvideOpsMetricsCollector(opsRepository, settingRepository, accountRepository, concurrencyService, db, redisClient, configConfig)
 	opsAggregationService := service.ProvideOpsAggregationService(opsRepository, settingRepository, db, redisClient, configConfig)
 	opsAlertEvaluatorService := service.ProvideOpsAlertEvaluatorService(opsService, opsRepository, emailService, redisClient, configConfig, proxyRepository)
@@ -373,10 +378,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService, usageBillingRepository)
 	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, opsService, opsIngressRejectAggregator, apiKeyService, authCacheInvalidationWorker, usageSettlementWorker, schedulerSnapshotService, tokenRefreshService, accountExpiryService, cnProviderBalanceCheckService, openAICodexVersionSyncService, claudeCodeVersionSyncService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, geminiCachedContentService, batchImageCleanupService, batchImageWorkerRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, responseAuditService, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, channelMonitorV2Aggregator, userPlatformQuotaUsageFlusher, upstreamBillingProbeService, ollamaCloudUsageService, openCodeGoUsageService, auditLogService, openAIQuotaAutoResetService, promptService, pluginManager)
 	application := &Application{
-		Server:        httpServer,
-		PromptAudit:   promptService,
-		PluginManager: pluginManager,
-		Cleanup:       v,
+		Server:         httpServer,
+		PromptAudit:    promptService,
+		PluginManager:  pluginManager,
+		ReleaseControl: releaseControl,
+		Cleanup:        v,
 	}
 	return application, nil
 }
@@ -384,10 +390,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 // wire.go:
 
 type Application struct {
-	Server        *http.Server
-	PromptAudit   *securityaudit.PromptService
-	PluginManager *service.PluginManager
-	Cleanup       func()
+	Server         *http.Server
+	PromptAudit    *securityaudit.PromptService
+	PluginManager  *service.PluginManager
+	ReleaseControl *server.ReleaseControl
+	Cleanup        func()
 }
 
 func providePrivacyClientFactory() service.PrivacyClientFactory {
@@ -464,11 +471,19 @@ func provideCleanup(
 	return func() {
 
 		drainCtx, drainCancel := context.WithTimeout(context.Background(), 45*time.Second)
+		if releaselifecycle.Default.Enabled() {
+			drainCancel()
+			drainCtx, drainCancel = context.WithCancel(context.Background())
+		}
 		if err := handler.DrainDurableUsageRecords(drainCtx); err != nil {
 			log.Printf("ALERT financial ingress drain incomplete: %v", err)
 		}
 		drainCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if releaselifecycle.Default.Enabled() {
+			cancel()
+			ctx, cancel = context.WithCancel(context.Background())
+		}
 		defer cancel()
 
 		type cleanupStep struct {

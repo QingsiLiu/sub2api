@@ -130,6 +130,13 @@ func (w *BatchImageWorker) Run(ctx context.Context) {
 }
 
 func (w *BatchImageWorker) RunOnce(ctx context.Context) error {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("batch_image_worker:RunOnce")
+	if !releaseAllowed {
+		sleepOrDone(ctx, 100*time.Millisecond)
+		return nil
+	}
+	defer releaseDone()
 	if w == nil || w.queue == nil || w.processor == nil {
 		return nil
 	}
@@ -231,6 +238,12 @@ func (w *BatchImageWorker) runJobHeartbeat(ctx context.Context, batchID string, 
 }
 
 func (w *BatchImageWorker) MoveDueDelayedOnce(ctx context.Context) (int, error) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("batch_image_worker:MoveDueDelayedOnce")
+	if !releaseAllowed {
+		return 0, nil
+	}
+	defer releaseDone()
 	if w == nil || w.queue == nil {
 		return 0, nil
 	}
@@ -254,6 +267,12 @@ func (w *BatchImageWorker) RunDelayedMover(ctx context.Context) {
 }
 
 func (w *BatchImageWorker) RecoverStaleActiveOnce(ctx context.Context) (int, error) {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("batch_image_worker:RecoverStaleActiveOnce")
+	if !releaseAllowed {
+		return 0, nil
+	}
+	defer releaseDone()
 	if w == nil || w.queue == nil {
 		return 0, nil
 	}

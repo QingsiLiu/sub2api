@@ -119,6 +119,12 @@ func (s *OpenAICodexVersionSyncService) syncedWithinInterval() bool {
 }
 
 func (s *OpenAICodexVersionSyncService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("openai_codex_version_sync_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), openAICodexVersionSyncTimeout)
 	defer cancel()
 

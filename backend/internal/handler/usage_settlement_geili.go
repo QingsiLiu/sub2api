@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/releaselifecycle"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"go.uber.org/zap"
 )
@@ -54,6 +55,8 @@ func DrainDurableUsageRecords(ctx context.Context) error {
 }
 
 func runDurableUsageRecordTask(task service.UsageRecordTask) {
+	releaseDone := releaselifecycle.Default.Begin("settlement") // geili hook: detached ingress participates in release drain.
+	defer releaseDone()
 	done := beginDurableUsageRecord()
 	defer done()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

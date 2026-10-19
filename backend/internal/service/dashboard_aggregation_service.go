@@ -221,6 +221,12 @@ func (s *DashboardAggregationService) recomputeRange(ctx context.Context, start,
 }
 
 func (s *DashboardAggregationService) runScheduledAggregation() {
+	// geili hook: singleton background owner during release overlap.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("dashboard_aggregation_service.go:runScheduledAggregation")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if !atomic.CompareAndSwapInt32(&s.running, 0, 1) {
 		return
 	}
@@ -279,6 +285,12 @@ func (s *DashboardAggregationService) runScheduledAggregation() {
 }
 
 func (s *DashboardAggregationService) runScheduledGroupUsageSync() {
+	// geili hook: singleton background owner during release overlap.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("dashboard_aggregation_service.go:runScheduledGroupUsageSync")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultDashboardAggregationTimeout)
 	defer cancel()
 	if err := s.syncGroupUsageRollups(ctx, time.Now().UTC()); err != nil {
@@ -287,6 +299,12 @@ func (s *DashboardAggregationService) runScheduledGroupUsageSync() {
 }
 
 func (s *DashboardAggregationService) runStartupGroupUsageSync() {
+	// geili hook: singleton background owner during release overlap.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("dashboard_aggregation_service.go:runStartupGroupUsageSync")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultDashboardAggregationBackfillTimeout)
 	defer cancel()
 	release, ok := tryAcquireSingletonLeaderLock(ctx, s.lockCache, s.db, dashboardAggregationGroupUsageBackfillLeaderLockKey, s.instanceID, dashboardAggregationGroupUsageBackfillLeaderLockTTL)
@@ -436,6 +454,12 @@ func (s *DashboardAggregationService) requestRetentionDays(ctx context.Context) 
 }
 
 func (s *DashboardAggregationService) runScheduledRetention() {
+	// geili hook: singleton background owner during release overlap.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("dashboard_aggregation_service.go:runScheduledRetention")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	if !atomic.CompareAndSwapInt32(&s.running, 0, 1) {
 		return
 	}

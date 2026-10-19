@@ -355,6 +355,12 @@ func (s *UpstreamBillingProbeService) runLoop() {
 
 // RunDue executes at most one bounded batch of due accounts.
 func (s *UpstreamBillingProbeService) RunDue(ctx context.Context) error {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("upstream_billing_probe:RunDue")
+	if !releaseAllowed {
+		return nil
+	}
+	defer releaseDone()
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}

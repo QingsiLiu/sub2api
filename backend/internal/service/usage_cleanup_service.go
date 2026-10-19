@@ -155,6 +155,12 @@ func (s *UsageCleanupService) CreateTask(ctx context.Context, filters UsageClean
 }
 
 func (s *UsageCleanupService) runOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("usage_cleanup_service:runOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	svc := s
 	if svc == nil {
 		return

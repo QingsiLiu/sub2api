@@ -377,6 +377,12 @@ func (s *PricingService) startUpdateScheduler() {
 
 // checkAndUpdatePricing 检查并更新价格数据
 func (s *PricingService) checkAndUpdatePricing() error {
+	// geili hook: singleton background owner during release overlap.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("pricing_service.go:checkAndUpdatePricing")
+	if !releaseAllowed {
+		return nil
+	}
+	defer releaseDone()
 	pricingFile := s.getPricingFilePath()
 
 	// 检查本地文件是否存在
@@ -626,7 +632,7 @@ func (s *PricingService) downloadPricingData() error {
 
 	// 保存到本地文件
 	pricingFile := s.getPricingFilePath()
-	if err := os.WriteFile(pricingFile, body, 0644); err != nil {
+	if err := writeReleaseFileGeili(pricingFile, body, 0644); err != nil {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save file: %v", err)
 	}
 
@@ -637,7 +643,7 @@ func (s *PricingService) downloadPricingData() error {
 		syncHash = remoteHash
 	}
 	hashFile := s.getHashFilePath()
-	if err := os.WriteFile(hashFile, []byte(syncHash+"\n"), 0644); err != nil {
+	if err := writeReleaseFileGeili(hashFile, []byte(syncHash+"\n"), 0644); err != nil {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save hash: %v", err)
 	}
 
@@ -1164,7 +1170,7 @@ func (s *PricingService) useFallbackPricing() error {
 	}
 
 	pricingFile := s.getPricingFilePath()
-	if err := os.WriteFile(pricingFile, data, 0644); err != nil { //nolint:gosec // G703: 路径为配置的数据目录 + 硬编码文件名，非请求输入
+	if err := writeReleaseFileGeili(pricingFile, data, 0644); err != nil { //nolint:gosec // G703: 路径为配置的数据目录 + 硬编码文件名，非请求输入
 		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to copy fallback: %v", err)
 	}
 

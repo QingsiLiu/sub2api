@@ -790,6 +790,12 @@ func (s *GeminiCachedContentService) ReleaseMutation(ctx context.Context, m *Gem
 
 // RecoverStaleMutations 回滚恢复一批租约已过期的修改意图，返回完成恢复的数量。
 func (s *GeminiCachedContentService) RecoverStaleMutations(ctx context.Context) (int, error) {
+	// geili hook: release-controlled claim boundary.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("gemini_cached_content.go:RecoverStaleMutations")
+	if !releaseAllowed {
+		return 0, nil
+	}
+	defer releaseDone()
 	listCtx, cancel := context.WithTimeout(ctx, geminiCachedContentMutationRecoveryTimeout)
 	ids, err := s.repo.ListStaleMutations(listCtx, geminiCachedContentMutationRecoveryBatch)
 	cancel()

@@ -589,6 +589,12 @@ func (s *OpenCodeGoUsageService) Refresh(ctx context.Context, accountID int64) (
 }
 
 func (s *OpenCodeGoUsageService) RunDue(ctx context.Context) error {
+	// geili hook: release-controlled claim boundary.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("opencode_go_usage.go:RunDue")
+	if !releaseAllowed {
+		return nil
+	}
+	defer releaseDone()
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}

@@ -77,6 +77,12 @@ func (s *IdempotencyCleanupService) runLoop() {
 }
 
 func (s *IdempotencyCleanupService) cleanupOnce() {
+	// geili hook: release pause stops new claims; admitted work is never cancelled.
+	releaseDone, releaseAllowed := beginReleaseBackgroundGeili("idempotency_cleanup_service:cleanupOnce")
+	if !releaseAllowed {
+		return
+	}
+	defer releaseDone()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

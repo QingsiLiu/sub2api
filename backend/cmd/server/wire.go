@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/releaselifecycle"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/server"
@@ -25,10 +26,11 @@ import (
 )
 
 type Application struct {
-	Server        *http.Server
-	PromptAudit   *securityaudit.PromptService
-	PluginManager *service.PluginManager
-	Cleanup       func()
+	Server         *http.Server
+	PromptAudit    *securityaudit.PromptService
+	PluginManager  *service.PluginManager
+	ReleaseControl *server.ReleaseControl
+	Cleanup        func()
 }
 
 func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
@@ -58,7 +60,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "Cleanup"),
+		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "ReleaseControl", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -137,11 +139,19 @@ func provideCleanup(
 	return func() {
 		// geili: finish detached WAL/settlement capture before stopping DB/Redis.
 		drainCtx, drainCancel := context.WithTimeout(context.Background(), 45*time.Second)
+		if releaselifecycle.Default.Enabled() {
+			drainCancel()
+			drainCtx, drainCancel = context.WithCancel(context.Background())
+		}
 		if err := handler.DrainDurableUsageRecords(drainCtx); err != nil {
 			log.Printf("ALERT financial ingress drain incomplete: %v", err)
 		}
 		drainCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if releaselifecycle.Default.Enabled() {
+			cancel()
+			ctx, cancel = context.WithCancel(context.Background())
+		}
 		defer cancel()
 
 		type cleanupStep struct {

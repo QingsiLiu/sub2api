@@ -24,6 +24,12 @@ type BatchImageBillingRecoveryService struct {
 }
 
 func (s *BatchImageBillingRecoveryService) ReleaseStaleUnsubmittedOnce(ctx context.Context) (int, error) {
+	// geili hook: pause stops new refund claims, not active work.
+	releaseDone, allowed := beginReleaseBackgroundGeili("batch-refund-recovery")
+	if !allowed {
+		return 0, nil
+	}
+	defer releaseDone()
 	if s == nil || s.Repo == nil || s.Billing == nil {
 		return 0, nil
 	}
