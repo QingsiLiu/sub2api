@@ -35,6 +35,9 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 ## 候选构建与部署
 
+- 用户已确定后续应用版本统一沿用单机临时蓝绿：同digest先Stage验收 → 预热新槽位 → 平滑切流 → 至少观察10分钟且旧请求/后台/计费及旧Nginx worker全部排空后回收。超过30分钟只报告并继续等待；禁止先停后起、强杀或重放模型POST。
+- 每次发布检查容量、PG连接预算和新旧版本迁移兼容性；就绪和依赖探针不进入正常模型请求热路径，后台任务保持单一owner。目标为日常单实例，升级时临时双开；`legacy_retained`阶段按实际保留双实例并阻止下一次发布。性能与内存以本次候选实际验收为准，不将新旧版本性能差异当作蓝绿开销测量。
+
 - `.github/workflows/geili-candidate.yml` 在 `geili/main` 和 `codex/**` 上发布 `acceptance-<commit>` 镜像及固定摘要，不修改 `latest`。
 - 上线固定顺序：候选 CI → 先钉测试环境 → 合入 `geili/main` → 当次授权后用同一 digest 热修生产。运维入口是 `~/code/geili/subscription-lab-ops` 的 `bin/release-geili-sub2api.sh`，细则见该仓 `docs/runbooks/geili-sub2api-release.md`。
 - 测试连接正式 API 时只用专用、限额、有期限的下游 Key，绝不复制供应商主凭据或生产数据库。
