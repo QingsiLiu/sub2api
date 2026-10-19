@@ -182,6 +182,7 @@ type RefundPlan struct {
 	SubDaysToDeduct        int
 	SubscriptionID         int64
 	SubscriptionLots       []SubscriptionLotAdjustment
+	deductionHeld          bool // upstream pending-refund compatibility
 }
 
 type SubscriptionLotAdjustment struct {

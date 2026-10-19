@@ -624,6 +624,14 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver,
 				c.Abort()
 				return
 			}
+			// 含 OAuth 账号的跨平台歧义是分组配置错误：拒绝而不是放行。否则未解析的
+			// 请求落到默认 Anthropic handler，handler 再按模型名前缀另猜平台，
+			// OAuth 凭据被送进不匹配的协议管线（如 ChatGPT token 发往 Anthropic）。
+			if decision.OAuthAmbiguous() {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalModelConfiguration)
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": decision.AmbiguousMessage()}})
+				return
+			}
 			if len(keyServices) > 0 && !bindCompositeResolvedKey(c, keyServices[0], apiKey, decision) {
 				return
 			}

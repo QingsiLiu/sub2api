@@ -368,6 +368,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	imageCounter := newOpenAIImageOutputCounter()
 	var firstTokenMs *int
 	responseID := ""
+	var createdAtStamper responsesCreatedAtStamper
 	var finalResponse []byte
 	wroteDownstream := false
 	needModelReplace := originalModel != mappedModel
@@ -613,6 +614,9 @@ readLoop:
 		if eventType == "" {
 			continue
 		}
+		if stamped, changed := createdAtStamper.Stamp(message, eventType); changed {
+			message = stamped
+		}
 		responseModelObserver.ObserveOpenAI(message, eventType)
 		eventCount++
 		if firstEventType == "" {
@@ -732,7 +736,7 @@ readLoop:
 				flushBufferedStreamEvents("error_event")
 				// geili hook: native Responses clients require a failed terminal after partial output.
 				if isOpenAIInstantInferenceQuotaError(errMsgRaw, message) {
-					emitStreamMessage([]byte(strings.TrimSpace(strings.TrimPrefix(buildOpenAIResponseFailedSSE(responseID, originalModel, message, errMsg), "event: response.failed\ndata: "))), true)
+					emitStreamMessage([]byte(strings.TrimSpace(strings.TrimPrefix(buildOpenAIResponseFailedSSE(responseID, originalModel, createdAtStamper.Value(), message, errMsg), "event: response.failed\ndata: "))), true)
 				} else {
 					emitStreamMessage(message, true)
 				}

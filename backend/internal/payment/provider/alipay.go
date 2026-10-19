@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/smartwalle/alipay/v3"
 )
 
@@ -24,13 +25,13 @@ const (
 const (
 	alipayFundChangeYes    = "Y"
 	alipayErrTradeNotExist = "ACQ.TRADE_NOT_EXIST"
-	alipayRefundSuffix     = "-refund"
+	alipayRefundStatusSucc = "REFUND_SUCCESS"
+	alipayRefundRequestSep = "-refund-"
+	// 支付宝提示退款发起后过早查询可能查不到、之后又处理成功；超过该时长仍无记录才判定失败。
+	alipayRefundQueryNotFoundGrace = 10 * time.Minute
 )
 
 var (
-	alipayTradeRefund = func(ctx context.Context, client *alipay.Client, param alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
-		return client.TradeRefund(ctx, param)
-	}
 	alipayTradeRefundQuery = func(ctx context.Context, client *alipay.Client, param alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
 		return client.TradeFastPayRefundQuery(ctx, param)
 	}
@@ -42,6 +43,12 @@ var (
 	}
 	alipayTradePagePay = func(client *alipay.Client, param alipay.TradePagePay) (*url.URL, error) {
 		return client.TradePagePay(param)
+	}
+	alipayTradeRefund = func(ctx context.Context, client *alipay.Client, param alipay.TradeRefund) (*alipay.TradeRefundRsp, error) {
+		return client.TradeRefund(ctx, param)
+	}
+	alipayTradeFastPayRefundQuery = func(ctx context.Context, client *alipay.Client, param alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
+		return client.TradeFastPayRefundQuery(ctx, param)
 	}
 )
 
@@ -357,59 +364,77 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 	if err != nil {
 		return nil, fmt.Errorf("alipay TradeRefund: %w", err)
 	}
+	if result == nil {
+		return nil, fmt.Errorf("alipay TradeRefund: empty response")
+	}
 
 	refundStatus := payment.ProviderStatusPending
 	if result.FundChange == alipayFundChangeYes {
 		refundStatus = payment.ProviderStatusSuccess
 	}
 
-	refundID := result.TradeNo
-	if refundID == "" {
-		refundID = req.OrderID + alipayRefundSuffix
-	}
-
+	// fund_change != Y 时需凭退款请求号查询终态，因此 RefundID 记录 out_request_no。
 	return &payment.RefundResponse{
-		RefundID: refundID,
+		RefundID: requestKey,
 		Status:   refundStatus,
 	}, nil
 }
 
-// QueryRefund resolves only an explicit durable refund operation. Legacy calls
-// without its original request number stay manual rather than guessing a trade.
+// QueryRefund keeps journal identities authoritative. Older non-journal refunds
+// can be queried only when they stored the original provider request number.
 func (a *Alipay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
 	key := strings.TrimSpace(req.IdempotencyKey)
-	if key == "" {
-		return nil, fmt.Errorf("alipay query refund: original refund operation required")
+	journal := key != ""
+	if !journal {
+		key = strings.TrimSpace(req.RefundID)
+		if req.OrderID == "" || !strings.HasPrefix(key, req.OrderID+alipayRefundRequestSep) {
+			return nil, infraerrors.BadRequest("REFUND_QUERY_UNSUPPORTED", "this refund was issued without a queryable refund request number; please verify manually")
+		}
 	}
 	client, err := a.getClient()
 	if err != nil {
 		return nil, err
 	}
-	result, err := alipayTradeRefundQuery(ctx, client, alipay.TradeFastPayRefundQuery{OutTradeNo: req.OrderID, OutRequestNo: key})
+	query := alipayTradeFastPayRefundQuery
+	if journal {
+		query = alipayTradeRefundQuery
+	}
+	result, err := query(ctx, client, alipay.TradeFastPayRefundQuery{OutTradeNo: req.OrderID, OutRequestNo: key})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("alipay query refund: %w", err)
 	}
-	if result == nil || result.OutRequestNo != key || result.OutTradeNo != req.OrderID {
-		return nil, fmt.Errorf("alipay query refund: operation identity mismatch")
+	if result == nil {
+		return nil, fmt.Errorf("alipay query refund: empty response")
 	}
-	expected, err := payment.AmountToMinorUnit(req.Amount, "CNY")
-	if err != nil {
-		return nil, err
+	if result.IsFailure() {
+		return nil, fmt.Errorf("alipay query refund: %w", result.Error)
 	}
-	actual, err := payment.AmountToMinorUnit(result.RefundAmount, "CNY")
-	if err != nil || actual != expected {
-		return nil, fmt.Errorf("alipay query refund: amount mismatch")
+	if journal || result.OutRequestNo != "" {
+		if result.OutRequestNo != key || (journal && result.OutTradeNo != req.OrderID) {
+			return nil, fmt.Errorf("alipay query refund: operation identity mismatch")
+		}
+		if journal || req.Amount != "" {
+			expected, err := payment.AmountToMinorUnit(req.Amount, "CNY")
+			if err != nil {
+				return nil, err
+			}
+			actual, err := payment.AmountToMinorUnit(result.RefundAmount, "CNY")
+			if err != nil || actual != expected {
+				return nil, fmt.Errorf("alipay query refund: amount mismatch")
+			}
+		}
 	}
 	status := payment.ProviderStatusPending
-	// Missing refund_status means not received OR failed, never confirmed failed.
-	if result.RefundStatus == "REFUND_SUCCESS" {
+	if strings.TrimSpace(result.RefundStatus) == alipayRefundStatusSucc {
 		status = payment.ProviderStatusSuccess
+	} else if !journal && strings.TrimSpace(result.OutRequestNo) == "" && strings.TrimSpace(result.RefundAmount) == "" && alipayRefundAbsenceIsFinal(req.RequestedAt, time.Now()) {
+		status = payment.ProviderStatusFailed
 	}
-	id := result.TradeNo
-	if id == "" {
-		id = req.OrderID + alipayRefundSuffix
-	}
-	return &payment.RefundResponse{RefundID: id, Status: status}, nil
+	return &payment.RefundResponse{RefundID: key, Status: status}, nil
+}
+
+func alipayRefundAbsenceIsFinal(requestedAt, now time.Time) bool {
+	return !requestedAt.IsZero() && now.Sub(requestedAt) >= alipayRefundQueryNotFoundGrace
 }
 
 // CancelPayment closes a pending trade on Alipay.
@@ -454,5 +479,6 @@ func parseAlipayAmount(values ...string) (float64, error) {
 var (
 	_ payment.Provider                 = (*Alipay)(nil)
 	_ payment.CancelableProvider       = (*Alipay)(nil)
+	_ payment.RefundQueryProvider      = (*Alipay)(nil)
 	_ payment.MerchantIdentityProvider = (*Alipay)(nil)
 )

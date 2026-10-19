@@ -137,7 +137,7 @@ func TestGeminiNativeReasoningPricingUsesExplicitForwardedLevel(t *testing.T) {
 	}
 }
 
-func TestGeminiChatCompatReasoningPricingTracksForwardedEffort(t *testing.T) {
+func TestGeminiChatCompatReasoningPricingUsesForwardedEffort(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, stream := range []bool{false, true} {
 		mode := "buffered"
@@ -168,7 +168,9 @@ func TestGeminiChatCompatReasoningPricingTracksForwardedEffort(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Len(t, upstream.requestBodies, 1)
+			// Geili native conversion uses Gemini enum casing and retains thought summaries for both modes.
 			require.Equal(t, "HIGH", gjson.GetBytes(upstream.requestBodies[0], "generationConfig.thinkingConfig.thinkingLevel").String())
+			require.True(t, gjson.GetBytes(upstream.requestBodies[0], "generationConfig.thinkingConfig.includeThoughts").Bool())
 			require.Equal(t, "high", optionalStringValue(result.ReasoningEffort))
 
 			billing := NewBillingService(&config.Config{}, nil)

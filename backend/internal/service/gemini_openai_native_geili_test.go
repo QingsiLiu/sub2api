@@ -323,7 +323,7 @@ func TestGeminiOpenAIThinkingModelCapabilities(t *testing.T) {
 		level         string
 		budget        int64
 	}{
-		{"gemini-3-pro-preview", "medium", false, "", 0}, {"gemini-3-pro-preview", "high", true, "HIGH", 0}, {"gemini-3.1-pro-preview", "medium", true, "MEDIUM", 0}, {"gemini-3-flash-preview", "minimal", true, "MINIMAL", 0}, {"gemini-4-argon", "medium", false, "", 0}, {"argon", "high", false, "", 0}, {"gemini-2.5-pro", "none", false, "", 0}, {"gemini-2.5-pro", "medium", true, "", 4096},
+		{"gemini-3-pro-preview", "medium", false, "", 0}, {"gemini-3-pro-preview", "high", true, "HIGH", 0}, {"gemini-3.1-pro-preview", "medium", true, "MEDIUM", 0}, {"gemini-3-flash-preview", "minimal", true, "MINIMAL", 0}, {"gemini-4-argon", "low", true, "LOW", 0}, {"gemini-4-argon", "medium", true, "MEDIUM", 0}, {"gemini-4-argon", "high", true, "HIGH", 0}, {"gemini-4-argon", "minimal", false, "", 0}, {"argon", "high", false, "", 0}, {"gemini-2.5-pro", "none", false, "", 0}, {"gemini-2.5-pro", "medium", true, "", 4096},
 	} {
 		t.Run(tc.model+"/"+tc.effort, func(t *testing.T) {
 			cfg, err := geminiOpenAIThinkingGeili(tc.model, tc.effort)

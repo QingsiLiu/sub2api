@@ -659,13 +659,17 @@ func geminiOpenAIThinkingGeili(model, effort string) (map[string]any, error) {
 		}
 		return map[string]any{"thinkingBudget": budget, "includeThoughts": true}, nil
 	}
+	disableThoughts := effort == "none" && strings.HasPrefix(id, "gemini-3.8-flash")
+	if disableThoughts {
+		effort = "minimal"
+	}
 	supported := map[string]bool{}
 	switch {
-	case strings.HasPrefix(id, "gemini-3.1-pro"):
+	case strings.HasPrefix(id, "gemini-3.1-pro"), id == "gemini-4-argon":
 		supported = map[string]bool{"low": true, "medium": true, "high": true}
 	case strings.HasPrefix(id, "gemini-3-pro"):
 		supported = map[string]bool{"low": true, "high": true}
-	case strings.HasPrefix(id, "gemini-3-flash"), strings.HasPrefix(id, "gemini-3.1-flash"):
+	case strings.HasPrefix(id, "gemini-3-flash"), strings.HasPrefix(id, "gemini-3.1-flash"), strings.HasPrefix(id, "gemini-3.8-flash"):
 		supported = map[string]bool{"minimal": true, "low": true, "medium": true, "high": true}
 	default:
 		return nil, fmt.Errorf("reasoning effort requires an explicit supported Gemini upstream model")
@@ -673,7 +677,11 @@ func geminiOpenAIThinkingGeili(model, effort string) (map[string]any, error) {
 	if !supported[effort] {
 		return nil, fmt.Errorf("upstream model %s does not support reasoning effort %q", model, effort)
 	}
-	return map[string]any{"thinkingLevel": strings.ToUpper(effort), "includeThoughts": true}, nil
+	out := map[string]any{"thinkingLevel": strings.ToUpper(effort)}
+	if !disableThoughts {
+		out["includeThoughts"] = true
+	}
+	return out, nil
 }
 
 // Convert Chat's shape to the shared native input representation without an
@@ -801,21 +809,16 @@ func geminiChatToResponsesGeili(source map[string]any) (map[string]any, error) {
 		role, _ := m["role"].(string)
 		switch role {
 		case "system", "developer", "user", "assistant":
-			if role == "assistant" {
-				reason, _ := m["reasoning_content"].(string)
-				if reason == "" {
-					reason, _ = m["reasoning"].(string)
-				}
-				if reason != "" {
-					input = append(input, map[string]any{"type": "reasoning", "summary": []any{map[string]any{"type": "summary_text", "text": reason}}})
-				}
-			}
+			// Gemini continuation uses provider thought signatures on tool calls;
+			// never replay plaintext Chat reasoning history as model thoughts.
 			if content, exists := m["content"]; exists && content != nil {
-				normalized, err := geminiChatContentGeili(content)
+				normalized, err := geminiChatContentGeili(content, role == "assistant")
 				if err != nil {
 					return nil, err
 				}
-				input = append(input, map[string]any{"role": role, "content": normalized})
+				if parts, ok := normalized.([]any); !ok || len(parts) > 0 {
+					input = append(input, map[string]any{"role": role, "content": normalized})
+				}
 			}
 			if raw, exists := m["tool_calls"]; exists {
 				if role != "assistant" {
@@ -875,7 +878,7 @@ func geminiChatToResponsesGeili(source map[string]any) (map[string]any, error) {
 	req["input"] = input
 	return req, nil
 }
-func geminiChatContentGeili(raw any) (any, error) {
+func geminiChatContentGeili(raw any, historyAssistant ...bool) (any, error) {
 	if s, ok := raw.(string); ok {
 		return s, nil
 	}
@@ -888,6 +891,12 @@ func geminiChatContentGeili(raw any) (any, error) {
 		p, ok := v.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("content parts must be objects")
+		}
+		if len(historyAssistant) > 0 && historyAssistant[0] {
+			switch p["type"] {
+			case "thinking", "reasoning", "redacted_thinking":
+				continue
+			}
 		}
 		switch p["type"] {
 		case "text":

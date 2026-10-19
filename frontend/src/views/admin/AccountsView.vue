@@ -9,7 +9,6 @@
         </div>
         <div class="flex flex-wrap-reverse items-start justify-between gap-3">
           <AccountTableFilters
-            class="lg:w-auto lg:flex-1"
             v-model:searchQuery="params.search"
             :filters="params"
             :groups="groups"

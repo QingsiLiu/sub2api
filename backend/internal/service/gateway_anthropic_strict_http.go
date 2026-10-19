@@ -60,7 +60,7 @@ func copyAnthropicEndToEndHeaders(dst, src http.Header, request bool) {
 // buildAnthropicPassthroughRequest never parses or repairs the business body.
 // The configured base URL selects the destination; the inbound query is retained.
 func (s *GatewayService) buildAnthropicPassthroughRequest(ctx context.Context, c *gin.Context, account *Account, method, endpoint string, body io.Reader, token string) (*http.Request, error) {
-	baseURL := strings.TrimRight(account.GetBaseURL(), "/")
+	baseURL := strings.TrimRight(getAnthropicGatewayBaseURL(account), "/")
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}

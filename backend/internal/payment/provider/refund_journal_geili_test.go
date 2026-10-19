@@ -26,7 +26,7 @@ func TestAlipayRefundJournalKeepsRequestIdentityAndVerifiesQuery(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, []string{"geili-refund-7", "geili-refund-7"}, keys)
-	result := &alipay.TradeFastPayRefundQueryRsp{TradeNo: "trade-7", OutTradeNo: "order-7", OutRequestNo: "geili-refund-7", RefundAmount: "1.00", RefundStatus: "REFUND_SUCCESS"}
+	result := &alipay.TradeFastPayRefundQueryRsp{Error: alipay.Error{Code: alipay.CodeSuccess}, TradeNo: "trade-7", OutTradeNo: "order-7", OutRequestNo: "geili-refund-7", RefundAmount: "1.00", RefundStatus: "REFUND_SUCCESS"}
 	alipayTradeRefundQuery = func(_ context.Context, _ *alipay.Client, p alipay.TradeFastPayRefundQuery) (*alipay.TradeFastPayRefundQueryRsp, error) {
 		require.Equal(t, "geili-refund-7", p.OutRequestNo)
 		return result, nil

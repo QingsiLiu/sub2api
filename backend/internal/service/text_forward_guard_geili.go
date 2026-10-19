@@ -27,6 +27,7 @@ type geiliTextForwardWriter struct {
 	status, initialSize                int
 	stream, semantic, terminal, failed bool
 	responseID, model                  string
+	createdAtStamper                   responsesCreatedAtStamper
 	failurePayload                     []byte
 	writeErr                           error
 	clientDisconnected                 bool
@@ -395,6 +396,8 @@ func geiliObserveUpstreamOperation(c *gin.Context, payload []byte, eventType ...
 }
 
 func (w *geiliTextForwardWriter) observeTerminal(frame []byte) {
+	payloadForStamp := geiliSSEPayload(frame)
+	w.createdAtStamper.Observe(payloadForStamp, gjson.GetBytes(payloadForStamp, "type").String())
 	payload := geiliSSEPayload(frame)
 	if len(payload) == 0 && gjson.ValidBytes(frame) {
 		payload = frame
@@ -661,11 +664,13 @@ func GeiliWriteStreamFailure(c *gin.Context, err error) {
 		}
 	default:
 		responseID, model := "", ""
+		var stamp responsesCreatedAtStamper
 		if w, ok := c.Writer.(*geiliTextForwardWriter); ok {
 			responseID, model = w.responseID, w.model
+			stamp = w.createdAtStamper
 		}
 		body, _ := json.Marshal(gin.H{"error": errorBody})
-		frame = buildOpenAIResponseFailedSSE(responseID, model, body, message)
+		frame = buildOpenAIResponseFailedSSE(responseID, model, stamp.Value(), body, message)
 	}
 	_, _ = c.Writer.WriteString(frame)
 	c.Writer.Flush()

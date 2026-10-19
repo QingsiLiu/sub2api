@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // mappedAccountModelIDs is shared with GetAvailableModels. Nil retains the
@@ -52,6 +54,12 @@ func mappedAccountModelIDs(accounts []Account, platform string) []string {
 
 	// If no account has model_mapping, return nil (use default)
 	if !hasAnyMapping {
+		if platform == PlatformOpenAI {
+			models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs())
+			if len(models) != len(openai.DefaultModels) {
+				return models
+			}
+		}
 		return nil
 	}
 
@@ -64,6 +72,7 @@ func mappedAccountModelIDs(accounts []Account, platform string) []string {
 
 	if platform == PlatformOpenAI {
 		models = supplementUnmappedOpenAIModels(accounts, models)
+		models = filterRetiredOpenAIModelIDs(accounts, models)
 	}
 
 	return models
@@ -71,6 +80,9 @@ func mappedAccountModelIDs(accounts []Account, platform string) []string {
 
 // ModelListingSource is the gateway's allowlist source, shared with the plaza.
 func ModelListingSource(platform string, available, defaults []string) []string {
+	if platform == PlatformOpenAI && available != nil {
+		return available
+	}
 	if len(available) == 0 {
 		return defaults
 	}

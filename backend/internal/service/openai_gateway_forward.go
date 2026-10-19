@@ -65,7 +65,7 @@ func (s *OpenAIGatewayService) forwardGeiliAttempt(ctx context.Context, c *gin.C
 	if normalized {
 		body = normalizedBody
 	}
-	legacyIngressBody, legacyIngressChanged, legacyIngressErr := normalizeOpenAIResponsesLegacyIngress(body)
+	legacyIngressBody, legacyIngressChanged, legacyIngressErr := normalizeOpenAIResponsesLegacyIngressWithConfig(s.cfg, body)
 	if legacyIngressErr != nil {
 		return nil, legacyIngressErr
 	}

@@ -72,11 +72,15 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 	build, _ := s.buildGeminiChatCompletionsUpstreamRequestFunc(account, mapped, request.body, request.stream, useStream)
 	var resp *http.Response
 	var upstreamURL, requestIDHeader string
+	var checkedPolicy *ErrorPolicyResult
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
 		upstream, idHeader, buildErr := build(ctx)
 		if buildErr != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
+			}
+			if failover := s.handleVertexServiceAccountNotFound(ctx, c, account, buildErr); failover != nil {
+				return nil, failover
 			}
 			return nil, s.writeChatCompletionsError(c, 502, "upstream_error", "Failed to construct Gemini upstream request")
 		}
@@ -97,9 +101,9 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		} else {
 			resp = rebuilt
 		}
-		matched, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mapped)
-		resp = rebuilt
-		if matched {
+		checked, rebuilt := s.checkErrorPolicyInLoop(ctx, account, resp, mapped)
+		resp, checkedPolicy = rebuilt, checked
+		if checked != nil && *checked != ErrorPolicyNone {
 			break
 		}
 		if resp.StatusCode < 400 || !s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) || attempt == geminiMaxRetries {
@@ -144,7 +148,9 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		errorBody := s.readUpstreamErrorBody(resp)
 		errorBody = unwrapIfNeeded(account.Type == AccountTypeOAuth, errorBody)
 		policy := ErrorPolicyNone
-		if s.rateLimitService != nil {
+		if checkedPolicy != nil {
+			policy = *checkedPolicy
+		} else if s.rateLimitService != nil {
 			policy = s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, errorBody, mapped)
 		}
 		if policy == ErrorPolicyNone || policy == ErrorPolicyMatched {
