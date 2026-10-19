@@ -2468,7 +2468,7 @@ func (h *OpenAIGatewayHandler) acquireOpenAIAccountSlot(
 		c,
 		account.ID,
 		selection.WaitPlan.MaxConcurrency,
-		selection.WaitPlan.Timeout,
+		slotWaitTimeoutGeili(c, selection.WaitPlan.Timeout),
 		reqStream,
 		streamStarted,
 	)

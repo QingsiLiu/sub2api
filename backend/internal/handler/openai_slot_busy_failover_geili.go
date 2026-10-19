@@ -15,6 +15,7 @@ package handler
 // unschedulable accounts and cannot help a busy one.
 import (
 	"context"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,9 @@ const (
 	openAISlotBusyMaxSwitchesGeili = 3
 	// Saturated exclusions are re-admitted this many times before the error is final.
 	openAISlotBusyMaxRequeuesGeili = 1
+	// The re-admitted round only hunts slots that free right after the first
+	// timeout, so total latency stays within the pre-existing single-round worst case.
+	openAISlotBusyRequeueWaitGeili = 10 * time.Second
 )
 
 // openAISlotAcquireBusyGeili: the selected account stayed saturated. Nothing
@@ -104,6 +108,17 @@ func requeueBusyAccountsGeili(c *gin.Context, excluded map[int64]struct{}) bool 
 	state.requeues++
 	state.write = nil
 	return true
+}
+
+// slotWaitTimeoutGeili bounds the current round. The first round keeps the
+// scheduler's own wait plan; a re-admitted round only waits for the short window
+// in which an almost-free slot frees, instead of repeating the whole budget.
+func slotWaitTimeoutGeili(c *gin.Context, planned time.Duration) time.Duration {
+	state := openAISlotBusyStateFromGeili(c)
+	if state != nil && state.requeues > 0 && planned > openAISlotBusyRequeueWaitGeili {
+		return openAISlotBusyRequeueWaitGeili
+	}
+	return planned
 }
 
 // selectContextGeili marks the selection context while a saturated candidate can
