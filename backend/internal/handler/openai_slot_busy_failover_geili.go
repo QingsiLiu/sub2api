@@ -121,17 +121,22 @@ func slotWaitTimeoutGeili(c *gin.Context, planned time.Duration) time.Duration {
 	return planned
 }
 
-// selectContextGeili marks the selection context while a saturated candidate can
-// still be re-admitted. The account-recovery probe only restores accounts that
-// are not schedulable, so probing a pool whose only loss was saturation cannot
-// help and would delay the request by up to its foreground budget.
-func selectContextGeili(c *gin.Context) context.Context {
+// selectContextGeili marks the selection context while every excluded account was
+// excluded only because its slots were busy. The account-recovery probe restores
+// accounts that are not schedulable, so it cannot free a busy one and would add
+// its whole foreground budget to a request that is about to fail anyway.
+func selectContextGeili(c *gin.Context, excluded map[int64]struct{}) context.Context {
 	ctx := c.Request.Context()
 	state := openAISlotBusyStateFromGeili(c)
-	if state != nil && len(state.busy) > 0 && state.requeues < openAISlotBusyMaxRequeuesGeili {
-		return service.WithBusyRequeuePendingGeili(ctx)
+	if state == nil || len(state.busy) == 0 || len(excluded) == 0 {
+		return service.ClearBusyRequeuePendingGeili(ctx)
 	}
-	return service.ClearBusyRequeuePendingGeili(ctx)
+	for id := range excluded {
+		if _, busy := state.busy[id]; !busy {
+			return service.ClearBusyRequeuePendingGeili(ctx)
+		}
+	}
+	return service.WithBusyRequeuePendingGeili(ctx)
 }
 
 // writeOpenAISlotBusyExhaustedGeili writes the deferred concurrency error when

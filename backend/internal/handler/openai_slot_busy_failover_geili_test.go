@@ -124,7 +124,7 @@ func TestOpenAISlotBusyRequeueGeili(t *testing.T) {
 		_, c, _ := newSlotBusyTestGeili(t, &saturatedConcurrencyCacheGeili{}, true)
 		excluded := map[int64]struct{}{6453: {}}
 		markOpenAISlotBusyAccountGeili(c, 6453)
-		require.True(t, service.BusyRequeuePendingGeili(selectContextGeili(c)),
+		require.True(t, service.BusyRequeuePendingGeili(selectContextGeili(c, excluded)),
 			"while a saturated candidate can be re-admitted, the recovery probe is pointless")
 		require.True(t, requeueBusyAccountsGeili(c, excluded))
 		require.Empty(t, excluded, "the saturated account becomes a candidate again")
@@ -141,6 +141,6 @@ func TestOpenAISlotBusyRequeueGeili(t *testing.T) {
 
 	t.Run("without a saturated exclusion the context is never marked", func(t *testing.T) {
 		_, c, _ := newSlotBusyTestGeili(t, &saturatedConcurrencyCacheGeili{}, true)
-		require.False(t, service.BusyRequeuePendingGeili(selectContextGeili(c)))
+		require.False(t, service.BusyRequeuePendingGeili(selectContextGeili(c, nil)))
 	})
 }

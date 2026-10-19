@@ -690,7 +690,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithSchedulerForCapability(
-			selectContextGeili(c),
+			selectContextGeili(c, failedAccountIDs),
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
