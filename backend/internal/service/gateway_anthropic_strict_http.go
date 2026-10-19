@@ -101,7 +101,7 @@ func (s *GatewayService) buildAnthropicPassthroughRequest(ctx context.Context, c
 	}
 	// Strict mode ignores compatibility header overrides, just as it ignores
 	// model/body rewrites. The selected account supplies authentication only.
-	setAnthropicAPIKeyAuthHeader(req.Header, account, token, account.GetBaseURL())
+	setAnthropicAPIKeyAuthHeader(req.Header, account, token, baseURL)
 	return req, nil
 }
 

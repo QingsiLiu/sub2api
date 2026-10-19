@@ -85,14 +85,17 @@ func TestGatewayService_AnthropicPassthroughAndCountTokensUseSelectedBase(t *tes
 	account := gatewayAnthropicBaseURLAccount(map[string]any{
 		APIProtocolAnthropic: "https://ollama.com",
 	})
+	// Geili passthrough builders retain query/body bytes independently of protocol destination selection.
 	body := []byte(`{"model":"deepseek-v4-flash","max_tokens":256000,"messages":[{"role":"user","content":"hi"}]}`)
 	c := gatewayAnthropicBaseURLContext(t)
+	c.Request.URL.RawQuery = "beta=true"
 
 	passthroughReq, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "test-key")
 	require.NoError(t, err)
 	require.Equal(t, "https://ollama.com/v1/messages?beta=true", passthroughReq.URL.String())
 	require.Equal(t, "Bearer test-key", passthroughReq.Header.Get("Authorization"))
-	require.Equal(t, int64(65535), gjson.GetBytes(wireBody, "max_tokens").Int())
+	require.Equal(t, body, wireBody, "strict passthrough must not clamp or rewrite the body")
+	require.Equal(t, int64(256000), gjson.GetBytes(wireBody, "max_tokens").Int())
 
 	countPassthroughReq, err := svc.buildCountTokensRequestAnthropicAPIKeyPassthrough(context.Background(), c, account, body, "test-key")
 	require.NoError(t, err)
