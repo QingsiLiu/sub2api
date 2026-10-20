@@ -4,7 +4,7 @@ Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运
 
 ## 当前基线
 
-- 当前生产 `0.2.17-geili.1` 固定 `681c9385e56492cfd5de6a4a04ecc664f0979918` / `7c3ff7ade6a97b697bdd85fa2ce2c2562e0fb2ecd68f4da60baf416e9a24fb74`，已通过CI9任务/13门禁及同镜像完整Stage，13:54:50Z已平滑切流生产，14:01:01Z完成canonical恢复接入。原始`.23`保留并负责后台，新版后台暂停，实际`legacy_retained`，下一次发布被阻止，未完成旧实例回收。保留完整Geili与蓝绿排空，后续文档CI不得替换该digest；验收及生产实际状态见RELEASES.md顶部。用户本次已授权验证后不停机试发。
+- 当前生产 `0.2.17-geili.1` 固定 `681c9385e56492cfd5de6a4a04ecc664f0979918` / `7c3ff7ade6a97b697bdd85fa2ce2c2562e0fb2ecd68f4da60baf416e9a24fb74`，CI9任务/13门禁、同镜像完整Stage及10月19日平滑切流通过。2026-10-20 10:26:04Z按用户明确授权经canonical完成首轮旧`.23`后台交接，旧版正常退出0、新版未重启并成为唯一后台owner，事务`complete`，恢复日常单实例。停止的旧容器/镜像仅保留追溯，不能在新版有请求时重启原始`.23`；后续版本保持同digest Stage、每次资源/兼容审查及自然排空。1条既有已扣费日志投递失败原样保全，未重复扣费、不记为修复；实际证据见RELEASES.md及运维仓`docs/reports/legacy-handoff-20261020/`。本次不发布新应用版本，后续文档CI不得替换固定digest。
 
 - 2026-10-19早期历史基线（已被上条`.1`接管）：生产`.23` / `94f3b743d03e8775ab0b54efaf7249cad166a183` / `ee14e1c23e74398b6a0cd648c4cd8146febb3f9fc5c30cd83a888dd1c1a6ff4c`，蓝绿候选`.24` / `d0107479ed89969d8415ca0c29b013ad443a255b` / `bf08ef0db00dc9037430e2c990fea611f498e5d9753938e47aa739c41be54993`已Stage、未生产。只固定验收镜像，不按后续文档提交的CI或VERSION选制品。发布设计见`.github/geili/bluegreen-release.md`，实际状态以RELEASES.md顶部及运维仓本次原始报告为准；以下旧候选说明保留为历史。
 
