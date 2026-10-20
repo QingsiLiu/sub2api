@@ -42,9 +42,9 @@ def fixture_type(ops, module):
                             attempt = len(rows)
                         status = fixture.retry_modes[label]
                         if status and attempt <= 2:
-                            kind = 'model_not_found' if status == 404 else 'server_error'
+                            kind = 'model_not_found' if status in (401, 404) else 'server_error'
                             return self.reply(dict(error=dict(type=kind, code=kind,
-                                message='model not found' if status == 404 else 'synthetic relay temporarily unavailable')), status)
+                                message='model not found' if status in (401, 404) else 'synthetic relay temporarily unavailable')), status)
                     saved = self.rfile
                     try:
                         self.rfile = io.BytesIO(raw)
@@ -81,7 +81,7 @@ def fixture_type(ops, module):
             completed = 0
             for path in ('responses', 'chat/completions', 'messages'):
                 for stream in (False, True):
-                    for status in (502, 429, 404):
+                    for status in (502, 429, 404, 401):
                         label = path.replace('/', '-')+'-'+str(stream)+'-'+str(status)
                         key = self.scenario(label, status)
                         payload = dict(model=MODEL, stream=stream, max_tokens=32)
@@ -131,7 +131,7 @@ def main(argv=None):
             path = fixture.private/'billing-result.json'
             report = json.loads(path.read_text())
             report.update(astra_retry_runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                synthetic_only=True, real_payment=False, real_provider=False, synthetic_requests=19, max_http_concurrency=1)
+                synthetic_only=True, real_payment=False, real_provider=False, synthetic_requests=25, max_http_concurrency=1)
             ops.b.stage.private_json(path, report)
     return 0 if passed else 1
 

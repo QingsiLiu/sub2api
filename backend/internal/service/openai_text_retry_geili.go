@@ -8,6 +8,19 @@ import (
 
 const openAITextModelUnavailableCooldownGeili = 5 * time.Second
 
+// Request context distinguishes a text model used for text from that same
+// model hosting an image_generation tool. The latter keeps the media policy.
+func (a *Account) modelRateLimitResetForRequestGeili(ctx context.Context, scope string) *time.Time {
+	reset := a.modelRateLimitResetAt(scope)
+	if reset == nil || OpenAIImageGenerationIntentFromContext(ctx) || OpenAIImagesEndpointFromContext(ctx) {
+		return reset
+	}
+	limits, _ := a.Extra[modelRateLimitsKey].(map[string]any)
+	state, _ := limits[scope].(map[string]any)
+	effective := openAITextModelCooldownResetGeili(a, scope, state, *reset)
+	return &effective
+}
+
 // A relay's model-not-found response can be transient even for an explicitly
 // configured model. Keep a short backoff instead of removing text capacity for
 // half an hour. OAuth plan gates and media retain their existing policies.
@@ -52,6 +65,8 @@ func CanRetryOpenAITextFailureGeili(a *Account, failure *UpstreamFailoverError) 
 		return true
 	case 404:
 		return isUpstreamModelNotFoundError(failure.StatusCode, failure.ResponseBody)
+	case 401:
+		return isOpenAICompatibleModelNotFoundBody(failure.ResponseBody)
 	default:
 		return false
 	}
@@ -60,6 +75,7 @@ func CanRetryOpenAITextFailureGeili(a *Account, failure *UpstreamFailoverError) 
 type OpenAITextRetryPlanGeili struct {
 	Delay      time.Duration
 	AccountIDs []int64
+	Untried    bool
 }
 
 // OpenAITextRetryPlan is an error-path lookup. It never admits an account:
@@ -120,6 +136,9 @@ func (s *OpenAIGatewayService) OpenAITextRetryPlanGeili(ctx context.Context, gro
 		if !isOpenAICompatibleAccountEligibleForRequest(ctx, &copy, PlatformOpenAI, model, false, capability) ||
 			s.recoveryUpstreamChannelRestrictedGeili(ctx, groupID, &copy, model) {
 			continue
+		}
+		if _, failed := excluded[a.ID]; !failed && !until.After(now) && !s.isOpenAIAccountRequestRuntimeBlockedGeili(ctx, a, model) {
+			plan.Untried = true
 		}
 		delay := until.Sub(now) + 25*time.Millisecond
 		if delay < time.Second {

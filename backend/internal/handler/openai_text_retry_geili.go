@@ -49,6 +49,11 @@ func (s *openAITextRetryStateGeili) recover(c *gin.Context, gateway *service.Ope
 	if plan.Delay <= 0 {
 		return openAITextRetryNoneGeili
 	}
+	// Hitting the per-round switch count is not proof the pool is spent. Keep
+	// all failed IDs excluded while any fresh account can still serve the turn.
+	if selectionErr == nil && plan.Untried {
+		return openAITextRetryAgainGeili
+	}
 	// No tight loop when a relay keeps failing but has no Retry-After header.
 	backoff := time.Duration(min(s.rounds+1, 5)) * time.Second
 	if plan.Delay < backoff {

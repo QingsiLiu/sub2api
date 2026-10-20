@@ -51,6 +51,15 @@ func TestOpenAITextRetryGeiliPreservesOAuthMediaAndActualRateLimits(t *testing.T
 	}
 }
 
+func TestOpenAITextRetryGeiliTextModelWithImageToolRetainsMediaCooldown(t *testing.T) {
+	a := textRetryAccountGeili(1)
+	setAccountModelRateLimitSnapshot(&a, "gpt-6-astra", time.Now().Add(30*time.Minute), upstreamModelNotFoundReason, time.Now().Add(-10*time.Second))
+	ctx := WithOpenAIImageGenerationIntent(context.Background())
+	require.Greater(t, a.GetModelRateLimitRemainingTimeWithContext(ctx, "gpt-6-astra"), 29*time.Minute)
+	require.False(t, a.IsSchedulableForModelWithContext(ctx, "gpt-6-astra"))
+	require.Zero(t, a.GetModelRateLimitRemainingTime("gpt-6-astra"), "ordinary text can recover without changing the stored media record")
+}
+
 func TestOpenAITextRetryGeiliPlanRetainsPermanentExclusionsAndGates(t *testing.T) {
 	a, b, c := textRetryAccountGeili(1), textRetryAccountGeili(2), textRetryAccountGeili(3)
 	until := time.Now().Add(150 * time.Millisecond)

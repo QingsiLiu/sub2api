@@ -35,6 +35,7 @@ type textRetryUpstreamGeili struct {
 	calls    []int64
 	bodies   [][]byte
 	failures int
+	failCode int
 	cancel   context.CancelFunc
 }
 
@@ -51,6 +52,10 @@ func (u *textRetryUpstreamGeili) Do(req *http.Request, _ string, id int64, _ int
 			status = 429
 		}
 		response = `{"error":{"type":"server_error","message":"relay temporarily unavailable"}}`
+		if u.failCode != 0 {
+			status = u.failCode
+			response = `{"error":{"code":"model_not_found","message":"model not found"}}`
+		}
 		if len(u.calls) == 2 && u.cancel != nil {
 			time.AfterFunc(50*time.Millisecond, u.cancel)
 		}
@@ -67,9 +72,13 @@ func (u *textRetryUpstreamGeili) Do(req *http.Request, _ string, id int64, _ int
 	return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": []string{contentType}}, Body: io.NopCloser(strings.NewReader(response))}, nil
 }
 
-func newTextRetryHandlerGeili(t *testing.T, upstream *textRetryUpstreamGeili, cooldown bool) *OpenAIGatewayHandler {
+func newTextRetryHandlerGeili(t *testing.T, upstream *textRetryUpstreamGeili, cooldown bool, sizes ...int) *OpenAIGatewayHandler {
 	t.Helper()
-	accounts := make([]service.Account, 2)
+	size := 2
+	if len(sizes) > 0 {
+		size = sizes[0]
+	}
+	accounts := make([]service.Account, size)
 	for i := range accounts {
 		accounts[i] = service.Account{ID: int64(i + 1), Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey,
 			Status: service.StatusActive, Schedulable: true, Priority: i,
@@ -88,6 +97,16 @@ func newTextRetryHandlerGeili(t *testing.T, upstream *textRetryUpstreamGeili, co
 	h := NewOpenAIGatewayHandler(gateway, service.NewConcurrencyService(nil), billing, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, nil, cfg)
 	h.maxAccountSwitches = 10
 	return h
+}
+
+func TestOpenAITextRetryGeiliSwitchLimitStillReachesUntriedHealthyAccount(t *testing.T) {
+	u := &textRetryUpstreamGeili{failures: 4}
+	h := newTextRetryHandlerGeili(t, u, false, 5)
+	h.maxAccountSwitches = 2
+	c, rec := textRetryContextGeili(t, "/v1/responses", service.WithRequestRecovery(context.Background(), 5*time.Second))
+	h.Responses(c)
+	require.Equal(t, 200, rec.Code, rec.Body.String())
+	require.Equal(t, []int64{1, 2, 3, 4, 5}, u.calls, "never re-admit earlier failures before reaching the healthy fifth account")
 }
 
 func textRetryContextGeili(t *testing.T, path string, ctx context.Context) (*gin.Context, *httptest.ResponseRecorder) {
@@ -137,6 +156,15 @@ func TestOpenAITextRetryGeiliInitiallyCoolingPoolWaits(t *testing.T) {
 	h.Responses(c)
 	require.Equal(t, 200, rec.Code, rec.Body.String())
 	require.Len(t, u.calls, 1)
+}
+
+func TestOpenAITextRetryGeiliModel401WholePoolRecovers(t *testing.T) {
+	u := &textRetryUpstreamGeili{failures: 2, failCode: 401}
+	h := newTextRetryHandlerGeili(t, u, false)
+	c, rec := textRetryContextGeili(t, "/v1/responses", service.WithRequestRecovery(context.Background(), 5*time.Second))
+	h.Responses(c)
+	require.Equal(t, 200, rec.Code, rec.Body.String())
+	require.Len(t, u.calls, 3)
 }
 
 func TestOpenAITextRetryGeiliCancellationAndDeadlineStopReplay(t *testing.T) {
