@@ -16,6 +16,12 @@ func isOpenAILunaModelGeili(model string) bool {
 	}
 }
 
+// A proxy hostname does not turn an explicit Luna reasoning choice into a
+// catalog placeholder. Resolve account aliases before deciding its semantics.
+func preserveLunaNoneReasoningGeili(account *Account, model string) bool {
+	return account != nil && account.IsOpenAIApiKey() && isOpenAILunaModelGeili(account.GetMappedModel(model))
+}
+
 // Official Luna with reasoning disabled supports native Chat parameters, including
 // caps below the Responses minimum of 16. Keep explicit protocol overrides and
 // Responses-shaped requests on their configured path.

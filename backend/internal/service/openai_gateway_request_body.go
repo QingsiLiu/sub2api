@@ -87,6 +87,10 @@ func filterOpenAIResponsesNoneReasoningEffortForAccount(account *Account, body [
 	if len(body) == 0 || shouldPreserveOpenAIResponsesNoneReasoningEffort(account) {
 		return body, nil
 	}
+	// geili hook: Luna's explicit none remains valid behind an API Key proxy.
+	if preserveLunaNoneReasoningGeili(account, gjson.GetBytes(body, "model").String()) {
+		return body, nil
+	}
 
 	out := body
 	for _, path := range []string{"reasoning.effort", "reasoning_effort"} {
@@ -112,6 +116,11 @@ func filterOpenAIResponsesNoneReasoningEffortForAccount(account *Account, body [
 
 func deleteOpenAIResponsesNoneReasoningEffortFromObject(account *Account, body map[string]any) {
 	if body == nil || shouldPreserveOpenAIResponsesNoneReasoningEffort(account) {
+		return
+	}
+	// geili hook: share the HTTP rule with the WebSocket-to-HTTP bridge.
+	model, _ := body["model"].(string)
+	if preserveLunaNoneReasoningGeili(account, model) {
 		return
 	}
 	if effort, ok := body["reasoning_effort"].(string); ok && strings.EqualFold(strings.TrimSpace(effort), "none") {

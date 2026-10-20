@@ -103,6 +103,27 @@ func TestGeiliLunaOfficialResponsesPreservesNone(t *testing.T) {
 	require.Equal(t, int64(32), gjson.GetBytes(upstream.lastBody, "max_output_tokens").Int())
 }
 
+func TestGeiliLunaCompatibleResponsesPreservesExplicitNone(t *testing.T) {
+	for _, model := range []string{"gpt-6-luna", "gpt-5.6-luna"} {
+		t.Run(model, func(t *testing.T) {
+			body := []byte(`{"model":"public-luna","input":"hello","reasoning":{"effort":"none"},"max_output_tokens":32,"stream":false}`)
+			upstream := &httpUpstreamRecorder{resp: &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"id":"resp_fixture","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1}}`))}}
+			svc := &OpenAIGatewayService{cfg: structuredInputRetryTestConfig(), httpUpstream: upstream}
+			account := lunaParameterAccountGeili("https://compat.example")
+			account.Credentials["model_mapping"] = map[string]any{"public-luna": model}
+			c, _ := lunaParameterContextGeili("/v1/responses", body)
+			result, err := svc.Forward(context.Background(), c, account, body)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, "none", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+			require.Equal(t, int64(32), gjson.GetBytes(upstream.lastBody, "max_output_tokens").Int())
+			object := map[string]any{"model": "public-luna", "reasoning": map[string]any{"effort": "none"}}
+			deleteOpenAIResponsesNoneReasoningEffortFromObject(account, object)
+			require.Equal(t, "none", object["reasoning"].(map[string]any)["effort"])
+		})
+	}
+}
+
 func TestGeiliLunaNativeChatRoutingBoundaries(t *testing.T) {
 	for _, tc := range []struct {
 		name, baseURL, accountType, mode, model, effort string
