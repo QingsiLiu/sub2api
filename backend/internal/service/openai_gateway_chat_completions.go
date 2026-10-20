@@ -147,6 +147,10 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		}
 		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
 	}
+	// geili hook: retain official Luna's native Chat parameter semantics at none.
+	if !isResponsesShape && useNativeLunaChatGeili(account, body, defaultMappedModel) {
+		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
+	}
 	// 上游为 Responses（含 adaptive 下 Responses 形状入站且供应商有原生
 	// Responses 端点）：走下方 Chat Completions ↔ Responses 转换链。
 	SetActualOpenAIUpstreamEndpoint(c, openAIResponsesUpstreamEndpoint)
@@ -231,7 +235,8 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		// Normal path: convert Chat Completions → Responses.
 		// ChatCompletionsToResponses always sets Stream=true (upstream always streams).
 		chatReq.Model = upstreamModel
-		responsesReq, err = chatCompletionsToResponses(s.cfg, &chatReq)
+		// geili hook: explicit API Key completion ceilings must never become floors.
+		responsesReq, err = chatCompletionsToResponsesForAccountGeili(s.cfg, account, &chatReq)
 		if err != nil {
 			return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 		}
