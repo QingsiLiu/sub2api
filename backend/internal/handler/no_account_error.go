@@ -34,6 +34,8 @@ type noAccountErrorClassification struct {
 	ModelNotFound bool // true when this is a 404 model_not_found classification
 }
 
+var selectionMixedFailurePatternGeili = regexp.MustCompile(`(?:runtime_blocked|not_schedulable|quota_auto_pause\w*)=[1-9]\d*`)
+
 var selectionModelRateLimitedPattern = regexp.MustCompile(`(?:model_rate_limited|rate_limited)=(\d+)`)
 
 // classifySelectionFailureError preserves the scheduler's compact reason when
@@ -57,6 +59,11 @@ func classifySelectionFailureError(err error, fallback noAccountErrorClassificat
 	// from a local model-configuration issue to routing capacity, because call
 	// sites gate markOpsRoutingCapacityLimitedIfNoAvailable on ModelNotFound.
 	if fallback.ModelNotFound {
+		return fallback
+	}
+	// geili hook: a mixed pool of model cooldowns and runtime faults is not
+	// proof that every model-serving account was rate limited.
+	if selectionMixedFailurePatternGeili.MatchString(strings.ToLower(err.Error())) {
 		return fallback
 	}
 	match := selectionModelRateLimitedPattern.FindStringSubmatch(strings.ToLower(err.Error()))

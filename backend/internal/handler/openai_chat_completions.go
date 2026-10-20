@@ -169,6 +169,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
+	textRetry := newOpenAITextRetryStateGeili(true)
 	var lastFailoverErr *service.UpstreamFailoverError
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 
@@ -209,6 +210,15 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Error(openAICompatibleSelectionErrorForLog(err, requestPlatform)),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
+			// geili hook: preserve the client request while relay capacity recovers.
+			switch textRetry.recover(c, h.gatewayService, apiKey.GroupID, forwardModel, requestPlatform, failedAccountIDs, service.OpenAIEndpointCapabilityChatCompletions, err) {
+			case openAITextRetryAgainGeili:
+				switchCount = 0
+				continue
+			case openAITextRetryStopGeili:
+				return
+			}
+
 			if len(failedAccountIDs) == 0 {
 				cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel)
 				cls = classifySelectionFailureError(err, cls)
@@ -400,10 +410,18 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 							continue
 						}
 					}
+					textRetry.record(account, failoverErr)
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
 					if switchCount >= maxAccountSwitches {
+						switch textRetry.recover(c, h.gatewayService, apiKey.GroupID, forwardModel, requestPlatform, failedAccountIDs, service.OpenAIEndpointCapabilityChatCompletions, nil) {
+						case openAITextRetryAgainGeili:
+							switchCount = 0
+							continue
+						case openAITextRetryStopGeili:
+							return
+						}
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}

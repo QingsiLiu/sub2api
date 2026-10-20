@@ -2532,6 +2532,10 @@ func (s *RateLimitService) HandleUpstreamModelNotFound(ctx context.Context, acco
 	if modelKey == "" {
 		return false
 	}
+	// geili hook: relay text availability can recover on the very next retry.
+	if openAITextModelUnavailableGeili(account, modelKey, reason) && !OpenAIImageGenerationIntentFromContext(ctx) {
+		cooldown = openAITextModelUnavailableCooldownGeili
+	}
 	if shouldSkipCodexPlanGatedImageModelCooldown(ctx, reason, requestedModel, modelKey) {
 		return true
 	}

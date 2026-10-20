@@ -195,6 +195,8 @@ func (a *Account) modelRateLimitResetAt(scope string) *time.Time {
 	if err != nil {
 		return nil
 	}
+	// geili hook: cap legacy relay model-not-found pauses as well as new ones.
+	resetAt = openAITextModelCooldownResetGeili(a, scope, rawLimit, resetAt)
 	return &resetAt
 }
 
