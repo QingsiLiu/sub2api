@@ -38,7 +38,7 @@ func applyAccountRuntimeAvailabilityFilterGeili(ctx context.Context, q *dbent.Ac
 	}
 	quotaIDs := accountQuotaExceededIDsGeili(quotaAccounts)
 	now := time.Now()
-	q.Where(dbaccount.StatusEQ(service.StatusActive), dbaccount.SchedulableEQ(true), dbpredicate.Account(func(s *entsql.Selector) {
+	q.Where(dbpredicate.Account(func(s *entsql.Selector) {
 		conditions := []*entsql.Predicate{
 			entsql.GT(s.C(dbaccount.FieldRateLimitResetAt), now),
 			entsql.GT(s.C(dbaccount.FieldOverloadUntil), now),
@@ -51,8 +51,11 @@ func applyAccountRuntimeAvailabilityFilterGeili(ctx context.Context, q *dbent.Ac
 			}))
 		}
 		s.Where(entsql.And(
-			entsql.ExprP(`NOT EXISTS (SELECT 1 FROM account_runtime_geili r WHERE r.account_id=`+s.C("id")+` AND r.balance_blocked)`),
-			entsql.Or(conditions...),
+			entsql.ExprP(`NOT EXISTS (SELECT 1 FROM account_runtime_geili r WHERE r.account_id=`+s.C("id")+` AND r.stop_reason='manual')`),
+			entsql.Or(
+				entsql.EQ(s.C(dbaccount.FieldStatus), service.StatusError),
+				entsql.And(entsql.EQ(s.C(dbaccount.FieldStatus), service.StatusActive), entsql.EQ(s.C(dbaccount.FieldSchedulable), true), entsql.Or(conditions...)),
+			),
 		))
 	}))
 	return nil

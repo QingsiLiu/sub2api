@@ -304,8 +304,8 @@
             </div>
           </template>
           <template #cell-schedulable="{ row }">
-            <button @click="handleToggleSchedulable(row)" :disabled="togglingSchedulable === row.id" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-dark-800" :class="[row.schedulable ? 'bg-primary-500 hover:bg-primary-600' : 'bg-gray-200 hover:bg-gray-300 dark:bg-dark-600 dark:hover:bg-dark-500']" :title="row.schedulable ? t('admin.accounts.schedulableEnabled') : t('admin.accounts.schedulableDisabled')">
-              <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="[row.schedulable ? 'translate-x-4' : 'translate-x-0']" />
+            <button @click="handleToggleSchedulable(row)" :disabled="togglingSchedulable === row.id" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-dark-800" :class="[accountSchedulingEnabledGeili(row) ? 'bg-primary-500 hover:bg-primary-600' : 'bg-gray-200 hover:bg-gray-300 dark:bg-dark-600 dark:hover:bg-dark-500']" :title="accountSchedulingEnabledGeili(row) ? t('admin.accounts.schedulableEnabled') : t('admin.accounts.schedulableDisabled')">
+              <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="[accountSchedulingEnabledGeili(row) ? 'translate-x-4' : 'translate-x-0']" />
             </button>
           </template>
           <template #cell-today_stats="{ row }">
@@ -466,7 +466,6 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
-    <p class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.runtime.autoEnableHint') }}</p>
     <AccountSubmissionInviteModal :show="showSubmissionInvite" :groups="groups" :proxies="proxies" @close="showSubmissionInvite = false" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
@@ -538,7 +537,7 @@ import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountRecheckDialogGeili from '@/components/account/AccountRecheckDialogGeili.vue'
-import { accountRuntimeStateGeili } from '@/utils/accountRuntimeGeili'
+import { accountRuntimeStateGeili, accountSchedulingEnabledGeili } from '@/utils/accountRuntimeGeili'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
@@ -2002,7 +2001,16 @@ const handleBulkProbeUpstreamBilling = async () => {
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
   if (accountIds.length === 0) return
   const idSet = new Set(accountIds)
-  accounts.value = accounts.value.map((account) => (idSet.has(account.id) ? { ...account, schedulable } : account))
+  accounts.value = accounts.value.map((account) => {
+    if (!idSet.has(account.id)) return account
+    const updated = { ...account, schedulable, status: schedulable && account.status === 'inactive' ? 'active' as const : account.status }
+    return { ...updated, runtime_state: {
+      ...account.runtime_state,
+      balance_blocked: account.runtime_state?.balance_blocked ?? false,
+      state: schedulable ? accountRuntimeStateGeili({ ...updated, runtime_state: undefined }) : 'stopped' as const,
+      stop_reason: schedulable ? (updated.status === 'error' ? 'temporary_failure' : '') : 'manual'
+    } }
+  })
 }
 const normalizeBulkSchedulableResult = (
   result: {
@@ -2211,7 +2219,7 @@ const accountMatchesCurrentFilters = (account: Account) => {
     const isTempUnschedulable = Number.isFinite(tempUnschedUntil) && tempUnschedUntil > now
 
     if (filters.status === 'geili_balance_stopped') {
-      if (accountRuntimeStateGeili(account) !== 'balance_stopped') return false
+      if (!account.runtime_state?.balance_blocked) return false
     } else if (filters.status === 'geili_temporary_stopped') {
       if (accountRuntimeStateGeili(account) !== 'temporarily_stopped') return false
     } else if (filters.status === 'active') {
@@ -2469,7 +2477,6 @@ const handleManualBalanceStop = async (a: Account) => {
   }
 }
 const handleRecoverState = async (a: Account) => {
-  if (a.runtime_state?.balance_blocked) { handleRecheck(a); return }
   try {
     const updated = await adminAPI.accounts.recoverState(a.id)
     patchAccountInList(updated)
@@ -2559,8 +2566,7 @@ const confirmCreateSparkShadow = async () => {
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }
 const confirmDelete = async () => { if(!deletingAcc.value) return; try { await adminAPI.accounts.delete(deletingAcc.value.id); showDeleteDialog.value = false; deletingAcc.value = null; reload() } catch (error) { console.error('Failed to delete account:', error) } }
 const handleToggleSchedulable = async (a: Account) => {
-  const nextSchedulable = !a.schedulable
-  if (nextSchedulable && a.runtime_state?.balance_blocked) { handleRecheck(a); return }
+  const nextSchedulable = !accountSchedulingEnabledGeili(a)
   togglingSchedulable.value = a.id
   try {
     const updated = await adminAPI.accounts.setSchedulable(a.id, nextSchedulable)

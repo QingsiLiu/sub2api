@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAccountRecoveryGeiliAutomaticCannotOverrideManualDebt(t *testing.T) {
+func TestAccountRecoveryGeiliAutomaticRecoversErrorsWithoutClearingDebt(t *testing.T) {
 	repo := newRecoveryRuntimeRepoGeili(stoppedRecoveryAccountGeili(1, 7))
 	require.NoError(t, repo.MarkAccountBalanceBlockedGeili(context.Background(), 1, "manual"))
 	var probes atomic.Int64
@@ -26,9 +26,13 @@ func TestAccountRecoveryGeiliAutomaticCannotOverrideManualDebt(t *testing.T) {
 	defer recovery.Stop()
 	a, err := repo.GetByID(context.Background(), 1)
 	require.NoError(t, err)
-	require.ErrorIs(t, recovery.check(context.Background(), a, "m", "automatic", true), ErrAccountBalanceBlockedGeili)
-	require.Zero(t, probes.Load())
-	require.Empty(t, repo.activations)
+	require.NoError(t, recovery.check(context.Background(), a, "m", "automatic", true))
+	require.Equal(t, int64(1), probes.Load())
+	require.Len(t, repo.activations, 1)
+	updated, err := repo.GetByID(context.Background(), 1)
+	require.NoError(t, err)
+	require.True(t, updated.Schedulable)
+	require.True(t, updated.RuntimeState.BalanceBlocked)
 }
 
 func TestAccountRecoveryGeiliFailedConfirmedProbeKeepsManualDebt(t *testing.T) {
@@ -69,19 +73,23 @@ func TestAccountRecoveryGeiliConcurrentManualMarkInvalidatesProbe(t *testing.T) 
 	require.Empty(t, repo.activations)
 }
 
-func TestAccountRecoveryGeiliManualDebtOwnerExcludesChildProbe(t *testing.T) {
+func TestAccountRecoveryGeiliParentDebtLabelDoesNotExcludeChildProbe(t *testing.T) {
 	parent, child := stoppedRecoveryAccountGeili(1, 7), stoppedRecoveryAccountGeili(2, 7)
+	parent.Status, parent.Schedulable = StatusActive, true
 	child.ParentAccountID = &parent.ID
 	repo := newRecoveryRuntimeRepoGeili(parent, child)
 	require.NoError(t, repo.MarkAccountBalanceBlockedGeili(context.Background(), 1, "manual"))
 	recovery := NewAccountRecoveryServiceGeili(repo, func(context.Context, *Account, string) (bool, error) {
-		t.Fatal("child cannot override its credential owner's manual debt mark")
+
 		return true, nil
 	}, nil)
 	defer recovery.Stop()
 	_, err := recovery.RecheckAccountGeili(context.Background(), 2, "m", true)
-	require.ErrorIs(t, err, ErrAccountBalanceBlockedGeili)
-	require.Empty(t, repo.records)
+	require.NoError(t, err)
+	require.Len(t, repo.records, 1)
+	state, err := repo.GetAccountRuntimeGeili(context.Background(), 1)
+	require.NoError(t, err)
+	require.True(t, state.BalanceBlocked)
 }
 
 func TestAccountRecoveryGeiliCredentialOwnerAdmission(t *testing.T) {
@@ -190,9 +198,9 @@ func TestAccountRecoveryGeiliPresentationUsesActualState(t *testing.T) {
 		schedulable, manualDebt, cooling    bool
 	}{
 		{"active ignores retired stop metadata", StatusActive, "enabled", "", true, false, false},
-		{"inactive stays stopped", "inactive", "stopped", "", false, false, false},
+		{"inactive stays stopped", "inactive", "stopped", "manual", false, false, false},
 		{"actual cooling window", StatusActive, "temporarily_stopped", "temporary_failure", true, false, true},
-		{"manual debt mark", StatusActive, "balance_stopped", "balance", true, true, false},
+		{"manual debt mark", StatusActive, "enabled", "", true, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := stoppedRecoveryAccountGeili(1, 7)
@@ -218,7 +226,7 @@ func TestAccountRecoveryGeiliPresentationKeepsRecoveryRecords(t *testing.T) {
 	a.RuntimeState = &AccountRuntimeStateGeili{LastProbe: probe,
 		Models: map[string]AccountModelHealthGeili{"m": {Blocked: true, LastProbe: probe}}}
 	view := PresentAccountRuntimeGeili(&a)
-	require.Equal(t, "stopped", view["state"])
+	require.Equal(t, "temporarily_stopped", view["state"])
 	require.Equal(t, &future, view["next_check_at"])
 	require.Equal(t, "failed", view["last_probe"].(map[string]any)["status"])
 	model := view["models"].(map[string]any)["m"].(map[string]any)

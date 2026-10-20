@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAccountRecoveryGeiliIntegrationDiscoversInactiveAndErrorInRealGroup(t *testing.T) {
+func TestAccountRecoveryGeiliIntegrationRecoversOnlyErrorsInRealGroup(t *testing.T) {
 	for _, status := range []string{"inactive", service.StatusError} {
 		t.Run(status, func(t *testing.T) {
 			ctx := context.Background()
@@ -50,9 +50,15 @@ func TestAccountRecoveryGeiliIntegrationDiscoversInactiveAndErrorInRealGroup(t *
 				return true, nil
 			}, nil)
 			defer recovery.Stop()
-			wait, cancel := context.WithTimeout(ctx, 3*time.Second)
+			wait, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 			defer cancel()
-			require.True(t, recovery.RecoverGroupGeili(wait, group.ID, "claude-sonnet-4-5", nil))
+			recovered := recovery.RecoverGroupGeili(wait, group.ID, "claude-sonnet-4-5", nil)
+			if status == "inactive" {
+				require.False(t, recovered)
+				require.Zero(t, probes.Load())
+				return
+			}
+			require.True(t, recovered)
 			restored, err := repo.GetByID(ctx, account.ID)
 			require.NoError(t, err)
 			require.Equal(t, service.StatusActive, restored.Status)

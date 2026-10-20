@@ -9,7 +9,7 @@ import (
 
 var (
 	ErrAccountManualBalanceUnavailableGeili = infraerrors.New(http.StatusServiceUnavailable, "ACCOUNT_MANUAL_BALANCE_UNAVAILABLE", "Manual upstream balance controls unavailable")
-	ErrAccountManualBalanceShadowGeili      = infraerrors.New(http.StatusBadRequest, "ACCOUNT_MANUAL_BALANCE_USE_PARENT", "Manage the balance stop on this shadow account's parent")
+	ErrAccountManualBalanceShadowGeili      = infraerrors.New(http.StatusBadRequest, "ACCOUNT_MANUAL_BALANCE_USE_PARENT", "Manage the unpaid label on this shadow account's parent")
 )
 
 // Manual balance controls are optional; ordinary account repositories and runtime

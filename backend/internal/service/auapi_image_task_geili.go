@@ -369,11 +369,6 @@ func (s *AUAPIImageTaskService) step(ctx context.Context, t *AUAPIImageTaskRecor
 	if !account.IsAUAPIImageAccount() || account.GetCredential("api_key") == "" {
 		return errors.New("AUAPI task account credentials unavailable")
 	}
-	// geili hook: the fresh account read already proves debt. Avoid even a
-	// pricing request for unsubmitted work; accepted tasks still poll/store.
-	if (t.Phase == "estimate" || t.Phase == "submit") && account.RuntimeState != nil && account.RuntimeState.BalanceBlocked {
-		return NewAccountRuntimeAdmissionErrorGeili("balance")
-	}
 	// Task ownership stays on the accepted account and endpoint even if routing changes.
 	copy := *account
 	copy.Credentials = make(map[string]any, len(account.Credentials))

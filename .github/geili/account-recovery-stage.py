@@ -462,7 +462,7 @@ def fixture_type(cache, source):
             self.api('/admin/users/' + str(self.owner['id']) + '/balance',
                      {'balance': 100, 'operation': 'set', 'notes': 'Synthetic mock-only recovery acceptance'}, self.admin)
 
-        def new_case(self, label, mode='healthy', manual=False, pool=False, group=None, declare_allowlist=True):
+        def new_case(self, label, mode='healthy', stopped=False, pool=False, group=None, declare_allowlist=True):
             if type(declare_allowlist) is not bool:
                 raise RuntimeError('fixture model declaration opt-out must be explicit boolean')
             group_payload = {'name': 'Recovery ' + label + ' ' + self.suffix,
@@ -479,8 +479,8 @@ def fixture_type(cache, source):
                     'model_mapping': {MODEL: MODEL, OTHER_MODEL: OTHER_MODEL}}, 'group_ids': [group['id']], 'concurrency': 4, 'priority': 1}, self.admin)
             self.snapshot['recovery_account_names'][str(account['id'])] = account['name']
             cache.b.stage.private_json(self.private / 'snapshot.json', self.snapshot)
-            if manual:
-                self.api('/admin/accounts/' + str(account['id']) + '/schedulable', {'schedulable': False}, self.admin)
+            if stopped:
+                self.request('/api/v1/admin/accounts/' + str(account['id']), {'status': 'error'}, self.admin, 'PUT')
             key = self.api('/keys', {'name': 'Recovery ' + label + ' ' + self.suffix,
                 'billing_source': 'balance', 'routing_mode': 'composite', 'group_ids': [group['id']]}, self.owner['token'])
             return {'label': label, 'group': group, 'account': account, 'key': key}
@@ -546,10 +546,10 @@ def fixture_type(cache, source):
 
             self.probe_scope_checks()
             self.recoverable_catalog_checks()
-            manual = self.new_case('manual', manual=True)
-            unrelated = self.new_case('other-group', manual=True)
+            manual = self.new_case('manual', stopped=True)
+            unrelated = self.new_case('other-group', stopped=True)
             resumed = self.call(manual)
-            self.check('manually stopped same-group account is checked and resumes customer request', completed('messages', resumed)
+            self.check('error-stopped same-group account is checked and resumes customer request', completed('messages', resumed)
                 and self.account_state(manual)['runtime_state']['state'] == 'enabled',
                 {**response_detail(resumed), 'calls': self.counts('manual')})
             self.check('recovery never probes another target group', self.counts('other-group') == {'inference': 0, 'probes': 0})
@@ -566,58 +566,48 @@ def fixture_type(cache, source):
             balance = self.new_case('balance', mode='balance', pool=True)
             failed = self.call(balance)
             state = self.account_state(balance)
-            self.check('supplier credit error is a failure without an automatic debt mark', not completed('messages', failed)
+            self.check('supplier error does not create an automatic debt label', not completed('messages', failed)
                 and not state['runtime_state']['balance_blocked'], self.counts('balance'))
             before = self.counts('balance')
-            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/manual-balance-stop',
-                                    {'blocked': True}, self.admin, 'PUT')
+            scheduling = (state['status'], state['schedulable'])
+            path = '/api/v1/admin/accounts/' + str(balance['account']['id'])
+            response = self.request(path + '/manual-balance-stop', {'blocked': True}, self.admin, 'PUT')
             state = self.account_state(balance)
-            self.check('manual debt mark stops scheduling without querying the supplier', response[0] == 200
-                and state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active'
-                and self.counts('balance') == before, {'status': response[0]})
-            self.wait_until('manual debt account has no remaining probe lease', lambda: self.lease_count([balance]) == 0)
-            before = self.counts('balance')
-            for path, data, method in [('/schedulable', {'schedulable': True}, None),
-                                      ('/recover-state', {}, None), ('/clear-error', {}, None),
-                                      ('', {'status': 'active'}, 'PUT')]:
-                response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + path, data, self.admin, method)
-                state = self.account_state(balance)
-                self.check('legacy enable cannot bypass manual debt: ' + (path or 'update'),
-                    state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active',
-                    {'status': response[0]})
-            denied = self.call(balance, secondary=True)
-            self.check('second instance excludes manually debt-stopped account without inference or probes',
-                not completed('messages', denied) and self.counts('balance') == before, self.counts('balance'))
-            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/recheck',
-                                    {'model': MODEL}, self.admin)
-            self.check('manual debt mark requires explicit clearance before an ordinary recheck', response[0] == 409
+            self.check('marking unpaid preserves scheduling without supplier I/O', response[0] == 200
+                and state['runtime_state']['balance_blocked'] and (state['status'], state['schedulable']) == scheduling
                 and self.counts('balance') == before, {'status': response[0]})
             with self.lock: self.recovery_modes['balance'] = 'healthy'
+            response = self.request(path + '/schedulable', {'schedulable': False}, self.admin)
+            state = self.account_state(balance)
+            self.check('manual switch records an independent stop', response[0] == 200
+                and not state['schedulable'] and state['runtime_state']['stop_reason'] == 'manual', {'status': response[0]})
+            self.wait_until('manual stop has no remaining probe lease', lambda: self.lease_count([balance]) == 0)
+            denied = self.call(balance, secondary=True)
+            self.check('replica does not automatically probe or resume a manual stop', not completed('messages', denied)
+                and self.counts('balance') == before, self.counts('balance'))
             usage_before = self.usage(balance)
-            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/manual-balance-stop',
-                                    {'blocked': False}, self.admin, 'PUT')
+            response = self.request(path + '/recheck', {'model': MODEL}, self.admin)
             state = self.account_state(balance)
-            self.check('clearing manual debt leaves the account stopped without supplier I/O', response[0] == 200
-                and not state['runtime_state']['balance_blocked'] and not state['schedulable'] and state['status'] != 'active'
-                and self.counts('balance') == before, {'status': response[0]})
-            response = self.request('/api/v1/admin/accounts/' + str(balance['account']['id']) + '/recheck',
-                                    {'model': MODEL}, self.admin)
+            self.check('explicit healthy check preserves manual stop and unpaid label', response[0] == 200
+                and not state['schedulable'] and state['runtime_state']['balance_blocked']
+                and self.counts('balance')['probes'] == before['probes'] + 1, {'status': response[0]})
+            self.check('administrator check has no customer usage', self.usage(balance) == usage_before)
+            response = self.request(path + '/manual-balance-stop', {'blocked': False}, self.admin, 'PUT')
             state = self.account_state(balance)
-            self.check('complete current probe activates a manually cleared account', response[0] == 200
-                and not state['runtime_state']['balance_blocked'] and state['runtime_state']['state'] == 'enabled'
-                and self.counts('balance')['probes'] == before['probes'] + 1,
-                {'status': response[0], 'calls': self.counts('balance')})
-            self.check('administrator recovery probe has no customer usage', self.usage(balance) == usage_before)
+            self.check('clearing unpaid does not enable a manually stopped account', response[0] == 200
+                and not state['runtime_state']['balance_blocked'] and not state['schedulable'], {'status': response[0]})
+            response = self.request(path + '/schedulable', {'schedulable': True}, self.admin)
             resumed = self.call(balance, secondary=True)
-            self.check('replica sees manually cleared and recovered state without restart', completed('messages', resumed))
+            self.check('only explicit enable resumes the manually stopped account', response[0] == 200
+                and completed('messages', resumed), response_detail(resumed))
             row = self.wait_usage(balance, 1)
-            self.check('post-clearance customer request settles exactly once', row['n'] == 1 and row['wrong_group'] == 0, row)
+            self.check('resumed customer request settles exactly once', row['n'] == 1 and row['wrong_group'] == 0, row)
 
         def probe_scope_checks(self):
             # Same valid stopped account/key: media-output requests must not
             # create probes, then an ordinary text request must recover it.
             for protocol in PROTOCOLS:
-                case = self.new_case('scope-' + protocol.replace('/', '-'), manual=True)
+                case = self.new_case('scope-' + protocol.replace('/', '-'), stopped=True)
                 payload = {'model': MODEL, 'stream': True, 'max_tokens': 16}
                 if protocol == 'responses':
                     payload.update(input='fixture_scope_media', tools=[{'type': 'image_generation'}])
@@ -636,8 +626,8 @@ def fixture_type(cache, source):
         def recoverable_catalog_checks(self):
             # Exercise the real HTTP admission fix independently of an explicit
             # group allowlist. Only this stopped account declares model mappings.
-            for status, protocol in (('inactive', 'messages'), ('error', 'responses')):
-                case = self.new_case('catalog-' + status, declare_allowlist=False)
+            for status, protocol in (('error', 'messages'), ('error', 'responses')):
+                case = self.new_case('catalog-' + protocol, declare_allowlist=False)
                 response = self.request('/api/v1/admin/accounts/' + str(case['account']['id']),
                                         {'status': status}, self.admin, 'PUT')
                 before = self.account_state(case)
@@ -657,8 +647,8 @@ def fixture_type(cache, source):
         def bounded_recovery_checks(self):
             # Isolated group, five stopped candidates. Only three may be probed
             # in the first batch; the customer request owns one billable result.
-            candidates = [self.new_case('auto-0', mode='hold_probe', manual=True)]
-            candidates.extend(self.new_case('auto-' + str(i), mode='hold_probe', manual=True,
+            candidates = [self.new_case('auto-0', mode='hold_probe', stopped=True)]
+            candidates.extend(self.new_case('auto-' + str(i), mode='hold_probe', stopped=True,
                                             group=candidates[0]['group']) for i in range(1, 5))
             labels = [case['label'] for case in candidates]
             self.probe_release.clear()
@@ -680,7 +670,7 @@ def fixture_type(cache, source):
 
             # Four administrator probes split across primary and same-image
             # replica. PostgreSQL coordinates their global lease admission.
-            cases = [self.new_case('global-' + str(i), mode='hold_probe', manual=True) for i in range(5)]
+            cases = [self.new_case('global-' + str(i), mode='hold_probe', stopped=True) for i in range(5)]
             labels = [case['label'] for case in cases]
             self.probe_release.clear()
             def recheck(index):
@@ -703,7 +693,7 @@ def fixture_type(cache, source):
             self.check('global administrator probe batch adds zero customer usage', all(self.usage(case)['n'] == 0 for case in cases))
 
         def timing_and_backoff_checks(self):
-            delayed = self.new_case('background', mode='probe_unhealthy', manual=True)
+            delayed = self.new_case('background', mode='probe_unhealthy', stopped=True)
             response = self.timed_call(delayed)
             self.check('actual foreground recovery wait ends at30s plus bounded overhead', foreground_wait_ok(response), response[2])
             self.check('foreground failed wait has no customer inference or charge', self.counts('background')['inference'] == 0

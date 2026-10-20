@@ -43,7 +43,7 @@ func TestAccountAvailabilityFilterGeiliTemporaryPredicateUsesCurrentFields(t *te
 	ctx := service.WithAccountAvailabilityFilterGeili(context.Background(), "temporarily_stopped")
 	q := repo.client.Account.Query()
 	require.NoError(t, applyAccountRuntimeAvailabilityFilterGeili(ctx, q))
-	mock.ExpectQuery(`(?s)SELECT COUNT.*NOT EXISTS \(SELECT 1 FROM account_runtime_geili.*balance_blocked.*rate_limit_reset_at.*overload_until.*temp_unschedulable_until.*auto_pause_on_expired.*expires_at.*ANY\(`).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`(?s)SELECT COUNT.*rate_limit_reset_at.*overload_until.*temp_unschedulable_until.*auto_pause_on_expired.*expires_at.*ANY\(`).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	count, err := q.Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, count)

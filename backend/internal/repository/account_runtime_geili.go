@@ -134,8 +134,8 @@ func (r *accountRepository) LoadAccountRuntimeBatchGeili(ctx context.Context, id
 	return out, rows.Err()
 }
 
-// Every runtime mutation locks the account first; the legacy account guard and
-// activation share that lock, preventing a late probe grant from racing debt.
+// Every runtime mutation locks the account first. Scheduling switches and probe
+// activation share that lock, preventing late grants from racing manual stops.
 func (r *accountRepository) withAccountRuntimeGeili(ctx context.Context, id int64, fn func(*accountRepository, *service.AccountRuntimeStateGeili) error) error {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
@@ -203,11 +203,7 @@ func (r *accountRepository) MarkAccountBalanceBlockedGeili(ctx context.Context, 
 			state.BalanceReason = "insufficient_balance"
 		}
 		state.BalanceBlockedAt = &now
-		state.StopReason = "balance"
-		if err := persistAccountRuntimeGeili(ctx, view, state, true); err != nil {
-			return err
-		}
-		return stopRuntimeAccountGeili(ctx, view, id, state.BalanceReason)
+		return persistAccountRuntimeGeili(ctx, view, state, true)
 	})
 }
 
@@ -234,7 +230,7 @@ func (r *accountRepository) RecordModelFailureGeili(ctx context.Context, id int6
 			health.NextProbeAt = &nextProbeAt
 		}
 		state.Models[model] = health
-		if model == "" {
+		if model == "" && state.StopReason != "manual" {
 			state.StopReason = "temporary_failure"
 			state.NextCheckAt = health.NextCheckAt
 		}
@@ -332,11 +328,9 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 		}
 		account.RuntimeState = state
 		if account.ParentAccountID != nil {
-			// Fault-path only. Parent manual stop updates all children in its
-			// transaction. Avoid a child->parent lock inversion with that writer;
-			// if it is waiting on this child, its later UPDATE wins the stop.
+			// Fault-path only. Preserve shared credential availability rules.
 			var allowed bool
-			err := accountRuntimeQueryRowGeili(ctx, view.sql, `SELECT p.deleted_at IS NULL AND p.status='active' AND (p.temp_unschedulable_until IS NULL OR p.temp_unschedulable_until<=NOW()) AND (NOT p.auto_pause_on_expired OR p.expires_at IS NULL OR p.expires_at>NOW()) AND NOT COALESCE(r.balance_blocked,FALSE) FROM accounts p LEFT JOIN account_runtime_geili r ON r.account_id=p.id WHERE p.id=$1`, *account.ParentAccountID).Scan(&allowed)
+			err := accountRuntimeQueryRowGeili(ctx, view.sql, `SELECT p.deleted_at IS NULL AND p.status='active' AND (p.temp_unschedulable_until IS NULL OR p.temp_unschedulable_until<=NOW()) AND (NOT p.auto_pause_on_expired OR p.expires_at IS NULL OR p.expires_at>NOW()) FROM accounts p WHERE p.id=$1`, *account.ParentAccountID).Scan(&allowed)
 			if errors.Is(err, sql.ErrNoRows) || err == nil && !allowed {
 				return service.ErrAccountRuntimeConflictGeili
 			}
@@ -366,14 +360,7 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 		if !success || !complete {
 			return service.ErrAccountProbeUnhealthyGeili
 		}
-		if state.BalanceBlocked {
-			if !input.TrustedBalanceVerified || !balanceVerified || (state.BalanceBlockedAt != nil && checkedAt.Before(*state.BalanceBlockedAt)) {
-				return service.ErrAccountBalanceBlockedGeili
-			}
-			state.BalanceBlocked = false
-			state.BalanceReason = ""
-			state.BalanceBlockedAt = nil
-		}
+		manualStop := service.AccountManuallyStoppedGeili(account)
 		health := state.Models[input.Model]
 		health.Blocked = false
 		health.Health = "healthy"
@@ -394,13 +381,16 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 			state.Models[""] = global
 		}
 		state.StopReason = ""
+		if manualStop {
+			state.StopReason = "manual"
+		}
 		state.NextCheckAt = nil
 		state.ProtectionEnabled = input.EnableProtection
 		if err := persistAccountRuntimeGeili(ctx, view, state, true); err != nil {
 			return err
 		}
 		clearGenericTemporary := service.AccountGenericTemporaryStopGeili(account, time.Now())
-		if _, err := view.sql.ExecContext(ctx, `UPDATE accounts SET status='active',schedulable=TRUE,error_message='',overload_until=NULL,temp_unschedulable_until=CASE WHEN $2 THEN NULL ELSE temp_unschedulable_until END,temp_unschedulable_reason=CASE WHEN $2 THEN NULL ELSE temp_unschedulable_reason END,updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL`, state.AccountID, clearGenericTemporary); err != nil {
+		if _, err := view.sql.ExecContext(ctx, `UPDATE accounts SET status='active',schedulable=$3,error_message='',overload_until=NULL,temp_unschedulable_until=CASE WHEN $2 THEN NULL ELSE temp_unschedulable_until END,temp_unschedulable_reason=CASE WHEN $2 THEN NULL ELSE temp_unschedulable_reason END,updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL`, state.AccountID, clearGenericTemporary, !manualStop); err != nil {
 			return err
 		}
 		activated = state
@@ -411,7 +401,6 @@ func (r *accountRepository) ActivateAccountAfterProbeGeili(ctx context.Context, 
 
 const accountRuntimeAdmissionSQLGeili = `
 SELECT a.deleted_at IS NULL AND a.status='active' AND a.schedulable
- AND NOT COALESCE(r.balance_blocked,FALSE) AND NOT COALESCE(pr.balance_blocked,FALSE)
  AND NOT COALESCE((r.model_states->''->>'blocked')::boolean,FALSE)
  AND NOT COALESCE((r.model_states->$2->>'blocked')::boolean,FALSE)
  AND (a.parent_account_id IS NULL OR (p.id IS NOT NULL AND p.deleted_at IS NULL AND p.status='active'
@@ -419,8 +408,7 @@ SELECT a.deleted_at IS NULL AND a.status='active' AND a.schedulable
   AND (NOT p.auto_pause_on_expired OR p.expires_at IS NULL OR p.expires_at>NOW())
   AND NOT COALESCE((pr.model_states->''->>'blocked')::boolean,FALSE))),
  COALESCE(r.balance_blocked,FALSE) OR COALESCE(pr.balance_blocked,FALSE),
- CASE WHEN r.balance_blocked OR pr.balance_blocked THEN 'balance'
- WHEN a.parent_account_id IS NOT NULL AND (p.id IS NULL OR p.deleted_at IS NOT NULL OR p.status<>'active') THEN 'credential_unavailable'
+ CASE WHEN a.parent_account_id IS NOT NULL AND (p.id IS NULL OR p.deleted_at IS NOT NULL OR p.status<>'active') THEN 'credential_unavailable'
  WHEN COALESCE((r.model_states->''->>'blocked')::boolean,FALSE) THEN 'temporary_failure'
  WHEN COALESCE((r.model_states->$2->>'blocked')::boolean,FALSE) THEN 'model_failure'
  ELSE COALESCE(r.stop_reason,'') END,

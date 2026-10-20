@@ -119,18 +119,18 @@ func TestAUAPINativeBalanceGeiliRealTransportUncertaintyRetainsHold(t *testing.T
 	require.Empty(t, billing.captured)
 }
 
-func TestAUAPINativeBalanceGeiliKnownDebtSkipsUnsubmittedPricing(t *testing.T) {
+func TestAUAPINativeBalanceGeiliDebtLabelDoesNotBlockUnsubmittedPricing(t *testing.T) {
 	a := auapiNativeBalanceAccountGeili()
 	accounts := newRecoveryRuntimeRepoGeili(a)
 	require.NoError(t, accounts.MarkAccountBalanceBlockedGeili(context.Background(), a.ID, "supplier_insufficient_balance"))
-	up := &nativePaidDebtUpstreamGeili{}
+	up := &nativePaidDebtUpstreamGeili{err: errors.New("fixture transport failure")}
 	cfg := &config.Config{AUAPIImage: config.AUAPIImageConfig{MaxPollSeconds: 600}}
 	svc := &AUAPIImageTaskService{accounts: accounts, cfg: cfg, gateway: &OpenAIGatewayService{httpUpstream: up, cfg: cfg}}
-	for _, phase := range []string{"estimate", "submit"} {
-		err := svc.step(context.Background(), &AUAPIImageTaskRecord{TaskID: "auimgtask_known_debt", Phase: phase, AccountID: a.ID, CreatedAt: time.Now()})
-		require.True(t, isAccountRuntimeAdmissionFailureGeili(err))
-	}
-	require.Zero(t, up.requests)
+	err := svc.step(context.Background(), &AUAPIImageTaskRecord{TaskID: "auimgtask_known_debt", Phase: "estimate", AccountID: a.ID, CreatedAt: time.Now()})
+	require.Error(t, err)
+	require.False(t, isAccountRuntimeAdmissionFailureGeili(err))
+	require.Equal(t, 1, up.requests)
+
 }
 
 type auapiCompleteErrorEOFGeili struct{ raw []byte }

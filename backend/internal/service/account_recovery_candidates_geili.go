@@ -11,7 +11,8 @@ const accountRecoveryCandidatePageSizeGeili = 100
 
 // Read one bounded page without the legacy active/schedulable filter. Keeping
 // the group constraint in the query and checking fresh membership at dispatch
-// lets manual inactive/error accounts recover without changing repository APIs.
+// lets error-stopped accounts recover without changing repository APIs. Manual
+// inactive accounts are excluded by the shared recovery eligibility policy.
 func listAccountRecoveryCandidatePageGeili(ctx context.Context, repo AccountRepository, groupID int64, platform string, page int) ([]Account, int, error) {
 	if page < 1 {
 		page = 1

@@ -46,7 +46,7 @@ func newRecoveryRuntimeRepoGeili(accounts ...Account) *recoveryRuntimeRepoGeili 
 	return r
 }
 func stoppedRecoveryAccountGeili(id, group int64) Account {
-	return Account{ID: id, Name: fmt.Sprintf("account-%d", id), Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Status: "inactive", Schedulable: false, GroupIDs: []int64{group}, Priority: int(id), Credentials: map[string]any{"api_key": "fixture-key"}}
+	return Account{ID: id, Name: fmt.Sprintf("account-%d", id), Platform: PlatformAnthropic, Type: AccountTypeAPIKey, Status: StatusError, Schedulable: false, GroupIDs: []int64{group}, Priority: int(id), Credentials: map[string]any{"api_key": "fixture-key"}}
 }
 func copyRecoveryAccountGeili(a Account) *Account {
 	encoded, _ := json.Marshal(a)
@@ -115,10 +115,8 @@ func (r *recoveryRuntimeRepoGeili) MarkAccountBalanceBlockedGeili(ctx context.Co
 		return r.markError
 	}
 	a := r.accounts[id]
-	a.Status, a.Schedulable = StatusError, false
 	a.RuntimeState.BalanceBlocked = true
 	a.RuntimeState.BalanceReason = reason
-	a.RuntimeState.StopReason = "balance"
 	a.RuntimeState.Version++
 	r.accounts[id] = a
 	return nil
@@ -174,13 +172,13 @@ func (r *recoveryRuntimeRepoGeili) ActivateAccountAfterProbeGeili(ctx context.Co
 	if last == nil || last.Model != grant.Model || !last.Success || !last.Complete {
 		return nil, ErrAccountProbeUnhealthyGeili
 	}
-	if a.RuntimeState.BalanceBlocked && (!grant.TrustedBalanceVerified || !last.BalanceVerified) {
-		return nil, ErrAccountBalanceBlockedGeili
-	}
 	r.activations = append(r.activations, grant)
-	a.Status, a.Schedulable = StatusActive, true
-	a.RuntimeState.BalanceBlocked = false
+	manual := AccountManuallyStoppedGeili(&a)
+	a.Status, a.Schedulable = StatusActive, !manual
 	a.RuntimeState.StopReason = ""
+	if manual {
+		a.RuntimeState.StopReason = "manual"
+	}
 	a.RuntimeState.Version++
 	m := a.RuntimeState.Models[grant.Model]
 	m.Blocked = false
@@ -218,16 +216,13 @@ func (r *recoveryRuntimeRepoGeili) CheckAccountRuntimeAdmissionGeili(ctx context
 	}
 	a := r.accounts[id]
 	state := a.RuntimeState
-	if state.BalanceBlocked {
-		return &AccountRuntimeAdmissionGeili{Allowed: false, BalanceBlocked: true, Reason: "balance"}, nil
-	}
 	if state.Models[model].Blocked {
 		return &AccountRuntimeAdmissionGeili{Allowed: false, Reason: "model"}, nil
 	}
 	return &AccountRuntimeAdmissionGeili{Allowed: true}, nil
 }
 
-func TestAccountRecoveryGeiliManualStoppedSameGroupOnly(t *testing.T) {
+func TestAccountRecoveryGeiliErrorStoppedSameGroupOnly(t *testing.T) {
 	r := newRecoveryRuntimeRepoGeili(stoppedRecoveryAccountGeili(1, 7), stoppedRecoveryAccountGeili(2, 8))
 	var probed atomic.Int64
 	s := NewAccountRecoveryServiceGeili(r, func(ctx context.Context, a *Account, model string) (bool, error) {
@@ -245,7 +240,7 @@ func TestAccountRecoveryGeiliManualStoppedSameGroupOnly(t *testing.T) {
 	require.Equal(t, int64(1), probed.Load())
 	require.Equal(t, StatusActive, a.Status)
 	require.True(t, a.Schedulable)
-	require.Equal(t, "inactive", other.Status)
+	require.Equal(t, StatusError, other.Status)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	require.Equal(t, []int64{7}, r.groups)
@@ -253,8 +248,9 @@ func TestAccountRecoveryGeiliManualStoppedSameGroupOnly(t *testing.T) {
 	require.Equal(t, "automatic", r.records[0].Source)
 }
 
-func TestAccountRecoveryGeiliBalanceStoppedNotAutomatic(t *testing.T) {
+func TestAccountRecoveryGeiliManualStoppedNotAutomatic(t *testing.T) {
 	a := stoppedRecoveryAccountGeili(1, 7)
+	a.Status = "inactive"
 	a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, BalanceBlocked: true, Models: map[string]AccountModelHealthGeili{}}
 	r := newRecoveryRuntimeRepoGeili(a)
 	var calls atomic.Int64
@@ -335,7 +331,7 @@ func TestAccountRecoveryGeiliFailedProbeNeverEnables(t *testing.T) {
 			_, err := s.RecheckAccountGeili(context.Background(), 1, "m", false)
 			require.ErrorIs(t, err, ErrAccountProbeUnhealthyGeili)
 			a, _ := r.GetByID(context.Background(), 1)
-			require.Equal(t, "inactive", a.Status)
+			require.Equal(t, StatusError, a.Status)
 			require.False(t, a.Schedulable)
 			r.mu.Lock()
 			defer r.mu.Unlock()
@@ -346,29 +342,26 @@ func TestAccountRecoveryGeiliFailedProbeNeverEnables(t *testing.T) {
 	}
 }
 
-func TestAccountRecoveryGeiliRechargeConfirmationAndCurrentGrant(t *testing.T) {
+func TestAccountRecoveryGeiliDebtLabelPreservedByCurrentGrant(t *testing.T) {
 	a := stoppedRecoveryAccountGeili(1, 7)
 	a.RuntimeState = &AccountRuntimeStateGeili{AccountID: 1, Version: 4, BalanceBlocked: true, StopReason: "balance", Models: map[string]AccountModelHealthGeili{}}
 	r := newRecoveryRuntimeRepoGeili(a)
 	var calls atomic.Int64
 	s := NewAccountRecoveryServiceGeili(r, func(context.Context, *Account, string) (bool, error) { calls.Add(1); return true, nil }, nil)
 	defer s.Stop()
-	_, err := s.RecheckAccountGeili(context.Background(), 1, "m", false)
-	require.ErrorIs(t, err, ErrAccountRechargeConfirmationRequiredGeili)
-	require.Zero(t, calls.Load())
-	updated, err := s.RecheckAccountGeili(context.Background(), 1, "m", true)
+	updated, err := s.RecheckAccountGeili(context.Background(), 1, "m", false)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), calls.Load())
 	require.Equal(t, StatusActive, updated.Status)
 	require.True(t, updated.Schedulable)
-	require.False(t, updated.RuntimeState.BalanceBlocked)
+	require.True(t, updated.RuntimeState.BalanceBlocked)
 	require.Equal(t, int64(5), updated.RuntimeState.Version)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	require.Len(t, r.activations, 1)
-	require.True(t, r.activations[0].TrustedBalanceVerified)
+	require.False(t, r.activations[0].TrustedBalanceVerified)
 	require.Equal(t, int64(4), r.activations[0].Snapshot.RuntimeVersion)
-	require.True(t, r.records[0].BalanceVerified)
+	require.False(t, r.records[0].BalanceVerified)
 }
 
 func TestAccountRecoveryGeiliLegacyVerifierIsNeverCalled(t *testing.T) {
@@ -386,7 +379,7 @@ func TestAccountRecoveryGeiliLegacyVerifierIsNeverCalled(t *testing.T) {
 			updated, err := s.RecheckAccountGeili(context.Background(), 1, "m", true)
 			require.NoError(t, err)
 			require.Equal(t, int64(1), calls.Load())
-			require.False(t, updated.RuntimeState.BalanceBlocked)
+			require.Equal(t, blocked, updated.RuntimeState.BalanceBlocked)
 		})
 	}
 }
@@ -405,7 +398,7 @@ func TestAccountRecoveryGeiliStaleCASCannotActivate(t *testing.T) {
 	_, err := s.RecheckAccountGeili(context.Background(), 1, "m", false)
 	require.ErrorIs(t, err, ErrAccountRuntimeConflictGeili)
 	a, _ := r.GetByID(context.Background(), 1)
-	require.Equal(t, "inactive", a.Status)
+	require.Equal(t, StatusError, a.Status)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	require.Empty(t, r.activations)

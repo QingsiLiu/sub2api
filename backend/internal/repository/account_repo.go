@@ -616,7 +616,18 @@ func (r *accountRepository) updateLockedAccount(
 	builder.SetQuotaDimension(dbaccount.QuotaDimension(account.QuotaDimensionOrDefault()))
 	builder.SetNillableParentAccountID(account.ParentAccountID)
 
-	return builder.Save(ctx)
+	updated, err := builder.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// geili hook: disabling through Edit must survive later in-flight errors,
+	// just like disabling through the scheduling switch.
+	if updated.Status == "inactive" {
+		if err := setBulkManualSchedulingGeili(ctx, client, []int64{updated.ID}, false); err != nil {
+			return nil, err
+		}
+	}
+	return updated, nil
 }
 
 func lockAndMergeAccountProbeExtra(
@@ -3085,6 +3096,10 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		setClauses = append(setClauses, "schedulable = $"+itoa(idx))
 		args = append(args, *updates.Schedulable)
 		idx++
+		// geili hook: enabling a manually inactive account is explicit intent.
+		if *updates.Schedulable && updates.Status == nil {
+			setClauses = append(setClauses, "status = CASE WHEN status='inactive' THEN 'active' ELSE status END")
+		}
 	}
 	if updates.ProbeEnabled != nil {
 		if updates.Extra == nil {
@@ -3290,6 +3305,13 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		}
 	}
 	if rows > 0 {
+		// geili hook: bulk scheduling switches share the account transaction.
+		if updates.Schedulable != nil || updates.Status != nil && *updates.Status == "inactive" {
+			enabled := updates.Schedulable != nil && *updates.Schedulable && (updates.Status == nil || *updates.Status != "inactive")
+			if err := setBulkManualSchedulingGeili(ctx, exec, ids, enabled); err != nil {
+				return 0, err
+			}
+		}
 		payload := map[string]any{"account_ids": ids}
 		if err := enqueueSchedulerOutbox(ctx, exec, service.SchedulerOutboxEventAccountBulkChanged, nil, nil, payload); err != nil {
 			return 0, err

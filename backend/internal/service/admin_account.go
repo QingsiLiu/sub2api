@@ -1356,7 +1356,14 @@ func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorM
 }
 
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {
-	if err := s.accountRepo.SetSchedulable(ctx, id, schedulable); err != nil {
+	// geili hook: persist administrator intent separately from an error stop.
+	var err error
+	if writer, ok := s.accountRepo.(AccountManualSchedulingRepositoryGeili); ok {
+		err = writer.SetManualAccountSchedulingGeili(ctx, id, schedulable)
+	} else {
+		err = s.accountRepo.SetSchedulable(ctx, id, schedulable)
+	}
+	if err != nil {
 		return nil, err
 	}
 	updated, err := s.accountRepo.GetByID(ctx, id)

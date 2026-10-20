@@ -51,14 +51,26 @@ function makeAccount(overrides: Partial<Account>): Account {
 }
 
 describe('AccountStatusIndicator', () => {
-  it('欠费优先于限流，并显示充值后重新检查提示', () => {
+  it('欠费与异常停止分别显示，不显示副标题', () => {
     const wrapper = mount(AccountStatusIndicator, { props: { account: makeAccount({
       runtime_state: { state: 'balance_stopped', balance_blocked: true, stop_reason: 'balance' },
       rate_limit_reset_at: '2099-07-11T13:00:00Z'
     }) }, global: { stubs: { Icon: true } } })
     expect(wrapper.find('.badge-danger').text()).toBe('admin.accounts.runtime.balance_stopped')
-    expect(wrapper.text()).toContain('admin.accounts.runtime.rechargeHint')
+    expect(wrapper.find('.badge-warning').text()).toBe('admin.accounts.runtime.temporarily_stopped')
+    expect(wrapper.text()).not.toContain('admin.accounts.runtime.rechargeHint')
     expect(wrapper.text()).not.toContain('admin.accounts.runtime.enabled')
+  })
+
+  it('欠费标签不覆盖已启用，检查记录只出现在悬浮提示', () => {
+    const wrapper = mount(AccountStatusIndicator, { props: { account: makeAccount({
+      runtime_state: { state: 'enabled', balance_blocked: true, stop_reason: '',
+        last_probe: { status: 'success', model: 'gpt-6', checked_at: '2026-10-20T00:00:00Z' } }
+    }) }, global: { stubs: { Icon: true } } })
+    expect(wrapper.find('.badge-success').text()).toBe('admin.accounts.runtime.enabled')
+    expect(wrapper.find('.badge-danger').text()).toBe('admin.accounts.runtime.balance_stopped')
+    expect(wrapper.find('.badge-success').attributes('title')).toContain('admin.accounts.runtime.probe_success')
+    expect(wrapper.text()).not.toContain('admin.accounts.runtime.probe_success')
   })
 
   it('手动停止优先显示已停止，模型冷却保留详情', () => {
@@ -127,7 +139,8 @@ describe('AccountStatusIndicator', () => {
     })
 
     expect(wrapper.find('.badge-warning').text()).toBe('admin.accounts.runtime.temporarily_stopped')
-    expect(wrapper.text()).toContain('admin.accounts.status.rateLimitedAutoResume')
+    expect(wrapper.find('.badge-warning').attributes('title')).toContain('admin.accounts.status.rateLimitedAutoResume')
+    expect(wrapper.text()).not.toContain('admin.accounts.status.rateLimitedAutoResume')
     expect(wrapper.text()).not.toContain('admin.accounts.status.tempUnschedulable')
   })
 

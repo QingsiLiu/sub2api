@@ -26,9 +26,9 @@ describe('manual supplier balance controls', () => {
     expect(wrapper.emitted('close')).toBeTruthy()
     wrapper.unmount()
   })
-  it('does not offer paid recheck or generic recovery for a manually blocked account', () => {
+  it('offers recheck regardless of the unpaid label', () => {
     const wrapper = open(true)
-    expect(document.body.textContent).not.toContain('admin.accounts.runtime.recheck')
+    expect(document.body.textContent).toContain('admin.accounts.runtime.recheck')
     expect(document.body.textContent).not.toContain('admin.accounts.recoverState')
     wrapper.unmount()
   })

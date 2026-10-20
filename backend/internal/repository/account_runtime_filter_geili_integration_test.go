@@ -29,6 +29,7 @@ func TestAccountAvailabilityFilterGeiliIntegrationMatchesPresentationAndPaginati
 		debt          bool
 		temporary     bool
 	}{
+		{name: "error", fields: `status='error',schedulable=FALSE`, temporary: true},
 		{name: "429", fields: `rate_limit_reset_at=NOW()+INTERVAL '1 hour'`, temporary: true},
 		{name: "overload", fields: `overload_until=NOW()+INTERVAL '1 hour'`, temporary: true},
 		{name: "transport", fields: `temp_unschedulable_until=NOW()+INTERVAL '1 hour'`, temporary: true},
@@ -48,7 +49,7 @@ func TestAccountAvailabilityFilterGeiliIntegrationMatchesPresentationAndPaginati
 		{name: "active unschedulable", fields: `schedulable=FALSE,overload_until=NOW()+INTERVAL '1 hour'`},
 		{name: "old cooldown expired", fields: `rate_limit_reset_at=NOW()-INTERVAL '1 hour',temp_unschedulable_until=NOW()-INTERVAL '1 hour'`},
 		{name: "manual debt", fields: `status='inactive',schedulable=FALSE,rate_limit_reset_at=NOW()+INTERVAL '1 hour'`, debt: true},
-		{name: "legacy active debt", fields: `rate_limit_reset_at=NOW()+INTERVAL '1 hour'`, debt: true},
+		{name: "legacy active debt", fields: `rate_limit_reset_at=NOW()+INTERVAL '1 hour'`, debt: true, temporary: true},
 	} {
 		account := runtimeIntegrationAccountGeili(t, repo)
 		_, err := integrationDB.ExecContext(ctx, `UPDATE accounts SET name=$2 WHERE id=$1`, account.ID, prefix+tc.name)

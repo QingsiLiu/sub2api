@@ -11,7 +11,7 @@
       >
         <div class="py-1">
           <template v-if="account">
-            <button v-if="!account.runtime_state?.balance_blocked" @click="$emit('recheck', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
+            <button @click="$emit('recheck', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
               <Icon name="refresh" size="sm" />
               {{ t('admin.accounts.runtime.recheck') }}
             </button>
@@ -138,7 +138,6 @@ const isRateLimited = computed(() => {
 const isOverloaded = computed(() => props.account?.overload_until && new Date(props.account.overload_until) > new Date())
 const isTempUnschedulable = computed(() => props.account?.temp_unschedulable_until && new Date(props.account.temp_unschedulable_until) > new Date())
 const hasRecoverableState = computed(() => {
-  if (props.account?.runtime_state?.balance_blocked) return false
   return props.account?.status === 'error' || Boolean(isRateLimited.value) || Boolean(isOverloaded.value) || Boolean(isTempUnschedulable.value)
 })
 const isAntigravityOAuth = computed(() => props.account?.platform === 'antigravity' && props.account?.type === 'oauth')

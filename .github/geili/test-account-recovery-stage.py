@@ -314,7 +314,7 @@ class PerformanceTests(unittest.TestCase):
 
 
 class OracleTests(unittest.TestCase):
-    def test_catalog_matrix_exercises_inactive_messages_and_error_responses(self):
+    def test_catalog_matrix_exercises_error_messages_and_responses(self):
         fixture = s.fixture_type(SimpleNamespace(fixture_type=lambda _: object), None)()
         cases, calls, checks = [], [], []
         def new_case(label, **options):
@@ -325,7 +325,7 @@ class OracleTests(unittest.TestCase):
         fixture.new_case, fixture.admin = new_case, 'synthetic-admin'
         fixture.request = Mock(return_value=[200, {}])
         fixture.counts = lambda label: {'inference': int(label in calls), 'probes': int(label in calls)}
-        fixture.account_state = lambda case: {'status': 'active' if case['label'] in calls else case['label'][8:],
+        fixture.account_state = lambda case: {'status': 'active' if case['label'] in calls else 'error',
                                                'runtime_state': {'state': 'enabled'}}
         def call(case, protocol):
             calls.append(case['label'])
@@ -336,13 +336,13 @@ class OracleTests(unittest.TestCase):
         fixture.wait_usage = lambda case, n: {'n': n, 'wrong_group': 0, 'cost': .01}
         fixture.check = lambda name, passed, detail: checks.append((name, passed, detail))
         fixture.recoverable_catalog_checks()
-        self.assertEqual(calls, ['catalog-inactive', 'catalog-error'])
-        self.assertEqual([c.args[1] for c in fixture.request.call_args_list], [{'status': 'inactive'}, {'status': 'error'}])
+        self.assertEqual(calls, ['catalog-messages', 'catalog-responses'])
+        self.assertEqual([c.args[1] for c in fixture.request.call_args_list], [{'status': 'error'}, {'status': 'error'}])
         self.assertTrue(all(c.args[3] == 'PUT' for c in fixture.request.call_args_list))
         self.assertEqual(len(checks), 6)
         self.assertTrue(all(passed for _, passed, _ in checks))
 
-    def manual_balance_fixture(self, auto_debt=False, auto_enable_on_clear=False):
+    def manual_balance_fixture(self, auto_debt=False, auto_enable_on_clear=False, stop_on_mark=False):
         fixture = s.fixture_type(SimpleNamespace(fixture_type=lambda _: object), None)()
         calls, checks = [], []
         counters = {'inference': 0, 'probes': 0}
@@ -366,19 +366,21 @@ class OracleTests(unittest.TestCase):
             if path.endswith('/manual-balance-stop'):
                 self.assertEqual(method, 'PUT')
                 state['runtime_state']['balance_blocked'] = body['blocked']
-                state['runtime_state']['state'] = 'balance_stopped' if body['blocked'] else 'stopped'
-                state['status'], state['schedulable'] = 'inactive', False
+                if body['blocked'] and stop_on_mark:
+                    state['status'], state['schedulable'] = 'inactive', False
                 if not body['blocked'] and auto_enable_on_clear:
                     state['status'], state['schedulable'] = 'active', True
                 return [200, {}]
             if path.endswith('/recheck'):
                 self.assertEqual(body, {'model': s.MODEL})
-                if state['runtime_state']['balance_blocked']: return [409, {}]
                 counters['probes'] += 1
-                state['runtime_state']['state'] = 'enabled'
-                state['status'], state['schedulable'] = 'active', True
                 return [200, {}]
-            return [409, {}]  # Legacy enable attempts cannot override the mark.
+            if path.endswith('/schedulable'):
+                state['schedulable'] = body['schedulable']
+                state['runtime_state']['stop_reason'] = '' if body['schedulable'] else 'manual'
+                state['runtime_state']['state'] = 'enabled' if body['schedulable'] else 'stopped'
+                return [200, {}]
+            return [404, {}]
         fixture.request = request
         invoked = []
         def call(case, secondary=False):
@@ -387,7 +389,7 @@ class OracleTests(unittest.TestCase):
                 counters['inference'] += 1
                 state['runtime_state']['balance_blocked'] = auto_debt
                 return [403, {'error': {'message': 'supplier credit unavailable'}}]
-            if state['runtime_state']['balance_blocked']: return [503, {}]
+            if not state['schedulable']: return [503, {}]
             self.assertTrue(secondary)
             self.assertEqual(state['runtime_state']['state'], 'enabled')
             counters['inference'] += 1
@@ -396,17 +398,17 @@ class OracleTests(unittest.TestCase):
         fixture.call = call
         return fixture, calls, checks, counters
 
-    def test_manual_debt_acceptance_requires_explicit_mark_clear_then_probe(self):
+    def test_debt_label_and_manual_scheduling_are_independent(self):
         fixture, calls, checks, counters = self.manual_balance_fixture()
         fixture.manual_balance_checks()
         manual = [(body, method) for path, body, method in calls if path.endswith('/manual-balance-stop')]
         self.assertEqual(manual, [({'blocked': True}, 'PUT'), ({'blocked': False}, 'PUT')])
         self.assertEqual(counters, {'inference': 2, 'probes': 1})
-        self.assertEqual(len(checks), 13)
+        self.assertEqual(len(checks), 9)
         self.assertFalse(any('confirm_recharged' in body for _, body, _ in calls))
 
     def test_manual_debt_oracle_rejects_automatic_debt_and_enable_on_clear(self):
-        for options in ({'auto_debt': True}, {'auto_enable_on_clear': True}):
+        for options in ({'auto_debt': True}, {'auto_enable_on_clear': True}, {'stop_on_mark': True}):
             with self.subTest(options=options):
                 fixture, _, _, _ = self.manual_balance_fixture(**options)
                 with self.assertRaises(AssertionError): fixture.manual_balance_checks()

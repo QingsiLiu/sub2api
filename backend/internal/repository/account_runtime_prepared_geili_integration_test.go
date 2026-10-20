@@ -32,7 +32,7 @@ func TestAccountRuntimePreparedGeiliIntegrationReadsRemainFresh(t *testing.T) {
 	require.NoError(t, plain.MarkAccountBalanceBlockedGeili(ctx, account.ID, "supplier_insufficient_balance"))
 	gate, err := prepared.CheckAccountRuntimeAdmissionGeili(ctx, account.ID, "fixture-model")
 	require.NoError(t, err)
-	require.False(t, gate.Allowed)
+	require.True(t, gate.Allowed)
 	require.True(t, gate.BalanceBlocked)
 	state, err = prepared.GetAccountRuntimeGeili(ctx, account.ID)
 	require.NoError(t, err)

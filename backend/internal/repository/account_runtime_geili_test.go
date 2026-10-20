@@ -74,12 +74,11 @@ func TestAccountRuntimeGeiliFailureThresholdAndSuccessReset(t *testing.T) {
 	}
 }
 
-func TestAccountRuntimeGeiliDebtAndAccountStopShareTransaction(t *testing.T) {
+func TestAccountRuntimeGeiliDebtLabelDoesNotStopScheduling(t *testing.T) {
 	repo, mock := runtimeTestRepositoryGeili(t)
 	expectRuntimeWriteStartGeili(mock, `{}`)
-	mock.ExpectExec(`UPDATE account_runtime_geili SET`).WithArgs(int64(17), int64(3), true, "insufficient_balance", sqlmock.AnyArg(), "balance", false, "{}", "null", nil).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE account_runtime_geili SET`).WithArgs(int64(17), int64(3), true, "insufficient_balance", sqlmock.AnyArg(), "", false, "{}", "null", nil).WillReturnResult(sqlmock.NewResult(0, 1))
 	expectRuntimeOutboxGeili(mock)
-	mock.ExpectExec(`UPDATE accounts SET status='error',schedulable=FALSE`).WithArgs(int64(17), "insufficient_balance").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	require.NoError(t, repo.MarkAccountBalanceBlockedGeili(context.Background(), 17, "insufficient_balance"))
 }
@@ -122,7 +121,7 @@ func TestAccountRuntimeGeiliStaleLeaseReleaseRequiresToken(t *testing.T) {
 
 func TestAccountRuntimeGeiliAdmissionReadsDurableGate(t *testing.T) {
 	repo, mock := runtimeTestRepositoryGeili(t)
-	mock.ExpectQuery(`(?s)SELECT .*NOT COALESCE\(r.balance_blocked,FALSE\).*r.model_states->''.*r.model_states->\$2.*FROM accounts a LEFT JOIN account_runtime_geili`).WithArgs(int64(17), "claude-opus-5").WillReturnRows(sqlmock.NewRows([]string{"allowed", "balance_blocked", "reason", "credential_account_id"}).AddRow(false, true, "balance", int64(17)))
+	mock.ExpectQuery(`(?s)SELECT .*r.model_states->''.*r.model_states->\$2.*FROM accounts a LEFT JOIN account_runtime_geili`).WithArgs(int64(17), "claude-opus-5").WillReturnRows(sqlmock.NewRows([]string{"allowed", "balance_blocked", "reason", "credential_account_id"}).AddRow(false, true, "balance", int64(17)))
 	gate, err := repo.CheckAccountRuntimeAdmissionGeili(context.Background(), 17, "claude-opus-5")
 	require.NoError(t, err)
 	require.False(t, gate.Allowed)

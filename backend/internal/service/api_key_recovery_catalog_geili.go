@@ -84,9 +84,6 @@ func (r *CompositeRouteResolver) explicitRecoverableTextModelGeili(ctx context.C
 			if err != nil || verdict == nil {
 				return false, infraerrors.ServiceUnavailable("MODEL_CATALOG_UNAVAILABLE", "account model catalog is unavailable")
 			}
-			if verdict.BalanceBlocked || verdict.Reason == "balance" || state != nil && state.BalanceBlocked {
-				continue
-			}
 			if !recoveryAccountEligibleGeili(fresh, model, time.Now(), true) || !accountRecoveryProbeTextModelGeili(fresh.GetMappedModel(model)) {
 				continue
 			}

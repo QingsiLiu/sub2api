@@ -51,7 +51,7 @@ func stoppedTextDeclaredAccountGeili() Account {
 }
 
 func TestExplicitKeyRecoveryCatalogGeiliStoppedDeclaredTextRequestOnly(t *testing.T) {
-	for _, status := range []string{StatusActive, "inactive", StatusError} {
+	for _, status := range []string{StatusError} {
 		t.Run(status, func(t *testing.T) {
 			a := stoppedTextDeclaredAccountGeili()
 			a.Status = status
@@ -76,7 +76,7 @@ func TestExplicitKeyRecoveryCatalogGeiliStoppedDeclaredTextRequestOnly(t *testin
 }
 
 func TestExplicitKeyRecoveryCatalogGeiliPreservesAdmissionBoundaries(t *testing.T) {
-	for _, scenario := range []string{"unknown", "allowlist", "other_group", "other_platform", "debt", "future_probe_backoff", "unpriced", "group_inactive", "unauthorized", "embeddings", "media", "compact_optout", "continuity_optout"} {
+	for _, scenario := range []string{"unknown", "allowlist", "other_group", "other_platform", "manual_stop", "future_probe_backoff", "unpriced", "group_inactive", "unauthorized", "embeddings", "media", "compact_optout", "continuity_optout"} {
 		t.Run(scenario, func(t *testing.T) {
 			a := stoppedTextDeclaredAccountGeili()
 			model, endpoint, allow := "claude-sonnet-4-5", CompositeRouteEndpointMessages, true
@@ -86,8 +86,8 @@ func TestExplicitKeyRecoveryCatalogGeiliPreservesAdmissionBoundaries(t *testing.
 			if scenario == "other_platform" {
 				a.Platform = PlatformOpenAI
 			}
-			if scenario == "debt" {
-				a.RuntimeState = &AccountRuntimeStateGeili{AccountID: a.ID, BalanceBlocked: true, Models: map[string]AccountModelHealthGeili{}}
+			if scenario == "manual_stop" {
+				a.Status = "inactive"
 			}
 			if scenario == "future_probe_backoff" {
 				later := time.Now().Add(time.Hour)

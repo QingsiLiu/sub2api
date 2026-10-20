@@ -25,7 +25,7 @@ func runtimeIntegrationAccountGeili(t *testing.T, repo *accountRepository) *serv
 	return loaded
 }
 
-func TestAccountRuntimeGeiliIntegrationDebtCannotBeClearedByLegacyMutations(t *testing.T) {
+func TestAccountRuntimeGeiliIntegrationDebtLabelSurvivesSchedulingAndRecovery(t *testing.T) {
 	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
@@ -36,19 +36,22 @@ func TestAccountRuntimeGeiliIntegrationDebtCannotBeClearedByLegacyMutations(t *t
 	require.NoError(t, err)
 	loaded, err := repo.GetByID(ctx, account.ID)
 	require.NoError(t, err)
-	require.Equal(t, service.StatusError, loaded.Status)
-	require.False(t, loaded.Schedulable)
+	require.Equal(t, service.StatusActive, loaded.Status)
+	require.True(t, loaded.Schedulable)
 	require.True(t, loaded.RuntimeState.BalanceBlocked)
 	require.Equal(t, true, loaded.Extra["ordinary_edit"])
 	gate, err := repo.CheckAccountRuntimeAdmissionGeili(ctx, account.ID, "claude-opus-5")
 	require.NoError(t, err)
-	require.False(t, gate.Allowed)
+	require.True(t, gate.Allowed)
 	loaded.RuntimeState, err = repo.GetAccountRuntimeGeili(ctx, account.ID)
 	require.NoError(t, err)
 	snapshot := service.MakeAccountProbeSnapshotGeili(loaded)
 	require.NoError(t, repo.RecordAccountProbeGeili(ctx, service.AccountProbeResultGeili{Snapshot: snapshot, Model: "claude-opus-5", Source: "manual", Success: true, Complete: true, CheckedAt: time.Now()}))
 	_, err = repo.ActivateAccountAfterProbeGeili(ctx, service.AccountProbeActivationGeili{Snapshot: snapshot, Model: "claude-opus-5"})
-	require.ErrorIs(t, err, service.ErrAccountBalanceBlockedGeili)
+	require.NoError(t, err)
+	state, err := repo.GetAccountRuntimeGeili(ctx, account.ID)
+	require.NoError(t, err)
+	require.True(t, state.BalanceBlocked)
 }
 
 func TestAccountRuntimeGeiliIntegrationLateGrantCannotOverwriteCredentialChange(t *testing.T) {
@@ -267,7 +270,7 @@ func TestAccountRuntimeGeiliIntegrationProbeClearsOnlyGenericTemporaryStop(t *te
 	}
 }
 
-func TestAccountRuntimeGeiliIntegrationParentDebtBlocksAllShadows(t *testing.T) {
+func TestAccountRuntimeGeiliIntegrationParentDebtDoesNotBlockShadows(t *testing.T) {
 	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	parent := runtimeIntegrationAccountGeili(t, repo)
@@ -284,9 +287,9 @@ func TestAccountRuntimeGeiliIntegrationParentDebtBlocksAllShadows(t *testing.T) 
 	require.NoError(t, repo.MarkAccountBalanceBlockedGeili(ctx, parent.ID, "supplier_insufficient_balance"))
 	gate, err = repo.CheckAccountRuntimeAdmissionGeili(ctx, shadow.ID, "claude-opus-5")
 	require.NoError(t, err)
-	require.False(t, gate.Allowed)
+	require.True(t, gate.Allowed)
 	require.True(t, gate.BalanceBlocked)
-	require.Equal(t, "balance", gate.Reason)
+	require.Empty(t, gate.Reason)
 	loaded, err := repo.GetByID(ctx, shadow.ID)
 	require.NoError(t, err)
 	require.True(t, loaded.Schedulable)
@@ -294,14 +297,14 @@ func TestAccountRuntimeGeiliIntegrationParentDebtBlocksAllShadows(t *testing.T) 
 	require.NoError(t, repo.SetSchedulable(ctx, shadow.ID, true))
 	gate, err = repo.CheckAccountRuntimeAdmissionGeili(ctx, shadow.ID, "claude-opus-5")
 	require.NoError(t, err)
-	require.False(t, gate.Allowed)
+	require.True(t, gate.Allowed)
 }
 
 func TestAccountRuntimeGeiliIntegrationProbeClearsGenericOverloadWithoutRateWindow(t *testing.T) {
 	ctx := service.WithAccountRuntimePresentationGeili(context.Background())
 	repo := newAccountRepositoryWithSQL(integrationEntClient, integrationDB, nil)
 	account := runtimeIntegrationAccountGeili(t, repo)
-	_, err := integrationDB.Exec(`UPDATE accounts SET status='inactive',schedulable=FALSE,overload_until=NOW()+INTERVAL '1 hour',updated_at=NOW() WHERE id=$1`, account.ID)
+	_, err := integrationDB.Exec(`UPDATE accounts SET status='error',schedulable=FALSE,overload_until=NOW()+INTERVAL '1 hour',updated_at=NOW() WHERE id=$1`, account.ID)
 	require.NoError(t, err)
 	account, err = repo.GetByID(ctx, account.ID)
 	require.NoError(t, err)
@@ -330,7 +333,7 @@ func TestAccountRuntimeGeiliIntegrationShadowActivationUsesCurrentCredentialOwne
 		t.Run(tc.name, func(t *testing.T) {
 			parent := runtimeIntegrationAccountGeili(t, repo)
 			child := runtimeIntegrationAccountGeili(t, repo)
-			_, err := integrationDB.ExecContext(ctx, `UPDATE accounts SET parent_account_id=$2,quota_dimension='spark',status='inactive',schedulable=FALSE WHERE id=$1`, child.ID, parent.ID)
+			_, err := integrationDB.ExecContext(ctx, `UPDATE accounts SET parent_account_id=$2,quota_dimension='spark',status='error',schedulable=FALSE WHERE id=$1`, child.ID, parent.ID)
 			require.NoError(t, err)
 			child, err = repo.GetByID(ctx, child.ID)
 			require.NoError(t, err)
