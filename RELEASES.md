@@ -1,11 +1,11 @@
-## 0.2.17-geili.2（Luna Chat 参数修复，源码候选，未部署）
+## 0.2.17-geili.2（Luna Chat 参数修复，已部署Stage，生产验收中）
 
 相对生产 `.1`，修复 API Key Chat 转 Responses 时把显式 `max_completion_tokens=16/32` 抬高到默认 128 的问题；同时补齐 GPT-5.6 Luna 在 `reasoning_effort=none` 下的 `temperature` / `top_p`，保留自定义上游地址的两款 Luna Responses 显式 `none`（含账号模型别名及 WebSocket→HTTP 入口）。官方 Luna API Key 在自动模式、关闭思考时使用原生 Chat，保留小额输出上限；显式强制协议、OAuth、其他供应商和其他模型的协议选择保持。没有迁移、定价/计费或账号配置改动。
 
 - 修复与复现范围见 [Luna 参数记录](.github/geili/luna-chat-parameters.md)。旧代码已由新增回归复现；首次修复本地默认/unit全量通过，补充 `none` 修复后本地默认全量、定向及竞态通过。最终候选 CI [39401422288](https://github.com/QingsiLiu/sub2api/actions/runs/39401422288) 全部9任务/13门禁通过，347份迁移保持。
-- 固定候选 revision `b221053bc0446e2eb416409ee71c37d458e85445` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:8492e3a32253487b760d6d2c78cc0afa9888794ab9c10b54e9c09feaa1c45f1a`。首轮 `b7b6721e1` 的CI被补充修复接管，不用作制品依据；后续文档提交不得替换本digest。未部署 Stage，未部署生产。
-- 生产旧版 `.1` 的官转分组已用本人限额/有期限 Key 做8次真实短文本复现：两款 Luna 的 Chat 上限32均返回128；Responses 明确 `none` 时，上限32均消耗32个思考 token且正文为空。8次均HTTP200，页面用量`$0.0030`，测试Key已禁用。自造请求及证据见参数记录；候选尚未部署，不能把旧版复现写成候选上游验收通过。
-- 生产继续固定 `.1` 的既有 revision/digest；后续应用发布仍须同 digest Stage、当次生产授权及蓝绿门禁，不覆盖其他会话进行中的旧实例交接。
+- 固定候选 revision `b221053bc0446e2eb416409ee71c37d458e85445` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:8492e3a32253487b760d6d2c78cc0afa9888794ab9c10b54e9c09feaa1c45f1a`。首轮 `b7b6721e1` 的CI被补充修复接管，不用作制品依据；后续文档提交不得替换本digest。2026-10-20 11:27Z经canonical平滑切入Stage，11:37Z完成十分钟自然排空观察，旧受控实例正常退出；公网健康通过。用户当次已授权“好的，请把版本发布到生产”，仍须本digest所有Stage门禁通过，当前尚未发布生产。
+- 生产旧版 `.1` 的官转分组已用本人限额/有期限 Key 做8次真实短文本复现：两款 Luna 的 Chat 上限32均返回128；Responses 明确 `none` 时，上限32均消耗32个思考 token且正文为空。8次均HTTP200，页面用量`$0.0030`，测试Key已禁用。自造请求及证据见参数记录；候选真实上游验收待完成，不能把旧版复现写成候选上游验收通过。
+- 生产继续固定 `.1` 的既有 revision/digest；本次以同 digest Stage、当次生产授权及蓝绿门禁继续验收；原始`.23`交接已在另一任务中完成，其证据与财务保全要求保持。
 
 ## 0.2.17-geili.1（合并上游 v0.2.17，已发布 Stage 和生产）
 
