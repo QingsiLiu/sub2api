@@ -322,3 +322,9 @@ func TestGPT55RetirementEmptyListingDoesNotUseDefaults(t *testing.T) {
 	require.Empty(t, modelListingSource(service.PlatformOpenAI, []string{}, []string{"gpt-5.5"}))
 	require.Equal(t, []string{"gpt-5.5"}, modelListingSource(service.PlatformOpenAI, nil, []string{"gpt-5.5"}))
 }
+
+func TestClassifySelectionFailureErrorGeiliMixedFaultsAreNotAllRateLimited(t *testing.T) {
+	fallback := noAccountErrorClassification{Status: http.StatusServiceUnavailable, ErrType: "api_error", Message: "Service temporarily unavailable"}
+	got := classifySelectionFailureError(fmt.Errorf("pool=3, filtered: model_not_supported=1 model_rate_limited=1 runtime_blocked=1"), fallback)
+	require.Equal(t, fallback, got)
+}

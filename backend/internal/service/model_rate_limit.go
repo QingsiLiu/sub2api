@@ -39,7 +39,7 @@ func (a *Account) getRateLimitRemainingForKey(key string) time.Duration {
 
 func (a *Account) isModelRateLimitedWithContext(ctx context.Context, requestedModel string) bool {
 	for _, key := range a.modelRateLimitKeysForRequest(ctx, requestedModel) {
-		if a.isRateLimitActiveForKey(key) {
+		if reset := a.modelRateLimitResetForRequestGeili(ctx, key); reset != nil && time.Now().Before(*reset) {
 			return true
 		}
 	}
@@ -55,7 +55,11 @@ func (a *Account) GetModelRateLimitRemainingTime(requestedModel string) time.Dur
 func (a *Account) GetModelRateLimitRemainingTimeWithContext(ctx context.Context, requestedModel string) time.Duration {
 	remaining := time.Duration(0)
 	for _, key := range a.modelRateLimitKeysForRequest(ctx, requestedModel) {
-		if keyRemaining := a.getRateLimitRemainingForKey(key); keyRemaining > remaining {
+		reset := a.modelRateLimitResetForRequestGeili(ctx, key)
+		if reset == nil {
+			continue
+		}
+		if keyRemaining := time.Until(*reset); keyRemaining > remaining {
 			remaining = keyRemaining
 		}
 	}
