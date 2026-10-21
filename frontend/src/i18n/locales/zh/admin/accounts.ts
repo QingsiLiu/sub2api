@@ -820,6 +820,12 @@ export default {
         probe_failed: '{model} 检查失败 · {time}',
         probe_checking: '{model} 正在检查 · {time}',
       },
+      menuGroup: {
+        check: '检查与统计',
+        state: '状态与额度',
+        account: '账号操作',
+        owner: '归属'
+      },
       recoverState: '恢复状态',
       recoverStateHint: '用于恢复错误、限流和临时不可调度等可恢复状态。',
       recoverStateSuccess: '账号状态已恢复',

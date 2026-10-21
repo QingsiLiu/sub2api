@@ -701,6 +701,12 @@ export default {
         probe_failed: '{model} failed · {time}',
         probe_checking: '{model} checking · {time}',
       },
+      menuGroup: {
+        check: 'Checks & stats',
+        state: 'State & quota',
+        account: 'Account',
+        owner: 'Ownership'
+      },
       recoverState: 'Recover State',
       recoverStateHint: 'Used to recover error, rate-limit, and temporary unschedulable runtime state.',
       recoverStateSuccess: 'Account state recovered successfully',
