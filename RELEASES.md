@@ -6,9 +6,10 @@
 - 「更多」菜单改为四组：`检查与统计`（重新检查/测试连接/查看统计/定时测试）、`状态与额度`（恢复状态/重置配额/标记欠费）、`账号操作`（复制、重新授权、刷新令牌、创建 Spark 影子、设置隐私）、`归属`（设置供应商）。空分组整组隐藏，欠费账号也可直接重新检查。
 - 前端 414 个测试文件 / 3342 项、i18n 键完整性、`vue-tsc` 类型检查与 vite 构建通过。无定价、客户计费、订阅或支付规则变化。
 
-待补：候选 CI revision/digest、Stage 与生产验收记录。此前 `.3` 镜像不含 `.4` 重试修复，不得直接上线。
+- 固定候选 revision `b74e964e828c5f4bb9cbd3d3e048e34e16733379` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:bc33189ab3cfd07695612858b1ad562ec6c46737f9c35b8c7a9626ac5631300c`。CI [39581279852](https://github.com/QingsiLiu/sub2api/actions/runs/39581279852) 全部9任务/13门禁通过；同digest Stage通过非支付业务51、双实例缓存17、迁移完整性348份（含284）、Astra52、Luna44、v0.2.17特性18、上游增量36、本机入口3、受控切换4，全部绑定本revision/digest。经canonical于2026-10-21 11:28Z蓝绿切入生产，旧`.4`实例排空至0 worker后自然退出0、未OOM，phase complete，新蓝色实例独占后台；公网health200、版本`0.2.17-geili.5`。备份`/srv/projects/geili-sub2api/.bluegreen/20261021T112800Z-b74e964e`。
+- `fair_performance_stage` 及重复长流／共享限制／进程故障演练按当次范围记 `deferred_by_owner`，未重标通过；真实支付／供应商／媒体／历史恢复／主机库重启为 `out_of_scope_not_executed`。
 
-
+## 0.2.17-geili.4（Astra 上游波动重试，已发布Stage和生产）
 
 相对固定生产 `.2`，OpenAI API Key 文本上游的模型不存在/模型权限错误只退避5秒，读取既有30分钟冷却也按原发生时间缩短，避免暂时上游波动长期移除模型容量。Responses、Chat Completions、Messages 在初次池空或本轮账号全部失败后，在原请求恢复预算和客户端截止时间内退避、重新选号及重试；混合故障不再一律误报所有账号限流。每次真实调用仍走原调度、协议、并发和计费门禁；已输出内容、客户端取消、明确不可重试错误、硬额度/凭据失败、受保护会话和媒体保持原边界。
 
