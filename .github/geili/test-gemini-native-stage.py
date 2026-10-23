@@ -22,9 +22,9 @@ def sse(rows):
 class OracleTests(unittest.TestCase):
     def test_input_matrix_contains_only_requested_protocols(self):
         self.assertEqual(s.PROTOCOLS, ('responses', 'chat/completions'))
-        self.assertEqual(len(s.scenarios('responses')), 20)
-        self.assertEqual(len(s.scenarios('chat/completions')), 22)
-        self.assertEqual(sum(len(s.scenarios(p)) for p in s.PROTOCOLS) * 2 - 2, 82)
+        self.assertEqual(len(s.scenarios('responses')), 33)
+        self.assertEqual(len(s.scenarios('chat/completions')), 31)
+        self.assertEqual(sum(len(s.scenarios(p)) for p in s.PROTOCOLS) * 2 - 2, 126)
 
     def test_nullable_sdk_fields_are_sent_as_null_and_thinking_is_explicitly_mapped(self):
         for protocol in s.PROTOCOLS:
@@ -67,6 +67,24 @@ class OracleTests(unittest.TestCase):
         parts = s.mock_rows('thinking', False)[0]['candidates'][0]['content']['parts']
         self.assertTrue(parts[0]['thought'])
         self.assertNotIn('thought', parts[1])
+
+    def test_history_matrix_carries_real_tail_and_tool_pairing_boundaries(self):
+        for protocol in s.PROTOCOLS:
+            field = 'input' if protocol == 'responses' else 'messages'
+            self.assertEqual(s.case_payload(protocol, 'history_assistant', False)[field][-1]['role'], 'assistant')
+            self.assertEqual(s.case_payload(protocol, 'history_developer', True)[field][-1]['role'], 'developer')
+            self.assertEqual(s.case_payload(protocol, 'history_blank', True)[field][-1]['content'][0]['text'], '  ')
+            history = s.case_payload(protocol, 'history_tools', False)[field]
+            outputs = [r for r in history if r.get('type') == 'function_call_output' or r.get('role') == 'tool']
+            self.assertEqual([r.get('call_id', r.get('tool_call_id')) for r in outputs], ['native-b', 'native-a'])
+            self.assertEqual(outputs[-1].get('output', outputs[-1].get('content')), '')
+            missing = s.case_payload(protocol, 'reject_history_missing', False)[field]
+            self.assertEqual(sum(r.get('type') == 'function_call_output' or r.get('role') == 'tool' for r in missing), 1)
+        self.assertEqual(s.case_payload('responses', 'history_summary', False)['input'][-1]['type'], 'reasoning')
+        self.assertEqual(s.case_payload('responses', 'history_additional', False)['input'][-1]['type'], 'additional_tools')
+        legacy = s.case_payload('responses', 'history_legacy', False)
+        self.assertNotIn('input', legacy)
+        self.assertEqual(legacy['messages'][-1]['role'], 'assistant')
 
     def test_responses_terminal_selection_rejects_duplicate_successes(self):
         done = {'type': 'response.completed', 'response': {'status': 'completed', 'output': []}}
@@ -158,8 +176,36 @@ class MockHTTPTests(unittest.TestCase):
         self.fixture.native_modes['offline'] = mode
         conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
         self.addCleanup(conn.close)
-        conn.request('POST', '/gemini-supplier/offline/' + endpoint, json.dumps(body or {'contents': []}), {'Content-Type': 'application/json'})
+        if body is None:
+            body = {'contents': [{'role': 'user', 'parts': [{'text': 'synthetic'}]}]}
+        conn.request('POST', '/gemini-supplier/offline/' + endpoint, json.dumps(body), {'Content-Type': 'application/json'})
         return conn.getresponse()
+
+    def test_http_mock_rejects_model_tail_empty_turn_and_unpaired_tools(self):
+        endpoint = 'v1beta/models/' + s.supplier.MODEL + ':generateContent'
+        for contents in ([], [{'role': 'model', 'parts': [{'text': 'partial'}]}],
+                         [{'role': 'user', 'parts': []}],
+                         [{'role': 'user', 'parts': [{'text': '  '}]}],
+                         [{'role': 'model', 'parts': [{'functionCall': {'id': 'a', 'name': 'read', 'args': {}}}]},
+                          {'role': 'user', 'parts': [{'text': 'not a tool result'}]}],
+                         [{'role': 'user', 'parts': [{'functionResponse': {'id': 'a', 'name': 'read', 'response': {}}}]}]):
+            with self.subTest(contents=contents):
+                response = self.request(endpoint, body={'contents': contents})
+                self.assertEqual(response.status, 400)
+                response.read()
+
+    def test_http_mock_accepts_reverse_same_name_results_but_rejects_duplicate(self):
+        contents = [
+            {'role': 'model', 'parts': [{'functionCall': {'id': ident, 'name': 'read', 'args': {}}} for ident in ('a', 'b')]},
+            {'role': 'user', 'parts': [{'functionResponse': {'id': ident, 'name': 'read', 'response': {'output': ''}}} for ident in ('b', 'a')]}]
+        endpoint = 'v1beta/models/' + s.supplier.MODEL + ':generateContent'
+        response = self.request(endpoint, body={'contents': contents})
+        self.assertEqual(response.status, 200)
+        response.read()
+        contents[-1]['parts'].append(copy.deepcopy(contents[-1]['parts'][-1]))
+        response = self.request(endpoint, body={'contents': contents})
+        self.assertEqual(response.status, 400)
+        response.read()
 
     def test_http_mock_rejects_anthropic_bridge_and_captures_actual_native_body(self):
         response = self.request('v1/messages')

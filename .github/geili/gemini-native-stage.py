@@ -22,7 +22,8 @@ spec = importlib.util.spec_from_file_location('gemini_native_supplier_base', Pat
 supplier = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(supplier)
 
-KIND = 'gemini-native-stage-v1'
+KIND = 'gemini-native-stage-v2'
+CONTINUATION = 'Continue and complete the previous assistant turn from where it stopped. Do not repeat content already provided; use the tool results already present.'
 TEXT = 'native acceptance OK'
 SIGNATURES = ('c3ludGhldGljLXNpZ25hdHVyZS1h', 'c3ludGhldGljLXNpZ25hdHVyZS1i')
 NAMES = ('fixture_lookup', 'fixture_other')
@@ -61,12 +62,18 @@ def scenarios(protocol):
     common = ['rich', 'thinking', 'nullable', 'json_object', 'json_schema', 'budget_one', 'tools', 'max_tokens',
               'reject_zero', 'reject_negative', 'reject_schema', 'reject_format', 'reject_state',
               'reject_store', 'reject_encrypted', 'reject_input', 'empty', 'missing_finish', 'error', 'disconnect']
-    return common + (['stop_string', 'stop_array'] if protocol == 'chat/completions' else [])
+    common += ['history_assistant', 'history_developer', 'history_blank', 'history_tools',
+               'reject_history_missing', 'reject_history_duplicate', 'reject_history_orphan',
+               'reject_history_empty', 'reject_history_media']
+    return common + (['stop_string', 'stop_array'] if protocol == 'chat/completions' else
+                     ['history_summary', 'history_additional', 'reject_history_summary', 'history_legacy'])
 
 
 def case_payload(protocol, mode, stream):
     value = base_payload(protocol, stream)
-    if mode == 'rich':
+    if mode.startswith('history_') or mode.startswith('reject_history_'):
+        history_case_payload(value, protocol, mode)
+    elif mode == 'rich':
         if protocol == 'responses':
             value.update(instructions='Native system marker', input=[
                 {'role': 'user', 'content': 'Native first turn'}, {'role': 'assistant', 'content': 'Native previous answer'},
@@ -117,6 +124,80 @@ def case_payload(protocol, mode, stream):
         else:
             value['messages'] = [{'role': 'user', 'content': [{'type': 'input_audio', 'input_audio': {'data': 'synthetic', 'format': 'wav'}}]}]
     return value
+
+
+def history_case_payload(value, protocol, mode):
+    history = [{'role': 'user', 'content': 'Native first turn'},
+               {'role': 'assistant', 'content': 'Native previous answer'}]
+    if mode == 'history_developer':
+        history.append({'role': 'developer', 'content': 'Native developer marker'})
+    elif mode == 'history_blank':
+        history.append({'role': 'user', 'content': [{'type': 'input_text' if protocol == 'responses' else 'text', 'text': '  '}]})
+    elif mode == 'history_additional':
+        history.append({'type': 'additional_tools', 'tools': tools('responses')})
+    elif mode == 'reject_history_empty':
+        history = [{'role': 'user', 'content': []}]
+    elif mode == 'reject_history_media':
+        part = ({'type': 'input_image', 'image_url': 'data:image/png;base64,' + PNG} if protocol == 'responses'
+                else {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + PNG}})
+        history[-1]['content'] = [part]
+    elif mode in ('history_tools', 'history_summary', 'reject_history_missing', 'reject_history_duplicate', 'reject_history_orphan'):
+        value['tools'] = tools(protocol)
+        calls = [{'type': 'function_call', 'call_id': ident, 'name': NAMES[0], 'arguments': json.dumps({'value': i}),
+                  'gemini_thought_signature': SIGNATURES[i]} for i, ident in enumerate(('native-a', 'native-b'))]
+        results = [{'type': 'function_call_output', 'call_id': ident, 'output': '' if ident == 'native-a' else 'second'}
+                   for ident in ('native-b', 'native-a')]
+        if mode == 'reject_history_missing':
+            results.pop()
+        elif mode == 'reject_history_duplicate':
+            results.append(copy.deepcopy(results[-1]))
+        elif mode == 'reject_history_orphan':
+            calls = []
+        if protocol == 'responses':
+            history = history[:1] + calls + results
+        else:
+            history = history[:1] + ([{'role': 'assistant', 'content': '', 'tool_calls': [
+                {'id': c['call_id'], 'type': 'function', 'function': {'name': c['name'], 'arguments': c['arguments']},
+                 'gemini_thought_signature': c['gemini_thought_signature']} for c in calls]}] if calls else []) + [
+                {'role': 'tool', 'tool_call_id': r['call_id'], 'content': r['output']} for r in results]
+        if mode == 'history_summary':
+            history.append({'type': 'reasoning', 'summary': [{'type': 'summary_text', 'text': 'Historical display summary'}]})
+    elif mode == 'reject_history_summary':
+        history = [{'type': 'reasoning', 'summary': [{'type': 'summary_text', 'text': 'Historical display summary'}]}]
+    if protocol == 'responses' and mode != 'history_legacy':
+        value['input'] = history
+    else:
+        value.pop('input', None)
+        value['messages'] = history
+
+
+def native_history_error(body):
+    contents = body.get('contents')
+    if not isinstance(contents, list) or not contents or contents[-1].get('role') != 'user':
+        return 'Requests ending with a model turn are not supported.'
+    calls, consumed = {}, set()
+    for turn in contents:
+        parts = turn.get('parts')
+        if turn.get('role') not in ('user', 'model') or not isinstance(parts, list) or not parts:
+            return 'Empty or invalid native turn'
+        for part in parts:
+            if 'text' in part and (not isinstance(part['text'], str) or not part['text'].strip()):
+                return 'Empty native text'
+            if 'functionCall' in part:
+                call = part['functionCall']
+                ident = call.get('id') or ('anonymous-' + str(len(calls)))
+                if turn['role'] != 'model' or ident in calls:
+                    return 'Invalid or duplicate native function call'
+                calls[ident] = call.get('name')
+            if 'functionResponse' in part:
+                result = part['functionResponse']
+                ident = result.get('id')
+                if not ident:
+                    ident = next((k for k, name in calls.items() if k not in consumed and name == result.get('name')), None)
+                if turn['role'] != 'user' or ident not in calls or ident in consumed or calls[ident] != result.get('name'):
+                    return 'Orphan or duplicate native function result'
+                consumed.add(ident)
+    return None if len(calls) == len(consumed) else 'Missing native function result'
 
 
 def chunk(parts=None, finish=None, usage=False):
@@ -245,6 +326,9 @@ def fixture_type(cache, source):
                             cache.b.stage.private_json(fixture.private / 'gemini-native-mock-calls.json', fixture.native_calls)
                     if re.fullmatch(r'v1beta/models/' + re.escape(upstream_model(mode)) + r':(?:streamGenerateContent|generateContent)', endpoint) is None:
                         return self.reply({'error': {'message': 'Anthropic bridge is forbidden in native acceptance'}}, 400)
+                    history_error = native_history_error(body)
+                    if history_error:
+                        return self.reply({'error': {'message': history_error}}, 400)
                     stream = ':streamGenerateContent' in endpoint
                     rows = mock_rows(mode, stream)
                     if not stream:
@@ -299,6 +383,27 @@ def fixture_type(cache, source):
             self.check(label + ': native model action without Anthropic fields', '/v1beta/models/' + upstream_model(mode) + ':' in call['path']
                 and 'anthropic_version' not in body and 'messages' not in body and isinstance(body.get('contents'), list))
             cfg = body.get('generationConfig', {})
+            self.check(label + ': valid native tail, nonempty turns and paired tools', native_history_error(body) is None)
+            if mode in ('history_assistant', 'history_developer', 'history_blank', 'history_additional', 'history_legacy'):
+                self.check(label + ': semantic continuation preserves assistant and appends one cue',
+                    [c['role'] for c in body['contents']] == ['user', 'model', 'user']
+                    and body['contents'][1]['parts'] == [{'text': 'Native previous answer'}]
+                    and body['contents'][2]['parts'] == [{'text': CONTINUATION}])
+                if mode == 'history_developer':
+                    self.check(label + ': developer remains a system instruction',
+                        body.get('systemInstruction', {}).get('parts') == [{'text': 'Native developer marker'}])
+            if mode in ('history_tools', 'history_summary'):
+                parts = [p for c in body['contents'] for p in c['parts']]
+                calls = [p for p in parts if 'functionCall' in p]
+                results = [p['functionResponse'] for p in parts if 'functionResponse' in p]
+                self.check(label + ': reverse same-name tool results and signatures preserved',
+                    [c['role'] for c in body['contents']] == ['user', 'model', 'user']
+                    and [p.get('thoughtSignature') for p in calls] == list(SIGNATURES)
+                    and [r.get('id') for r in results] == ['native-b', 'native-a']
+                    and [r.get('response', {}).get('output') for r in results] == ['second', '']
+                    and 'Historical display summary' not in json.dumps(body)
+                    and CONTINUATION not in json.dumps(body))
+
             if mode == 'rich':
                 contents = body['contents']
                 self.check(label + ': instructions, roles and image preserved', body.get('systemInstruction', {}).get('parts') == [{'text': 'Native system marker'}]
