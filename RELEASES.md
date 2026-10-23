@@ -1,4 +1,4 @@
-## 0.2.17-geili.6（Gemini 历史转换与语义续传，已部署 Stage，未发布生产）
+## 0.2.17-geili.6（Gemini 历史转换与语义续传，已发布 Stage 和生产）
 
 继承生产 `.5` / `b74e964e828c5f4bb9cbd3d3e048e34e16733379`，修复 Gemini 文本 Responses、Chat 及 Responses messages 兼容输入的历史转换：思考摘要不再被回放成额外 model 轮；system/developer 抽取后，已完成工具结果且以助手文本结尾的历史追加固定续写指令，保留已有内容；空白内容不生成空轮次。工具调用和结果按 call_id 一对一验证，同名并行/逆序回传与函数签名保留，缺失、孤立、重复结果及重复调用 ID 在出网前拒绝。
 
@@ -7,7 +7,8 @@
 - 固定候选 revision `79d5fc6e1f77c184fcd4b720d96b542718cc5ae4` / 镜像 `ghcr.io/qingsiliu/sub2api@sha256:3b02052696ee3d60424ce3ee1e0164d51a4497316843199ba01a8a4fc27350cc`。CI [39964434888](https://github.com/QingsiLiu/sub2api/actions/runs/39964434888) 全部9任务/13门禁通过；本地 default/unit/integration 全量、相关竞态及17项 Stage 离线检查通过。
 - 同 digest Stage 通过126场景/726项接口及结算检查、19项 schema 检查（348份候选迁移完整匹配，历史 Stage 额外迁移保留）及3项稳定入口检查。工具签名/同名并行/逆序回传、预先拒绝、流式失败不伪造成功、唯一结算均通过；自有夹具和运行时状态恢复，临时同镜像副本移除。
 - 2026-10-23 14:03:51Z经canonical切Stage；首次SSH在切流后中断，核实draining后只执行正式stage-resume，未重复部署。旧`.5`及旧Nginx worker自然排空，观察601秒后旧实例正常退出0、未OOM，事务complete，新绿色实例ready且后台独占。备份`/srv/projects/geili-stage/lab-files/sub2api-subscription-lab/.bluegreen/20261023T140345Z-79d5fc6e`，证据见运维仓`docs/reports/gemini-history-v6-20261023/`。
-- 生产未发布，仍固定 `.5` / `b74e964e828c5f4bb9cbd3d3e048e34e16733379` / `sha256:bc33189ab3cfd07695612858b1ad562ec6c46737f9c35b8c7a9626ac5631300c`，应用/PG/Redis身份及重启计数保持。真实供应商/支付/媒体及性能门禁未执行，不记passed；生产发布仍需当次授权和正式验收凭据。后续文档CI不能替换本固定候选镜像。
+- 按用户当次“这个会话刚刚完成的版本迭代你看看能否蓝绿发布到线上，实践一次”授权，于2026-10-23 17:00:16Z经canonical同digest蓝绿切入生产；旧`.5`自然退出0、未OOM，事务complete，新绿色ready并独占后台。1422次连续切流健康采样均200，公网版本`.6`；PG/Redis、348迁移、环境/应用配置、定价及既有已结算投递失败财务指纹保持。实际重叠额度旧12GiB/新10GiB，旧退出后新版在线恢复12GiB/Swap总14GiB，Go8GiB全程不变、新版未重启。
+- 本轮当前引擎38项实机蓝绿通过：长SSE1861.793秒完整、反向观察600秒、14293笔成功请求逐笔唯一结算；业务51/缓存17/Luna44/Astra52/增量36/特性18/共享并发9/进程故障8及独立公平性能均通过，v38和23项篡改拒绝通过。原失败/中断报告保留，未放宽原性能门槛；真实供应商/支付/媒体未执行，不记passed。详见运维仓`docs/reports/gemini-history-v6-release-20261023/`，只固定上述79d5fc6e/3b020526，不按后续文档CI换镜像。
 
 ## 0.2.17-geili.5（账号状态精简与账号菜单分组，候选待验收）
 
