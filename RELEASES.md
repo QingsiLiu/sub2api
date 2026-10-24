@@ -5,7 +5,7 @@
 - 新增 Vertex 服务账号总/日/周额度与调度提醒；Gemini/Antigravity 生图权限校验、账号及分组过滤条件记忆；优化调度快照解码缓存、模型映射和额度 SQL。
 - 合入 Anthropic 兼容流断连后有界用量回收、规范终止错误帧，保留 Geili 的语义首内容计时、长思考预算、严格流完整性检查、输出后禁止重放及已观测部分用量唯一结算。Gemini 原生文本适配同步保留断连前实际用量。
 - 合入 Cloudflare 1010 免账号惩罚、DeepSeek 图片字段与工具 schema 兼容、异步图片下载地址/重定向限制和依赖安全更新。Grok 4.7 fast 默认官方价格上调，显式自定义定价不变。
-- 新增官方迁移 `246_enable_gemini_image_generation_groups.sql`（合计349份），只开启 Gemini/Antigravity 分组的既有生图开关以维持旧行为，不改历史迁移。现网预检无 Vertex 服务账号/混合分组，预期只更新两个 Gemini 分组开关；原有账号、倍率、订阅、支付及自定义价卡保持。
+- 新增官方迁移 `246_enable_gemini_image_generation_groups.sql`（合计349份），只开启 Gemini/Antigravity 分组的既有生图开关以维持旧行为，不改历史迁移。现网预检无 Vertex 服务账号/混合分组，预期更新两个在用 Gemini 分组及三个已删除历史分组的生图开关；原有账号、倍率、订阅、支付及自定义价卡保持。
 - revision / 不可变镜像 digest：待本次合并提交及候选 CI 产出后绑定；尚未部署 Stage 或生产。本次用户已授权通过完整验收后以同 digest canonical 单机临时蓝绿发布，旧版自然排空、至少观察600秒后回收；测试只用自有模拟上游，不执行真实支付或付费媒体调用。
 
 ## 0.2.17-geili.6（Gemini 历史转换与语义续传，已发布 Stage 和生产）

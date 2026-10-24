@@ -217,6 +217,11 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 					return "", errAnthropicNativeStreamIdle
 				}
 			case <-canceled:
+				// Recovery deadlines belong to the connected request; report the
+				// exhausted budget instead of classifying it as a gone client.
+				if !errors.Is(requestContext.Err(), context.Canceled) {
+					return "", requestContext.Err()
+				}
 				// An already started request is drained for the provider's final usage;
 				// cancellation never starts another route attempt.
 				GeiliMarkTextClientDisconnect(c)
@@ -381,9 +386,11 @@ func anthropicCompatFailureGeili(c *gin.Context, err error) *anthropicCompatStre
 	if errors.As(err, &failover) {
 		return nil
 	}
-	failure := &anthropicCompatStreamFailure{err: err, errType: "stream_incomplete", message: "upstream stream ended without a terminal event"}
+	failure := &anthropicCompatStreamFailure{err: err, errType: "stream_incomplete", message: "Upstream response did not complete"}
 	var payload *geiliUpstreamPayloadFailure
 	switch {
+	case errors.Is(err, context.DeadlineExceeded) || (c != nil && c.Request != nil && !RequestRecoveryAllowed(c.Request.Context())):
+		failure.errType, failure.message = "upstream_recovery_timeout", "Upstream recovery timeout budget exhausted"
 	case errors.As(err, &payload):
 		failure.errType = firstNonEmpty(geiliPayloadErrorField(payload.payload, "type"), "upstream_error")
 		failure.message = firstNonEmpty(sanitizeUpstreamErrorMessage(payload.message), "upstream stream error")

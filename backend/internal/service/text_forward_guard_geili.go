@@ -188,7 +188,7 @@ func geiliTextClientDisconnected(c *gin.Context) bool {
 	if c == nil {
 		return false
 	}
-	if c.Request != nil && c.Request.Context().Err() != nil {
+	if c.Request != nil && errors.Is(c.Request.Context().Err(), context.Canceled) {
 		return true
 	}
 	return c.GetBool("geili_text_client_disconnected")

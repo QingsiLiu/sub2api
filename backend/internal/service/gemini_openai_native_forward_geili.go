@@ -378,6 +378,9 @@ func (s *GeminiMessagesCompatService) readOpenAIGeminiSSEGeili(ctx context.Conte
 	for {
 		select {
 		case <-canceled:
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return ctx.Err()
+			}
 			if !out.semantic && !out.usage.hasObservedTokens() {
 				return ctx.Err()
 			}
