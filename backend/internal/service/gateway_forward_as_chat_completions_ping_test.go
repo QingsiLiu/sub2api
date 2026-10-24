@@ -201,13 +201,13 @@ func TestHandleCCStreamingFromAnthropic_PingWriteFailureStopsDownstream(t *testi
 			require.Zero(t, writer.writesAfterError)
 			require.Zero(t, writer.flushesAfterError)
 			require.NotContains(t, writer.Body.String(), "[DONE]")
-			// Geili drains the already-started upstream to retain real usage.
+			// Geili drains real usage; metadata and ping do not start the semantic clock.
+			require.Nil(t, result.FirstTokenMs)
 			require.Equal(t, 7, result.Usage.OutputTokens)
 			if withUsage {
 				require.Equal(t, 10, result.Usage.InputTokens)
 			} else {
 				require.Zero(t, result.Usage.InputTokens)
-				require.Nil(t, result.FirstTokenMs)
 			}
 		})
 	}

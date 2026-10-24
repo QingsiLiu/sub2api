@@ -231,6 +231,11 @@ func (s *GatewayService) ForwardAsResponses(
 	var handleErr error
 	if clientStream {
 		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime, clientToolMapping)
+		// geili hook: online idle failures retain upstream's account timeout policy;
+		// disconnected clients drain usage without penalizing an upstream account.
+		if errors.Is(handleErr, errAnthropicNativeStreamIdle) && s.rateLimitService != nil && !geiliTextClientDisconnected(c) {
+			s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)
+		}
 	} else {
 		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime, clientToolMapping)
 	}
@@ -508,7 +513,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			Stream:           true,
 			Duration:         time.Since(startTime),
 			FirstTokenMs:     firstTokenMs,
-			ClientDisconnect: clientDisconnected,
+			ClientDisconnect: clientDisconnected || geiliTextClientDisconnected(c),
 		}
 	}
 
@@ -579,7 +584,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	}
 
 	finalizeStream := func() (*ForwardResult, error) {
-		if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 && !clientDisconnected {
+		if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 && !clientDisconnected && !geiliTextClientDisconnected(c) {
 			for _, evt := range finalEvents {
 				sse, err := apicompat.ResponsesEventToSSE(evt)
 				if err != nil {
@@ -592,7 +597,7 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 					break
 				}
 			}
-			if !clientDisconnected {
+			if !clientDisconnected && !geiliTextClientDisconnected(c) {
 				c.Writer.Flush()
 			}
 		}
@@ -606,7 +611,14 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		return nil
 	})
 	if readErr != nil {
-		return resultWithUsage(), readErr
+		if failure := anthropicCompatFailureGeili(c, readErr); failure != nil {
+			writeAnthropicCompatResponsesStreamFailure(c, state, clientToolRestorer, failure)
+		}
+		result := resultWithUsage()
+		if !result.Usage.hasObservedTokens() && !c.Writer.Written() {
+			return nil, readErr
+		}
+		return result, readErr
 	}
 
 	return finalizeStream()

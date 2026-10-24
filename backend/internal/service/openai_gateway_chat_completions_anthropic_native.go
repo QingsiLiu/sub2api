@@ -246,12 +246,12 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 			Stream:           true,
 			Duration:         time.Since(startTime),
 			FirstTokenMs:     firstTokenMs,
-			ClientDisconnect: clientDisconnected,
+			ClientDisconnect: clientDisconnected || geiliTextClientDisconnected(c),
 		}
 	}
 
 	writeChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
-		if clientDisconnected {
+		if clientDisconnected || geiliTextClientDisconnected(c) {
 			return false // 已断开：不再写客户端，只排水上游累计 usage
 		}
 		sse, err := apicompat.ChatChunkToSSE(chunk)
@@ -289,7 +289,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 
 		// 客户端已断开：跳过转换与写出，继续读上游直到流结束（usage 完整、
 		// 连接及时归还），不再提前 return。
-		if clientDisconnected {
+		if clientDisconnected || geiliTextClientDisconnected(c) {
 			return false
 		}
 
@@ -314,7 +314,14 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		return nil
 	})
 	if readErr != nil {
-		return resultWithUsage(), readErr
+		if failure := anthropicCompatFailureGeili(c, readErr); failure != nil {
+			writeAnthropicCompatCCStreamFailure(c, failure)
+		}
+		result := resultWithUsage()
+		if !usage.hasObservedTokens() {
+			return nil, readErr
+		}
+		return result, readErr
 	}
 
 	// Finalize both state machines（客户端已断开时仍执行，保证 usage 汇总完整）。
@@ -330,7 +337,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		writeChunk(chunk) //nolint:errcheck
 	}
 
-	if !clientDisconnected {
+	if !clientDisconnected && !geiliTextClientDisconnected(c) {
 		fmt.Fprint(c.Writer, "data: [DONE]\n\n") //nolint:errcheck
 		c.Writer.Flush()
 	}

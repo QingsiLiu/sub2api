@@ -190,11 +190,16 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 		ping = keepalivePayload[0]
 	}
 	next := func() (string, error) {
-		var idle <-chan time.Time
-		if pump.timer != nil {
-			idle = pump.timer.C
-		}
 		for {
+			if geiliTextClientDisconnected(c) {
+				GeiliMarkTextClientDisconnect(c)
+				canceled, keepalive = nil, nil
+				pump.enableInterval(anthropicCompatDisconnectDrainInterval)
+			}
+			var idle <-chan time.Time
+			if pump.timer != nil {
+				idle = pump.timer.C
+			}
 			select {
 			case event, ok := <-pump.events:
 				if !ok {
@@ -203,14 +208,23 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 				pump.resetTimer()
 				return event.line, event.err
 			case <-idle:
-				return "", errAnthropicNativeStreamIdle
+				// Match the upstream pump: queued data wins an expired timer
+				// when conversion or downstream processing took time.
+				select {
+				case event, ok := <-pump.events:
+					return pump.deliver(event, ok)
+				default:
+					return "", errAnthropicNativeStreamIdle
+				}
 			case <-canceled:
 				// An already started request is drained for the provider's final usage;
 				// cancellation never starts another route attempt.
-				canceled = nil
-				keepalive = nil
+				GeiliMarkTextClientDisconnect(c)
+				canceled, keepalive = nil, nil
+				pump.enableInterval(anthropicCompatDisconnectDrainInterval)
 			case <-keepalive:
 				if _, err := fmt.Fprint(c.Writer, ping); err != nil {
+					GeiliMarkTextClientDisconnect(c)
 					keepalive = nil
 					continue
 				}
@@ -252,6 +266,10 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 			return GeiliUpstreamReadFailure(c, errors.New("upstream stream read error: invalid JSON event"))
 		}
 		if eventType == "error" || gjson.Get(payload, "type").String() == "error" || gjson.Get(payload, "error").Exists() {
+			if geiliTextClientDisconnected(c) && tracker.usage.hasObservedTokens() {
+				tracker.stopped = true
+				return nil
+			}
 			return GeiliUpstreamErrorFailure(c, []byte(payload), resp.StatusCode, resp.Header)
 		}
 		var event apicompat.AnthropicStreamEvent
@@ -275,15 +293,24 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 		line, err := next()
 		if err != nil {
 			tracker.readErr = err
-			if errors.Is(err, io.EOF) {
+			// geili hook: accept a fully validated final event even when the peer
+			// omits the final empty SSE line and then stalls or drops transport.
+			if frame.Len() > 0 {
 				if e := process(); e != nil {
 					return tracker, e
 				}
-				if e := tracker.complete(); e == nil {
-					return tracker, nil
-				} else {
-					return tracker, GeiliUpstreamReadFailure(c, e)
-				}
+			}
+			if e := tracker.complete(); e == nil {
+				return tracker, nil
+			}
+			// Keep observed provider usage after a client disconnect, bounded by
+			// the configured read interval (or the upstream fallback interval).
+			if geiliTextClientDisconnected(c) && tracker.usage.hasObservedTokens() {
+				GeiliMarkTextClientDisconnect(c)
+				return tracker, nil
+			}
+			if errors.Is(err, io.EOF) {
+				return tracker, GeiliUpstreamReadFailure(c, tracker.complete())
 			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return tracker, err
@@ -342,4 +369,30 @@ func validateAnthropicJSONGeili(c *gin.Context, resp *http.Response, body []byte
 		return GeiliUpstreamReadFailure(c, err)
 	}
 	return nil
+}
+
+// geili hook: keep pre-semantic safe failover and the strict completion reader,
+// while emitting upstream's protocol-specific failure frames after output.
+func anthropicCompatFailureGeili(c *gin.Context, err error) *anthropicCompatStreamFailure {
+	if err == nil || geiliTextClientDisconnected(c) {
+		return nil
+	}
+	var failover *UpstreamFailoverError
+	if errors.As(err, &failover) {
+		return nil
+	}
+	failure := &anthropicCompatStreamFailure{err: err, errType: "stream_incomplete", message: "upstream stream ended without a terminal event"}
+	var payload *geiliUpstreamPayloadFailure
+	switch {
+	case errors.As(err, &payload):
+		failure.errType = firstNonEmpty(geiliPayloadErrorField(payload.payload, "type"), "upstream_error")
+		failure.message = firstNonEmpty(sanitizeUpstreamErrorMessage(payload.message), "upstream stream error")
+	case errors.Is(err, errAnthropicNativeStreamIdle):
+		failure.errType, failure.message = "stream_timeout", "upstream stream data interval timeout"
+	case errors.Is(err, bufio.ErrTooLong):
+		failure.errType, failure.message = "response_too_large", "upstream SSE line exceeded the configured limit"
+	case !strings.Contains(err.Error(), "missing terminal event"):
+		failure.errType, failure.message = "stream_read_error", "upstream stream disconnected: "+sanitizeStreamError(err)
+	}
+	return failure
 }

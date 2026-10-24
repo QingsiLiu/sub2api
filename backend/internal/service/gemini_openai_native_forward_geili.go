@@ -181,6 +181,9 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		chatState.Model = request.model
 		chatState.IncludeUsage = request.includeUsage
 		emit = func(event apicompat.ResponsesStreamEvent) error {
+			if geiliTextClientDisconnected(c) {
+				return nil
+			}
 			events := []apicompat.ResponsesStreamEvent{event}
 			if !chat {
 				events = restorer.Restore(event)
@@ -237,6 +240,18 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 	}
 	result := func() *ForwardResult {
 		return &ForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: output.usage, Model: request.model, UpstreamModel: mapped, Stream: request.stream, Duration: time.Since(start), FirstTokenMs: output.firstTokenMs, ReasoningEffort: extractGeminiReasoningEffortFromBody(request.body), ClientDisconnect: c.Request.Context().Err() != nil}
+	}
+	// geili hook: retain observed provider usage on client abort in our native
+	// text adapter too. Never synthesize a successful terminal for a gone client.
+	if geiliTextClientDisconnected(c) {
+		GeiliMarkTextClientDisconnect(c)
+		if output.usage.hasObservedTokens() {
+			return result(), nil
+		}
+		if c.Request != nil && c.Request.Context().Err() != nil {
+			return nil, c.Request.Context().Err()
+		}
+		return nil, err
 	}
 	if err == nil {
 		err = output.finalize()
@@ -359,10 +374,21 @@ func (s *GeminiMessagesCompatService) readOpenAIGeminiSSEGeili(ctx context.Conte
 		}
 		return out.consume([]byte(raw))
 	}
+	canceled := ctx.Done()
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-canceled:
+			if !out.semantic && !out.usage.hasObservedTokens() {
+				return ctx.Err()
+			}
+			GeiliMarkTextClientDisconnect(c)
+			canceled, firstCh = nil, nil
+			if timer == nil {
+				interval = anthropicCompatDisconnectDrainInterval
+				timer = time.NewTimer(interval)
+				idleCh = timer.C
+				defer timer.Stop()
+			}
 		case <-idleCh:
 			return fmt.Errorf("Gemini stream idle timeout")
 		case <-firstCh:
@@ -370,7 +396,7 @@ func (s *GeminiMessagesCompatService) readOpenAIGeminiSSEGeili(ctx context.Conte
 				return fmt.Errorf("Gemini first content deadline exceeded")
 			}
 		case <-heartbeat.C:
-			if clientStream {
+			if clientStream && !geiliTextClientDisconnected(c) {
 				if _, err := io.WriteString(c.Writer, ": ping\n\n"); err != nil {
 					return err
 				}

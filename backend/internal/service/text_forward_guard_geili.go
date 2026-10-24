@@ -52,6 +52,7 @@ func BeginTextForwardGuard(c *gin.Context, stream bool) func(error) error {
 	}
 	parent := c.Writer
 	c.Set("geili_supplier_failure", nil)
+	c.Set("geili_text_client_disconnected", false)
 	c.Set(anthropicStreamDiagnosticKeyGeili, nil)
 	w := &geiliTextForwardWriter{context: c, ResponseWriter: parent, headers: parent.Header().Clone(),
 		stage: newDefaultOpenAIFirstOutputStage(), status: http.StatusOK,
@@ -174,10 +175,23 @@ func GeiliTextForwardStreaming(c *gin.Context) bool {
 // Preserve the existing successful usage-draining result in that interval.
 func GeiliMarkTextClientDisconnect(c *gin.Context) {
 	if c != nil {
+		c.Set("geili_text_client_disconnected", true)
 		if w, ok := c.Writer.(*geiliTextForwardWriter); ok {
 			w.clientDisconnected = true
 		}
 	}
+}
+
+// geili hook: preserve writer-detected disconnects for shared upstream readers,
+// including compatibility paths without an installed forwarding guard.
+func geiliTextClientDisconnected(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	if c.Request != nil && c.Request.Context().Err() != nil {
+		return true
+	}
+	return c.GetBool("geili_text_client_disconnected")
 }
 
 // A synchronous Responses result can legitimately have status=failed with a

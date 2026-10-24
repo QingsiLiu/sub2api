@@ -256,7 +256,7 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 			Stream:           true,
 			Duration:         time.Since(startTime),
 			FirstTokenMs:     firstTokenMs,
-			ClientDisconnect: clientDisconnected,
+			ClientDisconnect: clientDisconnected || geiliTextClientDisconnected(c),
 		}
 	}
 
@@ -285,7 +285,7 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 		normalizeAnthropicEventUsageForResponses(event, usage)
 
 		events := apicompat.AnthropicEventToResponsesEvents(event, state)
-		if clientDisconnected {
+		if clientDisconnected || geiliTextClientDisconnected(c) {
 			return
 		}
 		for _, evt := range events {
@@ -318,13 +318,20 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 		return nil
 	})
 	if readErr != nil {
-		return resultWithUsage(), readErr
+		if failure := anthropicCompatFailureGeili(c, readErr); failure != nil {
+			writeAnthropicCompatResponsesStreamFailure(c, state, clientToolRestorer, failure)
+		}
+		result := resultWithUsage()
+		if !usage.hasObservedTokens() {
+			return nil, readErr
+		}
+		return result, readErr
 	}
 
 	// Finalize state machine（客户端已断开时仍推进，保证 usage 汇总完整；仅在
 	// 客户端仍连接时写出）。终态帧与逐事件路径一致过工具名反转与客户端工具还原，
 	// 避免流截断时终态帧携带改写后的工具名。
-	if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 && !clientDisconnected {
+	if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 && !clientDisconnected && !geiliTextClientDisconnected(c) {
 		wrote := false
 		for _, evt := range finalEvents {
 			payload, err := json.Marshal(evt)
@@ -345,7 +352,7 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 				}
 				wrote = true
 			}
-			if clientDisconnected {
+			if clientDisconnected || geiliTextClientDisconnected(c) {
 				break
 			}
 		}

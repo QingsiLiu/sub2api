@@ -203,6 +203,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	var handleErr error
 	if clientStream {
 		result, handleErr = s.handleCCStreamingFromAnthropic(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
+		// geili hook: online idle failures retain upstream's account timeout policy;
+		// disconnected clients drain usage without penalizing an upstream account.
+		if errors.Is(handleErr, errAnthropicNativeStreamIdle) && s.rateLimitService != nil && !geiliTextClientDisconnected(c) {
+			s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)
+		}
 	} else {
 		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
 	}
@@ -338,7 +343,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			Stream:           true,
 			Duration:         time.Since(startTime),
 			FirstTokenMs:     firstTokenMs,
-			ClientDisconnect: clientDisconnected,
+			ClientDisconnect: clientDisconnected || geiliTextClientDisconnected(c),
 		}
 	}
 
@@ -368,7 +373,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			return false
 		}
 		if event.Type == "ping" {
-			if clientDisconnected {
+			if clientDisconnected || geiliTextClientDisconnected(c) {
 				return true
 			}
 			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
@@ -396,7 +401,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 
 		// geili hook: drain observed provider usage after disconnect without writing
 		// another downstream frame or finalizing a failed client response.
-		if clientDisconnected {
+		if clientDisconnected || geiliTextClientDisconnected(c) {
 			return true
 		}
 
@@ -427,7 +432,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		return nil
 	})
 	if readErr != nil {
-		return resultWithUsage(), readErr
+		if failure := anthropicCompatFailureGeili(c, readErr); failure != nil {
+			writeAnthropicCompatCCStreamFailure(c, failure)
+		}
+		result := resultWithUsage()
+		if !result.Usage.hasObservedTokens() && !c.Writer.Written() {
+			return nil, readErr
+		}
+		return result, readErr
 	}
 
 	// Finalize both state machines
@@ -444,7 +456,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	}
 
 	// Write [DONE] marker
-	if !clientDisconnected {
+	if !clientDisconnected && !geiliTextClientDisconnected(c) {
 		if _, err := fmt.Fprint(c.Writer, "data: [DONE]\n\n"); err != nil {
 			clientDisconnected = true
 			GeiliMarkTextClientDisconnect(c)
