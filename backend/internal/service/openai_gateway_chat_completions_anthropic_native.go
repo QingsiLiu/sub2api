@@ -318,9 +318,6 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 			writeAnthropicCompatCCStreamFailure(c, failure)
 		}
 		result := resultWithUsage()
-		if !usage.hasObservedTokens() {
-			return nil, readErr
-		}
 		return result, readErr
 	}
 

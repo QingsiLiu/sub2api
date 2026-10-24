@@ -322,9 +322,6 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 			writeAnthropicCompatResponsesStreamFailure(c, state, clientToolRestorer, failure)
 		}
 		result := resultWithUsage()
-		if !usage.hasObservedTokens() {
-			return nil, readErr
-		}
 		return result, readErr
 	}
 
