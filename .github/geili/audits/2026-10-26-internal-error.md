@@ -35,5 +35,8 @@
 - 现有财务关联/歧义/余额与额度保全测试通过；空身份和输入去重覆盖。
 - 模型目录真实 PostgreSQL 验证候选过滤、顺序、各平台映射和损坏数据拒绝；1MB 凭据只返回模型声明所需字段。
 - 默认 routes、cmd/server、repository、service 全量测试通过；元数据隔离、并发/冷却及重试合同另作真实 PostgreSQL/Redis 与竞态验证。
+- 最终 `-tags unit` 的 routes 与 service 全量通过（18.513s / 265.582s）；入口模拟已获准 SQL 超时，保留原先两次元数据读取、仅一次模型 POST 的断言。
 - 真实 PG 锁表并发测试验证 64 个首查请求最多 2 次数据库尝试、SQL 池零等待，独立业务余额事务可继续；500ms 冷却拒绝不续期。原有同请求 50ms 首查后累计 250ms 的单次重试资格保留，短锁解除后原值/冲突/删除权威核验通过；普通客户端取消不触发全局熔断。
 - 不增加迁移，原 349 份迁移文件及校验和保持。候选 CI 和固定制品以 RELEASES.md 顶部为准；本报告不表示已发布生产，也不承诺任何系统故障绝不发生。
+
+固定候选 `.18.2` / `637e375b7e1ccadb0399de51490f77ff223ff450` / `ghcr.io/qingsiliu/sub2api@sha256:7fc23abba10e352a7523ddb2f000b15bb401abf69bed6eb4d1c6507e05b0091c` 的 CI [40213011071](https://github.com/QingsiLiu/sub2api/actions/runs/40213011071) 全部9任务/13门禁通过；已下载并核对制品身份及349份迁移校验。未部署 Stage/生产，制品 `production_ready=false` 保持。

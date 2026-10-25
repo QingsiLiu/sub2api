@@ -66,5 +66,16 @@
     "Estimated cost is not measured speedup",
     "Original full-scan query deliberately not executed",
     "Historical route helper did not log original errors, so individual 500 causes cannot be reconstructed exhaustively"
-  ]
+  ],
+  "candidate_validation": {
+    "revision": "637e375b7e1ccadb0399de51490f77ff223ff450",
+    "image": "ghcr.io/qingsiliu/sub2api@sha256:7fc23abba10e352a7523ddb2f000b15bb401abf69bed6eb4d1c6507e05b0091c",
+    "ci_run": "40213011071",
+    "jobs": 9,
+    "gates": 13,
+    "migrations": 349,
+    "production_ready": false,
+    "stage_deployed": false,
+    "production_deployed": false
+  }
 }
