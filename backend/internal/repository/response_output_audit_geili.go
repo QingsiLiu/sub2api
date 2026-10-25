@@ -122,25 +122,10 @@ func (r *responseAuditRepository) Stats(ctx context.Context, f service.ResponseA
 }
 func (r *responseAuditRepository) Lookup(ctx context.Context, keys []service.ResponseAuditUsageKey) (map[service.ResponseAuditUsageKey]*service.ResponseAudit, error) {
 	out := make(map[service.ResponseAuditUsageKey]*service.ResponseAudit)
-	if len(keys) == 0 {
+	q, args := responseAuditLookupQueryGeili(keys)
+	if q == "" {
 		return out, nil
 	}
-	args := make([]any, 0, len(keys)*2)
-	pairs := make([]string, 0, len(keys))
-	for _, k := range keys {
-		args = append(args, k.APIKeyID, k.RequestID)
-		pairs = append(pairs, fmt.Sprintf("($%d::bigint,$%d::text)", len(args)-1, len(args)))
-	}
-	// Only a unique association may label a financial row. Reused client IDs
-	// can correspond to several physical requests with different outcomes.
-	q := `WITH keys(key_id,request_id) AS (VALUES ` + strings.Join(pairs, ",") + `),
- matches AS (
- SELECT k.key_id,k.request_id,a.id FROM keys k JOIN gateway_response_audits a ON a.api_key_id=k.key_id AND a.usage_request_id=k.request_id
- UNION
- SELECT k.key_id,k.request_id,a.id FROM keys k JOIN usage_settlement_receipts r ON r.api_key_id=k.key_id AND r.usage_request_id=k.request_id
- JOIN gateway_response_audits a ON a.api_key_id=r.api_key_id AND a.usage_request_id=r.request_id
- ), unique_matches AS (SELECT key_id,request_id,MIN(id) AS id FROM matches GROUP BY key_id,request_id HAVING COUNT(*)=1)
- SELECT m.key_id,m.request_id,` + responseAuditSelect + ` FROM unique_matches m JOIN gateway_response_audits a ON a.id=m.id` + responseAuditReceiptJoin
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -159,6 +144,38 @@ func (r *responseAuditRepository) Lookup(ctx context.Context, keys []service.Res
 		out[k] = &a
 	}
 	return out, rows.Err()
+}
+
+func responseAuditLookupQueryGeili(keys []service.ResponseAuditUsageKey) (string, []any) {
+	args := make([]any, 0, len(keys)*2)
+	pairs := make([]string, 0, len(keys))
+	seen := make(map[service.ResponseAuditUsageKey]bool, len(keys))
+	for _, k := range keys {
+		// An empty identity means unlinked, never a unique financial association.
+		if k.APIKeyID <= 0 || k.RequestID == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		args = append(args, k.APIKeyID, k.RequestID)
+		pairs = append(pairs, fmt.Sprintf("($%d::bigint,$%d::text)", len(args)-1, len(args)))
+	}
+	if len(pairs) == 0 {
+		return "", nil
+	}
+	// Only a unique association may label a financial row. Reused client IDs
+	// can correspond to several physical requests with different outcomes.
+	// Both audit joins must state the partial-index predicate explicitly: a
+	// value coming from a materialized keys CTE does not imply a nonempty ID.
+	// Omitting it makes even a one-key lookup scan the entire audit table twice.
+	q := `WITH keys(key_id,request_id) AS (VALUES ` + strings.Join(pairs, ",") + `),
+ matches AS (
+ SELECT k.key_id,k.request_id,a.id FROM keys k JOIN gateway_response_audits a ON a.api_key_id=k.key_id AND a.usage_request_id=k.request_id AND a.usage_request_id<>''
+ UNION
+ SELECT k.key_id,k.request_id,a.id FROM keys k JOIN usage_settlement_receipts r ON r.api_key_id=k.key_id AND r.usage_request_id=k.request_id
+ JOIN gateway_response_audits a ON a.api_key_id=r.api_key_id AND a.usage_request_id=r.request_id AND a.usage_request_id<>''
+ ), unique_matches AS (SELECT key_id,request_id,MIN(id) AS id FROM matches GROUP BY key_id,request_id HAVING COUNT(*)=1)
+ SELECT m.key_id,m.request_id,` + responseAuditSelect + ` FROM unique_matches m JOIN gateway_response_audits a ON a.id=m.id` + responseAuditReceiptJoin
+	return q, args
 }
 func (r *responseAuditRepository) Cleanup(ctx context.Context, before time.Time) error {
 	for i := 0; i < 100; i++ {
