@@ -28,6 +28,10 @@ func (runtimeTrackedLookupFailureGeili) Unwrap() error                          
 func (runtimeTrackedLookupFailureGeili) KnownOpenAIEncryptedSourceHintGeili() bool { return true }
 func (runtimeTrackedLookupFailureGeili) EncryptedRouteLookupPhaseGeili() string    { return "query" }
 
+// This fixture models an already admitted PostgreSQL query timing out, rather
+// than a bulkhead rejection; it retains the original single retry eligibility.
+func (runtimeTrackedLookupFailureGeili) ClaimOpenAIEncryptedMetadataRetryGeili() bool { return true }
+
 type runtimeTrackedFailureCacheGeili struct {
 	*runtimeEncryptedCaptureCacheGeili
 }
