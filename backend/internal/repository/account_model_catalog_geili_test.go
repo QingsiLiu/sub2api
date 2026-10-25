@@ -56,7 +56,11 @@ func TestAccountModelCatalogGeiliOnlyAdminOptsIntoRuntimePresentation(t *testing
 	for _, call := range []string{"catalog", "original availability", "admin GetByID", "scheduler list", "GetByIDs"} {
 		t.Run(call, func(t *testing.T) {
 			repo, mock, counter := modelCatalogRepositoryGeili(t)
-			expectModelCatalogAccountConversionGeili(mock)
+			if call == "catalog" {
+				mock.ExpectQuery(regexp.QuoteMeta(accountModelCatalogSelectGeili)).WithArgs(`{"anthropic"}`).WillReturnRows(sqlmock.NewRows([]string{"id", "platform", "type", "credentials"}).AddRow(17, service.PlatformAnthropic, service.AccountTypeAPIKey, `{"model_mapping":{"claude-opus-5":"claude-opus-5"}}`))
+			} else {
+				expectModelCatalogAccountConversionGeili(mock)
+			}
 			if call == "admin GetByID" {
 				mock.ExpectQuery(`SELECT .* FROM account_runtime_geili WHERE account_id=ANY\(\$1\)`).WithArgs("{17}").WillReturnRows(runtimeRowsGeili(`{}`))
 			}
@@ -122,12 +126,24 @@ func TestAccountModelCatalogGeiliPrivateContextDoesNotSkipMandatoryOrSuccessRead
 
 func TestAccountModelCatalogGeiliGroupedDirectoryPreservesQueryScope(t *testing.T) {
 	repo, mock, counter := modelCatalogRepositoryGeili(t)
-	mock.ExpectQuery(`SELECT .* FROM "account_groups"`).WillReturnRows(sqlmock.NewRows([]string{"id", "account_id", "group_id", "priority"}).AddRow(1, 17, 7, 0))
-	expectModelCatalogAccountConversionGeili(mock)
+	mock.ExpectQuery(regexp.QuoteMeta(accountModelCatalogSelectGeili+` JOIN account_groups ag ON ag.account_id=a.id AND ag.group_id=$2 WHERE a.deleted_at IS NULL AND a.status='active' AND a.schedulable=TRUE AND a.platform=ANY($1) ORDER BY ag.priority,a.priority`)).WithArgs(`{"anthropic"}`, int64(7)).WillReturnRows(sqlmock.NewRows([]string{"id", "platform", "type", "credentials"}).AddRow(17, service.PlatformAnthropic, service.AccountTypeAPIKey, `{"model_mapping":{"claude-opus-5":"claude-opus-5"}}`))
 	group := int64(7)
 	accounts, err := repo.ListModelCatalogCandidatesGeili(context.Background(), &group, []string{service.PlatformAnthropic}, false)
 	require.NoError(t, err)
 	require.Len(t, accounts, 1)
 	require.Nil(t, accounts[0].RuntimeState)
 	require.Zero(t, counter.presentation.Load())
+}
+
+func TestAccountModelCatalogGeiliEmptyAndFailedReads(t *testing.T) {
+	repo, mock, _ := modelCatalogRepositoryGeili(t)
+	accounts, err := repo.ListModelCatalogCandidatesGeili(context.Background(), nil, nil, false)
+	require.NoError(t, err)
+	require.Empty(t, accounts)
+	mock.ExpectQuery(regexp.QuoteMeta(accountModelCatalogSelectGeili)).WithArgs(`{"anthropic"}`).WillReturnRows(sqlmock.NewRows([]string{"id", "platform", "type", "credentials"}).AddRow(17, "anthropic", "apikey", `broken`))
+	_, err = repo.ListModelCatalogCandidatesGeili(context.Background(), nil, []string{"anthropic"}, false)
+	require.ErrorContains(t, err, "decode model catalog declarations")
+	mock.ExpectQuery(regexp.QuoteMeta(accountModelCatalogSelectGeili)).WithArgs(`{"anthropic"}`).WillReturnRows(sqlmock.NewRows([]string{"id", "platform", "type", "credentials"}).AddRow(17, "anthropic", "apikey", nil).RowError(0, context.DeadlineExceeded))
+	_, err = repo.ListModelCatalogCandidatesGeili(context.Background(), nil, []string{"anthropic"}, false)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }

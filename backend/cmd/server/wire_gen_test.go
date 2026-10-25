@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -9,6 +10,16 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+type cleanupGatewayCacheGeili struct {
+	service.GatewayCache
+	closed atomic.Bool
+}
+
+func (c *cleanupGatewayCacheGeili) CloseEncryptedRouteCacheGeili() error {
+	c.closed.Store(true)
+	return nil
+}
 
 func TestProvideServiceBuildInfo(t *testing.T) {
 	in := handler.BuildInfo{
@@ -50,10 +61,12 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	idempotencyCleanupSvc := service.NewIdempotencyCleanupService(nil, cfg)
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
+	gatewayCache := &cleanupGatewayCacheGeili{}
 
 	cleanup := provideCleanup(
 		nil, // entClient
 		nil, // redis
+		gatewayCache,
 		&service.OpsMetricsCollector{},
 		&service.OpsAggregationService{},
 		&service.OpsAlertEvaluatorService{},
@@ -108,4 +121,5 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	require.NotPanics(t, func() {
 		cleanup()
 	})
+	require.True(t, gatewayCache.closed.Load(), "shutdown must close the owned metadata pool")
 }

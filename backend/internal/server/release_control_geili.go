@@ -32,6 +32,7 @@ type ReleaseControl struct {
 	checks     []func(context.Context) error
 	poolMax    int
 	poolIdle   int
+	poolAux    int
 	ownerMu    sync.Mutex
 	ownerLock  *os.File
 	dataDir    string
@@ -40,13 +41,16 @@ type ReleaseControl struct {
 	token      string
 }
 
-func ProvideReleaseControl(cfg *config.Config, db *sql.DB, rdb *redis.Client, settlement *service.UsageSettlementWorker) (*ReleaseControl, error) {
+func ProvideReleaseControl(cfg *config.Config, db *sql.DB, rdb *redis.Client, settlement *service.UsageSettlementWorker, gatewayCache service.GatewayCache) (*ReleaseControl, error) {
 	for _, name := range []string{"GEILI_RELEASE_CONTROL"} {
 		if v := os.Getenv(name); v != "" && v != "true" && v != "false" {
 			return nil, fmt.Errorf("%s must be true or false", name)
 		}
 	}
 	c := &ReleaseControl{poolMax: cfg.Database.MaxOpenConns, poolIdle: cfg.Database.MaxIdleConns}
+	if cache, ok := gatewayCache.(interface{ EncryptedRoutePoolStatsGeili() sql.DBStats }); ok {
+		c.poolAux = cache.EncryptedRoutePoolStatsGeili().MaxOpenConnections
+	}
 	if !c.lifecycle().Enabled() {
 		return c, nil
 	}
@@ -238,7 +242,9 @@ func (c *ReleaseControl) writeStatus(w http.ResponseWriter, code int) {
 		RequestPrefix string `json:"request_prefix"`
 		PoolMax       int    `json:"database_max_open_conns"`
 		PoolIdle      int    `json:"database_max_idle_conns"`
-	}{c.lifecycle().Status(), 2, os.Getpid(), service.RequestIDPrefix(), c.poolMax, c.poolIdle})
+		PoolAux       int    `json:"database_auxiliary_max_open_conns"`
+		PoolTotal     int    `json:"database_total_max_open_conns"`
+	}{c.lifecycle().Status(), 2, os.Getpid(), service.RequestIDPrefix(), c.poolMax, c.poolIdle, c.poolAux, c.poolMax + c.poolAux})
 }
 
 func (c *ReleaseControl) lifecycle() *releaselifecycle.Controller {

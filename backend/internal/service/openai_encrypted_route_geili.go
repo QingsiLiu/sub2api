@@ -227,7 +227,9 @@ func (s *OpenAIGatewayService) PrepareOpenAIEncryptedTurnGeili(ctx context.Conte
 			var retryCancel context.CancelFunc
 			lookup, retryCancel = context.WithDeadline(ctx, lookupStarted.Add(250*time.Millisecond))
 			defer retryCancel()
-			sources, err = cache.GetOpenAIEncryptedRoutesGeili(lookup, key.UserID, digests)
+			if retryCtx, admitted := WithOpenAIEncryptedMetadataRetryGeili(lookup, err); admitted {
+				sources, err = cache.GetOpenAIEncryptedRoutesGeili(retryCtx, key.UserID, digests)
+			}
 			resultClass := "none"
 			if err != nil {
 				resultClass = encryptedPersistenceFailureClassGeili(err)

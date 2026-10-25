@@ -164,6 +164,10 @@ type trackedEncryptedLookupFailureGeili struct {
 	phase   string
 }
 
+func (e trackedEncryptedLookupFailureGeili) ClaimOpenAIEncryptedMetadataRetryGeili() bool {
+	return true
+}
+
 func (e trackedEncryptedLookupFailureGeili) Error() string {
 	return "private database error must not be exposed"
 }

@@ -17,6 +17,7 @@ func TestExplicitDeclaredModelGeiliExactOnlyAvoidsCatalog(t *testing.T) {
 		{"exact", "model", "model", true, 0}, {"declaration whitespace", " model ", "model", true, 0},
 		{"case equivalent", "MODEL", "model", true, 1}, {"wildcard", "mod*", "model", true, 1},
 		{"alias", "model", "model-thinking", true, 1}, {"disabled", "model", "model", false, 1},
+		{"denied", "other", "model", true, 0},
 		{"request whitespace", "model", " model ", true, 1}, {"empty", "", "", true, 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,8 +52,10 @@ func TestExplicitDeclaredModelGeiliDependencyAndCatalogFailures(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, err)
 	require.Zero(t, repo.catalog)
-	_, err = r.explicitRequestedModelSupportedGeili(context.Background(), g, "unknown")
-	require.ErrorIs(t, err, failed)
+	ok, err = r.explicitRequestedModelSupportedGeili(context.Background(), g, "unknown")
+	require.False(t, ok)
+	require.NoError(t, err, "an unrelated group's failed directory cannot reject the request")
+	require.Zero(t, repo.catalog)
 	_, err = r.ExplicitGroupModels(context.Background(), g)
 	require.ErrorIs(t, err, failed, "model listing still reads its catalog")
 }
@@ -92,4 +95,20 @@ func TestExplicitDeclaredModelGeiliRoutingKeepsAuthorizationEndpointAndPricing(t
 			require.Zero(t, repo.catalog)
 		})
 	}
+}
+
+func TestExplicitDeclaredModelGeiliUnrelatedCatalogCannotBlockLaterGroup(t *testing.T) {
+	model := "claude-sonnet-5"
+	first := &Group{ID: 1, Status: StatusActive, Platform: PlatformOpenAI, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-*"}}}
+	second := &Group{ID: 2, Status: StatusActive, Platform: PlatformAnthropic, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{model}}}
+	svc := &APIKeyService{userRepo: &routingUserRepo{user: &User{ID: 1}}, groupRepo: &routingGroupRepo{groups: map[int64]*Group{1: first, 2: second}}}
+	repo := &thinModelCatalogRepoGeili{err: errors.New("unrelated directory unavailable")}
+	resolver := &CompositeRouteResolver{accountRepo: repo}
+	resolver.SetRouteValidation(svc.groupRepo, NewModelPricingResolver(nil, NewBillingService(&config.Config{}, nil)))
+	key := &APIKey{UserID: 1, BillingSource: BillingSourceBalance, RoutingMode: KeyRoutingComposite, GroupIDs: []int64{1, 2}}
+	decisions, err := svc.ResolveExplicitKeyRoutes(context.Background(), key, model, CompositeRouteEndpointMessages, resolver, true)
+	require.NoError(t, err)
+	require.Len(t, decisions, 1)
+	require.Equal(t, int64(2), *decisions[0].TargetGroupID)
+	require.Zero(t, repo.catalog)
 }

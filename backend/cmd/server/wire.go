@@ -86,6 +86,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
+	gatewayCache service.GatewayCache,
 	opsMetricsCollector *service.OpsMetricsCollector,
 	opsAggregation *service.OpsAggregationService,
 	opsAlertEvaluator *service.OpsAlertEvaluatorService,
@@ -427,6 +428,12 @@ func provideCleanup(
 		}
 
 		infraSteps := []cleanupStep{
+			{"EncryptedProvenance", func() error {
+				if cache, ok := gatewayCache.(interface{ CloseEncryptedRouteCacheGeili() error }); ok {
+					return cache.CloseEncryptedRouteCacheGeili()
+				}
+				return nil
+			}},
 			{"Redis", func() error {
 				if rdb == nil {
 					return nil

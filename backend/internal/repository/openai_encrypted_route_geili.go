@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -72,8 +73,8 @@ func (c *gatewayCache) HasOpenAIEncryptedSourceHintGeili(ctx context.Context, us
 	return false, nil
 }
 
-func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, digests []string) (map[string]service.OpenAIEncryptedRouteGeili, error) {
-	result := map[string]service.OpenAIEncryptedRouteGeili{}
+func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, digests []string) (result map[string]service.OpenAIEncryptedRouteGeili, err error) {
+	result = map[string]service.OpenAIEncryptedRouteGeili{}
 	if userID <= 0 {
 		return result, fmt.Errorf("invalid encrypted source user")
 	}
@@ -115,6 +116,22 @@ func (c *gatewayCache) GetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if c.encryptedRouteDB == nil {
 		return nil, encryptedRouteLookupFailureGeili("query", len(result) > 0, fmt.Errorf("encrypted provenance persistence unavailable"))
 	}
+	// Preserve the Redis presence hint even when PostgreSQL admission is denied:
+	// protected tracked sessions must fail closed, never use cached authority.
+	permit, err := c.encryptedRouteGuard.acquireWithRetry(time.Now(), service.ConsumeOpenAIEncryptedMetadataRetryGeili(ctx))
+	if err != nil {
+		return nil, encryptedRouteLookupFailureGeili("query", len(result) > 0, err)
+	}
+	defer func() {
+		if failure, ok := err.(*encryptedRouteLookupErrorGeili); ok {
+			failure.admitted = true
+		}
+		finishErr := err
+		if err != nil && ctx.Err() == context.Canceled {
+			finishErr = context.Canceled
+		}
+		permit.finish(finishErr)
+	}()
 	// Redis is only an access-refresh hint. Every authority comes from current
 	// durable metadata, including conflicts committed before a failed cache write.
 	// One SQL round trip touches misses daily and reads hits without extending
@@ -180,6 +197,12 @@ type encryptedRouteLookupErrorGeili struct {
 	phase     string
 	knownHint bool
 	cause     error
+	admitted  bool
+	retried   atomic.Bool
+}
+
+func (e *encryptedRouteLookupErrorGeili) ClaimOpenAIEncryptedMetadataRetryGeili() bool {
+	return e.admitted && e.retried.CompareAndSwap(false, true)
 }
 
 func (e *encryptedRouteLookupErrorGeili) Error() string {
@@ -209,7 +232,7 @@ func encryptedRouteStorageFailureGeili(phase string, cause error) error {
 	return &encryptedRouteStorageErrorGeili{phase: phase, cause: cause}
 }
 
-func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, records []service.OpenAIEncryptedRouteGeili) error {
+func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID int64, records []service.OpenAIEncryptedRouteGeili) (err error) {
 	if userID <= 0 {
 		return encryptedRouteStorageFailureGeili("validate_user", fmt.Errorf("invalid encrypted source user"))
 	}
@@ -241,6 +264,19 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if c.encryptedRouteDB == nil {
 		return encryptedRouteStorageFailureGeili("store_unavailable", fmt.Errorf("encrypted provenance persistence unavailable"))
 	}
+	permit, err := c.encryptedRouteGuard.acquire(time.Now())
+	if err != nil {
+		return encryptedRouteStorageFailureGeili("begin", err)
+	}
+	// Hold admission until rollback/commit has released the SQL transaction.
+	// Redis refill and opportunistic pruning do not occupy this permit.
+	defer func() {
+		finishErr := err
+		if err != nil && ctx.Err() == context.Canceled {
+			finishErr = context.Canceled
+		}
+		permit.finish(finishErr)
+	}()
 	records = append([]service.OpenAIEncryptedRouteGeili(nil), records...)
 	sort.Slice(records, func(i, j int) bool { return records[i].Digest < records[j].Digest })
 	tx, err := c.encryptedRouteDB.BeginTx(ctx, nil)
@@ -264,6 +300,8 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	if err = tx.Commit(); err != nil {
 		return encryptedRouteStorageFailureGeili("commit", err)
 	}
+	permit.finish(nil)
+	permit = encryptedRoutePermitGeili{}
 	if c.encryptedRouteRDB != nil {
 		redisCtx, cancel := context.WithTimeout(ctx, encryptedRouteRedisBudgetGeili)
 		pipe := c.encryptedRouteRDB.Pipeline()
@@ -278,7 +316,10 @@ func (c *gatewayCache) SetOpenAIEncryptedRoutesGeili(ctx context.Context, userID
 	now := time.Now().Unix()
 	prev := c.encryptedRouteLastPrune.Load()
 	if now-prev >= 3600 && c.encryptedRouteLastPrune.CompareAndSwap(prev, now) {
-		_, _ = c.encryptedRouteDB.ExecContext(ctx, `DELETE FROM openai_encrypted_sources_geili WHERE (user_id,cipher_digest) IN (SELECT user_id,cipher_digest FROM openai_encrypted_sources_geili WHERE last_accessed_at<NOW()-INTERVAL '180 days' LIMIT 1000)`)
+		if prunePermit, acquireErr := c.encryptedRouteGuard.acquire(time.Now()); acquireErr == nil {
+			_, pruneErr := c.encryptedRouteDB.ExecContext(ctx, `DELETE FROM openai_encrypted_sources_geili WHERE (user_id,cipher_digest) IN (SELECT user_id,cipher_digest FROM openai_encrypted_sources_geili WHERE last_accessed_at<NOW()-INTERVAL '180 days' LIMIT 1000)`)
+			prunePermit.finish(pruneErr)
+		}
 	}
 	return nil
 }

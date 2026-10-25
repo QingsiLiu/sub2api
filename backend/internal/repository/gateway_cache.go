@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
@@ -24,6 +25,8 @@ type gatewayCache struct {
 	rdb                     *redis.Client
 	encryptedRouteRDB       *redis.Client
 	encryptedRouteDB        *sql.DB
+	encryptedRouteDBOwned   bool
+	encryptedRouteGuard     encryptedRouteBulkheadGeili
 	encryptedRouteLastPrune atomic.Int64
 }
 
@@ -43,8 +46,14 @@ func NewGatewayCache(rdb *redis.Client, db ...*sql.DB) service.GatewayCache {
 }
 
 // geili hook: production provenance survives Redis eviction and instance restarts.
-func ProvideGatewayCache(rdb *redis.Client, db *sql.DB) service.GatewayCache {
-	return NewGatewayCache(rdb, db)
+func ProvideGatewayCache(rdb *redis.Client, cfg *config.Config) (service.GatewayCache, error) {
+	db, err := newEncryptedRoutePoolGeili(cfg)
+	if err != nil {
+		return nil, err
+	}
+	c := NewGatewayCache(rdb, db).(*gatewayCache)
+	c.encryptedRouteDBOwned = true
+	return c, nil
 }
 
 // buildSessionKey 构建 session key，包含 groupID 实现分组隔离

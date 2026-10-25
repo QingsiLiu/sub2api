@@ -198,6 +198,7 @@ func TestEncryptedSourceGeiliDelayedPGReadyProvesSoftDeadlineAndFreshBudgetAutho
 			short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 			start := time.Now()
 			got, err := cache.GetOpenAIEncryptedRoutesGeili(short, userID, []string{r.Digest})
+			initialFailure := err
 			softElapsed := time.Since(start)
 			cancel()
 			require.Nil(t, got)
@@ -215,8 +216,10 @@ func TestEncryptedSourceGeiliDelayedPGReadyProvesSoftDeadlineAndFreshBudgetAutho
 			}
 			require.NoError(t, err)
 			fresh, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+			retryCtx, admitted := service.WithOpenAIEncryptedMetadataRetryGeili(fresh, initialFailure)
+			require.True(t, admitted)
 			start = time.Now()
-			got, err = cache.GetOpenAIEncryptedRoutesGeili(fresh, userID, []string{r.Digest})
+			got, err = cache.GetOpenAIEncryptedRoutesGeili(retryCtx, userID, []string{r.Digest})
 			freshElapsed := time.Since(start)
 			cancel()
 			require.NoError(t, err)

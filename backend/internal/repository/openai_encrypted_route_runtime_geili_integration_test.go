@@ -57,6 +57,7 @@ func TestEncryptedSourceGeiliRealRedisAndPGCaptureBudgetAndUserForeignKeyLock(t 
 	require.NoError(t, integrationDB.QueryRow("SELECT COUNT(*) FROM openai_encrypted_sources_geili WHERE user_id=$1", userID).Scan(&n))
 	require.Zero(t, n)
 	require.NoError(t, blocker.Rollback())
+	time.Sleep(encryptedRouteFailureCooldownGeili + 10*time.Millisecond)
 	short, cancel = context.WithTimeout(ctx, 50*time.Millisecond)
 	require.NoError(t, a.SetOpenAIEncryptedRoutesGeili(short, userID, []service.OpenAIEncryptedRouteGeili{r}))
 	cancel()
@@ -346,6 +347,7 @@ func TestEncryptedSourceGeiliIsolatedPoolCanceledLookupResumesAuthoritativeVerif
 					initial, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 					got, err := cache.GetOpenAIEncryptedRoutesGeili(initial, userID, []string{r.Digest})
 					initialExpired := initial.Err()
+					initialFailure := err
 					cancel()
 					require.Nil(t, got)
 					require.Error(t, err)
@@ -368,7 +370,9 @@ func TestEncryptedSourceGeiliIsolatedPoolCanceledLookupResumesAuthoritativeVerif
 					// The service's single retry receives only the remainder of the original
 					// cumulative cap, not another 250ms or a refreshed generation deadline.
 					remaining, cancel := context.WithDeadline(ctx, started.Add(250*time.Millisecond))
-					got, err = cache.GetOpenAIEncryptedRoutesGeili(remaining, userID, []string{r.Digest})
+					retryCtx, admitted := service.WithOpenAIEncryptedMetadataRetryGeili(remaining, initialFailure)
+					require.True(t, admitted)
+					got, err = cache.GetOpenAIEncryptedRoutesGeili(retryCtx, userID, []string{r.Digest})
 					cancel()
 					totalElapsed := time.Since(started)
 					require.Less(t, totalElapsed, 350*time.Millisecond, "cumulative deadline plus cancellation overhead must remain bounded")

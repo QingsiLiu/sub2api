@@ -1,0 +1,70 @@
+{
+  "checked_at_utc": "2026-10-25T16:36:24.012569+00:00",
+  "user_id": 3885,
+  "keys": 100,
+  "mode": "read_only_original_plan_only_and_fixed_select_execution",
+  "limits": "statement_timeout=2000ms,lock_timeout=1000ms; no planner override; no production writes",
+  "old": {
+    "total_estimated_cost": 2115228.49,
+    "execution_ms": null,
+    "planning_ms": null,
+    "shared_read_blocks": null,
+    "shared_hit_blocks": null,
+    "audit_scans": [
+      {
+        "Node Type": "Seq Scan",
+        "Plan Rows": 5426289
+      },
+      {
+        "Node Type": "Seq Scan",
+        "Plan Rows": 5426289
+      },
+      {
+        "Node Type": "Index Scan",
+        "Index Name": "gateway_response_audits_pkey",
+        "Plan Rows": 1
+      }
+    ]
+  },
+  "fixed": {
+    "total_estimated_cost": 1735.5,
+    "execution_ms": 30.301,
+    "planning_ms": 10.665,
+    "shared_read_blocks": 535,
+    "shared_hit_blocks": 2150,
+    "audit_scans": [
+      {
+        "Node Type": "Index Scan",
+        "Index Name": "gateway_response_audits_usage_geili",
+        "Plan Rows": 1,
+        "Actual Rows": 1.0,
+        "Actual Loops": 100,
+        "Shared Hit Blocks": 359,
+        "Shared Read Blocks": 141
+      },
+      {
+        "Node Type": "Index Scan",
+        "Index Name": "gateway_response_audits_usage_geili",
+        "Plan Rows": 1,
+        "Actual Rows": 1.0,
+        "Actual Loops": 100,
+        "Shared Hit Blocks": 500,
+        "Shared Read Blocks": 0
+      },
+      {
+        "Node Type": "Index Scan",
+        "Index Name": "gateway_response_audits_pkey",
+        "Plan Rows": 1,
+        "Actual Rows": 1.0,
+        "Actual Loops": 100,
+        "Shared Hit Blocks": 399,
+        "Shared Read Blocks": 1
+      }
+    ]
+  },
+  "limitations": [
+    "Estimated cost is not measured speedup",
+    "Original full-scan query deliberately not executed",
+    "Historical route helper did not log original errors, so individual 500 causes cannot be reconstructed exhaustively"
+  ]
+}

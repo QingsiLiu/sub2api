@@ -17,6 +17,11 @@ func (r *CompositeRouteResolver) explicitRequestedModelSupportedGeili(ctx contex
 	if r.accountRepo == nil {
 		return false, infraerrors.ServiceUnavailable("MODEL_CATALOG_UNAVAILABLE", "account model catalog is unavailable")
 	}
+	// A catalog cannot add a model rejected by this group's allowlist. Avoid
+	// loading unrelated account pools, and let their outages stay unrelated.
+	if !group.ModelAllowlist.Allows(model) {
+		return false, nil
+	}
 	if group.ModelAllowlist.Enabled && model != "" && !strings.Contains(model, "*") {
 		for _, entry := range group.ModelAllowlist.Models {
 			if strings.TrimSpace(entry) == model && group.ModelAllowlist.Allows(model) {
