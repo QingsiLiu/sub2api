@@ -73,7 +73,8 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 	var resp *http.Response
 	var upstreamURL, requestIDHeader string
 	var checkedPolicy *ErrorPolicyResult
-	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
+	maxAttempts := s.geminiMaxAttemptsPerAccount()
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		upstream, idHeader, buildErr := build(ctx)
 		if buildErr != nil {
 			if ctx.Err() != nil {
@@ -106,7 +107,7 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		if checked != nil && *checked != ErrorPolicyNone {
 			break
 		}
-		if resp.StatusCode < 400 || !s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) || attempt == geminiMaxRetries {
+		if resp.StatusCode < 400 || !s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) || attempt == maxAttempts {
 			break
 		}
 		errorBody := s.readUpstreamErrorBody(resp)

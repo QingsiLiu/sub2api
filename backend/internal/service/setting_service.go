@@ -120,6 +120,7 @@ type SettingService struct {
 	encryptedRouteSettingsCache           atomic.Pointer[cachedOpenAIEncryptedRouteSettingsGeili]
 	encryptedRouteSettingsRefreshInFlight atomic.Bool
 
+	scopedAdminKeyRepo          ScopedAdminKeyRepository
 	settingRepo                 SettingRepository
 	defaultSubGroupReader       DefaultSubscriptionGroupReader
 	proxyRepo                   ProxyRepository // for resolving websearch provider proxy URLs

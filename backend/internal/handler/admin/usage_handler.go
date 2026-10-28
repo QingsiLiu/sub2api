@@ -232,11 +232,10 @@ func (h *UsageHandler) List(c *gin.Context) {
 		return
 	}
 
-	out := make([]dto.AdminUsageLog, 0, len(records))
-	for i := range records {
-		out = append(out, *dto.UsageLogFromServiceAdmin(&records[i]))
+	out := adminUsageLogResponses(c, records)
+	if full, ok := out.([]dto.AdminUsageLog); ok {
+		h.attachResponseAudits(c, full) // geili hook: full administrators only.
 	}
-	h.attachResponseAudits(c, out) // geili hook: admin-only, no financial writes.
 	response.Paginated(c, out, result.Total, page, pageSize)
 }
 
