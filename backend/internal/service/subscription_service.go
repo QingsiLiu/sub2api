@@ -194,10 +194,14 @@ func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64
 	// Invalidate each alias as well as the new subscription-ID cache.
 	for _, id := range subscriptionIDs {
 		if s.entClient != nil && s.userSubRepo != nil {
-			if sub, err := s.userSubRepo.GetByID(cacheCtx, id); err == nil && sub != nil {
-				for _, gid := range sub.EntitledGroupIDs {
-					groupIDs[gid] = true
-				}
+			// geili hook: invalidation only needs legacy alias IDs, not a full
+			// user/plan/entitlement/usage projection under its five-second budget.
+			aliases, err := s.subscriptionInvalidationAliasesGeili(cacheCtx, id)
+			if err != nil {
+				return fmt.Errorf("load subscription cache aliases: %w", err)
+			}
+			for _, gid := range aliases {
+				groupIDs[gid] = true
 			}
 		}
 		if s.billingCacheService != nil {
