@@ -21,6 +21,11 @@ func (s *SubscriptionService) AdmitConsumption(ctx context.Context, sub *UserSub
 	if s.entClient == nil {
 		return sub, nil
 	} // legacy test/service implementations
+	release, err := s.admissionGateGeili.acquire(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, err

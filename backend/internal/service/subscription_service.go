@@ -51,6 +51,8 @@ type SubscriptionService struct {
 	userSubRepo         UserSubscriptionRepository
 	billingCacheService *BillingCacheService
 	entClient           *dbent.Client
+	// geili hook: queue subscription admissions before leasing database connections.
+	admissionGateGeili subscriptionAdmissionGateGeili
 
 	// L1 缓存：加速中间件热路径的订阅查询
 	subCacheL1     *ristretto.Cache
@@ -72,6 +74,7 @@ func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscript
 		entClient:           entClient,
 		now:                 time.Now,
 	}
+	svc.initAdmissionGateGeili(cfg)
 	svc.initSubCache(cfg)
 	svc.initMaintenanceQueue(cfg)
 	svc.StartSubCacheInvalidationSubscriber(context.Background())
