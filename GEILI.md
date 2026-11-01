@@ -1,5 +1,8 @@
 # Geili fork 维护约定
 
+- 2026-11-01 源码候选`0.2.19-geili.3`：固定`db41b553795c48c5d94f0eb7bd034c0bffbf7e5c`，继承生产`.19.1`及未发`.2`准入门闩，新增缓存失效仅读取别名的一次索引查询，保留当前父分组回退和原协议，失败保留outbox重试；无迁移/金额/额度变更。本地专项、竞态和真实PG通过，候选CI41306572218正在运行、digest待产。`.2`已Stage自然切流，但两轮在setup授予后的缓存失效超时失败、夹具恢复，未执行32请求验证、未生产。当前生产仍`.19.1`/`e6acda5e`/`960428e8…`；本候选须同digest Stage及canonical蓝绿验收，不能把源码修复当恢复，不继承旧性能例外。详见RELEASES与运维事故报告；下次未占用编号`.4`。
+
+
 Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运维上线看 `~/code/geili/subscription-lab-ops/docs/runbooks/geili-sub2api-release.md`。
 
 ## 当前基线
