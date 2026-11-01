@@ -5,7 +5,7 @@
 - 为已证明未发送的取消增加独立每订阅1、全局最多2的门闩，先排队再开事务；24连接配置下准入最多8、取消最多2，保留正常读取/结算容量。保留parent锁和仅admitted→cancelled条件，不覆盖settled。
 - 普通API、Google、WebSocket多turn及异步任务回放统一120秒同步清理，脱离客户断开、最多3次有限重试；错误记录订阅/准入身份。预算耗尽仍保留未结案并返回错误，绝不按年龄自动取消、不改账。
 - HTTP发送边界已取消时直接返回原Context错误、关闭Body、零派发标记/零传输；边界之后才取消仍保留已有标记，不能据此推断上游未收到。Body预读/内存、支付、定价、额度、计费、351迁移保持。
-- 本候选revision、镜像digest及CI以本次candidate.json产物固定，当前尚未Stage/生产；仍须完整CI、同digest Stage、32请求全部服务端退出后终态无遗留/取消零分摊与凭证/唯一成功结算、资源兼容及canonical自然排空。不得继承`.19.1`性能例外或把`.3`失败改签。
+- 固定revision `f6a15c5c50a957ce62d5f6d6d85928db893b7892`、镜像`ghcr.io/qingsiliu/sub2api@sha256:34230adea08c6c40c76f86b97169b8e4b897161cc97e1b96a3852470b6b73c95`；[候选CI41311800968](https://github.com/QingsiLiu/sub2api/actions/runs/41311800968)全部9任务/13门禁通过。2026-11-01T13:57:56.980Z canonical切入Stage，至少600秒观察、旧实例自然排空后事务complete；尚未生产。首轮专项仅完成2项检查，单笔预热超过客户端45秒超时，实际服务端约53.9秒且最终settled，夹具已恢复，原始失败保留；尚不能声称32并发/全部Stage门禁通过或生产恢复。同一固定镜像继续严格验收，不继承`.19.1`性能例外、不把`.3`失败改签；文档CI不得替换本固定镜像。
 
 ## 0.2.19-geili.3（订阅准入与缓存失效读取保护，Stage专项未过，未生产）
 
@@ -13,7 +13,7 @@
 
 - 无迁移、价格、金额、额度或结算规则变更；5秒失效预算、Redis删除/发布协议及跨实例一致性保持。别名查询失败明确报错，保留outbox重试，不将未完成失效当成功。
 - `.19.2`CI9任务/13门禁已通过并完成Stage自然切换，但两轮专项都在测试订阅创建后的缓存失效阶段失败，尚未执行32请求竞争；夹具均已恢复，原始失败保留，未发布生产。不能把它记作准入故障复现已通过。
-- 本地定向单测、竞态和真实PostgreSQL验证通过（含别名、最新父分组回退、无分组池及失败保留）；固定源码revision `db41b553795c48c5d94f0eb7bd034c0bffbf7e5c`；[候选CI41306572218](https://github.com/QingsiLiu/sub2api/actions/runs/41306572218)正在运行，digest待产出，尚未Stage/生产。仍须本次完整CI、同digest Stage、当前资源/兼容性验收及canonical平滑发布，自然排空，不继承旧版性能例外。
+- 本地定向单测、竞态和真实PostgreSQL验证通过（含别名、最新父分组回退、无分组池及失败保留）；固定源码revision `db41b553795c48c5d94f0eb7bd034c0bffbf7e5c`、镜像`sha256:8946a61121f721ebdd90f80fe2eff941677dfddee075eb6fe13c5038e71484cb`；[候选CI41306572218](https://github.com/QingsiLiu/sub2api/actions/runs/41306572218)第二attempt全部9任务/13门禁通过，canonical Stage complete。但实际32请求收尾4条admitted未结案，严格专项失败、夹具恢复，未生产，后续由`.4`修正；原失败不改签。
 
 ## 0.2.19-geili.2（订阅准入连接池保护，Stage已部署、验收未完成，未生产）
 
