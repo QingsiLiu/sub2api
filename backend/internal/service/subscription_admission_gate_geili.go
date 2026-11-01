@@ -37,9 +37,21 @@ func (s *SubscriptionService) initAdmissionGateGeili(cfg *config.Config) {
 		}
 	}
 	s.admissionGateGeili.limit = limit
+	cancelLimit := 2
+	if cfg != nil && cfg.Database.MaxOpenConns > 0 && cfg.Database.MaxOpenConns/6 < cancelLimit {
+		cancelLimit = cfg.Database.MaxOpenConns / 6
+		if cancelLimit < 1 {
+			cancelLimit = 1
+		}
+	}
+	s.cancellationGateGeili.limit = cancelLimit
 }
 
 func (g *subscriptionAdmissionGateGeili) acquire(ctx context.Context, subscriptionID int64) (func(), error) {
+	return g.acquireWithDefaultLimitGeili(ctx, subscriptionID, 8)
+}
+
+func (g *subscriptionAdmissionGateGeili) acquireWithDefaultLimitGeili(ctx context.Context, subscriptionID int64, defaultLimit int) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -47,7 +59,7 @@ func (g *subscriptionAdmissionGateGeili) acquire(ctx context.Context, subscripti
 	if g.slots == nil {
 		limit := g.limit
 		if limit < 1 {
-			limit = 8
+			limit = defaultLimit
 		}
 		g.slots = make(chan struct{}, limit)
 		g.keys = make(map[int64]*subscriptionAdmissionKeyGeili)

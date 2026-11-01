@@ -287,6 +287,33 @@ func TestEntitlementCancelledUnsentRequestDoesNotRemainInFlight(t *testing.T) {
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT status FROM subscription_requests WHERE request_key=$1", admitted.AdmissionKey).Scan(&state))
 	require.Equal(t, "cancelled", state)
 }
+
+func TestEntitlementUnsentLifecycleCleanupCannotOverwriteSettledCharge(t *testing.T) {
+	f := newEntitlementFixture(t)
+	ctx := context.Background()
+	admitted, err := f.svc.AdmitConsumption(ctx, f.sub, f.key.ID)
+	require.NoError(t, err)
+	repo := NewUsageBillingRepository(f.c, integrationDB)
+	cmd := &service.UsageBillingCommand{RequestID: uuid.NewString(), APIKeyID: f.key.ID, UserID: f.user.ID, AccountID: f.account.ID, AccountType: "apikey", SubscriptionID: &f.sub.ID, SubscriptionAdmissionKey: admitted.AdmissionKey, SubscriptionCost: 1}
+	_, err = repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	readFingerprint := func() string {
+		var fingerprint string
+		require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT md5(jsonb_build_array(status,billing_request_id,cost_usd,(SELECT sum(cost_usd) FROM subscription_usage_allocations WHERE request_key=$1))::text) FROM subscription_requests WHERE request_key=$1`, admitted.AdmissionKey).Scan(&fingerprint))
+		return fingerprint
+	}
+	before := readFingerprint()
+	disconnected, cancel := context.WithCancel(ctx)
+	cancel()
+	for i := 0; i < 2; i++ {
+		require.NoError(t, f.svc.CancelUnsentConsumptionLifecycle(disconnected, admitted))
+		require.Equal(t, before, readFingerprint())
+	}
+	var status string
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT status FROM subscription_requests WHERE request_key=$1`, admitted.AdmissionKey).Scan(&status))
+	require.Equal(t, "settled", status)
+}
+
 func TestEntitlementBillingReplayClosesNewAdmissionWithoutCharging(t *testing.T) {
 	f := newEntitlementFixture(t)
 	ctx := context.Background()

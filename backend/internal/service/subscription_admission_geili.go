@@ -136,6 +136,13 @@ func (s *SubscriptionService) CancelUnsentConsumption(ctx context.Context, sub *
 	if s.entClient == nil || sub == nil || sub.AdmissionKey == "" {
 		return nil
 	}
+	// Queue proven-unsent cleanup before leasing a connection, independently
+	// from admissions. Rollback must finish before its gate slot is released.
+	release, err := s.cancellationGateGeili.acquireWithDefaultLimitGeili(ctx, sub.ID, 2)
+	if err != nil {
+		return err
+	}
+	defer release()
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return err
@@ -179,7 +186,5 @@ func CancelReplayedSubscriptionAdmission(ctx context.Context, sub *UserSubscript
 	if !ok {
 		return nil
 	}
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	return cancelAdmission(cleanup, sub)
+	return cancelUnsentSubscriptionLifecycleGeili(ctx, sub, cancelAdmission)
 }

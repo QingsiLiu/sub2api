@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -238,9 +237,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				defer func(admission *service.UserSubscription) {
 					// An accepted asynchronous job owns its future dispatch; retain its claim.
 					if !dispatch.Started() && c.Writer.Status() != 202 {
-						cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-						defer cancel()
-						_ = subscriptionService.CancelUnsentConsumption(cleanup, admission)
+						_ = subscriptionService.CancelUnsentConsumptionLifecycle(c.Request.Context(), admission)
 					}
 				}(admitted)
 			}

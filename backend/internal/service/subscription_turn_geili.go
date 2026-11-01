@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
@@ -63,9 +62,7 @@ func (s *SubscriptionTurnAdmission) End(billingScheduled, retry bool) {
 }
 func (s *SubscriptionTurnAdmission) cancel(sub *UserSubscription) {
 	if f, ok := s.ctx.Value(subscriptionCancelFactoryKey{}).(SubscriptionCancelFactory); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = f(ctx, sub)
+		_ = cancelUnsentSubscriptionLifecycleGeili(s.ctx, sub, f)
 	}
 }
 func (s *SubscriptionTurnAdmission) CloseUnsent() { s.End(false, false) }

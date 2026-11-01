@@ -53,6 +53,8 @@ type SubscriptionService struct {
 	entClient           *dbent.Client
 	// geili hook: queue subscription admissions before leasing database connections.
 	admissionGateGeili subscriptionAdmissionGateGeili
+	// Proven-unsent cleanup has an independent budget, outside admission queues.
+	cancellationGateGeili subscriptionAdmissionGateGeili
 
 	// L1 缓存：加速中间件热路径的订阅查询
 	subCacheL1     *ristretto.Cache

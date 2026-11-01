@@ -1,6 +1,8 @@
 # Geili fork 维护约定
 
-- 2026-11-01 源码候选`0.2.19-geili.3`：固定`db41b553795c48c5d94f0eb7bd034c0bffbf7e5c`，继承生产`.19.1`及未发`.2`准入门闩，新增缓存失效仅读取别名的一次索引查询，保留当前父分组回退和原协议，失败保留outbox重试；无迁移/金额/额度变更。本地专项、竞态和真实PG通过，候选CI41306572218正在运行、digest待产。`.2`已Stage自然切流，但两轮在setup授予后的缓存失效超时失败、夹具恢复，未执行32请求验证、未生产。当前生产仍`.19.1`/`e6acda5e`/`960428e8…`；本候选须同digest Stage及canonical蓝绿验收，不能把源码修复当恢复，不继承旧性能例外。详见RELEASES与运维事故报告；下次未占用编号`.4`。
+- 2026-11-01 当前源码候选`0.2.19-geili.4`：继承`.3`准入门闩和缓存窄查询，新增独立每SID1/全局最多2的取消事务预算（排队在Tx前），四个生命周期入口统一120秒同步清理/最多3次重试、失败可见；HTTP发送边界已取消则不标记派发并关闭Body，检查后取消仍保留派发不确定性。无迁移、价格、金额、Body预读/内存或计费规则变更；revision/digest待本次CI固定，未Stage/生产。仍须新revision同digest完整Stage、32请求终态/唯一结算及canonical蓝绿，不继承旧性能例外；下次未占用编号`.5`。
+
+- 2026-11-01 未发布候选`.19.3`：固定`db41b553795c48c5d94f0eb7bd034c0bffbf7e5c` / `sha256:8946a61121f721ebdd90f80fe2eff941677dfddee075eb6fe13c5038e71484cb`，CI41306572218 attempt2全部9任务/13门禁通过，canonical Stage已complete。真实32请求证明同SID仅1连接、其他用户可继续，但收尾发现4条admitted无分摊/凭证，不能发布；所有原失败及工具字段修正记录保留，夹具已恢复。不能仅凭金额正确放行，当前生产仍`.19.1`。
 
 
 Agent 和日常开发先读根目录 [AGENTS.md](AGENTS.md)，再看本文。运维上线看 `~/code/geili/subscription-lab-ops/docs/runbooks/geili-sub2api-release.md`。
