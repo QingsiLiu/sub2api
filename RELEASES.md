@@ -1,11 +1,12 @@
-## 0.2.19-geili.5（多分组 Key 用量查询与独立订阅额度显示，Stage自然排空中，未生产）
+## 0.2.19-geili.5（多分组 Key 用量查询与独立订阅额度显示，Stage专项通过，未生产）
 
 继承固定生产 `.19.4` / `f6a15c5c50a957ce62d5f6d6d85928db893b7892`。`GET /v1/usage` 和 `/antigravity/v1/usage` 在鉴权后直接查询当前 Key 的完整用量，不再进入模型选组，修复多分组 Key 无模型查询时的 `400 MODEL_REQUIRED`。无须修改用户 Key 或添加 model 参数。
 
 - 余额／订阅显示按 Key 的结算来源判断；订阅仅取绑定订阅的套餐、有效期与现有 Contract／Entitlements 权威额度汇总，保留旧套餐回退、Key 自身额度／速率限制模式及零／无限额度约定。缺少有效订阅时返回可读取的用量，不回退钱包、不伪造剩余额度。
 - 两个精确 GET 入口允许过期／配额耗尽 Key 查询自身用量，原凭据、用户状态、IP 校验与 LastUsed 更新保持；其他接口的模型／选组保护不变。查询不派发上游、不创建计费准入、不扣费或退款，无迁移、价格、配置、支付或计费规则变更。
 - 固定候选 revision `336519afc63f932f6e23c65db95b41dff05989a5`，镜像 `ghcr.io/qingsiliu/sub2api@sha256:72e2b1b9961da09d2be4cded688205d55a761934668d64dd6c88ece4aa64c487`；[CI41639277714](https://github.com/QingsiLiu/sub2api/actions/runs/41639277714) 全部9任务／13门禁通过，351份迁移源码保持。相关包完整 unit 回归及用量专项竞态通过；以旧路由覆盖复跑新增用例，准确复现原 `400 MODEL_REQUIRED`，修复后通过。
-- 同digest已于 UTC `2026-11-03T13:08:45.518593Z` 经canonical切入Stage绿色18481，版本／revision／ready及后台独占已核对，公网health200／两个用量匿名入口401。旧Stage应用HTTP／后台已归零，但共享Nginx仍有一条到生产13103的既有连接，事务保持draining、等待自然结束，不强杀、不记complete；用量专项尚未执行。备份 `/srv/projects/geili-stage/.bluegreen/20261103T130842Z-336519af`。生产保持 `.19.4`，本轮无生产授权；文档CI不得替换固定候选。
+- 同digest已于 UTC `2026-11-03T13:08:45.518593Z` 经canonical切入Stage绿色18481，旧蓝色于13:18:46.624Z自然退出0、未OOM，601秒观察后事务complete，旧Nginx worker全部自然退出、新实例ready／后台独占、重启0。真实HTTP用量专项32项通过、夹具恢复：两个入口及单组／五组余额与订阅、Key配额／状态兼容、LastUsed和财务不变通过；查询准入／凭证／日志／支付均0，钱包USD17／Key已用额度0保持，既有Stage配置及生产三容器身份／启动时间保持。Stage现有352条迁移账本不变。
+- 首次本机Python CA失败、canonical最后公网复核curl HTTP2退出16均保留；应用切换／排空已成功，完成态canonical stage-resume及系统TLS客户端复核通过，未重启应用或重新切流。备份 `/srv/projects/geili-stage/.bluegreen/20261103T130842Z-336519af`；详情见运维仓 `docs/reports/key-usage-20261103/`。生产保持 `.19.4`，本轮未发布生产；全量Stage／发布性能等其余正式门禁未执行，`production_ready=false`，不继承旧性能例外，文档CI不得替换固定候选。
 
 ## 0.2.19-geili.4（准入取消资源预算与已取消请求派发边界，已蓝绿发布生产）
 
