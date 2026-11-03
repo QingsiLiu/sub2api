@@ -201,6 +201,8 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	// geili hook: key-owned usage needs authentication, not model/group selection.
+	gateway.GET("/usage", h.Gateway.Usage)
 	gateway.Use(memoryAdmission)
 	gateway.Use(responseAudit)
 	gateway.Use(edgeKeepalive) // 必须先于 explicitRouting：多分组重试期间心跳要一直有效
@@ -238,7 +240,6 @@ func RegisterGatewayRoutes(
 			}
 			h.Gateway.Models(c)
 		})
-		gateway.GET("/usage", h.Gateway.Usage)
 		gateway.POST("/live", h.OpenAIGateway.Live)
 		gateway.GET("/live/:call_id", h.OpenAIGateway.LiveSideband)
 		// OpenAI Responses API: auto-route based on group platform
@@ -531,6 +532,8 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(endpointNorm)
 	antigravityV1.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
+	// geili hook: the alias reads the same whole-key usage before routing.
+	antigravityV1.GET("/usage", h.Gateway.Usage)
 	antigravityV1.Use(memoryAdmission)
 	antigravityV1.Use(responseAudit) // geili hook: observe the Messages alias.
 	antigravityV1.Use(explicitRouting)
@@ -540,7 +543,6 @@ func RegisterGatewayRoutes(
 		antigravityV1.POST("/messages", h.Gateway.Messages)
 		antigravityV1.POST("/messages/count_tokens", h.Gateway.CountTokens)
 		antigravityV1.GET("/models", h.Gateway.AntigravityModels)
-		antigravityV1.GET("/usage", h.Gateway.Usage)
 	}
 
 	antigravityV1Beta := r.Group("/antigravity/v1beta")
