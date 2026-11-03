@@ -1,4 +1,4 @@
-## 0.2.19-geili.5（多分组 Key 用量查询与独立订阅额度显示，Stage专项通过，未生产）
+## 0.2.19-geili.5（多分组 Key 用量查询与独立订阅额度显示，已蓝绿发布生产）
 
 继承固定生产 `.19.4` / `f6a15c5c50a957ce62d5f6d6d85928db893b7892`。`GET /v1/usage` 和 `/antigravity/v1/usage` 在鉴权后直接查询当前 Key 的完整用量，不再进入模型选组，修复多分组 Key 无模型查询时的 `400 MODEL_REQUIRED`。无须修改用户 Key 或添加 model 参数。
 
@@ -6,7 +6,11 @@
 - 两个精确 GET 入口允许过期／配额耗尽 Key 查询自身用量，原凭据、用户状态、IP 校验与 LastUsed 更新保持；其他接口的模型／选组保护不变。查询不派发上游、不创建计费准入、不扣费或退款，无迁移、价格、配置、支付或计费规则变更。
 - 固定候选 revision `336519afc63f932f6e23c65db95b41dff05989a5`，镜像 `ghcr.io/qingsiliu/sub2api@sha256:72e2b1b9961da09d2be4cded688205d55a761934668d64dd6c88ece4aa64c487`；[CI41639277714](https://github.com/QingsiLiu/sub2api/actions/runs/41639277714) 全部9任务／13门禁通过，351份迁移源码保持。相关包完整 unit 回归及用量专项竞态通过；以旧路由覆盖复跑新增用例，准确复现原 `400 MODEL_REQUIRED`，修复后通过。
 - 同digest已于 UTC `2026-11-03T13:08:45.518593Z` 经canonical切入Stage绿色18481，旧蓝色于13:18:46.624Z自然退出0、未OOM，601秒观察后事务complete，旧Nginx worker全部自然退出、新实例ready／后台独占、重启0。真实HTTP用量专项32项通过、夹具恢复：两个入口及单组／五组余额与订阅、Key配额／状态兼容、LastUsed和财务不变通过；查询准入／凭证／日志／支付均0，钱包USD17／Key已用额度0保持，既有Stage配置及生产三容器身份／启动时间保持。Stage现有352条迁移账本不变。
-- 首次本机Python CA失败、canonical最后公网复核curl HTTP2退出16均保留；应用切换／排空已成功，完成态canonical stage-resume及系统TLS客户端复核通过，未重启应用或重新切流。备份 `/srv/projects/geili-stage/.bluegreen/20261103T130842Z-336519af`；详情见运维仓 `docs/reports/key-usage-20261103/`。生产保持 `.19.4`，本轮未发布生产；全量Stage／发布性能等其余正式门禁未执行，`production_ready=false`，不继承旧性能例外，文档CI不得替换固定候选。
+- 首次本机Python CA失败、canonical最后公网复核curl HTTP2退出16均保留；应用切换／排空已成功，完成态canonical stage-resume及系统TLS客户端复核通过，未重启应用或重新切流。备份 `/srv/projects/geili-stage/.bluegreen/20261103T130842Z-336519af`；详情见运维仓 `docs/reports/key-usage-20261103/`。上述为Stage专项阶段记录；本轮完整验收及生产状态见下条，文档CI不得替换固定镜像。
+
+- 完整Stage12组1235项通过，含Gemini126场景/723项（固定722个必需断言完整，结算条件附加项随当次观察执行）；当前蓝绿39项安全事实含1860.628603秒长流/反向600秒/唯一完整结算、实际发布进程中断8项及共享并发9项通过。原重叠计时因未控制轮次间日志积压而不作为性能通过，原false报告及样本保留；补充同预算64/16池、每轮完整账务归零的默认转发80k：P95增量1.573057ms、吞吐比0.990526，零触限/OOM，通过原+10ms/0.98；直接Chat8k也通过，无旧例外或延后。v49凭据44项篡改拒绝通过，绑定当前用户原文授权和全部输入SHA。独立测试器一次ops参数笔误以实际Git blob/实机SHA独立核对，原报告不改写；应用revision/digest始终正确。
+- 已于UTC `2026-11-03T15:21:22.521627+00:00`在107主机canonical平滑切入生产；旧`.19.4`于`2026-11-03T15:31:23.806471059Z`自然退出0、无OOM，15:31:24.305132Z事务complete。新绿色13105 ready/后台独占、重启0，原重叠7.5GiB后在线恢复正常10GiB/Swap总12GiB、Go6GiB不变，容器ID/启动时间保持。原用户同一Key两入口400 MODEL_REQUIRED→200，保持quota_limited优先；1393次连续健康均200、15项公网契约及10项财务/配置保全通过。351迁移、原配置/价格/倍率/订阅/支付及历史财务身份金额保持；PG/Redis/Stage/相邻应用无重启，无生产模型或支付调用。
+- 生产备份`/srv/projects/geili-sub2api/.bluegreen/20261103T152117Z-336519af`；迁移后的本地入口仅在固定旧SHA核对和备份后补跟踪头，保留转发语义，三站共用上游平滑换13105；direct域名继续不开放用量/控制台等原白名单外路径。运维仓`docs/reports/key-usage-release-20261103/`保存所有成功/失败及源码关联。上一固定`.19.4`保留；回退需同digest Stage与当次授权，不重启已退休源或回灌旧账。
 
 ## 0.2.19-geili.4（准入取消资源预算与已取消请求派发边界，已蓝绿发布生产）
 
