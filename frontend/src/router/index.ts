@@ -655,6 +655,30 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.usage.description'
     }
   },
+  // geili hook: administrator-issued commercial invoices.
+  {
+    path: '/admin/invoices',
+    name: 'AdminInvoices',
+    component: () => import('@/views/admin/invoices/InvoicesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Invoices',
+      titleKey: 'invoice.title',
+      descriptionKey: 'invoice.description'
+    }
+  },
+  {
+    path: '/admin/invoices/:id/print',
+    name: 'AdminInvoicePrint',
+    component: () => import('@/views/admin/invoices/InvoicePrintView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Print Invoice',
+      titleKey: 'invoice.printTitle'
+    }
+  },
   // geili hook: supplier console (own accounts and their usage only).
   {
     path: '/supplier/accounts',

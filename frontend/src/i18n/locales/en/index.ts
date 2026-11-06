@@ -11,11 +11,13 @@ import subscriptionRights from './subscriptionRights'
 
 import responseAudit from './responseAudit'
 import supplier from './supplier'
+import invoice from './invoice'
 import gptIq from './gptIq'
 
 export default {
   ...responseAudit,
   ...supplier,
+  ...invoice,
   ...gptIq,
   ...subscriptionRights,
   adminAccessKeys,
