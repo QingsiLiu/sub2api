@@ -47,6 +47,8 @@ type AdminHandlers struct {
 	BenefitCampaign        *admin.BenefitCampaignHandler
 	// geili hook: supplier console and supplier ownership administration.
 	Supplier *admin.SupplierHandlerGeili
+	// geili hook: administrator-issued commercial invoices.
+	Invoice *admin.InvoiceHandlerGeili
 }
 
 // Handlers contains all HTTP handlers

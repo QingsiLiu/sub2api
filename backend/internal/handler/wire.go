@@ -54,6 +54,7 @@ func ProvideAdminHandlers(
 	claudeResetCredits *service.ClaudeResetCreditService,
 	accountSubmission *service.AccountSubmissionService,
 	supplierAccounts *service.SupplierAccountServiceGeili,
+	invoices *service.InvoiceServiceGeili,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
@@ -101,6 +102,7 @@ func ProvideAdminHandlers(
 		AuditLog:               auditLogHandler,
 		BenefitCampaign:        benefitCampaignHandler,
 		Supplier:               admin.NewSupplierHandlerGeili(supplierAccounts, accountHandler),
+		Invoice:                admin.NewInvoiceHandlerGeili(invoices),
 	}
 }
 

@@ -68,6 +68,7 @@ var ProviderSet = wire.NewSet(
 	// geili hook: external credential invitations.
 	NewAccountSubmissionRepository,
 	NewSupplierAccountRepositoryGeili,
+	NewInvoiceRepositoryGeili,
 	NewResponseAuditRepository,
 	NewUserRepository,
 	NewAPIKeyRepository,

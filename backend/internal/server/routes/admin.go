@@ -133,6 +133,9 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+
+		// geili hook: administrator-issued commercial invoices.
+		registerInvoiceRoutesGeili(admin, h)
 	}
 }
 
