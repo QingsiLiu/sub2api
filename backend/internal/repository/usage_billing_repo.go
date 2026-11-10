@@ -18,6 +18,7 @@ import (
 type usageBillingRepository struct {
 	db          *sql.DB
 	claimsGeili *usageSettlementPreparedClaimsGeili
+	walletGeili usageWalletGateGeili
 }
 
 func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
@@ -41,9 +42,13 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if err != nil {
 		return nil, err
 	}
+	var releaseWalletGeili func()
 	defer func() {
 		if tx != nil {
 			_ = tx.Rollback()
+		}
+		if releaseWalletGeili != nil {
+			releaseWalletGeili()
 		}
 	}()
 
@@ -90,6 +95,14 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	authoritative := cmd
 	if receipt.command != nil {
 		authoritative = receipt.command
+	}
+	// Geili hook: prepare/claim stays parallel; coordinate only the wallet-write
+	// section, retaining its token until this transaction commits or rolls back.
+	if authoritative.BalanceCost > 0 {
+		releaseWalletGeili, err = r.walletGeili.acquire(ctx, authoritative.UserID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := r.applyUsageBillingEffects(ctx, tx, authoritative, result); err != nil {
 		return nil, err
