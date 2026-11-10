@@ -158,6 +158,11 @@ func (s *OpenAIGatewayService) handleCCBufferedFromNativeAnthropic(
 	// geili hook: validate completion before constructing a successful JSON body.
 	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, false, nil)
 	if err != nil {
+		// geili hook: public buffered attempts preserve the existing no-result
+		// settlement boundary; the outer guard owns their final error response.
+		if _, guarded := c.Writer.(*geiliTextForwardWriter); guarded {
+			return nil, err
+		}
 		// Retain observed usage without turning an incomplete stream into success.
 		// Safe pre-output failover must stay uncommitted for the outer retry guard.
 		if failure := anthropicCompatFailureGeili(c, err); failure != nil {

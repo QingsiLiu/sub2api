@@ -38,9 +38,12 @@
 - HTTP派发边界继续先检查已取消Context，再记录派发，同时传递新增断连回收期限。恢复Context保留原期限，不让新的detach移除它。
 - Antigravity内部探测适配新增prompt参数；Gemini原生转换复用已保留输出前缀计算增量，避免依赖被删除函数或另存一份完整文本。
 - 通知工作池中已接受／排队工作纳入Geili自然排空计数。
+- 内部缓冲读取器失败返回已观测用量但仍返回错误；公开缓冲请求在Geili转发守卫下继续保持原有无计费结果边界，由外层统一处理错误；首内容前的安全failover保持未提交HTTP响应。上游身份头测试使用完整response.completed夹具，API设置快照增补GPT Image 2.6；测试不再把只有[DONE]的非流式响应当成功。严格透传测试继续断言不自动加beta或应用兼容请求头覆写；普通转发／账号测试应用上游Cloudflare URL规则。
 - vue-i18n升级后订单／收据测试按真实译文断言，避免依赖旧版运行时未编译消息时的裸key回退；业务页未作额外改写。
 - 本地既有 `sub2api-strict-passthrough-patch/` 未跟踪目录保持，不提交；不提交设计稿、密钥或前端编译产物。
 
 ## 验证与制品
 
-本地完整回归、专项竞态和候选CI结果待本次执行完成后记录。未继承任何历史Stage／性能／生产例外；正式发布仍须同digest Stage、当前资源／迁移兼容性验收及当次生产授权。
+固定源码revision `8875da2de7b1e2e3c1b4f9a4d19b9735f6edd53f`，已推送 `origin/geili/main`，双亲为合并前主干与官方固定标签。前端428文件／3564项及生产构建、5组Python共103项、嵌入前端、自更新守卫、专项竞态（httputil／service／routes／middleware／repository）已通过；默认及integration整套通过；unit末尾发现严格透传和公开缓冲失败结果两项契约差异，已按既有Geili边界修正并通过相关专项，正在重新执行最终三套Go回归。
+
+候选镜像未生成：GitHub Actions手动dispatch两次均返回HTTP422 `Actions has been disabled for this repository`。只读配置却显示仓库`disabled=false`、Actions `enabled=true`，workflow本身active；对本候选workflow执行enable后仍同样拒绝，没有修改仓库Actions权限配置。故记录为远端执行受阻，不猜测是否为账号／平台策略，也不标记CI门禁通过，digest为未生成。未继承任何历史Stage／性能／生产例外；正式发布仍须同digest Stage、当前资源／迁移兼容性验收及当次生产授权。

@@ -49,27 +49,37 @@ func TestAnthropicMessagesURL_EntryPoints(t *testing.T) {
 			if tt.query != "" {
 				wantURL += "?" + tt.query
 			}
-			checkRequest := func(t *testing.T, req *http.Request) {
+			checkRequest := func(t *testing.T, req *http.Request, strict bool) {
 				t.Helper()
 				require.NotNil(t, req)
-				require.Equal(t, wantURL, req.URL.String())
+				if strict {
+					// geili hook: strict passthrough keeps the inbound query;
+					// it never adds beta or compatibility header overrides.
+					require.Equal(t, baseURL+"/v1/messages", req.URL.String())
+				} else {
+					require.Equal(t, wantURL, req.URL.String())
+				}
 				require.Equal(t, http.MethodPost, req.Method)
 				require.Equal(t, "Bearer upstream-anthropic-key", getHeaderRaw(req.Header, "authorization"))
 				require.Empty(t, getHeaderRaw(req.Header, "x-api-key"))
-				require.Equal(t, "synthetic-gateway", getHeaderRaw(req.Header, "cf-aig-gateway-id"))
+				if strict {
+					require.Empty(t, getHeaderRaw(req.Header, "cf-aig-gateway-id"))
+				} else {
+					require.Equal(t, "synthetic-gateway", getHeaderRaw(req.Header, "cf-aig-gateway-id"))
+				}
 				require.Equal(t, "2023-06-01", getHeaderRaw(req.Header, "anthropic-version"))
 			}
 			svc := &GatewayService{cfg: &config.Config{}}
 			t.Run("forward", func(t *testing.T) {
 				req, wireBody, err := svc.buildUpstreamRequest(context.Background(), gatewayAnthropicBaseURLContext(t), account, body, "upstream-anthropic-key", "apikey", "claude-haiku-4-5", false, false)
 				require.NoError(t, err)
-				checkRequest(t, req)
+				checkRequest(t, req, false)
 				require.JSONEq(t, string(body), string(wireBody))
 			})
 			t.Run("passthrough", func(t *testing.T) {
 				req, wireBody, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(context.Background(), gatewayAnthropicBaseURLContext(t), account, body, "upstream-anthropic-key")
 				require.NoError(t, err)
-				checkRequest(t, req)
+				checkRequest(t, req, true)
 				require.JSONEq(t, string(body), string(wireBody))
 			})
 			t.Run("account test", func(t *testing.T) {
@@ -77,7 +87,7 @@ func TestAnthropicMessagesURL_EntryPoints(t *testing.T) {
 				testSvc := &AccountTestService{cfg: &config.Config{}, httpUpstream: upstream}
 				c, rec := newTestContext()
 				require.NoError(t, testSvc.testClaudeAccountConnection(c, account, "claude-haiku-4-5"))
-				checkRequest(t, upstream.lastReq)
+				checkRequest(t, upstream.lastReq, false)
 				require.Equal(t, "claude-haiku-4-5", gjson.GetBytes(upstream.lastBody, "model").String())
 				require.Contains(t, rec.Body.String(), `"success":true`)
 			})
