@@ -252,7 +252,13 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	// geili hook: validate completion before constructing a successful JSON body.
 	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, mappedModel, false, nil)
 	if err != nil {
-		return nil, err
+		// Retain observed usage without turning an incomplete stream into success.
+		// Safe pre-output failover must stay uncommitted for the outer retry guard.
+		if failure := anthropicCompatFailureGeili(c, err); failure != nil {
+			writeGatewayCCError(c, http.StatusBadGateway, "server_error", failure.message)
+		}
+		return &ForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: tracker.usage,
+			Model: originalModel, UpstreamModel: mappedModel, ReasoningEffort: reasoningEffort, Duration: time.Since(startTime)}, err
 	}
 	finalResp := tracker.response
 	usage := tracker.usage

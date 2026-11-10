@@ -97,7 +97,7 @@ describe('UserOrdersView receipt', () => {
   it('shows a receipt button only for credited orders', async () => {
     const wrapper = mountOrders([completed, pending])
     await flushPromises()
-    const buttons = wrapper.findAll('button').filter(button => button.text().includes('payment.orders.viewReceipt'))
+    const buttons = wrapper.findAll('button').filter(button => button.text().includes(zh.payment.orders.viewReceipt))
     expect(buttons).toHaveLength(1)
   })
 
@@ -105,13 +105,13 @@ describe('UserOrdersView receipt', () => {
     const tradeNo = paymentTradeNo || completed.out_trade_no
     const wrapper = mountOrders([{ ...completed, payment_trade_no: paymentTradeNo }])
     await flushPromises()
-    const open = wrapper.findAll('button').find(button => button.text().includes('payment.orders.viewReceipt'))
+    const open = wrapper.findAll('button').find(button => button.text().includes(zh.payment.orders.viewReceipt))
     expect(open).toBeTruthy()
     await open!.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('payment.receipt.title')
+    expect(wrapper.text()).toContain(zh.payment.receipt.title)
     expect(wrapper.text()).toContain(tradeNo)
-    expect(wrapper.text()).toContain('payment.receipt.itemBalance')
+    expect(wrapper.text()).toContain(zh.payment.receipt.itemBalance)
     expect(wrapper.text()).toContain('人民币贰万伍仟元整')
     expect(wrapper.text()).toContain('给力 API')
     expect(wrapper.text()).toContain('https://sub.geiliapi.com')
@@ -119,7 +119,7 @@ describe('UserOrdersView receipt', () => {
     expect(wrapper.findAll('.receipt-sheet ol li')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('payment.receipt.noteNotInvoice')
 
-    const download = wrapper.findAll('button').find(button => button.text().includes('payment.orders.downloadReceipt'))
+    const download = wrapper.findAll('button').find(button => button.text().includes(zh.payment.orders.downloadReceipt))
     expect(download).toBeTruthy()
     await download!.trigger('click')
     expect(downloadReceiptPdf).toHaveBeenCalledTimes(1)
@@ -134,12 +134,12 @@ describe('V2 paid review refunds', () => {
     const order = { ...completed, order_type: 'subscription' as const, status: 'FAILED' as const, provider_instance_id: 'wxpay-1', operation: 'upgrade' as const }
     const wrapper = mountOrders([order], ['wxpay-1'])
     await flushPromises()
-    const open = wrapper.findAll('button').find(button => button.text().includes('payment.orders.requestRefund'))!
+    const open = wrapper.findAll('button').find(button => button.text().includes(zh.payment.orders.requestRefund))!
     expect(open).toBeTruthy()
     await open.trigger('click')
-    expect(wrapper.text()).toContain('subscriptionRights.upgrade')
+    expect(wrapper.text()).toContain(zh.subscriptionRights.upgrade)
     await wrapper.get('textarea').setValue('Please review the paid contract conflict')
-    await wrapper.findAll('button').filter(button => button.text().includes('payment.orders.requestRefund')).at(-1)!.trigger('click')
+    await wrapper.findAll('button').filter(button => button.text().includes(zh.payment.orders.requestRefund)).at(-1)!.trigger('click')
     await flushPromises()
     expect(requestRefund).toHaveBeenCalledWith(order.id, { reason: 'Please review the paid contract conflict' })
     wrapper.unmount()
@@ -150,7 +150,7 @@ describe('V2 paid review refunds', () => {
   ])('does not offer an unsupported refund for paid_at=$paid_at provider=$provider_instance_id', async override => {
     const wrapper = mountOrders([{ ...completed, ...override, order_type: 'subscription', status: 'FAILED' }], ['wxpay-1'])
     await flushPromises()
-    expect(wrapper.findAll('button').some(button => button.text().includes('payment.orders.requestRefund'))).toBe(false)
+    expect(wrapper.findAll('button').some(button => button.text().includes(zh.payment.orders.requestRefund))).toBe(false)
     expect(requestRefund).not.toHaveBeenCalled()
     wrapper.unmount()
   })

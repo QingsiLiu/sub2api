@@ -1,6 +1,9 @@
 package httputil
 
-import "io"
+import (
+	"context"
+	"io"
+)
 
 func requestBodyReadChunkCapacityGeili(reader io.Reader, requested int) int {
 	if budget, ok := reader.(interface{ RequestBodyReadChunkCapacityGeili(int) int }); ok {
@@ -45,63 +48,20 @@ func (b *requestBodyDecompressionBudgetGeili) reserve(outputBytes int64) error {
 	return b.reserver.RequestBodyDecompressionReserveGeili(b.workspace + outputBytes)
 }
 
-func readDecompressedRequestBodyGeili(reader io.Reader, budget *requestBodyDecompressionBudgetGeili) ([]byte, error) {
-	reader = io.LimitReader(reader, maxDecompressedBodySize)
-	if budget == nil {
-		return io.ReadAll(reader)
+// Keep the Geili reservation on the same chunk/assembly path as the upstream budget.
+type decompressionReaderGeili struct {
+	io.Reader
+	budget *requestBodyDecompressionBudgetGeili
+}
+
+func reserveDecompressionOutputGeili(reader io.Reader, allocated int64) error {
+	if decoded, ok := reader.(*decompressionReaderGeili); ok && decoded.budget != nil {
+		return decoded.budget.reserve(allocated)
 	}
-	capacity := requestBodyReadInitCap
-	var chunks [][]byte
-	var allocated int64
-	total := 0
-	for {
-		chunkCapacity := capacity
-		if remaining := maxDecompressedBodySize - total; remaining < chunkCapacity {
-			chunkCapacity = remaining
-		}
-		if err := budget.reserve(allocated + int64(chunkCapacity)); err != nil {
-			return nil, err
-		}
-		chunk := make([]byte, chunkCapacity)
-		allocated += int64(chunkCapacity)
-		n := 0
-		var err error
-		for n < len(chunk) && err == nil {
-			var read int
-			read, err = reader.Read(chunk[n:])
-			n += read
-		}
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-		if n > 0 {
-			chunks = append(chunks, chunk[:n])
-			total += n
-		}
-		if err == io.EOF || total == maxDecompressedBodySize {
-			if len(chunks) == 0 {
-				return chunk[:0], nil
-			}
-			if len(chunks) == 1 {
-				return chunks[0], nil
-			}
-			// The accumulated chunks stay live while assembling the exact-size
-			// output. Reserve that second representation before allocating it.
-			if err := budget.reserve(allocated + int64(total)); err != nil {
-				return nil, err
-			}
-			body := make([]byte, total)
-			offset := 0
-			for _, part := range chunks {
-				offset += copy(body[offset:], part)
-			}
-			return body, nil
-		}
-		if capacity < requestBodyReadMaxInitCap {
-			capacity *= 2
-			if capacity > requestBodyReadMaxInitCap {
-				capacity = requestBodyReadMaxInitCap
-			}
-		}
-	}
+	return nil
+}
+
+func decompressRequestBodyWithReservationGeili(encoding string, raw []byte, source io.Reader) ([]byte, error) {
+	body, err := decompressRequestBodyWithBudget(context.Background(), encoding, raw, source)
+	return body.data, err
 }

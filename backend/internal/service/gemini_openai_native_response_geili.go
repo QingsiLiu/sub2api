@@ -76,7 +76,13 @@ func (s *geminiOpenAIOutputGeili) text(value string, thought bool) error {
 			seen = s.response.Output[idx].Content[0].Text
 		}
 	}
-	value, _ = computeGeminiTextDelta(seen, value)
+	// The response already owns the emitted prefix; avoid a second accumulator.
+	value = strings.TrimSuffix(value, "\u0000")
+	if strings.HasPrefix(value, seen) {
+		value = value[len(seen):]
+	} else if strings.HasPrefix(seen, value) {
+		return nil
+	}
 	if value == "" {
 		return nil
 	}

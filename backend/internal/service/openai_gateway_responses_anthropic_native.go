@@ -160,7 +160,14 @@ func (s *OpenAIGatewayService) handleResponsesBufferedFromNativeAnthropic(
 	// geili hook: validate completion before constructing a successful JSON body.
 	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, false, nil)
 	if err != nil {
-		return nil, err
+		// Retain observed usage without turning an incomplete stream into success.
+		// Safe pre-output failover must stay uncommitted for the outer retry guard.
+		if failure := anthropicCompatFailureGeili(c, err); failure != nil {
+			writeResponsesError(c, http.StatusBadGateway, "server_error", failure.message)
+		}
+		return &OpenAIForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: claudeUsageToOpenAIUsage(&tracker.usage),
+			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel, UpstreamEndpoint: "/v1/messages",
+			ReasoningEffort: reasoningEffort, Duration: time.Since(startTime)}, err
 	}
 	finalResp := tracker.response
 	usage := tracker.usage
@@ -284,10 +291,10 @@ func (s *OpenAIGatewayService) handleResponsesStreamingFromNativeAnthropic(
 		syncAnthropicResponsesUsage(state, usage)
 		normalizeAnthropicEventUsageForResponses(event, usage)
 
-		events := apicompat.AnthropicEventToResponsesEvents(event, state)
 		if clientDisconnected || geiliTextClientDisconnected(c) {
 			return
 		}
+		events := apicompat.AnthropicEventToResponsesEvents(event, state)
 		for _, evt := range events {
 			payload, err := json.Marshal(evt)
 			if err != nil {

@@ -158,7 +158,14 @@ func (s *OpenAIGatewayService) handleCCBufferedFromNativeAnthropic(
 	// geili hook: validate completion before constructing a successful JSON body.
 	tracker, err := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, false, nil)
 	if err != nil {
-		return nil, err
+		// Retain observed usage without turning an incomplete stream into success.
+		// Safe pre-output failover must stay uncommitted for the outer retry guard.
+		if failure := anthropicCompatFailureGeili(c, err); failure != nil {
+			writeChatCompletionsError(c, http.StatusBadGateway, "server_error", failure.message)
+		}
+		return &OpenAIForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: claudeUsageToOpenAIUsage(&tracker.usage),
+			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel, UpstreamEndpoint: "/v1/messages",
+			ReasoningEffort: reasoningEffort, Duration: time.Since(startTime)}, err
 	}
 	finalResp := tracker.response
 	usage := tracker.usage

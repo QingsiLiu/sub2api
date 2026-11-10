@@ -350,3 +350,25 @@ func TestAnthropicCompletionGeili_IdleRecoveryAfterHeartbeat(t *testing.T) {
 	require.Contains(t, rec.Body.String(), ": keepalive")
 	require.NotContains(t, rec.Body.String(), "failed_attempt_id")
 }
+
+func TestAnthropicCompletionGeili_UsesConfiguredTransportBounds(t *testing.T) {
+	for _, maxLines := range []int{1, 2} {
+		t.Run(strconv.Itoa(maxLines), func(t *testing.T) {
+			cfg := &config.Config{Gateway: config.GatewayConfig{SSEQueueMaxBytes: 32, SSEEventMaxLines: maxLines}}
+			body := strings.Repeat(": ping\n\n", 40) + anthropicCompletionFixtureGeili(geiliAnthropicStart, geiliAnthropicBlock, geiliAnthropicText, geiliAnthropicClosed, geiliAnthropicReason, geiliAnthropicStop)
+			body = strings.Replace(body, `"type":"message_start",`, "\"type\":\"message_start\",\ndata: ", 1)
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+			defer cancel()
+			c.Request = c.Request.WithContext(ctx)
+			tracker, err := readAnthropicCompletionGeili(c, &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, cfg, "gpt-4", false, nil)
+			if maxLines == 1 {
+				require.ErrorIs(t, err, errSSETransportLimit)
+			} else {
+				require.NoError(t, err, "dequeue must refund the configured byte budget")
+				require.Equal(t, 3, tracker.usage.OutputTokens)
+			}
+		})
+	}
+}

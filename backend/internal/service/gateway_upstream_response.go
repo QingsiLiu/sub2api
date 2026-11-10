@@ -749,7 +749,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	scanner.Buffer(scanBuf[:0], maxLineSize)
 	var preOutput atomic.Bool
 	preOutput.Store(true)
-	scanner.Split(openAIFirstOutputDynamicScanLines(&preOutput)) // geili hook: bound the private prelude before a newline arrives.
+	scanner.Split(newBoundedSSESplit(s.cfg, maxLineSize, openAIFirstOutputDynamicScanLines(&preOutput))) // geili hook: bound the private prelude before a newline arrives.
 
 	type scanEvent struct {
 		line string
@@ -758,11 +758,16 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	// 独立 goroutine 读取上游，避免读取阻塞导致超时/keepalive无法处理
 	events := make(chan scanEvent, 16)
 	done := make(chan struct{})
+	queueBudget := newSSEQueueBudget(s.cfg)
 	sendEvent := func(ev scanEvent) bool {
+		if !queueBudget.acquire(len(ev.line), done) {
+			return false
+		}
 		select {
 		case events <- ev:
 			return true
 		case <-done:
+			queueBudget.release(len(ev.line))
 			return false
 		}
 	}
@@ -1081,6 +1086,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	for {
 		select {
 		case ev, ok := <-events:
+			if ok {
+				queueBudget.release(len(ev.line))
+			}
 			if !ok {
 				if len(pendingEventLines) > 0 {
 					if err := relaySSEEvent(pendingEventLines); err != nil {
@@ -1156,6 +1164,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				}
 
 				err := relaySSEEvent(pendingEventLines)
+				clear(pendingEventLines)
 				pendingEventLines = pendingEventLines[:0]
 				pendingEventBytes = 0
 				if err != nil {

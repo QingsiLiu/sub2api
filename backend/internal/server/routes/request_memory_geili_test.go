@@ -350,3 +350,33 @@ func TestRequestMemoryGeiliPreservesExistingTextCaps(t *testing.T) {
 		require.Zero(t, budgetUsedGeili(b))
 	}
 }
+
+func TestRequestMemoryGeiliHonorsUpstreamBudget(t *testing.T) {
+	for _, compressed := range []bool{false, true} {
+		t.Run(fmt.Sprint(compressed), func(t *testing.T) {
+			body := []byte(`{"model":"keep","input":"body"}`)
+			if compressed {
+				var buf bytes.Buffer
+				writer := gzip.NewWriter(&buf)
+				_, err := writer.Write(body)
+				require.NoError(t, err)
+				require.NoError(t, writer.Close())
+				body = buf.Bytes()
+			}
+			geiliBudget := &requestBodyBudgetGeili{limit: 1 << 20}
+			upstreamBudget := pkghttputil.NewBodyMemoryBudget(1)
+			r := gin.New()
+			r.Use(middleware.RequestBodyLimit(1<<20, upstreamBudget), newRequestMemoryAdmissionGeili(nil, geiliBudget))
+			r.POST("/responses", func(c *gin.Context) { t.Error("exhausted request reached handler") })
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/responses", bytes.NewReader(body))
+			if compressed {
+				req.Header.Set("Content-Encoding", "gzip")
+			}
+			r.ServeHTTP(w, req)
+			require.Equal(t, 503, w.Code, "shared memory exhaustion must not become malformed input")
+			require.Equal(t, "1", w.Header().Get("Retry-After"))
+			require.Zero(t, budgetUsedGeili(geiliBudget))
+		})
+	}
+}

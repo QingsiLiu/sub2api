@@ -17,6 +17,7 @@ import (
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/memoryguard"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -212,12 +213,16 @@ func newRequestMemoryAdmissionGeili(cfg *config.Config, budget *requestBodyBudge
 				writeRequestMemoryOverloadGeili(c)
 				return
 			}
+			if middleware.RejectRequestBodyReadError(c, "geili_request_memory", err) {
+				return
+			}
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {
 				writeRequestMemoryErrorGeili(c, http.StatusRequestEntityTooLarge, "invalid_request_error", "Request body too large")
 				return
 			}
-			writeRequestMemoryErrorGeili(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+			failure := pkghttputil.DescribeRequestBodyReadFailure(c.Request, err)
+			writeRequestMemoryErrorGeili(c, failure.Status, "invalid_request_error", failure.Message)
 			return
 		}
 		if !lease.resize(int64(len(body))) {

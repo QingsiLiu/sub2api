@@ -170,8 +170,8 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 	var preOutput atomic.Bool
 	preOutput.Store(true)
-	scanner.Split(openAIFirstOutputDynamicScanLines(&preOutput))
-	pump := newAnthropicNativeLinePump(scanner, anthropicStreamIntervalGeili(cfg, model))
+	scanner.Split(newBoundedSSESplit(cfg, maxLineSize, openAIFirstOutputDynamicScanLines(&preOutput)))
+	pump := newAnthropicNativeLinePump(scanner, anthropicStreamIntervalGeili(cfg, model), cfg)
 	defer pump.stop()
 	defer func() { _ = resp.Body.Close() }()
 	var keepalive <-chan time.Time
@@ -202,11 +202,7 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 			}
 			select {
 			case event, ok := <-pump.events:
-				if !ok {
-					return "", io.EOF
-				}
-				pump.resetTimer()
-				return event.line, event.err
+				return pump.deliver(event, ok)
 			case <-idle:
 				// Match the upstream pump: queued data wins an expired timer
 				// when conversion or downstream processing took time.
@@ -300,7 +296,7 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 			tracker.readErr = err
 			// geili hook: accept a fully validated final event even when the peer
 			// omits the final empty SSE line and then stalls or drops transport.
-			if frame.Len() > 0 {
+			if frame.Len() > 0 && !errors.Is(err, errSSETransportLimit) {
 				if e := process(); e != nil {
 					return tracker, e
 				}

@@ -369,7 +369,7 @@ func (s *AccountTestService) probeAntigravityRawGeili(ctx context.Context, accou
 	builder := NewAntigravityGatewayService(nil, nil, nil, nil, nil, upstream, s.antigravityGatewayService.settingService, nil)
 	body, err := builder.buildGeminiTestRequestWithPrompt(project, model, ".")
 	if !strings.HasPrefix(normalizeAntigravityModelName(model), "gemini-") {
-		body, err = builder.buildClaudeTestRequest(project, model)
+		body, err = builder.buildClaudeTestRequest(project, model, ".")
 	}
 	if err != nil {
 		return errAccountRecoveryProbeIncompleteGeili

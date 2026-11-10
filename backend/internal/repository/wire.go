@@ -71,6 +71,7 @@ var ProviderSet = wire.NewSet(
 	NewInvoiceRepositoryGeili,
 	NewResponseAuditRepository,
 	NewUserRepository,
+	NewMCPOAuthRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
 	NewAdminGroupRepository,

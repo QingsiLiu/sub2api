@@ -2,6 +2,7 @@ package repository
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
@@ -9,7 +10,7 @@ import (
 // A context already cancelled at the sending boundary proves no attempt starts
 // here. Cancellation after this check retains the dispatch marker: its outcome
 // may be uncertain and must not be inferred safe to cancel by the lifecycle.
-func doUpstreamRequestWithDispatchGeili(client *http.Client, req *http.Request) (*http.Response, error) {
+func doUpstreamRequestWithDispatchGeili(client *http.Client, req *http.Request, drainTimeouts ...time.Duration) (*http.Response, error) {
 	if err := req.Context().Err(); err != nil {
 		if req.Body != nil {
 			_ = req.Body.Close()
@@ -17,5 +18,5 @@ func doUpstreamRequestWithDispatchGeili(client *http.Client, req *http.Request) 
 		return nil, err
 	}
 	ctxkey.MarkUpstreamDispatched(req.Context())
-	return doUpstreamRequest(client, req)
+	return doUpstreamRequest(client, req, drainTimeouts...)
 }

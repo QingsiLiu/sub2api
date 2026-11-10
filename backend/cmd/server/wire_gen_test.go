@@ -96,6 +96,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		billingCacheSvc,
 		&service.UsageRecordWorkerPool{},
 		nil, // optional response audit worker
+		service.ProvideBalanceNotifyService(nil, nil, nil, nil),
+		service.NewDigestSessionStore(),
 		&service.SubscriptionService{},
 		oauthSvc,
 		openAIOAuthSvc,

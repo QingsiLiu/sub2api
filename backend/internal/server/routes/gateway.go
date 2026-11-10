@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -30,9 +29,10 @@ func RegisterGatewayRoutes(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 ) {
-	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
-	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize)
-	memoryAdmission := requestMemoryAdmissionGeili(cfg) // geili hook: one byte budget across all authenticated text aliases.
+	bodyMemoryBudget := pkghttputil.NewBodyMemoryBudget(cfg.Gateway.RequestBodyMemoryBudgetBytes)
+	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize, bodyMemoryBudget)
+	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize, bodyMemoryBudget)
+	memoryAdmission := requestMemoryAdmissionGeili(cfg) // geili hook: preserve authenticated ingress admission.
 	clientRequestID := middleware.ClientRequestID()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	opsErrorLogger = codexRetryableRateLimit(settingService, opsErrorLogger) // geili hook: Codex transient 429 -> 503 slow_down, outside Ops.
@@ -603,15 +603,10 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver,
 
 		body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 		if err != nil {
-			status := http.StatusBadRequest
-			message := "Failed to read request body"
-			var maxErr *http.MaxBytesError
-			if errors.As(err, &maxErr) {
-				status = http.StatusRequestEntityTooLarge
-				message = "Request body is too large"
+			if middleware.RejectRequestBodyReadError(c, "middleware.composite_route", err) {
+				return
 			}
-			c.JSON(status, gin.H{"error": gin.H{"type": "invalid_request_error", "message": message}})
-			c.Abort()
+			middleware.AbortWithRequestBodyReadFailure(c, "middleware.composite_route", err)
 			return
 		}
 
