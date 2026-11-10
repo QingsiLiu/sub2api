@@ -1,11 +1,11 @@
-## 0.2.20-geili.1（合入上游 v0.2.20，源码候选，未部署）
+## 0.2.20-geili.1（合入上游 v0.2.20，Stage验收中，未生产）
 
 继承固定生产 `0.2.19-geili.5` / `336519afc63f932f6e23c65db95b41dff05989a5` 与当前主干 `2972bd0f578aecbee9f7eb3b00e02fffe70a0d55` 的管理员开票功能，合入官方最新正式标签 `v0.2.20` / `dab829a4e9b7d1cc307189aea8b0319eb29e29d0`（2026-11-07发布，112个提交／459个文件）。
 
 - 新增默认关闭的OAuth管理MCP、管理员Key权限及全权确认、邮箱精确黑名单；OpenAI图片按尺寸分流、GPT Image 2.6支持、Antigravity配额展示与模型级惩罚；修复Responses非流式终态、空instructions、cyber长会话、工具媒体及流式reasoning兼容，优化导出与请求热路径。
 - 合入共享请求体／解压／补丁预算、单次读写120秒超时、断连后有界上游回收、有界SSE队列／缓存／通知工作池。保留Geili长思考期限、派发／取消边界、部分用量唯一结算、输出后不重放、订阅归属及独立／零倍率；新的Terra长上下文自动计价行为须同digest验收，不能声称计费行为完全不变。
 - 新增官方 `249_mcp_oauth.sql`，原352份SQL校验和保持，候选353份；相对生产另含主干待部署 `285_invoices_geili.sql`，开票不丢失。MCP仍需显式 `MCP_PUBLIC_URL`，未开启；没有修改现网配置、分组、账号或价格。
-- 固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`（应用代码同`a3f8e240e`，另含合并记录），镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`；[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁通过。最初两次422拒绝保留；确认fork因compute usage自动暂停后，已在Actions页面重新启用并成功完成本轮构建。当前待同digest Stage验收，尚未生产；生产继续固定下节`.19.5`。不沿用历史验收或例外，不按后续文档CI替换本固定digest。
+- 固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`（应用代码同`a3f8e240e`，另含合并记录），镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`；[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁通过。最初两次422拒绝保留；确认fork因compute usage自动暂停后，已在Actions页面重新启用并成功完成本轮构建。同digest已于UTC 2026-11-10T08:02:18.754377切入Stage，至少600秒观察、旧实例自然退出0且无OOM后complete；受控切换4项、稳定入口3项及353份迁移／35项schema通过，完整功能与蓝绿性能验收进行中，尚未生产；生产继续固定下节`.19.5`。不沿用历史验收或例外，不按后续文档CI替换本固定digest。
 - 本次本地验证全部通过：Go default／unit／integration三套全量，5包专项竞态，前端428文件／3564项与生产构建，离线Python103项，嵌入前端／完整服务编译及自更新守卫。原始失败与后续复测分别保留，不改签；具体见合并记录。
 - 差异、冲突处理与升级边界见 [本轮合并记录](.github/geili/upstream-v0.2.20-20261110.md)。
 

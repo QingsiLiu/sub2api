@@ -53,7 +53,7 @@
 
 这些是本地测试结果，不是同digest Stage或远端13门禁凭据。
 
-候选镜像未生成：GitHub Actions手动dispatch两次均返回HTTP422 `Actions has been disabled for this repository`。只读配置却显示仓库`disabled=false`、Actions `enabled=true`，workflow本身active；对本候选workflow执行enable后仍同样拒绝，没有修改仓库Actions权限配置。故记录为远端执行受阻，不猜测是否为账号／平台策略，也不标记CI门禁通过，digest为未生成。未继承任何历史Stage／性能／生产例外；正式发布仍须同digest Stage、当前资源／迁移兼容性验收及当次生产授权。
+首次源码合并阶段的构建受阻记录（后续恢复见下节）：GitHub Actions手动dispatch两次均返回HTTP422 `Actions has been disabled for this repository`。只读配置却显示仓库`disabled=false`、Actions `enabled=true`，workflow本身active；对本候选workflow执行enable后仍同样拒绝，没有修改仓库Actions权限配置。故记录为远端执行受阻，不猜测是否为账号／平台策略，也不标记CI门禁通过，digest为未生成。未继承任何历史Stage／性能／生产例外；正式发布仍须同digest Stage、当前资源／迁移兼容性验收及当次生产授权。
 
 
 原始失败保留：首次接口签名／Gemini helper编译错误、旧身份头夹具仅[DONE]、设置模型快照、i18n裸key断言、缓冲读取器用量／严格透传与公开结算边界冲突，以及并行编译时两项10ms Redis presence hint测试失败均单独保留。Redis两项已单独复测通过；不扩大生产时限来迁就测试。最终修正版本三套全量重新执行全部通过；旧失败文件保持，不能改写为passed。原始及最终日志保存在被忽略的`deploy/.secrets/upstream-v0.2.20-20261110/`，`evidence.json`包含源码身份及逐文件SHA256。
@@ -61,3 +61,5 @@
 ## 生产授权后的候选构建进度
 
 用户2026-11-10原文“好的，可以推送版本部署到线上”为本候选验收全通过后的条件授权。确认GitHub fork因compute usage自动暂停，在Actions页面重新启用后，[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁实际成功；初始422为历史失败，不改签。固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`、镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`，353份迁移制品校验和逐项核对通过。现在待同digest Stage、当前蓝绿／资源／迁移兼容验收，生产仍`.19.5`；本节更新不替换上述本地失败证据。运维证据见运维仓`docs/reports/upstream-v0220-release-20261110/`。
+
+Stage阶段：固定镜像于UTC 2026-11-10T08:02:18.754377平滑切流，至少600秒观察及旧版自然退出0、无OOM后complete。受控切换4项、稳定入口3项、353份迁移及35项schema通过；51项业务、17项双实例缓存、44项Luna参数通过。其余当前功能、长流/故障/并发/性能验收尚在执行，未批准生产凭据、未切生产。Stage备份 `/srv/projects/geili-stage/.bluegreen/20261110T080213Z-35104b90`。
