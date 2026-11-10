@@ -4,7 +4,7 @@
 
 - 隔离剖析显示每次资格检查读取完整用户资料和分组；当前链路重复读取，用户查询占采样CPU约9.5%。改为只读取实时余额的单列SQL，每次仍查权威数据库，保留事务上下文、软删除过滤、零／负余额语义、查询错误与旧仓储回退；不新增余额缓存或合并并发读取。路由权限检查和扣费事务保持。
 - 相对`.20.1`无迁移、价格、倍率、资格阈值或财务规则变更；353份迁移字节保持。新增覆盖即时余额变化、零／负余额、删除、事务可见性及错误不回退的回归测试。
-- 当前 revision 为本节所属源码提交，镜像digest待候选CI产出，尚未Stage／生产；生产继续固定`.19.5`。诊断二进制只用于自有合成夹具，不是发布镜像，也不替代原性能门禁；必须新CI固定制品及同digest Stage重新验收后上线。
+- 固定 revision `52bc25ca9c4dafd0e1b1d9bd2b10d5ff46a967a4`，镜像 `ghcr.io/qingsiliu/sub2api@sha256:2150d4aa7855628fd812a4bba46ebf00c8133b1aa5a39ddf65a3ed23b29b4d42`；[CI42814572753](https://github.com/QingsiLiu/sub2api/actions/runs/42814572753)全部9任务／13门禁及353份迁移制品校验通过。本地Go default／unit／integration全量与余额专项竞态通过；隔离诊断8000次P95降低108.021ms／吞吐比1.219811，只作诊断。尚未Stage／生产，准备canonical Stage；生产继续固定`.19.5`。诊断二进制只用于自有合成夹具，不是发布镜像，也不替代原性能门禁；必须新CI固定制品及同digest Stage重新验收后上线。
 
 ## 0.2.20-geili.1（合入上游 v0.2.20，Stage性能未过，未生产）
 
@@ -13,7 +13,7 @@
 - 新增默认关闭的OAuth管理MCP、管理员Key权限及全权确认、邮箱精确黑名单；OpenAI图片按尺寸分流、GPT Image 2.6支持、Antigravity配额展示与模型级惩罚；修复Responses非流式终态、空instructions、cyber长会话、工具媒体及流式reasoning兼容，优化导出与请求热路径。
 - 合入共享请求体／解压／补丁预算、单次读写120秒超时、断连后有界上游回收、有界SSE队列／缓存／通知工作池。保留Geili长思考期限、派发／取消边界、部分用量唯一结算、输出后不重放、订阅归属及独立／零倍率；新的Terra长上下文自动计价行为须同digest验收，不能声称计费行为完全不变。
 - 新增官方 `249_mcp_oauth.sql`，原352份SQL校验和保持，候选353份；相对生产另含主干待部署 `285_invoices_geili.sql`，开票不丢失。MCP仍需显式 `MCP_PUBLIC_URL`，未开启；没有修改现网配置、分组、账号或价格。
-- 固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`（应用代码同`a3f8e240e`，另含合并记录），镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`；[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁通过。最初两次422拒绝保留；确认fork因compute usage自动暂停后，已在Actions页面重新启用并成功完成本轮构建。同digest已于UTC 2026-11-10T08:02:18.754377切入Stage，至少600秒观察、旧实例自然退出0且无OOM后complete；受控切换4项、稳定入口3项及353份迁移／35项schema通过，完整功能与蓝绿性能验收进行中，尚未生产；生产继续固定下节`.19.5`。不沿用历史验收或例外，不按后续文档CI替换本固定digest。
+- 固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`（应用代码同`a3f8e240e`，另含合并记录），镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`；[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁通过。最初两次422拒绝保留；确认fork因compute usage自动暂停后，已在Actions页面重新启用并成功完成本轮构建。同digest已于UTC 2026-11-10T08:02:18.754377切入Stage，至少600秒观察、旧实例自然退出0且无OOM后complete；受控切换4项、稳定入口3项及353份迁移／35项schema通过，13组功能1229项／用量32项和39项非性能蓝绿安全事实通过；三组性能P95增量18.70～24.42ms超过原+10ms，失败保留、未生产；生产继续固定下节`.19.5`。不沿用历史验收或例外，不按后续文档CI替换本固定digest。
 - 本次本地验证全部通过：Go default／unit／integration三套全量，5包专项竞态，前端428文件／3564项与生产构建，离线Python103项，嵌入前端／完整服务编译及自更新守卫。原始失败与后续复测分别保留，不改签；具体见合并记录。
 - 差异、冲突处理与升级边界见 [本轮合并记录](.github/geili/upstream-v0.2.20-20261110.md)。
 
