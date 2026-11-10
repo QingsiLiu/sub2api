@@ -44,6 +44,16 @@
 
 ## 验证与制品
 
-固定源码revision `8875da2de7b1e2e3c1b4f9a4d19b9735f6edd53f`，已推送 `origin/geili/main`，双亲为合并前主干与官方固定标签。前端428文件／3564项及生产构建、5组Python共103项、嵌入前端、自更新守卫、专项竞态（httputil／service／routes／middleware／repository）已通过；默认及integration整套通过；unit末尾发现严格透传和公开缓冲失败结果两项契约差异，已按既有Geili边界修正并通过相关专项，正在重新执行最终三套Go回归。
+固定源码revision `a3f8e240e85bc97e92569c549a4ab98b2b1e56a9`，已推送 `origin/geili/main`；包含同步合并`8875da2de7b1e2e3c1b4f9a4d19b9735f6edd53f`及后续边界适配，合并提交的双亲为原主干与官方固定标签。本次最终源码验证全部通过：
+
+- `go test ./...`、`go test -tags=unit ./...`、`CI=true go test -tags=integration ./...`。
+- httputil／service／routes／middleware／repository五包专项竞态，覆盖内存／解压、SSE限界／用量、不可逆操作、严格透传、订阅准入／派发、图片尺寸等交叉边界。
+- 前端428文件／3564项、生产构建与无旧视觉覆盖检查；5组离线Python共103项。
+- 嵌入前端测试、带版本／提交信息的完整嵌入服务编译、自更新禁用守卫。
+
+这些是本地测试结果，不是同digest Stage或远端13门禁凭据。
 
 候选镜像未生成：GitHub Actions手动dispatch两次均返回HTTP422 `Actions has been disabled for this repository`。只读配置却显示仓库`disabled=false`、Actions `enabled=true`，workflow本身active；对本候选workflow执行enable后仍同样拒绝，没有修改仓库Actions权限配置。故记录为远端执行受阻，不猜测是否为账号／平台策略，也不标记CI门禁通过，digest为未生成。未继承任何历史Stage／性能／生产例外；正式发布仍须同digest Stage、当前资源／迁移兼容性验收及当次生产授权。
+
+
+原始失败保留：首次接口签名／Gemini helper编译错误、旧身份头夹具仅[DONE]、设置模型快照、i18n裸key断言、缓冲读取器用量／严格透传与公开结算边界冲突，以及并行编译时两项10ms Redis presence hint测试失败均单独保留。Redis两项已单独复测通过；不扩大生产时限来迁就测试。最终修正版本三套全量重新执行全部通过；旧失败文件保持，不能改写为passed。原始及最终日志保存在被忽略的`deploy/.secrets/upstream-v0.2.20-20261110/`，`evidence.json`包含源码身份及逐文件SHA256。
