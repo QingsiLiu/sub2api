@@ -353,11 +353,12 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 
 // getUserBalanceFromDB 从数据库获取用户余额
 func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID int64) (float64, error) {
-	user, err := s.userRepo.GetByID(ctx, userID)
+	// Geili hook: eligibility needs a fresh balance, not the full user and groups.
+	balance, err := loadBillingBalanceGeili(ctx, s.userRepo, userID)
 	if err != nil {
 		return 0, fmt.Errorf("get user balance: %w", err)
 	}
-	return user.Balance, nil
+	return balance, nil
 }
 
 // setBalanceCache 设置余额缓存
