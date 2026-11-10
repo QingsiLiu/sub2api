@@ -1,10 +1,12 @@
 # 上游 v0.2.20 合并（2026-11-10）
 
-## 固定输入与范围
+最终已发布生产为`0.2.20-geili.3`／`cfe66d84d7ae1eaa1b4f96ffce804fa68171f296`／`sha256:38a2d17fb27afaf2deda69c20edc30593d1fa336e278f675783f85b71e9e9299`。原`.1`／`.2`性能失败保留，最终实时余额窄查询及同钱包写入协调经同digest完整Stage、三组原性能门槛、Go4补验与实际容量通过，于UTC2026-11-10T16:47:04平滑切流、16:57:06旧版自然退出0无OOM后complete。MCP保持关闭、无真实付费测试；完整当前状态见[RELEASES.md](../../RELEASES.md)。
+
+## 固定输入与范围（合并时记录）
 
 - 官方最新正式 Release：[v0.2.20](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.20)，发布时间 `2026-11-07T06:31:24Z`，固定提交 `dab829a4e9b7d1cc307189aea8b0319eb29e29d0`。
 - 上次官方基线 `v0.2.19` / `dece26153621959ccd7635814f4b2d08304e681a`；两标签之间112个提交、459个文件、29482行增加／1457行删除。[官方完整差异](https://github.com/Wei-Shaw/sub2api/compare/v0.2.19...v0.2.20)。不包含标签之后的 upstream/main 提交。
-- 合并前主干 `2972bd0f578aecbee9f7eb3b00e02fffe70a0d55`，包含尚未部署的管理员开票前后端与 `285_invoices_geili.sql`。当前生产固定 `.19.5` / `336519afc63f932f6e23c65db95b41dff05989a5` 是该主干祖先，合并继续保留两者。不使用 fork 的归档 main。
+- 合并前主干 `2972bd0f578aecbee9f7eb3b00e02fffe70a0d55`，包含尚未部署的管理员开票前后端与 `285_invoices_geili.sql`。合并前生产固定 `.19.5` / `336519afc63f932f6e23c65db95b41dff05989a5` 是该主干祖先，合并继续保留两者。不使用 fork 的归档 main。
 - 新候选 `0.2.20-geili.1`，仅源码整合与候选构建；未部署 Stage／生产，不启用 MCP 或修改生产配置。
 
 ## 用户可见变化
