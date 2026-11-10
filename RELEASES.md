@@ -5,7 +5,7 @@
 - 新增默认关闭的OAuth管理MCP、管理员Key权限及全权确认、邮箱精确黑名单；OpenAI图片按尺寸分流、GPT Image 2.6支持、Antigravity配额展示与模型级惩罚；修复Responses非流式终态、空instructions、cyber长会话、工具媒体及流式reasoning兼容，优化导出与请求热路径。
 - 合入共享请求体／解压／补丁预算、单次读写120秒超时、断连后有界上游回收、有界SSE队列／缓存／通知工作池。保留Geili长思考期限、派发／取消边界、部分用量唯一结算、输出后不重放、订阅归属及独立／零倍率；新的Terra长上下文自动计价行为须同digest验收，不能声称计费行为完全不变。
 - 新增官方 `249_mcp_oauth.sql`，原352份SQL校验和保持，候选353份；相对生产另含主干待部署 `285_invoices_geili.sql`，开票不丢失。MCP仍需显式 `MCP_PUBLIC_URL`，未开启；没有修改现网配置、分组、账号或价格。
-- 固定源码revision `a3f8e240e85bc97e92569c549a4ab98b2b1e56a9`（同步合并提交`8875da2de`及边界适配修正），已推送`origin/geili/main`。镜像digest：未生成；候选Actions手动dispatch两次均被HTTP422拒绝，原文`Actions has been disabled for this repository`，只读配置却显示Actions已启用，不能把它记为CI通过。未部署Stage／生产，现网继续固定 `.19.5` / `sha256:72e2b1b9961da09d2be4cded688205d55a761934668d64dd6c88ece4aa64c487`；不沿用历史验收或例外。
+- 固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`（应用代码同`a3f8e240e`，另含合并记录），镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`；[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁通过。最初两次422拒绝保留；确认fork因compute usage自动暂停后，已在Actions页面重新启用并成功完成本轮构建。当前待同digest Stage验收，尚未生产；生产继续固定下节`.19.5`。不沿用历史验收或例外，不按后续文档CI替换本固定digest。
 - 本次本地验证全部通过：Go default／unit／integration三套全量，5包专项竞态，前端428文件／3564项与生产构建，离线Python103项，嵌入前端／完整服务编译及自更新守卫。原始失败与后续复测分别保留，不改签；具体见合并记录。
 - 差异、冲突处理与升级边界见 [本轮合并记录](.github/geili/upstream-v0.2.20-20261110.md)。
 

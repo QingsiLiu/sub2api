@@ -57,3 +57,7 @@
 
 
 原始失败保留：首次接口签名／Gemini helper编译错误、旧身份头夹具仅[DONE]、设置模型快照、i18n裸key断言、缓冲读取器用量／严格透传与公开结算边界冲突，以及并行编译时两项10ms Redis presence hint测试失败均单独保留。Redis两项已单独复测通过；不扩大生产时限来迁就测试。最终修正版本三套全量重新执行全部通过；旧失败文件保持，不能改写为passed。原始及最终日志保存在被忽略的`deploy/.secrets/upstream-v0.2.20-20261110/`，`evidence.json`包含源码身份及逐文件SHA256。
+
+## 生产授权后的候选构建进度
+
+用户2026-11-10原文“好的，可以推送版本部署到线上”为本候选验收全通过后的条件授权。确认GitHub fork因compute usage自动暂停，在Actions页面重新启用后，[CI42777344187](https://github.com/QingsiLiu/sub2api/actions/runs/42777344187)全部9任务／13门禁实际成功；初始422为历史失败，不改签。固定构建revision `35104b90f1f6926f931eaff99742a1944a073150`、镜像 `ghcr.io/qingsiliu/sub2api@sha256:0102b5e8b3513ca3f05ac3478a3c9fc9e29c23063f8468ab0cef2df22b02db2b`，353份迁移制品校验和逐项核对通过。现在待同digest Stage、当前蓝绿／资源／迁移兼容验收，生产仍`.19.5`；本节更新不替换上述本地失败证据。运维证据见运维仓`docs/reports/upstream-v0220-release-20261110/`。
