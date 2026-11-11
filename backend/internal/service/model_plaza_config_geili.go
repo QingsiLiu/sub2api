@@ -310,8 +310,9 @@ func applyPlazaOfficialOverride(base *PlazaOfficialPricing, o ModelPlazaOfficial
 	}
 	if o.CacheWrite != nil {
 		out.CacheWritePrice = perTokenPtr(o.CacheWrite)
-		// A manual write price supersedes the pulled 5m/1h split.
+		// A manual write price supersedes all pulled cache-lifetime references.
 		out.CacheWrite1hPrice = nil
+		out.CacheWrite12hPrice = nil
 	}
 	out.Note = o.Note
 	return &out

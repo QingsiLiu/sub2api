@@ -158,3 +158,18 @@ func TestListVisibleGroupsWithConfig_OfficialOverrides(t *testing.T) {
 		require.Equal(t, "高峰价", cny.Note)
 	}
 }
+
+func TestModelPlazaGeiliManualCacheWriteReplacesLifetimeReferences(t *testing.T) {
+	base := &PlazaOfficialPricing{CacheWritePrice: f64(1e-6), CacheWrite1hPrice: f64(2e-6), CacheWrite12hPrice: f64(3e-6)}
+	for _, price := range []float64{0, 4} {
+		got := applyPlazaOfficialOverride(base, ModelPlazaOfficialOverride{Currency: ModelPlazaCurrencyUSD, CacheWrite: f64(price)})
+		require.InDelta(t, price/1e6, *got.CacheWritePrice, 1e-12)
+		require.Nil(t, got.CacheWrite1hPrice)
+		require.Nil(t, got.CacheWrite12hPrice, "a flat manual reference supersedes both upstream TTL references")
+	}
+	require.Equal(t, 3e-6, *base.CacheWrite12hPrice, "the memoized upstream reference must not be mutated")
+	partial := applyPlazaOfficialOverride(base, ModelPlazaOfficialOverride{Currency: ModelPlazaCurrencyUSD, Output: f64(5)})
+	require.Equal(t, 3e-6, *partial.CacheWrite12hPrice, "unrelated partial override retains the lifetime price")
+	cny := applyPlazaOfficialOverride(base, ModelPlazaOfficialOverride{Currency: ModelPlazaCurrencyCNY, Input: f64(4)})
+	require.Nil(t, cny.CacheWrite12hPrice, "USD lifetime prices must not leak into a CNY reference")
+}
