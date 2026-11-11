@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -269,10 +268,7 @@ func usageSettlementIngressHealth(cfg *config.Config) (UsageSettlementIngressHea
 	for _, entry := range entries {
 		cursor.scanned++
 		name := entry.Name()
-		if len(name) != 69 || !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		if _, e := hex.DecodeString(name[:64]); e != nil {
+		if !isUsageSettlementIngressFilename(name) {
 			continue
 		}
 		info, e := root.Lstat(name)

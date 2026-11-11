@@ -164,7 +164,7 @@ func TestSettlementIngressNeverSerializesAssociationsOrRequestSecrets(t *testing
 	}
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
-	require.Equal(t, float64(1), decoded["version"])
+	require.Equal(t, float64(usageSettlementIngressVersion), decoded["version"])
 }
 func TestSettlementIngressIgnoresPartialAndRejectsSymlinkFiles(t *testing.T) {
 	cfg, cmd, log := ingressFixture(t)

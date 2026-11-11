@@ -124,11 +124,17 @@ func (r *usageBillingRepository) prepareSettlementTx(ctx context.Context, tx *sq
 	if cmd.AccountID > 0 {
 		accountID = cmd.AccountID
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO usage_settlement_receipts
+	err = tx.QueryRowContext(ctx, `INSERT INTO usage_settlement_receipts
  (request_id,api_key_id,usage_request_id,request_fingerprint,user_id,account_id,group_id,subscription_id,billing_type,charged_amount,accounting_date,admitted_at,completed_at,command,detail,record_completeness)
  VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,($11::timestamptz AT TIME ZONE 'Asia/Shanghai')::date,$12,$13,$14::jsonb,$15::jsonb,$16)
- ON CONFLICT(request_id,api_key_id) DO NOTHING`, cmd.RequestID, cmd.APIKeyID, usageID, cmd.RequestFingerprint, cmd.UserID, accountID, groupID, cmd.SubscriptionID, billingType, charge, accounting, admitted, completed, string(raw), detailJSON, complete)
-	if err != nil {
+ ON CONFLICT(request_id,api_key_id) DO NOTHING RETURNING id,state`, cmd.RequestID, cmd.APIKeyID, usageID, cmd.RequestFingerprint, cmd.UserID, accountID, groupID, cmd.SubscriptionID, billingType, charge, accounting, admitted, completed, string(raw), detailJSON, complete).Scan(&out.id, &out.state)
+	// A new row already contains this validated command and complete snapshot;
+	// our transaction owns its insert lock. Only an existing receipt needs the
+	// identity/money comparison and missing-metadata repair below.
+	if err == nil {
+		return out, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
 		return out, err
 	}
 	var priorRaw []byte
@@ -136,8 +142,9 @@ func (r *usageBillingRepository) prepareSettlementTx(ctx context.Context, tx *sq
 	var priorUser int64
 	var priorAccount, priorSub sql.NullInt64
 	var priorUsage sql.NullString
+	var detailMissing, groupMissing bool
 	var priorAmount sql.NullFloat64
-	err = tx.QueryRowContext(ctx, `SELECT id,state,request_fingerprint,user_id,account_id,subscription_id,usage_request_id,charged_amount,command,record_source FROM usage_settlement_receipts WHERE request_id=$1 AND api_key_id=$2 FOR UPDATE`, cmd.RequestID, cmd.APIKeyID).Scan(&out.id, &out.state, &priorFingerprint, &priorUser, &priorAccount, &priorSub, &priorUsage, &priorAmount, &priorRaw, &source)
+	err = tx.QueryRowContext(ctx, `SELECT id,state,request_fingerprint,user_id,account_id,subscription_id,usage_request_id,charged_amount,command,record_source,detail IS NULL,group_id IS NULL FROM usage_settlement_receipts WHERE request_id=$1 AND api_key_id=$2 FOR UPDATE`, cmd.RequestID, cmd.APIKeyID).Scan(&out.id, &out.state, &priorFingerprint, &priorUser, &priorAccount, &priorSub, &priorUsage, &priorAmount, &priorRaw, &source, &detailMissing, &groupMissing)
 	if err != nil {
 		return out, err
 	}
@@ -156,7 +163,9 @@ func (r *usageBillingRepository) prepareSettlementTx(ctx context.Context, tx *sq
 	}
 	// An early Apply caller may have stored amount-only evidence. Upgrade only
 	// missing metadata, never overwrite the first complete snapshot or its prices.
-	if detail != nil && source == "live" {
+	// The existing row lock makes this observation authoritative. Complete
+	// retries need no UPDATE, new row version, or another metadata round trip.
+	if detail != nil && source == "live" && (detailMissing || (!priorUsage.Valid && usageID != "") || (groupMissing && groupID != nil)) {
 		_, err = tx.ExecContext(ctx, `UPDATE usage_settlement_receipts SET detail=COALESCE(detail,$2::jsonb),usage_request_id=COALESCE(usage_request_id,NULLIF($3,'')),group_id=COALESCE(group_id,$4),record_completeness=CASE WHEN detail IS NULL THEN $5 ELSE record_completeness END,updated_at=NOW() WHERE id=$1`, out.id, detailJSON, usageID, groupID, complete)
 	}
 	return out, err

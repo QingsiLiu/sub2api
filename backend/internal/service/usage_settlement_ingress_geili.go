@@ -31,7 +31,7 @@ const usageSettlementIngressQuarantineDir = ".quarantine"
 
 const (
 	usageSettlementIngressDir      = "usage-settlement-ingress"
-	usageSettlementIngressVersion  = 1
+	usageSettlementIngressVersion  = 2
 	usageSettlementIngressMaxBytes = 4 << 20
 )
 
@@ -152,9 +152,26 @@ func syncUsageSettlementDirectory(root *os.Root) error {
 }
 
 func settlementIngressFilename(cmd *UsageBillingCommand) string {
+	return settlementIngressIdentity(cmd) + ".v2.json"
+}
+
+func settlementIngressIdentity(cmd *UsageBillingCommand) string {
 	identity := strconv.FormatInt(cmd.APIKeyID, 10) + "\x00" + cmd.RequestID
 	sum := sha256.Sum256([]byte(identity))
-	return hex.EncodeToString(sum[:]) + ".json"
+	return hex.EncodeToString(sum[:])
+}
+
+// Old binaries select exactly 64 hex characters plus .json, then strictly
+// decode the nested detail. New TTL fields require their own filename so the
+// old owner cannot mistake a new record for corrupt evidence during overlap.
+// New owners count and replay both generations; no file is renamed or hidden.
+func isUsageSettlementIngressFilename(name string) bool {
+	if !((len(name) == 69 && strings.HasSuffix(name, ".json")) ||
+		(len(name) == 72 && strings.HasSuffix(name, ".v2.json"))) {
+		return false
+	}
+	_, err := hex.DecodeString(name[:64])
+	return err == nil
 }
 
 func freezeUsageSettlementIngress(cmd *UsageBillingCommand, log *UsageLog) (*usageSettlementIngressRecord, error) {
@@ -327,14 +344,18 @@ func readUsageSettlementIngress(root *os.Root, name string) (*usageSettlementIng
 	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, errors.New("trailing settlement ingress data")
 	}
-	if record.Version != usageSettlementIngressVersion {
+	if record.Version != 1 && record.Version != usageSettlementIngressVersion {
 		return nil, errors.New("unsupported settlement ingress version")
 	}
 	record.Command.Normalize()
 	if err = ValidateUsageSettlementCommand(&record.Command); err != nil {
 		return nil, err
 	}
-	if settlementIngressFilename(&record.Command) != name {
+	expected := settlementIngressFilename(&record.Command)
+	if record.Version == 1 {
+		expected = settlementIngressIdentity(&record.Command) + ".json"
+	}
+	if expected != name {
 		return nil, errors.New("settlement ingress filename identity mismatch")
 	}
 	if _, err = freezeUsageSettlementIngress(&record.Command, record.Detail.UsageLog()); err != nil {
@@ -512,10 +533,8 @@ func readUsageSettlementIngressNames(root *os.Root, limit int) ([]string, error)
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
-		if len(name) == 69 && strings.HasSuffix(name, ".json") {
-			if _, e := hex.DecodeString(name[:64]); e == nil {
-				names = append(names, name)
-			}
+		if isUsageSettlementIngressFilename(name) {
+			names = append(names, name)
 		}
 	}
 	return names, err
