@@ -185,6 +185,9 @@ const DataTableStub = {
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
         </div>
+        <div data-test="usage">
+          <slot name="cell-usage" :row="row" />
+        </div>
         <div
           v-if="columns.some((col) => col.key === 'last_used_ip')"
           data-test="last-used-ip"
@@ -335,7 +338,7 @@ describe('user KeysView column settings', () => {
     const wrapper = await mountView()
     expect(wrapper.findComponent({ name: 'DataTable' }).props('loading')).toBe(false)
     expect(wrapper.text()).toContain('test-key')
-    expect(wrapper.get('[data-test="key-usage"]').text()).toContain('—')
+    expect(wrapper.get('[data-test="key-usage"]').findAll('.animate-pulse')).toHaveLength(2)
     expect(wrapper.get('[data-test="key-usage"]').text()).not.toContain('$0.0000')
     finish({ stats: { 1: { api_key_id: 1, today_actual_cost: 2, total_actual_cost: 3 } } })
     await flushPromises()
@@ -350,6 +353,7 @@ describe('user KeysView column settings', () => {
     const wrapper = await mountView()
     expect(wrapper.findComponent({ name: 'DataTable' }).props('loading')).toBe(false)
     expect(wrapper.text()).toContain('test-key')
+    expect(wrapper.get('[data-test="key-usage"]').text()).toContain('—')
     expect(wrapper.get('[data-test="key-usage"]').text()).not.toContain('$0.0000')
     expect(showError).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -810,6 +814,33 @@ describe('user KeysView column settings', () => {
     })
   })
 
+  describe('usage stats loading', () => {
+    it('renders the key list without waiting for slow usage stats', async () => {
+      let resolveUsage!: (value: { stats: Record<string, unknown> }) => void
+      getDashboardApiKeysUsage.mockReturnValue(new Promise((resolve) => { resolveUsage = resolve }))
+      const wrapper = await mountView()
 
+      const table = wrapper.findComponent({ name: 'DataTable' })
+      expect(table.props('loading')).toBe(false)
+      expect(table.props('data')).toHaveLength(1)
+      expect(wrapper.find('[data-test="usage-pending"]').exists()).toBe(true)
 
+      resolveUsage({
+        stats: { 1: { api_key_id: 1, today_actual_cost: 0.5, total_actual_cost: 12.25 } },
+      })
+      await flushPromises()
+      expect(wrapper.find('[data-test="usage-pending"]').exists()).toBe(false)
+      expect(wrapper.get('[data-test="usage"]').text()).toContain('$12.2500')
+    })
+
+    it('stops showing usage placeholders when the usage request fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      getDashboardApiKeysUsage.mockRejectedValue(new Error('timeout'))
+      const wrapper = await mountView()
+
+      expect(wrapper.find('[data-test="usage-pending"]').exists()).toBe(false)
+      expect(wrapper.get('[data-test="usage"]').text()).toContain('—')
+      consoleError.mockRestore()
+    })
+  })
 })

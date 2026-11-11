@@ -67,6 +67,8 @@ type UsageSettlementDetail struct {
 	CacheReadTokens           int                   `json:"cache_read_tokens"`
 	CacheCreation5mTokens     int                   `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens     int                   `json:"cache_creation_1h_tokens"`
+	CacheCreation30mTokens    int                   `json:"cache_creation_30m_tokens"`
+	CacheCreation12hTokens    int                   `json:"cache_creation_12h_tokens"`
 	ImageInputTokens          int                   `json:"image_input_tokens"`
 	ImageInputCost            float64               `json:"image_input_cost"`
 	ImageOutputTokens         int                   `json:"image_output_tokens"`
@@ -138,6 +140,8 @@ func NewUsageSettlementDetail(log *UsageLog) (*UsageSettlementDetail, error) {
 		CacheReadTokens:           log.CacheReadTokens,
 		CacheCreation5mTokens:     log.CacheCreation5mTokens,
 		CacheCreation1hTokens:     log.CacheCreation1hTokens,
+		CacheCreation30mTokens:    log.CacheCreation30mTokens,
+		CacheCreation12hTokens:    log.CacheCreation12hTokens,
 		ImageInputTokens:          log.ImageInputTokens,
 		ImageInputCost:            log.ImageInputCost,
 		ImageOutputTokens:         log.ImageOutputTokens,
@@ -221,6 +225,8 @@ func (d *UsageSettlementDetail) UsageLog() *UsageLog {
 		CacheReadTokens:           d.CacheReadTokens,
 		CacheCreation5mTokens:     d.CacheCreation5mTokens,
 		CacheCreation1hTokens:     d.CacheCreation1hTokens,
+		CacheCreation30mTokens:    d.CacheCreation30mTokens,
+		CacheCreation12hTokens:    d.CacheCreation12hTokens,
 		ImageInputTokens:          d.ImageInputTokens,
 		ImageInputCost:            d.ImageInputCost,
 		ImageOutputTokens:         d.ImageOutputTokens,
