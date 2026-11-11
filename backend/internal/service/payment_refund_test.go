@@ -235,7 +235,7 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 			}))
 			defer server.Close()
 			user, err := client.User.Create().SetEmail("refund-protocol@example.com").
-				SetPasswordHash("hash").SetUsername("refund-protocol").Save(ctx)
+				SetPasswordHash("hash").SetUsername("refund-protocol").SetBalance(200).Save(ctx)
 			require.NoError(t, err)
 			inst, err := client.PaymentProviderInstance.Create().SetProviderKey(payment.TypeEasyPay).
 				SetName("refund-protocol").SetConfig("{}").SetSupportedTypes("wxpay").
@@ -251,20 +251,8 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 				SetClientIP("127.0.0.1").SetSrcHost("api.example.com").
 				SetProviderInstanceID(strconv.FormatInt(inst.ID, 10)).Save(ctx)
 			require.NoError(t, err)
-			balance := 200.0
-			repo := &mockUserRepo{
-				getByIDUser: &User{Balance: balance},
-				deductAvailableBalanceFn: func(_ context.Context, id int64, amount float64) (float64, error) {
-					require.Equal(t, user.ID, id)
-					balance -= amount
-					return amount, nil
-				},
-				updateBalanceFn: func(_ context.Context, id int64, amount float64) error {
-					require.Equal(t, user.ID, id)
-					balance += amount
-					return nil
-				},
-			}
+			// Geili journals atomically debit the persisted wallet with refund intent.
+			repo := &mockUserRepo{getByIDUser: &User{Balance: 200}}
 			svc := &PaymentService{entClient: client, userRepo: repo, loadBalancer: &easyPayRefundLoadBalancer{
 				config: map[string]string{
 					"pid": "1001", "pkey": "test-key", "apiBase": server.URL,
@@ -282,7 +270,7 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 			require.Equal(t, int32(1), calls.Load(), "do not retry a refund based on a different success code")
 			stored, err := client.PaymentOrder.Get(ctx, order.ID)
 			require.NoError(t, err)
-			wantStatus := OrderStatusCompleted
+			wantStatus := OrderStatusRefundPending
 			if tc.wantSuccess {
 				wantStatus = OrderStatusRefunded
 				if tc.amount < order.Amount {
@@ -290,19 +278,27 @@ func TestExecuteEasyPayRefundSuccessCode(t *testing.T) {
 				}
 				require.Equal(t, tc.amount, stored.RefundAmount)
 				require.NotNil(t, stored.RefundAt)
-				require.Equal(t, 200-tc.amount, balance)
+				require.Equal(t, 200-tc.amount, journalBalance(t, client, user.ID))
 			} else {
-				require.Zero(t, stored.RefundAmount)
+				// A mismatched code is an unknown provider outcome: retain the hold
+				// and query the original refund instead of restoring spendable funds.
+				require.Equal(t, tc.amount, stored.RefundAmount)
 				require.Nil(t, stored.RefundAt)
-				require.Equal(t, 200.0, balance)
+				require.Equal(t, 200-tc.amount, journalBalance(t, client, user.ID))
 			}
 			require.Equal(t, wantStatus, stored.Status)
 			failed, err := client.PaymentAuditLog.Query().Where(
 				paymentauditlog.OrderIDEQ(strconv.FormatInt(order.ID, 10)),
-				paymentauditlog.ActionEQ("REFUND_GATEWAY_FAILED"),
+				paymentauditlog.ActionEQ("REFUND_PENDING"),
 			).Exist(ctx)
 			require.NoError(t, err)
 			require.Equal(t, !tc.wantSuccess, failed)
+			beforeReplay := journalBalance(t, client, user.ID)
+			replay, err := svc.ExecuteRefund(ctx, plan)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSuccess, replay.Success)
+			require.Equal(t, int32(1), calls.Load(), "journal replay must not refund again")
+			require.Equal(t, beforeReplay, journalBalance(t, client, user.ID))
 		})
 	}
 }
