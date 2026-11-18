@@ -19,6 +19,10 @@ func TestSchedulerSnapshotConfiguredMembership(t *testing.T) {
 			ctx := context.Background()
 			tx := testEntTx(t)
 			client := tx.Client()
+			// geili hook: earlier full-suite fixtures can commit accounts to this owned DB.
+			// Isolate eligibility inside this rollback-only transaction before creating the matrix.
+			_, err := client.Account.Update().SetSchedulable(false).Save(ctx)
+			require.NoError(t, err)
 			repo := newAccountRepositoryWithSQL(client, tx, nil)
 			group := mustCreateGroup(t, client, &service.Group{Name: "snapshot-pool", Platform: platform})
 			other := mustCreateGroup(t, client, &service.Group{Name: "snapshot-other", Platform: platform})
