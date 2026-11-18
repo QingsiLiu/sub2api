@@ -26,7 +26,7 @@
 
 原356份SQL字节必须保持。新增官方 `251_group_force_openai_ultrafast.sql`、`251_group_usage_rollup_nonblocking_build.sql`、`252_channel_pricing_ultrafast_multiplier.sql` 以及Geili287，共360份。增列默认不强制UltraFast、不改既有价卡；滚动期间旧二进制须实际验证兼容，Stage历史275不带入生产。
 
-候选固定`4efb0a6950342876b0b27c9c2ad7a9a8ebec7888`／`ghcr.io/qingsiliu/sub2api@sha256:6a801f2d759fbf4fb6faabd186b14053938b7ae11258725724b7fd6998d1b190`，CI44241040223全部9任务／13门禁及360迁移哈希通过。本候选尚未部署Stage或生产。用户2026-11-18当次已明确授权合并、推送、验收后上线；继续Go4GiB及原P95增量不超过10ms／吞吐比不低于0.98门槛，无性能例外、无真实付费调用。后续凭据必须绑定本次revision／digest，不沿用旧候选通过记录。
+候选固定`4efb0a6950342876b0b27c9c2ad7a9a8ebec7888`／`ghcr.io/qingsiliu/sub2api@sha256:6a801f2d759fbf4fb6faabd186b14053938b7ae11258725724b7fd6998d1b190`，CI44241040223全部9任务／13门禁及360迁移哈希通过。同digest canonical Stage已自然排空complete、旧5ab退出0且无OOM，受控4项／入口3项通过；完整功能与原性能验收中，未生产。用户2026-11-18当次已明确授权合并、推送、验收后上线；继续Go4GiB及原P95增量不超过10ms／吞吐比不低于0.98门槛，无性能例外、无真实付费调用。后续凭据必须绑定本次revision／digest，不沿用旧候选通过记录。
 
 ## 本地验证记录（候选提交前）
 
