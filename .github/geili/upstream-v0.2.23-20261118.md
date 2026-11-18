@@ -26,7 +26,7 @@
 
 原356份SQL字节必须保持。新增官方 `251_group_force_openai_ultrafast.sql`、`251_group_usage_rollup_nonblocking_build.sql`、`252_channel_pricing_ultrafast_multiplier.sql` 以及Geili287，共360份。增列默认不强制UltraFast、不改既有价卡；滚动期间旧二进制须实际验证兼容，Stage历史275不带入生产。
 
-当前本地回归与整合中；revision／镜像digest待本次候选CI固定，尚未部署本候选Stage或生产。用户2026-11-18当次已明确授权合并、推送、验收后上线；继续Go4GiB及原P95增量不超过10ms／吞吐比不低于0.98门槛，无性能例外、无真实付费调用。后续凭据必须绑定本次revision／digest，不沿用旧候选通过记录。
+候选固定`4efb0a6950342876b0b27c9c2ad7a9a8ebec7888`／`ghcr.io/qingsiliu/sub2api@sha256:6a801f2d759fbf4fb6faabd186b14053938b7ae11258725724b7fd6998d1b190`，CI44241040223全部9任务／13门禁及360迁移哈希通过。本候选尚未部署Stage或生产。用户2026-11-18当次已明确授权合并、推送、验收后上线；继续Go4GiB及原P95增量不超过10ms／吞吐比不低于0.98门槛，无性能例外、无真实付费调用。后续凭据必须绑定本次revision／digest，不沿用旧候选通过记录。
 
 ## 本地验证记录（候选提交前）
 
@@ -35,3 +35,9 @@
 原生Anthropic流式共享读取器统一观察上游帧，回调只提取结算用量与转发字节；避免重复审计拼接工具参数。独立回归先复现有效工具JSON被判无效，再验证单次观察与原始SSE字节保持。
 
 Gemini原生文本适配在JSON及SSE读取边界记录实际modelVersion，转发结果同时携带模型声明与Vertex倍率；复用原生思考／价格的两模式回归核对，不改变下游公开模型名称或响应正文。
+
+## 固定候选CI与全量结论
+
+最终4ef的本地Go默认／单元／集成三套全量全部通过。前端431文件／3622项及构建、Python Stage恢复守卫103项、原生Anthropic审计专项竞态11.291秒通过。额外SDK可靠性探针因本机缺少openai依赖而在setup失败，原日志保留，不记通过。
+
+[CI44241040223 attempt2](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/2)全部9任务／13门禁通过，固定上述唯一digest。[首轮](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/1)仅既有锁风暴测试knownHints观察断言失败：64并发时10ms Redis提示读取全部超时；该测试相对固定生产5ab未改。本地完整集成与CI PG竞态均通过，同提交重跑后全绿；原失败不改签，未放宽任何应用超时、功能或性能门槛。Stage与生产仍须本次固定digest的新凭据。
