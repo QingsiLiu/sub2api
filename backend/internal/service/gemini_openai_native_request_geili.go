@@ -66,16 +66,18 @@ func parseGeminiOpenAIRequestGeili(body []byte, chat bool, mappedModel string) (
 	}
 	stream, _ := source["stream"].(bool)
 	req := source
+	var chatFormat gjson.Result
 	if chat {
+		// Validate the same format consumed by the raw-schema writer.
+		chatFormat = gjson.GetBytes(body, "response_format")
+		if err := validateGeminiChatFormatGeili(chatFormat); err != nil {
+			return nil, err
+		}
 		var err error
 		req, err = geminiChatToResponsesGeili(source)
 		if err != nil {
 			return nil, err
 		}
-	}
-	// geili hook: Chat JSON Schema now shares the upstream raw-schema path.
-	// This keeps integer precision and skips the incompatible tools/JSON combination.
-	if chat && source["response_format"] != nil {
 		delete(req, "text")
 	}
 	if !chat {
@@ -347,7 +349,7 @@ func parseGeminiOpenAIRequestGeili(body []byte, chat bool, mappedModel string) (
 		return nil, err
 	}
 	if chat {
-		data = applyGeminiChatResponseFormat(data, json.RawMessage(gjson.GetBytes(body, "response_format").Raw), mappedModel)
+		data = applyGeminiChatResponseFormat(data, json.RawMessage(chatFormat.Raw), mappedModel)
 	}
 	data = ensureGeminiFunctionCallThoughtSignatures(data)
 	usage := false
@@ -448,6 +450,42 @@ func geminiOpenAIFormatGeili(cfg, format map[string]any) error {
 	}
 }
 
+// Validate before using the upstream raw-schema writer. The decoded map is
+// validation-only: serialization still uses the original bytes, including large
+// integers. Chat's JSON-schema path supports string constraints and root schema
+// metadata, while retaining local rejection of references and malformed shapes.
+func validateGeminiChatFormatGeili(format gjson.Result) error {
+	if format.Type == gjson.Null {
+		return nil
+	}
+	if !format.IsObject() {
+		return fmt.Errorf("response_format must be an object")
+	}
+	typ := format.Get("type")
+	if typ.Type != gjson.Null && typ.Type != gjson.String {
+		return fmt.Errorf("response_format.type must be a string")
+	}
+	switch typ.String() {
+	case "", "text", "json_object":
+		return nil
+	case "json_schema":
+	default:
+		return fmt.Errorf("unsupported response_format type %q", typ.String())
+	}
+	rawSchema := format.Get("json_schema.schema")
+	var schema map[string]any
+	if !rawSchema.IsObject() || json.Unmarshal([]byte(rawSchema.Raw), &schema) != nil {
+		return fmt.Errorf("response_format.json_schema.schema must be an object")
+	}
+	if value, exists := schema["$schema"]; exists {
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("schema $schema must be a string")
+		}
+		delete(schema, "$schema")
+	}
+	return geminiJSONSchemaModeGeili(schema, true)
+}
+
 // JSON-schema is sent through Gemini's JSON-schema field, never silently pruned.
 func geminiJSONSchemaGeili(schema map[string]any) error {
 	return geminiJSONSchemaModeGeili(schema, false)
@@ -455,12 +493,12 @@ func geminiJSONSchemaGeili(schema map[string]any) error {
 func geminiToolJSONSchemaGeili(schema map[string]any) error {
 	return geminiJSONSchemaModeGeili(schema, true)
 }
-func geminiJSONSchemaModeGeili(schema map[string]any, tool bool) error {
+func geminiJSONSchemaModeGeili(schema map[string]any, allowStringConstraints bool) error {
 	for key, value := range schema {
 		switch key {
 		case "type", "title", "description", "enum", "minimum", "maximum", "minItems", "maxItems", "format", "required", "propertyOrdering":
 		case "pattern", "minLength", "maxLength":
-			if !tool {
+			if !allowStringConstraints {
 				return fmt.Errorf("unsupported Gemini JSON schema keyword %q", key)
 			}
 		case "properties":
@@ -473,7 +511,7 @@ func geminiJSONSchemaModeGeili(schema map[string]any, tool bool) error {
 				if !ok {
 					return fmt.Errorf("schema child must be an object")
 				}
-				if err := geminiJSONSchemaModeGeili(sub, tool); err != nil {
+				if err := geminiJSONSchemaModeGeili(sub, allowStringConstraints); err != nil {
 					return err
 				}
 			}
@@ -486,7 +524,7 @@ func geminiJSONSchemaModeGeili(schema map[string]any, tool bool) error {
 			if !ok {
 				return fmt.Errorf("schema %s must be an object or boolean", key)
 			}
-			if err := geminiJSONSchemaModeGeili(m, tool); err != nil {
+			if err := geminiJSONSchemaModeGeili(m, allowStringConstraints); err != nil {
 				return err
 			}
 		case "anyOf":
@@ -499,7 +537,7 @@ func geminiJSONSchemaModeGeili(schema map[string]any, tool bool) error {
 				if !ok {
 					return fmt.Errorf("schema branch must be an object")
 				}
-				if err := geminiJSONSchemaModeGeili(m, tool); err != nil {
+				if err := geminiJSONSchemaModeGeili(m, allowStringConstraints); err != nil {
 					return err
 				}
 			}

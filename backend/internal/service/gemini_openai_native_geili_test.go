@@ -62,6 +62,40 @@ func TestGeminiOpenAIRequestRejectsUnsupportedBeforeForward(t *testing.T) {
 	_, err := parseGeminiOpenAIRequestGeili([]byte(`{"model":"alias","input":"hi","reasoning":{"effort":"high"}}`), false, "argon")
 	require.Error(t, err)
 }
+
+func TestGeminiNativeChatRejectsInvalidResponseFormatBeforeSupplierGeili(t *testing.T) {
+	for _, format := range []string{
+		`{"type":"not_a_format"}`,
+		`{"type":"json_schema","json_schema":{"schema":{"$ref":"#/$defs/value"}}}`,
+		`{"type":"json_schema","json_schema":{"type":"text","schema":{"$ref":"#/$defs/value"}}}`,
+		`{"type":"json_schema","json_schema":{"schema":{"type":"object","properties":{"value":{"$ref":"#/$defs/value"}}}}}`,
+		`{"type":"json_schema","json_schema":{"schema":[]}}`,
+	} {
+		t.Run(format, func(t *testing.T) {
+			upstream := &queuedHTTPUpstreamStub{responses: []*http.Response{{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}`)),
+			}}}
+			svc := &GeminiMessagesCompatService{httpUpstream: upstream, cfg: &config.Config{}}
+			body := []byte(`{"model":"gemini-test","messages":[{"role":"user","content":"hi"}],"response_format":` + format + `}`)
+			c, recorder := newAntigravityCompatContext(http.MethodPost, "/v1/chat/completions", body)
+			_, err := svc.ForwardAsChatCompletions(context.Background(), c, &Account{ID: 1, Platform: PlatformGemini, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "synthetic-native-only"}}, body)
+			require.Error(t, err)
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			require.Empty(t, upstream.requestBodies, "invalid formats must never reach a supplier")
+		})
+	}
+}
+
+func TestGeminiNativeChatRawSchemaRetainsPrecisionAndStringConstraintsGeili(t *testing.T) {
+	schema := `{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"big":{"type":"integer","maximum":9007199254740993},"note":{"type":"string","maxLength":600}},"required":["big"],"additionalProperties":false}`
+	body := []byte(`{"model":"gemini-test","messages":[{"role":"user","content":"hi"}],"response_format":{"type":"json_schema","json_schema":{"name":"answer","strict":true,"schema":` + schema + `}}}`)
+	r, err := parseGeminiOpenAIRequestGeili(body, true, "gemini-4-argon")
+	require.NoError(t, err)
+	require.Equal(t, schema, gjson.GetBytes(r.body, "generationConfig.responseJsonSchema").Raw)
+	require.Equal(t, "application/json", gjson.GetBytes(r.body, "generationConfig.responseMimeType").String())
+}
 func TestGeminiOpenAIRequestConversationToolsImagesAndSignature(t *testing.T) {
 	body := []byte(`{"model":"gemini-test","instructions":"system","tools":[{"type":"function","name":"read","parameters":{"type":"object","properties":{"path":{"type":"string"}}}}],"tool_choice":{"type":"function","name":"read"},"input":[{"role":"developer","content":"rules"},{"role":"user","content":[{"type":"input_text","text":"look"},{"type":"input_image","image_url":"data:image/png;base64,aW1hZ2U="}]},{"type":"function_call","call_id":"call_one","name":"read","arguments":"{\"path\":\"a\"}","gemini_thought_signature":"signed-provider-history"},{"type":"function_call_output","call_id":"call_one","output":"result"}]}`)
 	r, err := parseGeminiOpenAIRequestGeili(body, false, "gemini-3.1-pro")

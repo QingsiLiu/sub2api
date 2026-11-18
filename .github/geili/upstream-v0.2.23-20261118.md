@@ -43,3 +43,5 @@ Gemini原生文本适配在JSON及SSE读取边界记录实际modelVersion，转�
 [CI44241040223 attempt2](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/2)全部9任务／13门禁通过，固定上述唯一digest。[首轮](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/1)仅既有锁风暴测试knownHints观察断言失败：64并发时10ms Redis提示读取全部超时；该测试相对固定生产5ab未改。本地完整集成与CI PG竞态均通过，同提交重跑后全绿；原失败不改签，未放宽任何应用超时、功能或性能门槛。Stage与生产仍须本次固定digest的新凭据。
 
 首次同镜像80k对称校准P95差−35.538801ms、吞吐比1.014006209，未过±10ms；80320次计时／预热完整、账务归零、夹具恢复，原失败保留，不能据此归因新版。已另冻运行时先验功能，再重做校准及原三组性能，样本／资源／门槛不变，生产仍固定`.21.3`，无例外。
+
+`.23.1` 的Stage完整功能前12组通过，Gemini原生第13组发现 Chat 格式校验遗漏：不支持的Schema引用返回200并派发一次模拟供应商。`.23.2`在使用原始Schema前恢复拒绝逻辑，合法Schema仍保留大数字精度与字符串约束。旧候选失败独立留档，新候选重新进行CI和全部同镜像验收。
