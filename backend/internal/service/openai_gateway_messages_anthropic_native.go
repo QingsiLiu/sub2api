@@ -343,7 +343,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 	// frames and usage accounting intact; client disconnects still drain usage.
 	tracker, readErr := readAnthropicCompletionGeili(c, resp, s.cfg, upstreamModel, true, func(event *apicompat.AnthropicStreamEvent, raw string) error {
 		payload := anthropicFrameDataGeili(raw)
-		observer.ObserveAnthropic([]byte(payload))
+		// geili: the shared completion reader observes this frame exactly once.
 		parseSSEUsagePassthrough(payload, usage)
 		if firstTokenMs == nil && anthropicEventHasSemanticOutputGeili(event) {
 			ms := int(time.Since(startTime).Milliseconds())
