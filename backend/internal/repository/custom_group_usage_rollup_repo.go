@@ -27,27 +27,32 @@ type groupUsageRollupSnapshot struct {
 // 判定条件与原先 SQL 里的 state_values CTE 完全一致：
 // 恰好一行、时区名与当前服务端配置相同、且水位不在未来。
 func (r *usageLogRepository) readGroupUsageRollupSnapshot(ctx context.Context, timezoneName, todayDate string) (groupUsageRollupSnapshot, error) {
-	epoch := time.Unix(0, 0).UTC()
-	invalid := groupUsageRollupSnapshot{
-		closedBefore: "1970-01-01",
-		retainedDate: "1970-01-01",
-		tailStart:    epoch,
-	}
-
 	var rowCount int
 	var closedBefore sql.NullString
 	var retainedFrom sql.NullTime
 	var stateTimezone sql.NullString
+	var expiredBefore sql.NullTime
 	if err := scanSingleRow(ctx, r.sql, `
 		SELECT
 			COUNT(*),
 			MAX(closed_before)::text,
 			MAX(retained_from),
-			MAX(timezone_name)
+			MAX(timezone_name),
+			MAX(expired_before)
 		FROM usage_group_rollup_state
 		WHERE id = 1
-	`, nil, &rowCount, &closedBefore, &retainedFrom, &stateTimezone); err != nil {
+	`, nil, &rowCount, &closedBefore, &retainedFrom, &stateTimezone, &expiredBefore); err != nil {
 		return groupUsageRollupSnapshot{}, fmt.Errorf("读取分组用量汇总水位: %w", err)
+	}
+
+	tailFloor := time.Unix(0, 0).UTC()
+	if rowCount == 1 && expiredBefore.Valid && expiredBefore.Time.After(tailFloor) {
+		tailFloor = expiredBefore.Time.UTC()
+	}
+	invalid := groupUsageRollupSnapshot{
+		closedBefore: "1970-01-01",
+		retainedDate: "1970-01-01",
+		tailStart:    tailFloor,
 	}
 	if rowCount != 1 || !closedBefore.Valid || !retainedFrom.Valid ||
 		!stateTimezone.Valid || stateTimezone.String != timezoneName ||
@@ -60,11 +65,19 @@ func (r *usageLogRepository) readGroupUsageRollupSnapshot(ctx context.Context, t
 		// 水位值解析不出来，按无效处理：宁可多扫一次，也不要算错钱。
 		return invalid, nil //nolint:nilerr // 与上面的 valid 判定同语义，均降级为全量重算
 	}
+	tailStart = tailStart.UTC()
+	if tailFloor.After(tailStart) {
+		tailStart = tailFloor
+	}
+	retainedDate := service.GroupUsageDate(retainedFrom.Time)
+	if expiredDate := service.GroupUsageDate(tailFloor); expiredDate > retainedDate {
+		retainedDate = expiredDate
+	}
 	return groupUsageRollupSnapshot{
 		valid:        true,
 		closedBefore: closedBefore.String,
-		retainedDate: service.GroupUsageDate(retainedFrom.Time),
-		tailStart:    tailStart.UTC(),
+		retainedDate: retainedDate,
+		tailStart:    tailStart,
 	}, nil
 }
 
@@ -151,6 +164,7 @@ const groupUsageRollupSummarySQLGeili = `
 			SELECT DISTINCT (affected_at AT TIME ZONE $8::text)::date AS bucket_date
 			FROM usage_group_rollup_invalidations
 			WHERE $4::boolean AND affected_at < $7
+				AND affected_at >= COALESCE((SELECT expired_before FROM usage_group_rollup_state WHERE id = 1), 'epoch'::timestamptz)
 		),
 		historical AS (
 			SELECT

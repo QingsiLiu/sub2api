@@ -1028,7 +1028,13 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorV2Aggregator,
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
+	ProvideUsageBillingRepositoryGeili,
 )
+
+// ProvideUsageBillingRepository 以按用户合并结算的通道作为各服务使用的计费仓储。
+func ProvideUsageBillingRepository(lanes *UsageBillingLaneCombiner) UsageBillingRepository {
+	return lanes
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService, billingRepo UsageBillingRepository) *UserPlatformQuotaUsageFlusher {
@@ -1134,4 +1140,13 @@ func ProvideClaudeResetCreditService(accounts AccountRepository, tokens *ClaudeT
 	s := NewClaudeResetCreditService(accounts, tokens, proxies, settings)
 	s.ConfigureRedemption(idem, locks)
 	return s
+}
+
+// ProvideUsageBillingRepositoryGeili keeps receipt preparation/replay and lot-based
+// subscriptions authoritative. The upstream unjournaled batch lane is not wired.
+func ProvideUsageBillingRepositoryGeili(repo UsageBillingBatchRepository) UsageBillingRepository {
+	if _, ok := repo.(UsageSettlementRepository); !ok {
+		panic("Geili billing requires durable settlement repository")
+	}
+	return repo
 }

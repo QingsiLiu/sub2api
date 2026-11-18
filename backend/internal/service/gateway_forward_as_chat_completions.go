@@ -110,6 +110,10 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
 
+	if !account.IsOAuth() {
+		anthropicBody = withChatCompletionsMetadataUserID(body, anthropicBody)
+	}
+
 	// 6. Apply Claude Code mimicry for OAuth accounts.
 	// Chat Completions 协议进来的请求永远不是 Claude Code 客户端，所以对 OAuth 账号
 	// 必须完整执行 /v1/messages 主路径上的伪装链路（system 重写 + normalize + metadata 注入），
@@ -137,27 +141,43 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		proxyURL = account.Proxy.URL()
 	}
 
-	// 10. Build upstream request
-	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
-	defer releaseUpstreamCtx()
-	if err != nil {
-		return nil, fmt.Errorf("build upstream request: %w", err)
+	// geili: preserve drain contexts and audit endpoints on each token rotation attempt.
+	var upstreamReq *http.Request
+	var forwardedBody []byte
+	var resp *http.Response
+	for retried := false; ; {
+		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
+		upstreamReq, forwardedBody, err = s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
+		defer releaseUpstreamCtx()
+		if err != nil {
+			return nil, fmt.Errorf("build upstream request: %w", err)
+		}
+		SetActualOpenAIUpstreamEndpoint(c, upstreamReq.URL.Path)
+		if account.Platform == PlatformGemini {
+			SetGeminiActualUpstreamURLGeili(c, upstreamReq.URL.String())
+		}
+		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		if err != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{UpstreamURL: safeUpstreamURL(upstreamReq.URL.String())})
+		}
+		if resp.StatusCode == http.StatusUnauthorized && !retried && RequestRecoveryAllowed(ctx) {
+			if rotated := s.rotatedClaudeAccessToken(ctx, account, token); rotated != "" {
+				_ = resp.Body.Close()
+				token = rotated
+				retried = true
+				continue
+			}
+		}
+		break
 	}
-	// Bill the final Anthropic effort after conversion and account normalization.
-	// For example, OpenAI xhigh is forwarded as output_config.effort=max.
+	// Bill the final forwarded effort, including per-account normalization.
 	reasoningEffort := NormalizeClaudeOutputEffort(gjson.GetBytes(forwardedBody, "output_config.effort").String())
 	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, forwardedBody, mappedModel)
-
-	// 11. Send request
-	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
-	if err != nil {
-		if resp != nil && resp.Body != nil {
-			_ = resp.Body.Close()
-		}
-		return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{
-			UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
-		})
+	if account.Platform == PlatformGemini {
+		SetGeminiUpstreamResponseHeadersGeili(c, resp.Header)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -248,6 +268,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*ForwardResult, error) {
+	beginUpstreamResponseModelObservation(c)
 	requestID := resp.Header.Get("x-request-id")
 
 	// geili hook: validate completion before constructing a successful JSON body.
@@ -264,17 +285,19 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 			writeGatewayCCError(c, http.StatusBadGateway, "server_error", failure.message)
 		}
 		return &ForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: tracker.usage,
-			Model: originalModel, UpstreamModel: mappedModel, ReasoningEffort: reasoningEffort, Duration: time.Since(startTime)}, err
+			Model: originalModel, UpstreamModel: mappedModel, UpstreamResponseModel: observedUpstreamResponseModel(c), UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c), UpstreamResponseServiceTier: observedUpstreamResponseServiceTier(c), ReasoningEffort: reasoningEffort, Duration: time.Since(startTime)}, err
 	}
 	finalResp := tracker.response
 	usage := tracker.usage
 
-	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+	{ // geili hook: cache-only/explicit-zero snapshots also replace the initial usage.
 		finalResp.Usage = apicompat.AnthropicUsage{
-			InputTokens:              usage.InputTokens,
-			OutputTokens:             usage.OutputTokens,
-			CacheCreationInputTokens: usage.CacheCreationInputTokens,
-			CacheReadInputTokens:     usage.CacheReadInputTokens,
+			InputTokens:                     usage.InputTokens,
+			OutputTokens:                    usage.OutputTokens,
+			CacheCreationInputTokens:        usage.CacheCreationInputTokens,
+			CacheReadInputTokens:            usage.CacheReadInputTokens,
+			CacheCreation:                   &apicompat.AnthropicCacheCreation{Ephemeral5mInputTokens: &usage.CacheCreation5mTokens, Ephemeral1hInputTokens: &usage.CacheCreation1hTokens},
+			CacheCreationInputTokensPresent: true,
 		}
 	}
 
@@ -301,14 +324,17 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	}
 
 	return &ForwardResult{
-		RequestID:       requestID,
-		UpstreamHeaders: resp.Header,
-		Usage:           usage,
-		Model:           originalModel,
-		UpstreamModel:   mappedModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          false,
-		Duration:        time.Since(startTime),
+		UpstreamResponseModel:         observedUpstreamResponseModel(c),
+		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
+		Usage:                         usage,
+		Model:                         originalModel,
+		UpstreamModel:                 mappedModel,
+		ReasoningEffort:               reasoningEffort,
+		Stream:                        false,
+		Duration:                      time.Since(startTime),
 	}, nil
 }
 
@@ -322,6 +348,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*ForwardResult, error) {
+	beginUpstreamResponseModelObservation(c)
 	requestID := resp.Header.Get("x-request-id")
 
 	if s.responseHeaderFilter != nil {
@@ -346,16 +373,19 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 
 	resultWithUsage := func() *ForwardResult {
 		return &ForwardResult{
-			RequestID:        requestID,
-			UpstreamHeaders:  resp.Header,
-			Usage:            usage,
-			Model:            originalModel,
-			UpstreamModel:    mappedModel,
-			ReasoningEffort:  reasoningEffort,
-			Stream:           true,
-			Duration:         time.Since(startTime),
-			FirstTokenMs:     firstTokenMs,
-			ClientDisconnect: clientDisconnected || geiliTextClientDisconnected(c),
+			UpstreamResponseModel:         observedUpstreamResponseModel(c),
+			UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+			UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+			RequestID:                     requestID,
+			UpstreamHeaders:               resp.Header,
+			Usage:                         usage,
+			Model:                         originalModel,
+			UpstreamModel:                 mappedModel,
+			ReasoningEffort:               reasoningEffort,
+			Stream:                        true,
+			Duration:                      time.Since(startTime),
+			FirstTokenMs:                  firstTokenMs,
+			ClientDisconnect:              clientDisconnected || geiliTextClientDisconnected(c),
 		}
 	}
 

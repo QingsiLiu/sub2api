@@ -283,6 +283,9 @@ func readAnthropicCompletionGeili(c *gin.Context, resp *http.Response, cfg *conf
 		if err := tracker.observe(&event); err != nil {
 			return GeiliUpstreamReadFailure(c, err)
 		}
+		if o := upstreamResponseModelObserverFromContext(c); o != nil {
+			o.ObserveAnthropic([]byte(payload))
+		}
 		geiliObserveUpstreamOperation(c, []byte(payload))
 		preOutput.Store(!tracker.semantic)
 		if onEvent != nil {

@@ -29,6 +29,7 @@ func (s *GeminiMessagesCompatService) ForwardAsResponsesGeili(ctx context.Contex
 }
 func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Context, c *gin.Context, account *Account, body []byte, chat bool) (out *ForwardResult, err error) {
 	start := time.Now()
+	beginUpstreamResponseModelObservation(c)
 	if account == nil || account.Platform != PlatformGemini {
 		return nil, s.writeChatCompletionsError(c, 400, "invalid_request_error", "Gemini account required")
 	}
@@ -240,7 +241,7 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		}
 	}
 	result := func() *ForwardResult {
-		return &ForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: output.usage, Model: request.model, UpstreamModel: mapped, Stream: request.stream, Duration: time.Since(start), FirstTokenMs: output.firstTokenMs, ReasoningEffort: extractGeminiReasoningEffortFromBody(request.body), ClientDisconnect: c.Request.Context().Err() != nil}
+		return &ForwardResult{RequestID: requestID, UpstreamHeaders: resp.Header, Usage: output.usage, Model: request.model, UpstreamModel: mapped, Stream: request.stream, Duration: time.Since(start), FirstTokenMs: output.firstTokenMs, ReasoningEffort: extractGeminiReasoningEffortFromBody(request.body), ClientDisconnect: c.Request.Context().Err() != nil, UpstreamPriceMultiplier: VertexUpstreamPriceMultiplier(account, mapped, ""), UpstreamResponseModel: observedUpstreamResponseModel(c), UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c)}
 	}
 	// geili hook: retain observed provider usage on client abort in our native
 	// text adapter too. Never synthesize a successful terminal for a gone client.

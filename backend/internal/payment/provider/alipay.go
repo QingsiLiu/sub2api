@@ -353,7 +353,7 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 
 	requestKey := strings.TrimSpace(req.IdempotencyKey)
 	if requestKey == "" {
-		requestKey = fmt.Sprintf("%s-refund-%d", req.OrderID, time.Now().UnixNano())
+		requestKey = fmt.Sprintf("%s%s%s", req.OrderID, alipayRefundRequestSep, alipayRefundRequestNoSuffix(req.Amount))
 	}
 	result, err := alipayTradeRefund(ctx, client, alipay.TradeRefund{
 		OutTradeNo:   req.OrderID,
@@ -380,8 +380,21 @@ func (a *Alipay) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 	}, nil
 }
 
-// QueryRefund keeps journal identities authoritative. Older non-journal refunds
-// can be queried only when they stored the original provider request number.
+// alipayRefundRequestNoSuffix 生成跨重试稳定的 out_request_no 后缀。
+// 支付宝把相同的 out_request_no 视为同一次退款请求；如果重试换号，
+// "网关已受理但返回错误"后的重试会变成第二笔真实退款。
+// 与 wxpayRefundID 一致，用金额区分同一订单的不同退款金额。
+func alipayRefundRequestNoSuffix(amount string) string {
+	normalized := strings.NewReplacer(".", "", "-", "").Replace(strings.TrimSpace(amount))
+	if normalized == "" {
+		return "0"
+	}
+	return normalized
+}
+
+// QueryRefund 通过 alipay.trade.fastpay.refund.query 查询退款终态。refund_status 为 REFUND_SUCCESS
+// 表示成功；退款发起超过宽限期仍查不到记录表示支付宝未受理或退款失败；其余情况视为仍在处理中。
+// geili: the persisted refund journal identity remains authoritative.
 func (a *Alipay) QueryRefund(ctx context.Context, req payment.RefundQueryRequest) (*payment.RefundResponse, error) {
 	key := strings.TrimSpace(req.IdempotencyKey)
 	journal := key != ""

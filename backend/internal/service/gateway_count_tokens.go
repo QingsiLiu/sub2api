@@ -346,7 +346,21 @@ func (s *GatewayService) forwardCountTokensAnthropicAPIKeyPassthrough(ctx contex
 func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	ctx context.Context, c *gin.Context, account *Account, body []byte, token string,
 ) (*http.Request, error) {
-	return s.buildAnthropicPassthroughRequest(ctx, c, account, http.MethodPost, "/messages/count_tokens", bytes.NewReader(body), token)
+	req, err := s.buildAnthropicPassthroughRequest(ctx, c, account, http.MethodPost, "/messages/count_tokens", bytes.NewReader(body), token)
+	if err != nil {
+		return nil, err
+	}
+	// geili hook: one case-insensitive field per wire header, with upstream casing.
+	for _, key := range []string{"content-type", "anthropic-version"} {
+		value := req.Header.Get(key)
+		for existing := range req.Header {
+			if strings.EqualFold(existing, key) {
+				delete(req.Header, existing)
+			}
+		}
+		setHeaderRaw(req.Header, key, value)
+	}
+	return req, nil
 }
 
 // buildCountTokensRequest 构建 count_tokens 上游请求
@@ -501,7 +515,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	filterSonnet55ToolsetBetaHeader(req.Header, body, modelID)
 
 	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+		c.Set(claudeMimicDebugInfoKey, newClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
 	}
 	if s.debugClaudeMimicEnabled() {
 		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)

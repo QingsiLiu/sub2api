@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	"github.com/tidwall/gjson"
 )
 
 type geminiOpenAIRequestGeili struct {
@@ -71,6 +72,11 @@ func parseGeminiOpenAIRequestGeili(body []byte, chat bool, mappedModel string) (
 		if err != nil {
 			return nil, err
 		}
+	}
+	// geili hook: Chat JSON Schema now shares the upstream raw-schema path.
+	// This keeps integer precision and skips the incompatible tools/JSON combination.
+	if chat && source["response_format"] != nil {
+		delete(req, "text")
 	}
 	if !chat {
 		if input, exists := source["input"]; !exists || input == nil {
@@ -339,6 +345,9 @@ func parseGeminiOpenAIRequestGeili(body []byte, chat bool, mappedModel string) (
 	data, err := json.Marshal(native)
 	if err != nil {
 		return nil, err
+	}
+	if chat {
+		data = applyGeminiChatResponseFormat(data, json.RawMessage(gjson.GetBytes(body, "response_format").Raw), mappedModel)
 	}
 	data = ensureGeminiFunctionCallThoughtSignatures(data)
 	usage := false

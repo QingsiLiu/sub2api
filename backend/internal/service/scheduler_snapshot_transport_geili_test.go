@@ -15,9 +15,15 @@ type transportSnapshotRepoGeili struct {
 	includeGrouped bool
 }
 
-func (r *transportSnapshotRepoGeili) ListOpenAITransportSnapshotCandidatesGeili(_ context.Context, group *int64, includeGrouped bool) ([]Account, error) {
+func (r *transportSnapshotRepoGeili) ListModelAvailabilityCandidates(_ context.Context, group *int64, _ []string, includeGrouped bool) ([]Account, error) {
 	r.group, r.includeGrouped = group, includeGrouped
-	return r.accounts, nil
+	var pool []Account
+	for _, a := range r.accounts {
+		if a.IsActive() && a.Schedulable {
+			pool = append(pool, a)
+		}
+	}
+	return pool, nil
 }
 func (r *transportSnapshotRepoGeili) ListSchedulableByGroupIDAndPlatform(context.Context, int64, string) ([]Account, error) {
 	return r.accounts[1:2], nil
@@ -48,10 +54,13 @@ func TestSchedulerSnapshotTransportCooldownGeili(t *testing.T) {
 	snapshot := &SchedulerSnapshotService{accountRepo: repo, cfg: &config.Config{RunMode: config.RunModeStandard}}
 	pool, err := snapshot.loadAccountsFromDB(context.Background(), SchedulerBucket{GroupID: 42, Platform: PlatformOpenAI}, false)
 	require.NoError(t, err)
-	require.Len(t, pool, 2, "transport-blocked member must survive the cooling-time snapshot rebuild")
+	require.Len(t, pool, 6, "upstream configured pool retains all timed blocks, including Geili transport cooldowns")
 	require.Equal(t, int64(1), pool[0].ID)
 	require.Equal(t, int64(2), pool[1].ID)
 	require.False(t, pool[0].IsSchedulable(), "retaining membership must not admit an active block")
+	for _, i := range []int{2, 3, 4, 5} {
+		require.False(t, pool[i].IsSchedulable(), "all active timed blocks remain excluded at request time")
+	}
 	require.Equal(t, int64(42), *repo.group)
 	require.False(t, repo.includeGrouped)
 	// Exactly the same stored snapshot can admit A after expiry, with no DB/cache clearing.
@@ -68,10 +77,10 @@ func TestSchedulerSnapshotTransportCooldownGeili(t *testing.T) {
 	repo.accounts = append(repo.accounts, quota, cooledQuota)
 	pool, err = snapshot.loadAccountsFromDB(context.Background(), SchedulerBucket{GroupID: 42, Platform: PlatformOpenAI}, false)
 	require.NoError(t, err)
-	require.Len(t, pool, 4, "quota membership must keep the original repository semantics")
-	require.Equal(t, int64(8), pool[2].ID)
-	require.Equal(t, int64(9), pool[3].ID)
-	require.False(t, pool[2].IsSchedulable(), "request-time quota gate must still reject exhausted accounts")
+	require.Len(t, pool, 8, "quota membership remains in the configured pool")
+	require.Equal(t, int64(8), pool[6].ID)
+	require.Equal(t, int64(9), pool[7].ID)
+	require.False(t, pool[6].IsSchedulable(), "request-time quota gate must still reject exhausted accounts")
 	for _, simple := range []bool{false, true} {
 		if simple {
 			snapshot.cfg.RunMode = config.RunModeSimple
