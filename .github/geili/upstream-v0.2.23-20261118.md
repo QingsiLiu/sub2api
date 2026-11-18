@@ -41,3 +41,5 @@ Gemini原生文本适配在JSON及SSE读取边界记录实际modelVersion，转�
 最终4ef的本地Go默认／单元／集成三套全量全部通过。前端431文件／3622项及构建、Python Stage恢复守卫103项、原生Anthropic审计专项竞态11.291秒通过。额外SDK可靠性探针因本机缺少openai依赖而在setup失败，原日志保留，不记通过。
 
 [CI44241040223 attempt2](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/2)全部9任务／13门禁通过，固定上述唯一digest。[首轮](https://github.com/QingsiLiu/sub2api/actions/runs/44241040223/attempts/1)仅既有锁风暴测试knownHints观察断言失败：64并发时10ms Redis提示读取全部超时；该测试相对固定生产5ab未改。本地完整集成与CI PG竞态均通过，同提交重跑后全绿；原失败不改签，未放宽任何应用超时、功能或性能门槛。Stage与生产仍须本次固定digest的新凭据。
+
+首次同镜像80k对称校准P95差−35.538801ms、吞吐比1.014006209，未过±10ms；80320次计时／预热完整、账务归零、夹具恢复，原失败保留，不能据此归因新版。已另冻运行时先验功能，再重做校准及原三组性能，样本／资源／门槛不变，生产仍固定`.21.3`，无例外。
