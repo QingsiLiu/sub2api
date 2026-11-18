@@ -2,7 +2,7 @@
 
 继承`.23.1`的官方v0.2.22／v0.2.23与Geili功能。Gemini Chat Completions 在发往上游前拒绝非法结构化输出格式和不支持的 Schema 引用。合法 Schema 沿用原始 JSON，保留大整数精度与字符串约束。原360份迁移及结算规则保持。
 
-固定revision`182db0c0b2c9d141a15d286459481e693303dc22`／镜像`ghcr.io/qingsiliu/sub2api@sha256:b44910469cc1a31d53929c64155e04298ebce4e03dc7c45ba68e645d6608bb44`，[CI44255259431](https://github.com/QingsiLiu/sub2api/actions/runs/44255259431)首轮9任务／13门禁与360份迁移核对通过。Gemini定向回归及竞态通过，同digest Stage蓝绿切换启动，完整复验待完成。生产继续运行`.21.3`，沿用Go4和原性能门槛。`.23.1` 的原失败证据保留。
+固定revision`182db0c0b2c9d141a15d286459481e693303dc22`／镜像`ghcr.io/qingsiliu/sub2api@sha256:b44910469cc1a31d53929c64155e04298ebce4e03dc7c45ba68e645d6608bb44`，[CI44255259431](https://github.com/QingsiLiu/sub2api/actions/runs/44255259431)首轮9任务／13门禁与360份迁移核对通过。Gemini定向回归及竞态通过。同digest Stage绿色18481已完成自然切换，旧`.23.1`退出0无OOM。功能13组1239项（Gemini 126场景725项，包含原失败复验）、新增计价60项、旧版TTL交接41项、Go4 11项和用量32项均通过。原性能和完整蓝绿验收进行中。生产继续运行`.21.3`，沿用Go4和原性能门槛。`.23.1` 的原失败证据保留。
 
 ## 0.2.23-geili.1（合入官方v0.2.22／v0.2.23，Stage发现兼容回归，未生产）
 
