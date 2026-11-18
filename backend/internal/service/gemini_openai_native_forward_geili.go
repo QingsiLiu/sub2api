@@ -237,6 +237,7 @@ func (s *GeminiMessagesCompatService) forwardOpenAINativeGeili(ctx context.Conte
 		var data []byte
 		data, err = ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 		if err == nil {
+			upstreamResponseModelObserverFromContext(c).ObserveGemini(data)
 			err = output.consume(data)
 		}
 	}
@@ -374,6 +375,7 @@ func (s *GeminiMessagesCompatService) readOpenAIGeminiSSEGeili(ctx context.Conte
 		if len(raw) > openAIFirstOutputStageMaxBytes && !out.semantic {
 			return fmt.Errorf("Gemini prelude exceeds staging limit")
 		}
+		upstreamResponseModelObserverFromContext(c).ObserveGemini([]byte(raw))
 		return out.consume([]byte(raw))
 	}
 	canceled := ctx.Done()

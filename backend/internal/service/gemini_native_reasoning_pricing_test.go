@@ -151,7 +151,7 @@ func TestGeminiChatCompatReasoningPricingUsesForwardedEffort(t *testing.T) {
 				"messages": []map[string]string{{"role": "user", "content": "hello"}},
 			})
 			require.NoError(t, err)
-			responseBody := `{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}`
+			responseBody := `{"modelVersion":"gemini-3.1-pro-observed","candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}`
 			contentType := "application/json"
 			if stream {
 				contentType = "text/event-stream"
@@ -166,6 +166,7 @@ func TestGeminiChatCompatReasoningPricingUsesForwardedEffort(t *testing.T) {
 			c, recorder := newAntigravityCompatContext(http.MethodPost, "/v1/chat/completions", body)
 			result, err := svc.ForwardAsChatCompletions(context.Background(), c, geminiSignalTestAccount(), body)
 			require.NoError(t, err)
+			require.Equal(t, "gemini-3.1-pro-observed", result.UpstreamResponseModel)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Len(t, upstream.requestBodies, 1)
 			// Geili native conversion uses Gemini enum casing and retains thought summaries for both modes.
