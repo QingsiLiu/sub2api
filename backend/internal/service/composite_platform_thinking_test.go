@@ -38,7 +38,7 @@ func forwardCompositeThinkingRequest(t *testing.T, publicModel, upstreamModel, c
 	upstream := &anthropicHTTPUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(`{"id":"msg_1","type":"message","role":"assistant","model":"` + upstreamModel + `","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`)),
+		Body:       io.NopCloser(strings.NewReader(`{"id":"msg_1","type":"message","role":"assistant","model":"` + upstreamModel + `","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)),
 	}}
 	svc := newForwardPartialUsageServiceForTest(upstream)
 	_, err = svc.Forward(ctx, c, newAnthropicOAuthAccountForPartialUsageTest(), parsed)
@@ -53,7 +53,7 @@ func TestCompositeRewriteToOpus55SendsEnabledThinkingAsAdaptive(t *testing.T) {
 		`{"model":"claude-sonnet-5","max_tokens":64,"stream":false,"thinking":{"type":"enabled","budget_tokens":4096},"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, err)
-	require.NotEqual(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, upstream.lastReq, "request must reach the upstream")
 	require.Equal(t, "claude-opus-5-5", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.Equal(t, "adaptive", gjson.GetBytes(upstream.lastBody, "thinking.type").String())
@@ -65,7 +65,7 @@ func TestCompositeRewriteToSonnet55SendsDisabledThinkingAsBetweenTools(t *testin
 		`{"model":"claude-sonnet-5","max_tokens":64,"stream":false,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, err)
-	require.NotEqual(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, upstream.lastReq, "request must reach the upstream")
 	require.Equal(t, "between_tools", gjson.GetBytes(upstream.lastBody, "thinking.type").String())
 }
