@@ -105,7 +105,7 @@ func TestAdminBalanceRealTransactionRollsBackWithoutEvidence(t *testing.T) {
 		require.NoError(t, err)
 	})
 	newSvc := func(audit service.RedeemCodeRepository) service.AdminService {
-		return service.NewAdminService(nil, userRepo, nil, nil, nil, nil, audit, nil, nil, nil, nil, nil, nil, c, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		return service.NewAdminService(nil, userRepo, nil, nil, nil, nil, audit, nil, nil, nil, nil, nil, nil, c, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	}
 	_, err := newSvc(adminBalanceAuditFailure{redeemRepo}).UpdateUserBalance(ctx, u.ID, 5, "add", "rollback proof")
 	require.Error(t, err)

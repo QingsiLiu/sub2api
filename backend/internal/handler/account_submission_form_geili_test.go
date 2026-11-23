@@ -68,7 +68,7 @@ func (r *submissionFormRepoFixture) SubmitInviteBatch(_ context.Context, _ strin
 func TestSubmissionFormGeiliBatchUsesOfficialValidationAndNoSharedProxy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &submissionFormRepoFixture{}
-	adminService := service.NewAdminService(&config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(&config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	account := admin.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	account.SetAccountSubmissionService(service.NewAccountSubmissionService(repo, adminService))
 	bridge := NewSubmissionFormHandlerGeili(&AdminHandlers{Account: account}, unavailableSubmissionSessions{})
