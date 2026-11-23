@@ -1,8 +1,8 @@
-## 0.2.24-geili.1（合入官方 v0.2.24，CI 通过，待 Stage 验收）
+## 0.2.24-geili.1（合入官方 v0.2.24，已切入 Stage，验收中）
 
 继承现网 `0.2.21-geili.3` 和 `0.2.23-geili.2` 的完整 Geili 功能。官方 v0.2.24 修复网关重复字段造成的路由与计费歧义，以及搜索接口 403 误停调 OpenAI OAuth 账号的问题。新增 Exa 搜索模拟和模型 ID 复制，改进流式兼容、令牌轮换和大请求解析。正常请求继续使用原分组、倍率及唯一结算规则。
 
-Geili 的重复字段校验放在内存准入之后、显式 Key 选组和所有合成路由改写之前。保留边界心跳、严格透传、结算和自然排空。相对前一候选的 360 份迁移不变。固定 revision `471a09f62e1f11685943f05822bcfc9356a5db3c`／镜像 `ghcr.io/qingsiliu/sub2api@sha256:7a214ace004c22c71d9b2bd0e32f0c48cbb13e586300fc8c23d8fe7fb0d71f39`。[候选 CI 45123565156](https://github.com/QingsiLiu/sub2api/actions/runs/45123565156) 首轮 9 任务／13 门禁与 360 份迁移哈希核对全部通过。Stage 管理 SSH 在握手前超时，当前候选未进入 Stage 或生产。公网复核 Stage `0.2.23-geili.2`、生产 `0.2.21-geili.3`，健康均正常。已获本次上线授权，仍按同 digest Stage 及原性能门槛执行。
+Geili 的重复字段校验放在内存准入之后、显式 Key 选组和所有合成路由改写之前。保留边界心跳、严格透传、结算和自然排空。相对前一候选的 360 份迁移不变。固定 revision `471a09f62e1f11685943f05822bcfc9356a5db3c`／镜像 `ghcr.io/qingsiliu/sub2api@sha256:7a214ace004c22c71d9b2bd0e32f0c48cbb13e586300fc8c23d8fe7fb0d71f39`。[候选 CI 45123565156](https://github.com/QingsiLiu/sub2api/actions/runs/45123565156) 首轮 9 任务／13 门禁与 360 份迁移哈希核对全部通过。经现有跳板恢复 Stage 管理连接。固定候选已于 `2026-11-23T08:53:16.100765+00:00` canonical 平滑切入 Stage 蓝色 18480，旧 `.23.2` 自然排空。Stage 与生产公网健康均正常，生产仍为 `0.2.21-geili.3`。已获本次上线授权，继续做同 digest 功能、Go4 和原性能门槛验收。
 
 合并后两个 Geili 测试夹具适配了上游新依赖。中间提交 `97c4c18ad` 的 CI 中仅两项 Claude 合成路由测试失败，模拟回执缺少 `stop_reason`；补齐回执并加强成功状态断言后，定向和完整单元测试通过。原失败未作为候选制品。
 
