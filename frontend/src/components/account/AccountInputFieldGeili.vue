@@ -1,12 +1,15 @@
 <template>
   <div>
-    <label :for="inputId" class="input-label">{{ label }}</label>
+    <div :class="$slots['label-action'] && 'mb-1 flex flex-wrap items-center justify-between gap-2'">
+      <label :for="inputId" class="input-label" :class="{ 'mb-0': $slots['label-action'] }">{{ label }}</label>
+      <slot name="label-action" />
+    </div>
     <input v-bind="$attrs" :id="inputId" :value="modelValue" :type="kind === 'key' ? 'password' : kind === 'concurrency' ? 'number' : 'text'"
       :required="required" :min="kind === 'concurrency' ? 1 : undefined" :max="maximum"
       :autocomplete="kind === 'key' ? 'off' : undefined" autocapitalize="none" :spellcheck="false"
       :placeholder="placeholder || (kind === 'name' ? t('admin.accounts.enterAccountName') : undefined)"
       :class="['input', kind === 'key' && 'font-mono']" @input="update" />
-    <p v-if="hint" class="input-hint">{{ hint }}</p>
+    <p v-if="hint || $slots.hint" class="input-hint"><slot name="hint">{{ hint }}</slot></p>
   </div>
 </template>
 <script setup lang="ts">

@@ -449,7 +449,7 @@ func (s *OpenAIGatewayService) pollDurableGrokVideo(ctx context.Context, snap *G
 	if account.IsGrokOAuth() && isGrokCLIProxyTarget(target) {
 		applyGrokCLIHeaders(req.Header)
 	}
-	account.ApplyHeaderOverrides(req.Header)
+	account.ApplyHeaderOverrides(withoutHeaderOverrideRequestScope(req.Context()), req.Header)
 	proxy := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxy = account.Proxy.URL()
