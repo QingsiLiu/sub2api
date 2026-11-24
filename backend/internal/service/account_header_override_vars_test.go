@@ -299,8 +299,8 @@ func TestAppendOpsUpstreamErrorCapturesReportedHeaders(t *testing.T) {
 	require.Nil(t, events[1].ReportedHeaders, "another account's attempt reported nothing")
 }
 
-// 真实转发构建器：变量头随 ctx 中的入站身份写入出站请求，客户端同名头被替换。
-func TestAnthropicUpstreamBuildersReportIdentity(t *testing.T) {
+// 普通转发上报已认证身份，Geili 严格透传清除保留的身份头。
+func TestAnthropicUpstreamBuildersRespectIdentityPolicy(t *testing.T) {
 	account := newAnthropicAPIKeyAccountForTest()
 	account.Credentials["base_url"] = "https://anthropic.example.com"
 	account.Credentials[credKeyHeaderOverrideEnabled] = true
@@ -316,7 +316,7 @@ func TestAnthropicUpstreamBuildersReportIdentity(t *testing.T) {
 			req, _, err := svc.buildUpstreamRequest(ctx, c, account, body, "upstream-anthropic-key", "apikey", "claude-haiku-4-5", false, false)
 			return req, err
 		},
-		"passthrough": func(ctx context.Context, c *gin.Context) (*http.Request, error) {
+		"strict_passthrough": func(ctx context.Context, c *gin.Context) (*http.Request, error) {
 			req, _, err := svc.buildUpstreamRequestAnthropicAPIKeyPassthrough(ctx, c, account, body, "upstream-anthropic-key")
 			return req, err
 		},
@@ -328,8 +328,13 @@ func TestAnthropicUpstreamBuildersReportIdentity(t *testing.T) {
 
 			req, err := fn(headerOverrideUserContext(), c)
 			require.NoError(t, err)
-			require.Equal(t, []string{"7"}, headerValuesFold(req.Header, "x-gateway-user-id"))
-			require.Equal(t, []string{"req-abc"}, headerValuesFold(req.Header, "x-gateway-request-id"))
+			if name == "strict_passthrough" {
+				require.Empty(t, headerValuesFold(req.Header, "x-gateway-user-id"))
+				require.Empty(t, headerValuesFold(req.Header, "x-gateway-request-id"))
+			} else {
+				require.Equal(t, []string{"7"}, headerValuesFold(req.Header, "x-gateway-user-id"))
+				require.Equal(t, []string{"req-abc"}, headerValuesFold(req.Header, "x-gateway-request-id"))
+			}
 
 			// 无用户上下文：不上报，也不放行客户端伪造的同名头
 			req, err = fn(context.Background(), c)

@@ -89,6 +89,13 @@ func (s *GatewayService) buildAnthropicPassthroughRequest(ctx context.Context, c
 	if c != nil && c.Request != nil {
 		copyAnthropicEndToEndHeaders(req.Header, c.Request.Header, true)
 	}
+	// Strict passthrough does not report gateway identity. Configured identity
+	// headers are reserved for the gateway, so a caller value cannot fill one.
+	for name, value := range account.GetHeaderOverrides() {
+		if headerOverrideHasVariable(value) {
+			req.Header.Del(name)
+		}
+	}
 	// Compression negotiation belongs to this HTTP hop. Metering and the SSE
 	// observer consume decoded business bytes; do not forward a caller encoding
 	// preference that would disable the transport's transparent decoding.
